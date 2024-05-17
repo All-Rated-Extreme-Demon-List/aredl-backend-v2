@@ -15,6 +15,7 @@ CREATE TABLE aredl_position_history (
     i SERIAL,
     new_position INT,
     old_position INT,
+    legacy BOOLEAN,
     affected_level uuid NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY(i),
@@ -45,8 +46,8 @@ BEGIN
     SET position = position + 1
     WHERE position >= NEW.position AND id <> NEW.id;
 
-    INSERT INTO aredl_position_history(new_position, old_position, affected_level)
-    VALUES (NEW.position, NULL, NEW.id);
+    INSERT INTO aredl_position_history(new_position, old_position, legacy, affected_level)
+    VALUES (NEW.position, NULL, NEW.legacy, NEW.id);
 
     RETURN null;
 END;
@@ -61,8 +62,9 @@ CREATE FUNCTION aredl_level_move() RETURNS TRIGGER AS
 $$
 DECLARE
     move_dir int;
+    legacy_history boolean;
 BEGIN
-    IF NEW.position = OLD.position THEN
+    IF NEW.position = OLD.position AND NEW.legacy = OLD.legacy THEN
         RETURN null;
     END IF;
     UPDATE aredl_levels
@@ -71,14 +73,19 @@ BEGIN
         BETWEEN LEAST(NEW.position, OLD.position)
         AND GREATEST(NEW.position, OLD.position);
 
-    INSERT INTO aredl_position_history(new_position, old_position, affected_level)
-    VALUES (NEW.position, OLD.position, NEW.id);
+    legacy_history := NULL;
+    IF NEW.legacy <> OLD.legacy THEN
+        legacy_history := NEW.legacy;
+    END IF;
+
+    INSERT INTO aredl_position_history(new_position, old_position, legacy, affected_level)
+    VALUES (NEW.position, OLD.position, legacy_history, NEW.id);
     RETURN null;
 END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER aredl_level_move
-AFTER UPDATE OF "position" ON "aredl_levels"
+AFTER UPDATE OF "position", "legacy" ON "aredl_levels"
 FOR EACH ROW
 WHEN (pg_trigger_depth() < 1)
 EXECUTE PROCEDURE aredl_level_move();
@@ -116,6 +123,7 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER aredl_validate_position_insert
 BEFORE INSERT ON "aredl_levels"
 FOR EACH ROW
+WHEN (pg_trigger_depth() < 1)
 EXECUTE PROCEDURE aredl_validate_position_insert();
 
 CREATE FUNCTION aredl_validate_position_update() RETURNS TRIGGER AS
@@ -149,15 +157,16 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER aredl_validate_position_update
 BEFORE UPDATE OF "position", "legacy" ON "aredl_levels"
 FOR EACH ROW
+WHEN (pg_trigger_depth() < 1)
 EXECUTE PROCEDURE aredl_validate_position_update();
 
 CREATE VIEW aredl_position_history_full_view AS
 WITH RECURSIVE ranked_history AS (
-    SELECT ROW_NUMBER() OVER (ORDER BY i) AS i, new_position, old_position, affected_level, created_at
+    SELECT ROW_NUMBER() OVER (ORDER BY i) AS i, new_position, old_position, legacy, created_at, affected_level
     FROM aredl_position_history
 ),
 full_history AS (
-	SELECT i, affected_level AS id, new_position AS position, CAST(NULL AS INT) as prev_pos, created_at AS action_at, affected_level AS cause
+	SELECT i, affected_level AS id, new_position AS position, CAST(NULL AS INT) as prev_pos, legacy, legacy AS prev_legacy, created_at AS action_at, affected_level AS cause
 	FROM ranked_history
 	WHERE old_position IS NULL
 	UNION
@@ -176,14 +185,16 @@ full_history AS (
 				CASE WHEN h.position BETWEEN r.new_position AND r.old_position THEN h.position + 1 ELSE h.position END
 		END) as position,
 		h.position AS prev_pos,
+		(CASE WHEN r.affected_level = h.id AND r.legacy IS NOT NULL THEN r.legacy ELSE h.legacy END) AS legacy,
+		h.legacy AS prev_legacy,
 		r.created_at AS action_at,
 		r.affected_level as cause
 	FROM ranked_history r
 	INNER JOIN full_history h ON r.i = h.i + 1
 )
-SELECT id as affected_level, position, action_at, cause
+SELECT id as affected_level, position, legacy, action_at, cause
 FROM full_history
-WHERE prev_pos <> position OR prev_pos IS NULL;
+WHERE prev_pos <> position OR prev_legacy <> legacy OR prev_pos IS NULL;
 
 CREATE FUNCTION aredl_levels_points_before_update() RETURNS TRIGGER AS
 $$

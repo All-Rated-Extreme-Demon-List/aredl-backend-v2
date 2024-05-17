@@ -17,6 +17,7 @@ diesel::table! {
         i -> Int4,
         new_position -> Nullable<Int4>,
         old_position -> Nullable<Int4>,
+        legacy -> Nullable<Bool>,
         affected_level -> Uuid,
         created_at -> Nullable<Timestamp>,
     }
