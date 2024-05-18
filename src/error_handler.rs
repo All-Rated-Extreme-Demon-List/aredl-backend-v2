@@ -1,5 +1,5 @@
 use std::fmt;
-use std::fmt::{format, Formatter};
+use std::fmt::{Formatter};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use diesel::result::Error as DieselError;
@@ -39,7 +39,7 @@ impl From<DieselError> for CustomError {
 }
 
 impl From<BlockingError> for CustomError {
-    fn from(error: BlockingError) -> Self {
+    fn from(_error: BlockingError) -> Self {
         CustomError::new(500, "Internal server error".to_string())
     }
 }
