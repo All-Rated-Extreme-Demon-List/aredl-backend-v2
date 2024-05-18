@@ -1,11 +1,11 @@
 use actix_web::{get, post, patch, HttpResponse, web};
 use uuid::Uuid;
-use crate::aredl::levels::{Level, LevelPlace, LevelUpdate};
+use crate::aredl::levels::{history, Level, LevelPlace, LevelUpdate};
 use crate::error_handler::CustomError;
 
 #[get("/aredl/levels")]
 async fn list() -> Result<HttpResponse, CustomError> {
-    let levels = web::block(|| Level::find_all()).await.unwrap()?;
+    let levels = web::block(|| Level::find_all()).await??;
     Ok(HttpResponse::Ok().json(levels))
 }
 
@@ -31,4 +31,5 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(list);
     config.service(create);
     config.service(update);
+    history::init_routes(config);
 }

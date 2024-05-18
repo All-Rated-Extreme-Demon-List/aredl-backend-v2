@@ -1,6 +1,5 @@
 mod model;
 mod routes;
-mod history;
 
 pub use model::*;
 pub use routes::init_routes;

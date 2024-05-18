@@ -8,6 +8,7 @@ mod schema;
 mod error_handler;
 
 mod aredl;
+mod custom_schema;
 
 use std::env;
 use actix_web::{App, HttpServer};

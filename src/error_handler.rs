@@ -1,10 +1,11 @@
 use std::fmt;
-use std::fmt::Formatter;
+use std::fmt::{format, Formatter};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use diesel::result::Error as DieselError;
 use actix_web::http::StatusCode;
 use actix_web::{HttpResponse, ResponseError};
+use actix_web::error::BlockingError;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CustomError {
@@ -34,6 +35,12 @@ impl From<DieselError> for CustomError {
             DieselError::NotFound => CustomError::new(404, "Record not found".to_string()),
             err => CustomError::new(500, format!("Unknown Diesel error: {}", err)),
         }
+    }
+}
+
+impl From<BlockingError> for CustomError {
+    fn from(error: BlockingError) -> Self {
+        CustomError::new(500, "Internal server error".to_string())
     }
 }
 
