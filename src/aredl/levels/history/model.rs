@@ -19,7 +19,6 @@ pub struct HistoryLevelFull {
 
 impl HistoryLevelFull {
     pub fn find(id: Uuid) -> Result<Vec<Self>, CustomError> {
-        let conn = &mut db::connection()?;
         let entries = aredl_position_history_full_view::table
             .filter(aredl_position_history_full_view::affected_level.eq(id))
             .inner_join(aredl_levels::table.on(aredl_levels::id.eq(aredl_position_history_full_view::cause)))
@@ -31,7 +30,7 @@ impl HistoryLevelFull {
                 aredl_position_history_full_view::cause,
                 aredl_levels::name,
             ))
-            .load::<HistoryLevelFull>(conn)?;
+            .load::<HistoryLevelFull>(&mut db::connection()?)?;
         Ok(entries)
     }
 }
