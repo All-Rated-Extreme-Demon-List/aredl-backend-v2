@@ -23,9 +23,19 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    users (id) {
+        id -> Uuid,
+        user_name -> Varchar,
+        global_name -> Varchar,
+        placeholder -> Bool,
+    }
+}
+
 diesel::joinable!(aredl_position_history -> aredl_levels (affected_level));
 
 diesel::allow_tables_to_appear_in_same_query!(
     aredl_levels,
     aredl_position_history,
+    users,
 );
