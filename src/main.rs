@@ -9,9 +9,11 @@ mod error_handler;
 
 mod aredl;
 mod custom_schema;
+mod user;
+mod auth;
 
 use std::env;
-use actix_web::{App, HttpServer};
+use actix_web::{App, HttpServer, web};
 use dotenv::dotenv;
 use listenfd::ListenFd;
 
@@ -21,8 +23,15 @@ async fn main() -> std::io::Result<()> {
 
     db::init();
 
+    let auth_app_state = auth::init_app_state().await;
+
     let mut listenfd = ListenFd::from_env();
-    let mut server = HttpServer::new(|| App::new().configure(aredl::init_routes));
+    let mut server = HttpServer::new(move || App::new().service(
+        web::scope("/api")
+            .app_data(web::Data::new(auth_app_state.clone()))
+            .configure(aredl::init_routes)
+            .configure(auth::init_routes)
+    ));
 
     server = match listenfd.take_tcp_listener(0)? {
         Some(listener) => server.listen(listener)?,

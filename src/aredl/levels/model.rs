@@ -4,7 +4,7 @@ use uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use crate::schema::aredl_levels;
 use crate::db;
-use crate::error_handler::CustomError;
+use crate::error_handler::ApiError;
 
 #[derive(Serialize, Deserialize, Queryable)]
 pub struct Level {
@@ -37,28 +37,28 @@ pub struct LevelUpdate {
 }
 
 impl Level {
-    pub fn find_all() -> Result<Vec<Self>, CustomError>{
+    pub fn find_all() -> Result<Vec<Self>, ApiError>{
         let levels = aredl_levels::table
             .order(aredl_levels::position)
             .load::<Level>(&mut db::connection()?)?;
         Ok(levels)
     }
 
-    pub fn find(id: Uuid) -> Result<Self, CustomError> {
+    pub fn find(id: Uuid) -> Result<Self, ApiError> {
         let level = aredl_levels::table
             .filter(aredl_levels::id.eq(id))
             .first(&mut db::connection()?)?;
         Ok(level)
     }
 
-    pub fn create(level: LevelPlace) -> Result<Self, CustomError> {
+    pub fn create(level: LevelPlace) -> Result<Self, ApiError> {
         let level = diesel::insert_into(aredl_levels::table)
             .values(level)
             .get_result(&mut db::connection()?)?;
         Ok(level)
     }
 
-    pub fn update(id: Uuid, level: LevelUpdate) -> Result<Self, CustomError> {
+    pub fn update(id: Uuid, level: LevelUpdate) -> Result<Self, ApiError> {
         let level = diesel::update(aredl_levels::table)
             .set(level)
             .filter(aredl_levels::id.eq(id))

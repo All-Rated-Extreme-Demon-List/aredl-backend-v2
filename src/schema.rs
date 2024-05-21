@@ -24,6 +24,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    oauth_requests (csrf_state) {
+        csrf_state -> Varchar,
+        pkce_verifier -> Varchar,
+        nonce -> Varchar,
+        created_at -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
     users (id) {
         id -> Uuid,
         user_name -> Varchar,
@@ -37,5 +46,6 @@ diesel::joinable!(aredl_position_history -> aredl_levels (affected_level));
 diesel::allow_tables_to_appear_in_same_query!(
     aredl_levels,
     aredl_position_history,
+    oauth_requests,
     users,
 );

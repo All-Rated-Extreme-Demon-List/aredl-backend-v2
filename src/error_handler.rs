@@ -8,43 +8,43 @@ use actix_web::{HttpResponse, ResponseError};
 use actix_web::error::BlockingError;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct CustomError {
+pub struct ApiError {
     pub error_status_code: u16,
     pub error_message: String,
 }
 
-impl CustomError {
-    pub fn new(error_status_code: u16, error_message: String) -> CustomError {
-        CustomError {
+impl ApiError {
+    pub fn new(error_status_code: u16, error_message: String) -> ApiError {
+        ApiError {
             error_status_code,
             error_message,
         }
     }
 }
 
-impl fmt::Display for CustomError {
+impl fmt::Display for ApiError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(self.error_message.as_str())
     }
 }
 
-impl From<DieselError> for CustomError {
+impl From<DieselError> for ApiError {
     fn from(error: DieselError) -> Self {
         match error {
-            DieselError::DatabaseError(_, err) => CustomError::new(409, err.message().to_string()),
-            DieselError::NotFound => CustomError::new(404, "Record not found".to_string()),
-            err => CustomError::new(500, format!("Unknown Diesel error: {}", err)),
+            DieselError::DatabaseError(_, err) => ApiError::new(409, err.message().to_string()),
+            DieselError::NotFound => ApiError::new(404, "Record not found".to_string()),
+            err => ApiError::new(500, format!("Unknown Diesel error: {}", err)),
         }
     }
 }
 
-impl From<BlockingError> for CustomError {
+impl From<BlockingError> for ApiError {
     fn from(_error: BlockingError) -> Self {
-        CustomError::new(500, "Internal server error".to_string())
+        ApiError::new(500, "Internal server error".to_string())
     }
 }
 
-impl ResponseError for CustomError {
+impl ResponseError for ApiError {
     fn error_response(&self) -> HttpResponse {
         let status_code = StatusCode::from_u16(self.error_status_code).unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR);
 

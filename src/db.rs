@@ -1,5 +1,5 @@
 
-use crate::error_handler::CustomError;
+use crate::error_handler::ApiError;
 use std::env;
 use diesel::{PgConnection, r2d2};
 use diesel::r2d2::ConnectionManager;
@@ -26,6 +26,6 @@ pub fn init() {
     connection().expect("Failed to get db connection");
 }
 
-pub fn connection() -> Result<DbConnection, CustomError> {
-    POOL.get().map_err(|e| CustomError::new(500, format!("Failed to get db connection: {}", e)))
+pub fn connection() -> Result<DbConnection, ApiError> {
+    POOL.get().map_err(|e| ApiError::new(500, format!("Failed to get db connection: {}", e)))
 }
