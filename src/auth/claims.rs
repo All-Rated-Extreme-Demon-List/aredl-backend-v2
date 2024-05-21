@@ -30,7 +30,7 @@ pub fn create_token(
         &Header::default(),
         &claims,
         &EncodingKey::from_secret(secret),
-    ).map_err(|_| ApiError::new(400, "Failed to create token!".to_string()))
+    ).map_err(|_| ApiError::new(400, "Failed to create token!"))
 }
 
 pub fn decode_token<T: Into<String>>(token: T, secret: &[u8]) -> Result<Uuid, ApiError> {
@@ -41,6 +41,6 @@ pub fn decode_token<T: Into<String>>(token: T, secret: &[u8]) -> Result<Uuid, Ap
     );
     match decoded {
         Ok(token) => Ok(token.claims.sub),
-        Err(_) => Err(ApiError::new(401, "Invalid token!".to_string())),
+        Err(_) => Err(ApiError::new(401, "Invalid token!")),
     }
 }

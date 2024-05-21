@@ -14,10 +14,10 @@ pub struct ApiError {
 }
 
 impl ApiError {
-    pub fn new(error_status_code: u16, error_message: String) -> ApiError {
+    pub fn new(error_status_code: u16, error_message: &str) -> ApiError {
         ApiError {
             error_status_code,
-            error_message,
+            error_message: error_message.to_string(),
         }
     }
 }
@@ -31,16 +31,16 @@ impl fmt::Display for ApiError {
 impl From<DieselError> for ApiError {
     fn from(error: DieselError) -> Self {
         match error {
-            DieselError::DatabaseError(_, err) => ApiError::new(409, err.message().to_string()),
-            DieselError::NotFound => ApiError::new(404, "Record not found".to_string()),
-            err => ApiError::new(500, format!("Unknown Diesel error: {}", err)),
+            DieselError::DatabaseError(_, err) => ApiError::new(409, err.message()),
+            DieselError::NotFound => ApiError::new(404, "Record not found"),
+            err => ApiError::new(500, &format!("Unknown Diesel error: {}", err)),
         }
     }
 }
 
 impl From<BlockingError> for ApiError {
     fn from(_error: BlockingError) -> Self {
-        ApiError::new(500, "Internal server error".to_string())
+        ApiError::new(500, "Internal server error")
     }
 }
 

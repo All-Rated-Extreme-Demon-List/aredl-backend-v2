@@ -2,10 +2,9 @@ use std::env;
 use std::sync::Arc;
 
 use actix_web::{get, HttpResponse, web};
-use actix_web::web::redirect;
 use diesel::{ExpressionMethods, RunQueryDsl};
 use diesel::prelude::*;
-use openidconnect::{AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope};
+use openidconnect::{AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce, OAuth2TokenResponse, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope};
 use openidconnect::core::{CoreAuthenticationFlow, CoreClient, CoreIdTokenVerifier, CoreProviderMetadata};
 use openidconnect::reqwest::async_http_client;
 use serde::{Deserialize, Serialize};
@@ -27,6 +26,16 @@ struct OAuthRequestData {
     pub csrf_state: String,
     pub pkce_verifier: String,
     pub nonce: String
+}
+
+#[derive(Serialize, Deserialize)]
+struct DiscordUser {
+    pub id: String,
+    pub username: String,
+    pub global_name: Option<String>,
+    pub avatar: Option<String>,
+    pub banner: Option<String>,
+    pub accent_color: Option<i32>,
 }
 
 impl OAuthRequestData {
@@ -83,26 +92,37 @@ async fn discord_auth(data: web::Data<Arc<AuthAppState>>) -> Result<HttpResponse
 async fn discord_callback(query: web::Query<OAuthCallbackQuery>, data: web::Data<Arc<AuthAppState>>) -> Result<HttpResponse, ApiError> {
     let client = &data.discord_client;
 
+    // maybe combine both db actions
     let csrf_state = query.state.clone();
     let request_data = web::block(move || OAuthRequestData::find(&csrf_state)).await??;
+
+    let csrf_state = query.state.clone();
+    web::block(move || OAuthRequestData::delete(&csrf_state)).await??;
 
     let token_response = client
         .exchange_code(query.code.clone())
         .set_pkce_verifier(PkceCodeVerifier::new(request_data.pkce_verifier))
         .request_async(async_http_client).await
-        .map_err(|_| ApiError::new(401, "Failed to request token!".to_string()))?;
+        .map_err(|_| ApiError::new(401, "Failed to request token!"))?;
 
     let nonce: Nonce = Nonce::new(request_data.nonce);
     let id_token_verifier: CoreIdTokenVerifier = client.id_token_verifier();
-    let test = match token_response.extra_fields().id_token() {
-        Some(id_token) => id_token.claims(&id_token_verifier, &nonce).map_err(|_| ApiError::new(401, "Failed to verify ID token!".to_string())),
-        None => Err(ApiError::new(500, "No id token provided!".to_string())),
+    match token_response.extra_fields().id_token() {
+        Some(id_token) => id_token.claims(&id_token_verifier, &nonce).map_err(|_| ApiError::new(401, "Failed to verify ID token!")),
+        None => Err(ApiError::new(500, "No id token provided!")),
     }?;
 
-    let csrf_state = query.state.clone();
-    web::block(move || OAuthRequestData::delete(&csrf_state)).await??;
+    let access_token = token_response.access_token();
 
-    Ok(HttpResponse::Ok().json(test))
+    let discord_user_data = reqwest::Client::new()
+        .get("https://discord.com/api/users/@me")
+        .bearer_auth(access_token.secret())
+        .send().await
+        .map_err(|_| ApiError::new(500, "Failed to request discord data"))?
+        .json::<DiscordUser>().await
+        .map_err(|_| ApiError::new(500, "Failed to load discord data"))?;
+
+    Ok(HttpResponse::Ok().json(discord_user_data))
 }
 
 pub(crate) async fn create_discord_client() -> Result<CoreClient, Box<dyn std::error::Error>> {

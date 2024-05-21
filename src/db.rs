@@ -27,5 +27,5 @@ pub fn init() {
 }
 
 pub fn connection() -> Result<DbConnection, ApiError> {
-    POOL.get().map_err(|e| ApiError::new(500, format!("Failed to get db connection: {}", e)))
+    POOL.get().map_err(|e| ApiError::new(500, &format!("Failed to get db connection: {}", e)))
 }
