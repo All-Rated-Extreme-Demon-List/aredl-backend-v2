@@ -9,8 +9,8 @@ mod error_handler;
 
 mod aredl;
 mod custom_schema;
-mod user;
 mod auth;
+mod users;
 
 use std::env;
 use actix_web::{App, HttpServer, web};

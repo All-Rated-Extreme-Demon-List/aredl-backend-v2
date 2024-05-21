@@ -11,19 +11,19 @@ async fn list() -> Result<HttpResponse, ApiError> {
 
 #[post("/aredl/levels")]
 async fn create(level: web::Json<LevelPlace>) -> Result<HttpResponse, ApiError> {
-    let level = Level::create(level.into_inner())?;
+    let level = web::block(|| Level::create(level.into_inner())).await??;
     Ok(HttpResponse::Ok().json(level))
 }
 
 #[patch("/aredl/levels/{id}")]
 async fn update(id: web::Path<Uuid>,level: web::Json<LevelUpdate>) -> Result<HttpResponse, ApiError> {
-    let level = Level::update(id.into_inner(), level.into_inner())?;
+    let level = web::block(|| Level::update(id.into_inner(), level.into_inner())).await??;
     Ok(HttpResponse::Ok().json(level))
 }
 
 #[get("/aredl/levels/{id}")]
 async fn find(id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
-    let level = Level::find(id.into_inner())?;
+    let level = web::block(|| Level::find(id.into_inner())).await??;
     Ok(HttpResponse::Ok().json(level))
 }
 

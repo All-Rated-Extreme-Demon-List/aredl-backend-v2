@@ -35,9 +35,13 @@ diesel::table! {
 diesel::table! {
     users (id) {
         id -> Uuid,
-        user_name -> Varchar,
+        username -> Varchar,
         global_name -> Varchar,
+        discord_id -> Nullable<Varchar>,
         placeholder -> Bool,
+        discord_avatar -> Nullable<Varchar>,
+        discord_banner -> Nullable<Varchar>,
+        discord_accent_color -> Nullable<Int4>,
     }
 }
 

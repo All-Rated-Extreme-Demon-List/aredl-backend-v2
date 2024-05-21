@@ -40,7 +40,7 @@ impl Level {
     pub fn find_all() -> Result<Vec<Self>, ApiError>{
         let levels = aredl_levels::table
             .order(aredl_levels::position)
-            .load::<Level>(&mut db::connection()?)?;
+            .load::<Self>(&mut db::connection()?)?;
         Ok(levels)
     }
 

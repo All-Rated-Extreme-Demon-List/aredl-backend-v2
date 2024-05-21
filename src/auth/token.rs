@@ -5,15 +5,21 @@ use uuid::Uuid;
 use crate::error_handler::ApiError;
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct TokenData {
+    pub user_id: Uuid,
+    pub is_api_key: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TokenClaims {
-    pub sub: Uuid,
+    pub sub: TokenData,
     pub iat: usize,
     pub exp: usize,
 }
 
 pub fn create_token(
-    user_id: Uuid,
-    secret: &[u8],
+    token_data: TokenData,
+    encoding_key: &EncodingKey,
     expires_in_seconds: i64,
 ) -> Result<String, ApiError> {
 
@@ -21,7 +27,7 @@ pub fn create_token(
     let iat = now.timestamp() as usize;
     let exp = (now + Duration::minutes(expires_in_seconds)).timestamp() as usize;
     let claims = TokenClaims {
-        sub: user_id,
+        sub: token_data,
         exp,
         iat,
     };
@@ -29,14 +35,14 @@ pub fn create_token(
     encode(
         &Header::default(),
         &claims,
-        &EncodingKey::from_secret(secret),
+        &encoding_key,
     ).map_err(|_| ApiError::new(400, "Failed to create token!"))
 }
 
-pub fn decode_token<T: Into<String>>(token: T, secret: &[u8]) -> Result<Uuid, ApiError> {
+pub fn decode_token<T: Into<String>>(token: T, decoding_key: &DecodingKey) -> Result<TokenData, ApiError> {
     let decoded = decode::<TokenClaims>(
         &token.into(),
-        &DecodingKey::from_secret(secret),
+        &decoding_key,
         &Validation::new(Algorithm::HS256),
     );
     match decoded {

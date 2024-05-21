@@ -2,6 +2,7 @@ use std::env;
 use std::sync::Arc;
 
 use actix_web::{get, HttpResponse, web};
+use chrono::Duration;
 use diesel::{ExpressionMethods, RunQueryDsl};
 use diesel::prelude::*;
 use openidconnect::{AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce, OAuth2TokenResponse, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope};
@@ -10,9 +11,11 @@ use openidconnect::reqwest::async_http_client;
 use serde::{Deserialize, Serialize};
 
 use crate::auth::app_state::AuthAppState;
-use crate::db;
+use crate::auth::token;
+use crate::{db, users};
 use crate::error_handler::ApiError;
 use crate::schema::oauth_requests;
+use crate::users::{User, UserUpsert};
 
 #[derive(Deserialize)]
 struct OAuthCallbackQuery {
@@ -38,6 +41,20 @@ struct DiscordUser {
     pub accent_color: Option<i32>,
 }
 
+impl From<DiscordUser> for UserUpsert {
+    fn from(user: DiscordUser) -> Self {
+        UserUpsert {
+            username: user.username.clone(),
+            global_name: user.global_name.or(Some(user.username)),
+            discord_id: Some(user.id),
+            placeholder: false,
+            discord_avatar: user.avatar,
+            discord_banner: user.banner,
+            discord_accent_color: user.accent_color,
+        }
+    }
+}
+
 impl OAuthRequestData {
     fn find(csrf_state: &str) -> Result<Self, ApiError> {
         let request_data = oauth_requests::table
@@ -60,6 +77,12 @@ impl OAuthRequestData {
             .execute(&mut db::connection()?)?;
         Ok(())
     }
+}
+
+#[derive(Debug, Serialize)]
+struct AuthResponse {
+    pub token: String,
+    pub user: User,
 }
 
 #[get("/auth/discord")]
@@ -122,7 +145,18 @@ async fn discord_callback(query: web::Query<OAuthCallbackQuery>, data: web::Data
         .json::<DiscordUser>().await
         .map_err(|_| ApiError::new(500, "Failed to load discord data"))?;
 
-    Ok(HttpResponse::Ok().json(discord_user_data))
+    let user = web::block(|| User::upsert(UserUpsert::from(discord_user_data))).await??;
+
+    let token = token::create_token(
+        token::TokenData {
+            user_id: user.id,
+            is_api_key: false,
+        },
+        &data.jwt_encoding_key,
+        Duration::weeks(52).num_seconds(),
+    )?;
+
+    Ok(HttpResponse::Ok().json(AuthResponse { token, user }))
 }
 
 pub(crate) async fn create_discord_client() -> Result<CoreClient, Box<dyn std::error::Error>> {
