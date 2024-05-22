@@ -1,11 +1,8 @@
 use actix_web::{get, post, patch, HttpResponse, web};
 use uuid::Uuid;
-use crate::aredl::levels;
-use crate::auth::{Authenticated, UserAuth};
+use crate::auth::{UserAuth, Permission};
 use crate::aredl::levels::{history, Level, LevelPlace, LevelUpdate};
 use crate::error_handler::ApiError;
-
-const PERM_MODIFY_LEVELS: &str = "level_modify";
 
 #[get("")]
 async fn list() -> Result<HttpResponse, ApiError> {
@@ -13,13 +10,13 @@ async fn list() -> Result<HttpResponse, ApiError> {
     Ok(HttpResponse::Ok().json(levels))
 }
 
-#[post("", wrap="UserAuth::require(PERM_MODIFY_LEVELS)")]
+#[post("", wrap="UserAuth::require(Permission::LevelModify)")]
 async fn create(level: web::Json<LevelPlace>) -> Result<HttpResponse, ApiError> {
     let level = web::block(|| Level::create(level.into_inner())).await??;
     Ok(HttpResponse::Ok().json(level))
 }
 
-#[patch("/{id}", wrap="UserAuth::require(PERM_MODIFY_LEVELS)")]
+#[patch("/{id}", wrap="UserAuth::require(Permission::LevelModify)")]
 async fn update(id: web::Path<Uuid>,level: web::Json<LevelUpdate>) -> Result<HttpResponse, ApiError> {
     let level = web::block(|| Level::update(id.into_inner(), level.into_inner())).await??;
     Ok(HttpResponse::Ok().json(level))

@@ -21,3 +21,5 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 r2d2 = "0.8"
 jsonwebtoken = { version = "9.3", features = ["default"] }
+strum = {version = "0.26", features = ["strum_macros"]}
+strum_macros = "0.26"
