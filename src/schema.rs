@@ -33,6 +33,28 @@ diesel::table! {
 }
 
 diesel::table! {
+    permissions (permission) {
+        privilege_level -> Int4,
+        permission -> Varchar,
+    }
+}
+
+diesel::table! {
+    roles (id) {
+        id -> Int4,
+        privilege_level -> Int4,
+        role_desc -> Varchar,
+    }
+}
+
+diesel::table! {
+    user_roles (role_id, user_id) {
+        role_id -> Int4,
+        user_id -> Uuid,
+    }
+}
+
+diesel::table! {
     users (id) {
         id -> Uuid,
         username -> Varchar,
@@ -46,10 +68,15 @@ diesel::table! {
 }
 
 diesel::joinable!(aredl_position_history -> aredl_levels (affected_level));
+diesel::joinable!(user_roles -> roles (role_id));
+diesel::joinable!(user_roles -> users (user_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     aredl_levels,
     aredl_position_history,
     oauth_requests,
+    permissions,
+    roles,
+    user_roles,
     users,
 );
