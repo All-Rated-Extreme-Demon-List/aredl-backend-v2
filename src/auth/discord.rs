@@ -2,7 +2,7 @@ use std::env;
 use std::sync::Arc;
 
 use actix_web::{get, HttpResponse, web};
-use chrono::Duration;
+use chrono::{DateTime, Duration, Utc};
 use diesel::{ExpressionMethods, RunQueryDsl};
 use diesel::prelude::*;
 use openidconnect::{AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce, OAuth2TokenResponse, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope};
@@ -82,6 +82,7 @@ impl OAuthRequestData {
 #[derive(Debug, Serialize)]
 struct AuthResponse {
     pub token: String,
+    pub expires: DateTime<Utc>,
     pub user: User,
 }
 
@@ -147,16 +148,16 @@ async fn discord_callback(query: web::Query<OAuthCallbackQuery>, data: web::Data
 
     let user = web::block(|| User::upsert(UserUpsert::from(discord_user_data))).await??;
 
-    let token = token::create_token(
-        token::TokenData {
+    let (token, expires) = token::create_token(
+        token::UserClaims {
             user_id: user.id,
             is_api_key: false,
         },
         &data.jwt_encoding_key,
-        Duration::weeks(52).num_seconds(),
+        Duration::weeks(52),
     )?;
 
-    Ok(HttpResponse::Ok().json(AuthResponse { token, user }))
+    Ok(HttpResponse::Ok().json(AuthResponse { token, expires, user }))
 }
 
 pub(crate) async fn create_discord_client() -> Result<CoreClient, Box<dyn std::error::Error>> {
