@@ -18,7 +18,7 @@ pub async fn init_app_state() -> Arc<AuthAppState> {
 
     Arc::new(AuthAppState {
         discord_client,
-        jwt_encoding_key: EncodingKey::from_base64_secret(&jwt_secret).expect("Failed to create jwt encoding key"),
-        jwt_decoding_key: DecodingKey::from_base64_secret(&jwt_secret).expect("Failed to create jwt decoding key")
+        jwt_encoding_key: EncodingKey::from_base64_secret(jwt_secret.as_ref()).expect("Failed to create jwt encoding key"),
+        jwt_decoding_key: DecodingKey::from_base64_secret(jwt_secret.as_ref()).expect("Failed to create jwt decoding key")
     })
 }

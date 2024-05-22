@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use crate::error_handler::ApiError;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct UserClaims {
     pub user_id: Uuid,
     pub is_api_key: bool,
@@ -12,13 +12,13 @@ pub struct UserClaims {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TokenClaims {
-    pub sub: UserClaims,
+    pub sub: String,
     pub iat: usize,
     pub exp: usize,
 }
 
 pub fn create_token(
-    token_data: UserClaims,
+    user_claims: UserClaims,
     encoding_key: &EncodingKey,
     expires_in: Duration,
 ) -> Result<(String, DateTime<Utc>), ApiError> {
@@ -27,8 +27,11 @@ pub fn create_token(
     let iat = now.timestamp() as usize;
     let expire_datetime = now + expires_in;
     let exp = expire_datetime.timestamp() as usize;
+    let user_claims_serialized = serde_json::to_string(&user_claims)
+        .map_err(|_| ApiError::new(500, "Failed to serialize user claims!"))?;
+
     let claims = TokenClaims {
-        sub: token_data,
+        sub: user_claims_serialized,
         exp,
         iat,
     };
@@ -43,13 +46,14 @@ pub fn create_token(
 }
 
 pub fn decode_token<T: Into<String>>(token: T, decoding_key: &DecodingKey) -> Result<UserClaims, ApiError> {
+    let token_str = token.into();
+
     let decoded = decode::<TokenClaims>(
-        &token.into(),
+        &token_str,
         &decoding_key,
         &Validation::new(Algorithm::HS256),
-    );
-    match decoded {
-        Ok(token) => Ok(token.claims.sub),
-        Err(_) => Err(ApiError::new(401, "Invalid token!")),
-    }
+    ).map_err(|e| ApiError::new(401, format!("Invalid token! {}", e.to_string()).as_str()))?;
+
+    serde_json::from_str::<UserClaims>(&decoded.claims.sub)
+        .map_err(|e| ApiError::new(401, format!("Failed to decode claims! {}", e.to_string()).as_str()))
 }

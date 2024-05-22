@@ -1,5 +1,6 @@
 use actix_web::{get, post, patch, HttpResponse, web};
 use uuid::Uuid;
+use crate::auth::{Authenticated, UserAuth};
 use crate::aredl::levels::{history, Level, LevelPlace, LevelUpdate};
 use crate::error_handler::ApiError;
 
@@ -9,8 +10,9 @@ async fn list() -> Result<HttpResponse, ApiError> {
     Ok(HttpResponse::Ok().json(levels))
 }
 
-#[post("/aredl/levels")]
-async fn create(level: web::Json<LevelPlace>) -> Result<HttpResponse, ApiError> {
+#[post("/aredl/levels", wrap="UserAuth::load()")]
+async fn create(level: web::Json<LevelPlace>, auth: Authenticated) -> Result<HttpResponse, ApiError> {
+    let test = auth.user_id;
     let level = web::block(|| Level::create(level.into_inner())).await??;
     Ok(HttpResponse::Ok().json(level))
 }

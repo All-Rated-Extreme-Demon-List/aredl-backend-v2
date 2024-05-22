@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use crate::auth::app_state::AuthAppState;
 use crate::auth::token;
 use crate::{db};
+use crate::auth::token::UserClaims;
 use crate::error_handler::ApiError;
 use crate::schema::oauth_requests;
 use crate::users::{User, UserUpsert};
@@ -149,7 +150,7 @@ async fn discord_callback(query: web::Query<OAuthCallbackQuery>, data: web::Data
     let user = web::block(|| User::upsert(UserUpsert::from(discord_user_data))).await??;
 
     let (token, expires) = token::create_token(
-        token::UserClaims {
+        UserClaims {
             user_id: user.id,
             is_api_key: false,
         },
