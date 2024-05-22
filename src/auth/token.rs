@@ -1,4 +1,4 @@
-use chrono::{DateTime, Duration, NaiveDateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use jsonwebtoken::{Algorithm, decode, DecodingKey, encode, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -25,7 +25,7 @@ pub fn create_token(
 
     let now = Utc::now();
     let iat = now.timestamp() as usize;
-    let expire_datetime = (now + expires_in);
+    let expire_datetime = now + expires_in;
     let exp = expire_datetime.timestamp() as usize;
     let claims = TokenClaims {
         sub: token_data,

@@ -1,4 +1,3 @@
-use actix_web::{FromRequest};
 use diesel::RunQueryDsl;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

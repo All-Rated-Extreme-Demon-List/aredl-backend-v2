@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth::app_state::AuthAppState;
 use crate::auth::token;
-use crate::{db, users};
+use crate::{db};
 use crate::error_handler::ApiError;
 use crate::schema::oauth_requests;
 use crate::users::{User, UserUpsert};
