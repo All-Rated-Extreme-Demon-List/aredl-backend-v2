@@ -24,7 +24,7 @@ async fn update(id: web::Path<Uuid>,level: web::Json<LevelUpdate>) -> Result<Htt
 
 #[get("/{id}")]
 async fn find(id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
-    let level = web::block(|| Level::find(id.into_inner())).await??;
+    let level = web::block(|| Level::find_resolved(id.into_inner())).await??;
     Ok(HttpResponse::Ok().json(level))
 }
 

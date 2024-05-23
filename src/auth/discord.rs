@@ -87,7 +87,7 @@ struct AuthResponse {
     pub user: User,
 }
 
-#[get("/auth/discord")]
+#[get("")]
 async fn discord_auth(data: web::Data<Arc<AuthAppState>>) -> Result<HttpResponse, ApiError> {
     let client = &data.discord_client;
 
@@ -113,7 +113,7 @@ async fn discord_auth(data: web::Data<Arc<AuthAppState>>) -> Result<HttpResponse
     Ok(HttpResponse::Found().append_header(("Location", authorize_url.to_string())).finish())
 }
 
-#[get("/auth/discord/callback")]
+#[get("/callback")]
 async fn discord_callback(query: web::Query<OAuthCallbackQuery>, data: web::Data<Arc<AuthAppState>>) -> Result<HttpResponse, ApiError> {
     let client = &data.discord_client;
 
@@ -185,7 +185,9 @@ pub(crate) async fn create_discord_client() -> Result<CoreClient, Box<dyn std::e
 }
 
 pub fn init_discord_routes(config: &mut web::ServiceConfig) {
-    config
-        .service(discord_auth)
-        .service(discord_callback);
+    config.service(
+        web::scope("/auth/discord")
+            .service(discord_auth)
+            .service(discord_callback)
+    );
 }

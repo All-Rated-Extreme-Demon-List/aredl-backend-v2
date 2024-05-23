@@ -5,10 +5,25 @@ diesel::table! {
         id -> Uuid,
         position -> Int4,
         name -> Varchar,
+        publisher_id -> Uuid,
         points -> Int4,
         legacy -> Bool,
         level_id -> Int4,
         two_player -> Bool,
+    }
+}
+
+diesel::table! {
+    aredl_pack_levels (pack_id, level_id) {
+        pack_id -> Uuid,
+        level_id -> Uuid,
+    }
+}
+
+diesel::table! {
+    aredl_packs (id) {
+        id -> Uuid,
+        name -> Varchar,
     }
 }
 
@@ -20,6 +35,40 @@ diesel::table! {
         legacy -> Nullable<Bool>,
         affected_level -> Uuid,
         created_at -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
+    aredl_records (id) {
+        id -> Uuid,
+        level_id -> Uuid,
+        submitted_by -> Uuid,
+        mobile -> Bool,
+        ldm_id -> Nullable<Int4>,
+        video_url -> Varchar,
+        raw_url -> Nullable<Varchar>,
+        reviewer_id -> Nullable<Uuid>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    aredl_submissions (id) {
+        id -> Uuid,
+        level_id -> Uuid,
+        submitted_by -> Uuid,
+        mobile -> Bool,
+        ldm_id -> Nullable<Int4>,
+        video_url -> Varchar,
+        raw_url -> Nullable<Varchar>,
+        reviewer_id -> Nullable<Uuid>,
+        priority -> Bool,
+        is_update -> Bool,
+        is_rejected -> Bool,
+        rejection_reason -> Nullable<Varchar>,
+        additional_notes -> Nullable<Varchar>,
+        created_at -> Timestamp,
     }
 }
 
@@ -67,13 +116,22 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(aredl_levels -> users (publisher_id));
+diesel::joinable!(aredl_pack_levels -> aredl_levels (level_id));
+diesel::joinable!(aredl_pack_levels -> aredl_packs (pack_id));
 diesel::joinable!(aredl_position_history -> aredl_levels (affected_level));
+diesel::joinable!(aredl_records -> aredl_levels (level_id));
+diesel::joinable!(aredl_submissions -> aredl_levels (level_id));
 diesel::joinable!(user_roles -> roles (role_id));
 diesel::joinable!(user_roles -> users (user_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     aredl_levels,
+    aredl_pack_levels,
+    aredl_packs,
     aredl_position_history,
+    aredl_records,
+    aredl_submissions,
     oauth_requests,
     permissions,
     roles,
