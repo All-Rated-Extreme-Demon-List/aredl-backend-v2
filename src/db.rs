@@ -1,14 +1,14 @@
-
 use crate::error_handler::ApiError;
 use std::env;
 use diesel::{PgConnection, r2d2};
 use diesel::r2d2::ConnectionManager;
+use diesel_migrations::{EmbeddedMigrations, MigrationHarness};
 use lazy_static::lazy_static;
 
 type Pool = r2d2::Pool<ConnectionManager<PgConnection>>;
 pub type DbConnection = r2d2::PooledConnection<ConnectionManager<PgConnection>>;
 
-//embed_migrations!();
+pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
 lazy_static! {
     static ref POOL: Pool = {
@@ -23,7 +23,10 @@ lazy_static! {
 
 pub fn init() {
     lazy_static::initialize(&POOL);
-    connection().expect("Failed to get db connection");
+    connection()
+        .expect("Failed to get db connection");
+    connection()?.run_pending_migrations(MIGRATIONS)
+        .expect("Failed to run pending migrations!");
 }
 
 pub fn connection() -> Result<DbConnection, ApiError> {
