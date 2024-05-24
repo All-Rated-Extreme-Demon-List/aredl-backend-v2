@@ -31,9 +31,12 @@ impl fmt::Display for ApiError {
 impl From<DieselError> for ApiError {
     fn from(error: DieselError) -> Self {
         match error {
-            DieselError::DatabaseError(_, err) => ApiError::new(409, err.message()),
-            DieselError::NotFound => ApiError::new(404, "Record not found"),
-            err => ApiError::new(500, &format!("Unknown Diesel error: {}", err)),
+            DieselError::DatabaseError(_, err) =>
+                ApiError::new(409, err.message()),
+            DieselError::NotFound =>
+                ApiError::new(404, "Record not found"),
+            err =>
+                ApiError::new(500, &format!("Unknown Diesel error: {}", err)),
         }
     }
 }
@@ -46,7 +49,8 @@ impl From<BlockingError> for ApiError {
 
 impl ResponseError for ApiError {
     fn error_response(&self) -> HttpResponse {
-        let status_code = StatusCode::from_u16(self.error_status_code).unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR);
+        let status_code = StatusCode::from_u16(self.error_status_code)
+            .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR);
 
         let error_message = match status_code.as_u16() < 500 {
             true => self.error_message.clone(),

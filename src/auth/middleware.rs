@@ -87,7 +87,10 @@ impl<S> Service<ServiceRequest> for AuthMiddleware<S>
 
         if token.is_none() {
             return if require_auth {
-                Box::pin(ready(Err(ErrorUnauthorized(ApiError::new(403, "Unauthorized")))))
+                Box::pin(ready(
+                    Err(ErrorUnauthorized(
+                        ApiError::new(403, "Unauthorized")
+                    ))))
             } else {
                 // auth is not required
                 let fut = self.service.call(req);
@@ -98,14 +101,19 @@ impl<S> Service<ServiceRequest> for AuthMiddleware<S>
             }
         }
 
-        let app_state = req.app_data::<web::Data<Arc<AuthAppState>>>().unwrap();
+        let app_state = req
+            .app_data::<web::Data<Arc<AuthAppState>>>()
+            .unwrap();
 
         let user_claims = match decode_token(
             &token.unwrap(),
             &app_state.jwt_decoding_key,
         ) {
             Ok(claims) => claims,
-            Err(e) => return Box::pin(ready(Err(ErrorUnauthorized(ApiError::new(403, e.error_message.as_str())))))
+            Err(e) =>
+                return Box::pin(ready(
+                    Err(ErrorUnauthorized(ApiError::new(403, e.error_message.as_str())))
+                ))
         };
 
         let user_id = user_claims.user_id;
@@ -117,11 +125,15 @@ impl<S> Service<ServiceRequest> for AuthMiddleware<S>
         let required_permission = self.required_perm.clone().unwrap();
 
         Box::pin(async move {
-            let has_permission = web::block(move || check_permission(user_id, required_permission)).await?
+            let has_permission = web::block(move ||
+                check_permission(user_id, required_permission)
+            ).await?
                 .map_err(|_| ApiError::new(500, "Failed to retrieve permission"))?;
 
             if !has_permission {
-                return Err(ErrorUnauthorized(ApiError::new(403, "Required permission to access this endpoint is missing")))
+                return Err(ErrorUnauthorized(
+                    ApiError::new(403, "Required permission to access this endpoint is missing"))
+                )
             }
 
             let res = fut.await?;
