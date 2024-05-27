@@ -25,7 +25,7 @@ pub fn init() {
     lazy_static::initialize(&POOL);
     connection()
         .expect("Failed to get db connection");
-    connection()?.run_pending_migrations(MIGRATIONS)
+    connection().unwrap().run_pending_migrations(MIGRATIONS)
         .expect("Failed to run pending migrations!");
 }
 

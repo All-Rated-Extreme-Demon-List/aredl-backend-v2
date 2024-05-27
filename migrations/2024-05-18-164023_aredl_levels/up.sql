@@ -11,6 +11,12 @@ CREATE TABLE aredl_levels (
     UNIQUE (level_id, two_player)
 );
 
+CREATE TABLE aredl_levels_created (
+    level_id uuid NOT NULL REFERENCES aredl_levels(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    PRIMARY KEY(level_id, user_id)
+);
+
 CREATE TABLE aredl_position_history (
     i SERIAL,
     new_position INT,
@@ -46,9 +52,6 @@ BEGIN
     SET position = position + 1
     WHERE position >= NEW.position AND id <> NEW.id;
 
-    INSERT INTO aredl_position_history(new_position, old_position, legacy, affected_level)
-    VALUES (NEW.position, NULL, NEW.legacy, NEW.id);
-
     RETURN null;
 END;
 $$ LANGUAGE plpgsql;
@@ -56,7 +59,23 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER aredl_level_place
 AFTER INSERT ON "aredl_levels"
 FOR EACH ROW
+WHEN (pg_trigger_depth() < 1)
 EXECUTE PROCEDURE aredl_level_place();
+
+CREATE FUNCTION aredl_level_place_history() RETURNS TRIGGER AS
+$$
+BEGIN
+    INSERT INTO aredl_position_history(new_position, old_position, legacy, affected_level)
+    VALUES (NEW.position, NULL, NEW.legacy, NEW.id);
+
+    RETURN null;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER aredl_level_place_history
+AFTER INSERT ON "aredl_levels"
+FOR EACH ROW
+EXECUTE PROCEDURE aredl_level_place_history();
 
 CREATE FUNCTION aredl_level_move() RETURNS TRIGGER AS
 $$
@@ -222,12 +241,19 @@ BEFORE INSERT ON "aredl_levels"
 FOR EACH ROW
 EXECUTE PROCEDURE aredl_levels_points_before_insert();
 
-CREATE FUNCTION aredl_levels_points_after_insert() RETURNS TRIGGER AS
+CREATE FUNCTION aredl_recalculate_points() RETURNS void AS
 $$
 BEGIN
     UPDATE aredl_levels
     SET points = aredl_point_formula(position, CAST((SELECT COUNT(*) FROM aredl_levels) AS INT));
-    RETURN null;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE FUNCTION aredl_levels_points_after_insert() RETURNS TRIGGER AS
+$$
+BEGIN
+   PERFORM aredl_recalculate_points();
+   RETURN null;
 END;
 $$ LANGUAGE plpgsql;
 
