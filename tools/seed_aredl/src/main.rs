@@ -4,7 +4,8 @@ mod error_handler;
 use std::{env, fs};
 use std::collections::{HashMap};
 use std::path::Path;
-use diesel::{Connection, ExpressionMethods, Insertable, PgConnection, Queryable, QueryDsl, RunQueryDsl, Selectable};
+use diesel::{Connection, ExpressionMethods, Insertable, PgConnection, QueryDsl, RunQueryDsl};
+use diesel::internal::derives::multiconnection::chrono::{Duration, Utc};
 use diesel::r2d2::ConnectionManager;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use dotenv::dotenv;
@@ -282,21 +283,28 @@ fn main() {
                 ).collect::<Vec<_>>()
             ).execute(conn)?;
 
+        let now = Utc::now().naive_utc();
+
         let records = levels.iter().map(|(level,level_data_ext)|
             (
                 aredl_records::level_id.eq(level_map.get(&(level.id, level_data_ext.two_player)).unwrap()),
                 aredl_records::submitted_by.eq(user_map.get(&level.verifier.to_lowercase()).unwrap()),
                 aredl_records::mobile.eq(false),
                 aredl_records::video_url.eq(&level.verification),
+                aredl_records::created_at.eq(now),
             )
         ).chain(
             levels.iter().flat_map(|(level,level_data_ext)|
-                level.records.iter().map(|record| (
-                    aredl_records::level_id.eq(level_map.get(&(level.id, level_data_ext.two_player)).unwrap()),
-                    aredl_records::submitted_by.eq(user_map.get(&record.user.to_lowercase()).unwrap()),
-                    aredl_records::mobile.eq(record.mobile.unwrap_or(false)),
-                    aredl_records::video_url.eq(&record.link),
-                ))
+                level.records.iter().enumerate().map(|(index, record)| {
+                    let created_at = now + Duration::seconds((index + 1) as i64);
+                    (
+                        aredl_records::level_id.eq(level_map.get(&(level.id, level_data_ext.two_player)).unwrap()),
+                        aredl_records::submitted_by.eq(user_map.get(&record.user.to_lowercase()).unwrap()),
+                        aredl_records::mobile.eq(record.mobile.unwrap_or(false)),
+                        aredl_records::video_url.eq(&record.link),
+                        aredl_records::created_at.eq(created_at),
+                    )
+                })
             )
         ).collect::<Vec<_>>();
 

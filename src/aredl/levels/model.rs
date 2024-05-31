@@ -2,7 +2,7 @@ use diesel::{ExpressionMethods, RunQueryDsl};
 use diesel::prelude::*;
 use uuid::Uuid;
 use serde::{Deserialize, Serialize};
-use crate::schema::{aredl_levels, users};
+use crate::schema::{aredl_levels, aredl_records, users};
 use crate::db;
 use crate::error_handler::ApiError;
 
@@ -17,14 +17,6 @@ pub struct Level {
     pub legacy: bool,
     pub level_id: i32,
     pub two_player: bool,
-}
-
-#[derive(Serialize, Deserialize, Queryable, Selectable, Debug)]
-#[diesel(table_name=users)]
-pub struct Publisher {
-    pub id: Uuid,
-    pub username: String,
-    pub global_name: String,
 }
 
 #[derive(Serialize, Deserialize, Insertable)]
@@ -48,28 +40,50 @@ pub struct LevelUpdate {
     pub two_player: Option<bool>,
 }
 
+#[derive(Serialize, Deserialize, Queryable, Selectable, Debug)]
+#[diesel(table_name=users)]
+pub struct User {
+    pub id: Uuid,
+    pub username: String,
+    pub global_name: String,
+}
+
+pub trait RecordSubmitter {}
+
+impl RecordSubmitter for Uuid {}
+impl RecordSubmitter for User {}
+
+#[derive(Serialize, Queryable, Selectable, Debug)]
+#[diesel(table_name=aredl_records)]
+pub struct Record<T>
+where T : RecordSubmitter
+{
+    pub id: Uuid,
+    pub submitted_by: T,
+    pub mobile: bool,
+    pub video_url: String,
+}
+
+// Level struct that has publisher and verification resolved
+#[derive(Serialize, Debug)]
+pub struct ResolvedLevel {
+    pub id : Uuid,
+    pub position: i32,
+    pub name: String,
+    pub points: i32,
+    pub legacy: bool,
+    pub level_id: i32,
+    pub two_player: bool,
+    pub publisher: User,
+    pub verification: Option<Record<User>>,
+}
+
 impl Level {
     pub fn find_all() -> Result<Vec<Self>, ApiError>{
         let levels = aredl_levels::table
             .order(aredl_levels::position)
             .load::<Self>(&mut db::connection()?)?;
         Ok(levels)
-    }
-
-    pub fn find(id: Uuid) -> Result<Self, ApiError> {
-        let level = aredl_levels::table
-            .filter(aredl_levels::id.eq(id))
-            .first(&mut db::connection()?)?;
-        Ok(level)
-    }
-
-    pub fn find_resolved(id: Uuid) -> Result<(Self, Publisher), ApiError> {
-        let level_resolved = aredl_levels::table
-            .filter(aredl_levels::id.eq(id))
-            .inner_join(users::table)
-            .select((Level::as_select(), Publisher::as_select()))
-            .first::<(Level, Publisher)>(&mut db::connection()?)?;
-        Ok(level_resolved)
     }
 
     pub fn create(level: LevelPlace) -> Result<Self, ApiError> {
@@ -85,5 +99,59 @@ impl Level {
             .filter(aredl_levels::id.eq(id))
             .get_result(&mut db::connection()?)?;
         Ok(level)
+    }
+}
+
+impl ResolvedLevel {
+    pub fn find(id: Uuid) -> Result<Self, ApiError> {
+        let (level, publisher) = aredl_levels::table
+            .filter(aredl_levels::id.eq(id))
+            .inner_join(users::table.on(aredl_levels::publisher_id.eq(users::id)))
+            .select(
+                (Level::as_select(), User::as_select())
+            )
+            .first::<(Level, User)>(&mut db::connection()?)?;
+
+        let verification = aredl_records::table
+            .filter(aredl_records::level_id.eq(id))
+            .filter(aredl_records::placement_order.eq(0))
+            .inner_join(users::table.on(aredl_records::submitted_by.eq(users::id)))
+            .select(
+                (Record::<Uuid>::as_select(), User::as_select())
+            )
+            .first::<(Record<Uuid>, User)>(&mut db::connection()?)
+            .optional()?;
+
+        let verification = verification.map(
+            |record| Record::from(record)
+        );
+
+        let resolved_level = Self::from_data(level, publisher, verification);
+        Ok(resolved_level)
+    }
+
+    pub fn from_data(level: Level, publisher: User, verification: Option<Record<User>>) -> Self {
+        Self {
+            id: level.id,
+            position: level.position,
+            name: level.name,
+            points: level.points,
+            legacy: level.legacy,
+            level_id: level.level_id,
+            two_player: level.two_player,
+            publisher,
+            verification,
+        }
+    }
+}
+
+impl From<(Record<Uuid>, User)> for Record<User> {
+    fn from((record, user): (Record<Uuid>, User)) -> Self {
+        Self {
+            id: record.id,
+            submitted_by: user,
+            mobile: record.mobile,
+            video_url: record.video_url,
+        }
     }
 }

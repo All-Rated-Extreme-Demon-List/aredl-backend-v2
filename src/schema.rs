@@ -54,6 +54,7 @@ diesel::table! {
         ldm_id -> Nullable<Int4>,
         video_url -> Varchar,
         raw_url -> Nullable<Varchar>,
+        placement_order -> Int4,
         reviewer_id -> Nullable<Uuid>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
