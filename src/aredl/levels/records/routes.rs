@@ -1,4 +1,4 @@
-use actix_web::{get, HttpResponse, post, web};
+use actix_web::{delete, get, HttpResponse, patch, post, web};
 use uuid::Uuid;
 use crate::auth::{UserAuth, Permission};
 use crate::aredl::levels::records::{Record, RecordInsert, RecordResolved, RecordUpdate};
@@ -28,18 +28,29 @@ async fn create(level_id: web::Path<Uuid>, record: web::Json<RecordInsert>) -> R
     Ok(HttpResponse::Ok().json(record))
 }
 
-#[post("/{id}", wrap="UserAuth::require(Permission::RecordModify)")]
-async fn update(level_id: web::Path<Uuid>, id: web::Path<Uuid>, record: web::Json<RecordUpdate>) -> Result<HttpResponse, ApiError> {
+#[patch("/{id}", wrap="UserAuth::require(Permission::RecordModify)")]
+async fn update(path: web::Path<(Uuid, Uuid)>, record: web::Json<RecordUpdate>) -> Result<HttpResponse, ApiError> {
+    let (level_id, id) = path.into_inner();
     let record = web::block(
-        || Record::update(level_id.into_inner(), id.into_inner(), record.into_inner())
+        move || Record::update(level_id, id, record.into_inner())
+    ).await??;
+    Ok(HttpResponse::Ok().json(record))
+}
+
+#[delete("/{id}", wrap="UserAuth::require(Permission::RecordModify)")]
+async fn delete(path: web::Path<(Uuid, Uuid)>) -> Result<HttpResponse, ApiError> {
+    let (level_id, id) = path.into_inner();
+    let record = web::block(
+        move || Record::delete(level_id, id)
     ).await??;
     Ok(HttpResponse::Ok().json(record))
 }
 
 #[get("/{id}", wrap="UserAuth::require(Permission::RecordModify)")]
-async fn find(level_id: web::Path<Uuid>, id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
+async fn find(path: web::Path<(Uuid, Uuid)>) -> Result<HttpResponse, ApiError> {
+    let (level_id, id) = path.into_inner();
     let record = web::block(
-        || Record::find(level_id.into_inner(), id.into_inner())
+        move || Record::find(level_id, id)
     ).await??;
     Ok(HttpResponse::Ok().json(record))
 }
@@ -52,5 +63,6 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .service(find)
             .service(create)
             .service(update)
+            .service(delete)
     );
 }

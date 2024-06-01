@@ -87,6 +87,14 @@ impl Record {
         Ok(record)
     }
 
+    pub fn delete(level_id: Uuid, record_id: Uuid) -> Result<Self, ApiError> {
+        let record = diesel::delete(aredl_records::table)
+            .filter(aredl_records::level_id.eq(level_id))
+            .filter(aredl_records::id.eq(record_id))
+            .get_result::<Self>(&mut db::connection()?)?;
+        Ok(record)
+    }
+
     pub fn find_all(level_id: Uuid) -> Result<Vec<Self>, ApiError> {
         let records = aredl_records::table
             .filter(aredl_records::level_id.eq(level_id))
