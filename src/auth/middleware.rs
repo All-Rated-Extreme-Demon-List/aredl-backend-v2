@@ -4,18 +4,12 @@ use std::task::{Context, Poll};
 use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
 use actix_web::{HttpMessage, web};
 use actix_web::error::ErrorUnauthorized;
-use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl};
-use diesel::dsl::max;
 use futures_util::future::{LocalBoxFuture, ready, Ready};
-use uuid::Uuid;
 
 use crate::auth::app_state::AuthAppState;
-use crate::auth::Permission;
+use crate::auth::{Permission, permission};
 use crate::auth::token::{decode_token, UserClaims};
-use crate::db;
 use crate::error_handler::ApiError;
-use crate::schema::{permissions, roles};
-use crate::schema::user_roles;
 
 pub struct UserAuth {
     required_perm: Option<Permission>,
@@ -122,11 +116,18 @@ impl<S> Service<ServiceRequest> for AuthMiddleware<S>
 
         let fut = self.service.call(req);
 
+        if !require_auth {
+            return Box::pin(async move {
+                let res = fut.await?;
+                Ok(res)
+            })
+        }
+
         let required_permission = self.required_perm.clone().unwrap();
 
         Box::pin(async move {
             let has_permission = web::block(move ||
-                check_permission(user_id, required_permission)
+                permission::check_permission(user_id, required_permission)
             ).await?
                 .map_err(|_| ApiError::new(500, "Failed to retrieve permission"))?;
 
@@ -140,23 +141,4 @@ impl<S> Service<ServiceRequest> for AuthMiddleware<S>
             Ok(res)
         })
     }
-}
-
-fn get_privilege_level(user_id: Uuid) -> Result<i32, ApiError> {
-    let privilege_level: Option<i32> = user_roles::table
-        .inner_join(roles::table.on(roles::id.eq(user_roles::role_id)))
-        .filter(user_roles::user_id.eq(user_id))
-        .select(max(roles::privilege_level))
-        .first(&mut db::connection()?)
-        .unwrap_or(None);
-    Ok(privilege_level.unwrap_or(0))
-}
-
-fn check_permission(user_id: Uuid, permission: Permission) -> Result<bool, ApiError> {
-    let max_privilege = get_privilege_level(user_id)?;
-    let required_privilege = permissions::table
-        .filter(permissions::permission.eq(permission.to_string()))
-        .select(permissions::privilege_level)
-        .first::<i32>(&mut db::connection()?)?;
-    Ok(required_privilege <= max_privilege)
 }

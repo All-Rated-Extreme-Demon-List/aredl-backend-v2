@@ -1,6 +1,7 @@
 use std::future::{Ready, ready};
 use actix_web::{FromRequest, HttpMessage, HttpRequest};
 use actix_web::dev::Payload;
+use crate::auth::{Permission, permission};
 use crate::auth::token::UserClaims;
 use crate::error_handler::ApiError;
 
@@ -19,6 +20,12 @@ impl FromRequest for Authenticated {
         };
 
         ready(result)
+    }
+}
+
+impl Authenticated {
+    pub fn has_permission(&self, permission: Permission) -> Result<bool, ApiError> {
+        permission::check_permission(self.user_id, permission)
     }
 }
 
