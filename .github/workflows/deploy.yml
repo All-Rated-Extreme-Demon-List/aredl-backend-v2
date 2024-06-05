@@ -19,6 +19,12 @@ jobs:
     - name: Build
       run: cargo build --release
 
+    - name: List Release Directory (Debugging Step1)
+      run: ls -al ./target
+
+    - name: List Release Directory (Debugging Step2)
+      run: ls -al ./target/release
+
     - name: Deploy to server
       uses: burnett01/rsync-deployments@6.0.0
       with:
