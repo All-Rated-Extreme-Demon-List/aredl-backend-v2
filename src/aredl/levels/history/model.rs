@@ -32,5 +32,7 @@ impl HistoryLevelFull {
             ))
             .load::<HistoryLevelFull>(&mut db::connection()?)?;
         Ok(entries)
+
+
     }
 }

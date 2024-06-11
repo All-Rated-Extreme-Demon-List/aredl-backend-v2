@@ -1,7 +1,7 @@
 use actix_web::{get, post, patch, HttpResponse, web};
 use uuid::Uuid;
 use crate::auth::{UserAuth, Permission};
-use crate::aredl::levels::{history, packs, Level, LevelPlace, LevelUpdate, ResolvedLevel, records};
+use crate::aredl::levels::{history, packs, Level, LevelPlace, LevelUpdate, ResolvedLevel, records, creators};
 use crate::error_handler::ApiError;
 
 #[get("")]
@@ -46,5 +46,6 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .configure(history::init_routes)
             .configure(packs::init_routes)
             .configure(records::init_routes)
+            .configure(creators::init_routes)
     );
 }
