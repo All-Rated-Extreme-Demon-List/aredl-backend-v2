@@ -42,4 +42,18 @@ jobs:
         username: ${{ secrets.DEPLOY_USER }}
         key: ${{ secrets.DEPLOY_KEY }}
         script: sudo systemctl restart aredl-backend-v2
-      
+
+    - name: Build migration exe
+      run: |
+        cd tools/seed_aredl
+        cargo build --release
+
+    - name: Deploy migration
+      uses: burnett01/rsync-deployments@6.0.0
+      with:
+        switches: -avz
+        path: ./target/release/seed_aredl
+        remote_path: ${{ secrets.DEPLOY_PATH }}
+        remote_host: ${{ secrets.DEPLOY_HOST }}
+        remote_user: ${{ secrets.DEPLOY_USER }}
+        remote_key: ${{ secrets.DEPLOY_KEY }}
