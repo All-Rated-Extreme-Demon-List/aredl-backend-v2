@@ -52,7 +52,7 @@ jobs:
       uses: burnett01/rsync-deployments@6.0.0
       with:
         switches: -avz
-        path: ./target/release/seed_aredl
+        path: ./tools/seed_aredl/target/release/seed_aredl
         remote_path: ${{ secrets.DEPLOY_PATH }}
         remote_host: ${{ secrets.DEPLOY_HOST }}
         remote_user: ${{ secrets.DEPLOY_USER }}
