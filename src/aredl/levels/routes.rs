@@ -1,7 +1,7 @@
 use actix_web::{get, post, patch, HttpResponse, web};
 use uuid::Uuid;
 use crate::auth::{UserAuth, Permission};
-use crate::aredl::levels::{history, packs, Level, LevelPlace, LevelUpdate, ResolvedLevel, records, creators};
+use crate::aredl::levels::{history, packs, Level, LevelPlace, LevelUpdate, ResolvedLevel, records, creators, LevelId};
 use crate::error_handler::ApiError;
 
 #[get("")]
@@ -21,17 +21,17 @@ async fn create(level: web::Json<LevelPlace>) -> Result<HttpResponse, ApiError> 
 }
 
 #[patch("/{id}", wrap="UserAuth::require(Permission::LevelModify)")]
-async fn update(id: web::Path<Uuid>,level: web::Json<LevelUpdate>) -> Result<HttpResponse, ApiError> {
+async fn update(id: web::Path<LevelId>,level: web::Json<LevelUpdate>) -> Result<HttpResponse, ApiError> {
     let level = web::block(
-        || Level::update(id.into_inner(), level.into_inner())
+        || Level::update(id.into_inner().into(), level.into_inner())
     ).await??;
     Ok(HttpResponse::Ok().json(level))
 }
 
 #[get("/{id}")]
-async fn find(id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
+async fn find(id: web::Path<LevelId>) -> Result<HttpResponse, ApiError> {
     let level = web::block(
-        || ResolvedLevel::find(id.into_inner())
+        || ResolvedLevel::find(id.into_inner().into())
     ).await??;
     Ok(HttpResponse::Ok().json(level))
 }
