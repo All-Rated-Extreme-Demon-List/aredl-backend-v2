@@ -259,7 +259,7 @@ fn main() {
             .values(
                 pack_data.iter().flat_map(|pack|
                     pack.levels.iter().map(|level_name|(
-                        aredl_pack_levels::level_id.eq(level_map.get(&(*level_id_map.get(level_name).unwrap(), false)).unwrap()),
+                        aredl_pack_levels::level_id.eq(level_map.get(&(*level_id_map.get(level_name).unwrap(), level_name.ends_with("2p"))).unwrap()),
                         aredl_pack_levels::pack_id.eq(pack_map.get(&pack.name).unwrap())
                         )
                     )
