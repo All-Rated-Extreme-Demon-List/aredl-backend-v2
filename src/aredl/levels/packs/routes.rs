@@ -1,5 +1,4 @@
 use actix_web::{get, HttpResponse, web};
-use uuid::Uuid;
 use crate::aredl::levels::LevelId;
 use crate::aredl::levels::packs::Pack;
 use crate::error_handler::ApiError;

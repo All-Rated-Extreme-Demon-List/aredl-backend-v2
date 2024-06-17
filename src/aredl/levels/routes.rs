@@ -1,5 +1,4 @@
 use actix_web::{get, post, patch, HttpResponse, web};
-use uuid::Uuid;
 use crate::auth::{UserAuth, Permission};
 use crate::aredl::levels::{history, packs, Level, LevelPlace, LevelUpdate, ResolvedLevel, records, creators, LevelId};
 use crate::error_handler::ApiError;
