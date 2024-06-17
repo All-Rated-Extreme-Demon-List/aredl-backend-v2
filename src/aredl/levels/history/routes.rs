@@ -1,7 +1,6 @@
 use actix_web::{get, HttpResponse, web};
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
-use strum_macros::{Display, EnumString};
 use uuid::Uuid;
 use crate::aredl::levels::history::HistoryLevelFull;
 use crate::aredl::levels::LevelId;
@@ -30,8 +29,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
     );
 }
 
-#[derive(Clone, EnumString, Display, Serialize, Deserialize)]
-#[strum(serialize_all="snake_case")]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum HistoryEvent {
     Placed,
     MovedUp,
@@ -57,6 +55,7 @@ impl HistoryEvent {
 #[derive(Serialize, Deserialize)]
 pub struct HistoryLevelResponse {
     pub position: Option<i32>,
+    pub position_diff: i32,
     pub event: HistoryEvent,
     pub legacy: bool,
     pub action_at: NaiveDateTime,
@@ -68,6 +67,7 @@ impl HistoryLevelResponse {
     pub fn from_data(data: &HistoryLevelFull, prev_position: Option<i32>, level_id: Uuid) -> Self {
         Self {
             position: data.position,
+            position_diff: data.position.unwrap_or(0) - prev_position.unwrap_or(0),
             event: HistoryEvent::from_history(data, prev_position, level_id),
             legacy: data.legacy,
             action_at: data.action_at,
