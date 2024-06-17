@@ -185,7 +185,7 @@ WITH RECURSIVE ranked_history AS (
     FROM aredl_position_history
 ),
 full_history AS (
-	SELECT i, affected_level AS id, new_position AS position, CAST(NULL AS INT) as prev_pos, legacy, legacy AS prev_legacy, created_at AS action_at, affected_level AS cause
+	SELECT i, affected_level AS id, new_position AS position, CAST(NULL AS INT) as prev_pos, legacy, legacy AS prev_legacy, created_at AS action_at, affected_level AS cause, false AS moved
 	FROM ranked_history
 	WHERE old_position IS NULL
 	UNION
@@ -207,11 +207,12 @@ full_history AS (
 		(CASE WHEN r.affected_level = h.id AND r.legacy IS NOT NULL THEN r.legacy ELSE h.legacy END) AS legacy,
 		h.legacy AS prev_legacy,
 		r.created_at AS action_at,
-		r.affected_level as cause
+		r.affected_level as cause,
+		(r.old_position IS NOT NULL AND r.new_position IS NOT NULL) as moved
 	FROM ranked_history r
 	INNER JOIN full_history h ON r.i = h.i + 1
 )
-SELECT id as affected_level, position, legacy, action_at, cause
+SELECT id as affected_level, position, moved, legacy, action_at, cause
 FROM full_history
 WHERE prev_pos <> position OR prev_legacy <> legacy OR prev_pos IS NULL;
 

@@ -11,6 +11,7 @@ use crate::schema::aredl_levels;
 #[derive(Serialize, Deserialize, Queryable)]
 pub struct HistoryLevelFull {
     pub position: i32,
+    pub moved: bool,
     pub legacy: bool,
     pub action_at: NaiveDateTime,
     pub cause_id: Uuid,
