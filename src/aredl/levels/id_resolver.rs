@@ -1,5 +1,4 @@
 use std::fmt::Formatter;
-use std::str::FromStr;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 use serde::{Deserialize, Deserializer};
 use serde::de::{Error, Visitor};
