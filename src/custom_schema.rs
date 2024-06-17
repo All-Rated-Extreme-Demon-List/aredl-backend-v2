@@ -4,6 +4,7 @@ diesel::table! {
     aredl_position_history_full_view (affected_level) {
         affected_level -> Uuid,
         position -> Int4,
+        moved -> Bool,
         legacy -> Bool,
         action_at -> Timestamp,
         cause -> Uuid,

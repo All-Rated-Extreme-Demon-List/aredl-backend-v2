@@ -26,6 +26,7 @@ impl HistoryLevelFull {
             .order_by(aredl_position_history_full_view::action_at)
             .select((
                 aredl_position_history_full_view::position,
+                aredl_position_history_full_view::moved,
                 aredl_position_history_full_view::legacy,
                 aredl_position_history_full_view::action_at,
                 aredl_position_history_full_view::cause,
