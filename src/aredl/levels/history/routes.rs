@@ -53,14 +53,19 @@ impl HistoryEvent {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct HistoryLevel {
+    pub id: Uuid,
+    pub name: String,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct HistoryLevelResponse {
     pub position: Option<i32>,
     pub position_diff: i32,
     pub event: HistoryEvent,
     pub legacy: bool,
     pub action_at: NaiveDateTime,
-    pub cause_id: Uuid,
-    pub cause_name: String,
+    pub cause: HistoryLevel,
 }
 
 impl HistoryLevelResponse {
@@ -71,8 +76,10 @@ impl HistoryLevelResponse {
             event: HistoryEvent::from_history(data, prev_position, level_id),
             legacy: data.legacy,
             action_at: data.action_at,
-            cause_id: data.cause_id,
-            cause_name: data.cause_name.clone(),
+            cause: HistoryLevel {
+                id: data.cause_id,
+                name: data.cause_name.clone(),
+            }
         }
     }
 }
