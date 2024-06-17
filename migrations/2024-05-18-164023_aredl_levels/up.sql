@@ -23,6 +23,8 @@ CREATE TABLE aredl_position_history (
     old_position INT,
     legacy BOOLEAN,
     affected_level uuid NOT NULL,
+    level_above uuid DEFAULT NULL REFERENCES aredl_levels(id) ON DELETE SET NULL ON UPDATE CASCADE,
+    level_below uuid DEFAULT NULL REFERENCES aredl_levels(id) ON DELETE SET NULL ON UPDATE CASCADE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY(i),
     CONSTRAINT fk_level
@@ -64,9 +66,15 @@ EXECUTE PROCEDURE aredl_level_place();
 
 CREATE FUNCTION aredl_level_place_history() RETURNS TRIGGER AS
 $$
+DECLARE
+  	above uuid;
+  	below uuid;
 BEGIN
-    INSERT INTO aredl_position_history(new_position, old_position, legacy, affected_level)
-    VALUES (NEW.position, NULL, NEW.legacy, NEW.id);
+    above := (SELECT id FROM aredl_levels WHERE position = NEW.position - 1);
+    below := (SELECT id FROM aredl_levels WHERE position = NEW.position + 1);
+
+    INSERT INTO aredl_position_history(new_position, old_position, legacy, affected_level, level_above, level_below)
+    VALUES (NEW.position, NULL, NEW.legacy, NEW.id, above, below);
 
     RETURN null;
 END;
@@ -82,6 +90,8 @@ $$
 DECLARE
     move_dir int;
     legacy_history boolean;
+    above uuid;
+    below uuid;
 BEGIN
     IF NEW.position = OLD.position AND NEW.legacy = OLD.legacy THEN
         RETURN null;
@@ -97,8 +107,11 @@ BEGIN
         legacy_history := NEW.legacy;
     END IF;
 
-    INSERT INTO aredl_position_history(new_position, old_position, legacy, affected_level)
-    VALUES (NEW.position, OLD.position, legacy_history, NEW.id);
+    above := (SELECT id FROM aredl_levels WHERE position = NEW.position - 1);
+    below := (SELECT id FROM aredl_levels WHERE position = NEW.position + 1);
+
+    INSERT INTO aredl_position_history(new_position, old_position, legacy, affected_level, level_above, level_below)
+    VALUES (NEW.position, OLD.position, legacy_history, NEW.id, above, below);
     RETURN null;
 END;
 $$ LANGUAGE plpgsql;

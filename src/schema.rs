@@ -41,6 +41,8 @@ diesel::table! {
         old_position -> Nullable<Int4>,
         legacy -> Nullable<Bool>,
         affected_level -> Uuid,
+        level_above -> Nullable<Uuid>,
+        level_below -> Nullable<Uuid>,
         created_at -> Nullable<Timestamp>,
     }
 }
@@ -129,7 +131,6 @@ diesel::joinable!(aredl_levels_created -> aredl_levels (level_id));
 diesel::joinable!(aredl_levels_created -> users (user_id));
 diesel::joinable!(aredl_pack_levels -> aredl_levels (level_id));
 diesel::joinable!(aredl_pack_levels -> aredl_packs (pack_id));
-diesel::joinable!(aredl_position_history -> aredl_levels (affected_level));
 diesel::joinable!(aredl_records -> aredl_levels (level_id));
 diesel::joinable!(aredl_submissions -> aredl_levels (level_id));
 diesel::joinable!(user_roles -> roles (role_id));
