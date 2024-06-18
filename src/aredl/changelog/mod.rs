@@ -1,5 +1,4 @@
-mod levels;
 mod routes;
-mod changelog;
+mod model;
 
 pub use routes::init_routes;

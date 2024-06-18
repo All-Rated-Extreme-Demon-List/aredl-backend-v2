@@ -25,7 +25,7 @@ CREATE TABLE aredl_position_history (
     affected_level uuid NOT NULL,
     level_above uuid DEFAULT NULL REFERENCES aredl_levels(id) ON DELETE SET NULL ON UPDATE CASCADE,
     level_below uuid DEFAULT NULL REFERENCES aredl_levels(id) ON DELETE SET NULL ON UPDATE CASCADE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY(i),
     CONSTRAINT fk_level
         FOREIGN KEY(affected_level)

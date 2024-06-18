@@ -43,7 +43,7 @@ diesel::table! {
         affected_level -> Uuid,
         level_above -> Nullable<Uuid>,
         level_below -> Nullable<Uuid>,
-        created_at -> Nullable<Timestamp>,
+        created_at -> Timestamp,
     }
 }
 

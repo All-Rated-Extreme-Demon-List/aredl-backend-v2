@@ -10,6 +10,7 @@ mod aredl;
 mod custom_schema;
 mod auth;
 mod users;
+mod page_helper;
 
 use std::env;
 use actix_web::{App, HttpServer, web};
