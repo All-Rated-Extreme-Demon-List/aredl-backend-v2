@@ -35,7 +35,7 @@ pub struct ChangelogEntry {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum ChangelogAction {
-    Placed { new_position: i32, legacy: Option<bool> },
+    Placed { new_position: i32, legacy: bool },
     Raised { new_position: i32, old_position: i32 },
     Lowered { new_position: i32, old_position: i32 },
     Removed { old_position: i32 },
@@ -102,7 +102,7 @@ impl ChangelogEntry {
 impl ChangelogAction {
     pub fn from_data(entry: &ChangelogEntryData, level: &Level, level_above: &Option<Level>, level_below: &Option<Level>) -> Self {
         match (entry.legacy, entry.new_position, entry.old_position) {
-            (legacy, Some(new_position), None) =>
+            (Some(legacy), Some(new_position), None) =>
                 Self::Placed { new_position, legacy },
             (None, Some(new_position), Some(old_position)) => {
                 let unknown = Self::Unknown {
