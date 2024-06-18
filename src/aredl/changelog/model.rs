@@ -1,6 +1,5 @@
 use chrono::NaiveDateTime;
 use diesel::{ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
-use diesel::internal::derives::multiconnection::SelectStatementAccessor;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use diesel::pg::Pg;
@@ -37,7 +36,7 @@ pub struct ChangelogEntryResolved {
 }
 
 impl ChangelogEntryResolved {
-    pub fn find_all(page_query: PageQuery) -> Result<Paginated<Self>, ApiError> {
+    pub fn find_all<const D: i64>(page_query: PageQuery<D>) -> Result<Paginated<Self>, ApiError> {
         let (level_affected, level_above, level_below) = diesel::alias!(
             aredl_levels as level_affected,
             aredl_levels as level_above,

@@ -4,7 +4,7 @@ use crate::error_handler::ApiError;
 use crate::page_helper::PageQuery;
 
 #[get("")]
-async fn list(page_query: web::Query<PageQuery>) -> Result<HttpResponse, ApiError> {
+async fn list(page_query: web::Query<PageQuery<20>>) -> Result<HttpResponse, ApiError> {
     let result = web::block(||
         ChangelogEntryResolved::find_all(page_query.into_inner())
     ).await??;

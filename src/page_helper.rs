@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
-pub struct PageQuery {
+pub struct PageQuery<const D: i64> {
     pub per_page: Option<i64>,
     pub page: i64,
 }
@@ -15,22 +15,22 @@ pub struct Paginated<T> {
 }
 
 impl<T> Paginated<T> {
-    pub fn from_data(query: PageQuery, pages: i64, data: Vec<T>) -> Self {
+    pub fn from_data<const D: i64>(query: PageQuery<D>, pages: i64, data: Vec<T>) -> Self {
         Self {
             page: query.page,
-            per_page: query.per_page.unwrap_or(20),
+            per_page: query.per_page.unwrap_or(D),
             pages,
             data,
         }
     }
 }
 
-impl PageQuery {
+impl<const D: i64> PageQuery<D> {
     pub fn offset(&self) -> i64 {
-        self.per_page.unwrap_or(20) * (self.page - 1)
+        self.per_page.unwrap_or(D) * (self.page - 1)
     }
 
     pub fn per_page(&self) -> i64 {
-        self.per_page.unwrap_or(20)
+        self.per_page.unwrap_or(D)
     }
 }
