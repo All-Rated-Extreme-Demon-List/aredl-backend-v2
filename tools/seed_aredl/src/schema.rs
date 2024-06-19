@@ -28,9 +28,19 @@ diesel::table! {
 }
 
 diesel::table! {
+    aredl_pack_tiers (id) {
+        id -> Uuid,
+        name -> Varchar,
+        color -> Varchar,
+        placement -> Int4,
+    }
+}
+
+diesel::table! {
     aredl_packs (id) {
         id -> Uuid,
         name -> Varchar,
+        tier -> Uuid,
     }
 }
 
@@ -41,7 +51,9 @@ diesel::table! {
         old_position -> Nullable<Int4>,
         legacy -> Nullable<Bool>,
         affected_level -> Uuid,
-        created_at -> Nullable<Timestamp>,
+        level_above -> Nullable<Uuid>,
+        level_below -> Nullable<Uuid>,
+        created_at -> Timestamp,
     }
 }
 
@@ -54,6 +66,7 @@ diesel::table! {
         ldm_id -> Nullable<Int4>,
         video_url -> Varchar,
         raw_url -> Nullable<Varchar>,
+        placement_order -> Int4,
         reviewer_id -> Nullable<Uuid>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
@@ -128,7 +141,7 @@ diesel::joinable!(aredl_levels_created -> aredl_levels (level_id));
 diesel::joinable!(aredl_levels_created -> users (user_id));
 diesel::joinable!(aredl_pack_levels -> aredl_levels (level_id));
 diesel::joinable!(aredl_pack_levels -> aredl_packs (pack_id));
-diesel::joinable!(aredl_position_history -> aredl_levels (affected_level));
+diesel::joinable!(aredl_packs -> aredl_pack_tiers (tier));
 diesel::joinable!(aredl_records -> aredl_levels (level_id));
 diesel::joinable!(aredl_submissions -> aredl_levels (level_id));
 diesel::joinable!(user_roles -> roles (role_id));
@@ -138,6 +151,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     aredl_levels,
     aredl_levels_created,
     aredl_pack_levels,
+    aredl_pack_tiers,
     aredl_packs,
     aredl_position_history,
     aredl_records,

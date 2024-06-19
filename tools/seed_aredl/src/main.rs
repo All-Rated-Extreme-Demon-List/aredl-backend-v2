@@ -14,7 +14,7 @@ use serde::de::DeserializeOwned;
 use uuid::Uuid;
 use itertools::Itertools;
 use crate::error_handler::MigrationError;
-use crate::schema::{aredl_levels, aredl_levels_created, aredl_pack_levels, aredl_packs, aredl_records, roles, user_roles, users};
+use crate::schema::{aredl_levels, aredl_levels_created, aredl_pack_levels, aredl_pack_tiers, aredl_packs, aredl_records, roles, user_roles, users};
 
 type Pool = diesel::r2d2::Pool<ConnectionManager<PgConnection>>;
 type DbConnection = diesel::r2d2::PooledConnection<ConnectionManager<PgConnection>>;
@@ -43,6 +43,13 @@ pub struct Level {
 pub struct Pack {
     pub name: String,
     pub levels: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PackTier {
+    pub name: String,
+    pub color: String,
+    pub packs: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -133,6 +140,9 @@ fn main() {
     let pack_data = load_json_from_file::<Vec<Pack>>(
         aredl_path.join("_packlist.json").as_path());
 
+    let pack_tier_data = load_json_from_file::<Vec<PackTier>>(
+        aredl_path.join("_packtiers.json").as_path());
+
     role_data.extend(role_data_supporters);
 
     let levels: Vec<(Level, LevelInfo)> = level_names
@@ -187,6 +197,11 @@ fn main() {
 
     println!("\tUsers found: {}", &users.len());
 
+    let pack_tier_name_map: HashMap<String, Vec<String>> = pack_tier_data
+        .iter()
+        .map(|tier| (tier.name.clone(), tier.packs.clone()))
+        .collect();
+
     println!("Migrating");
     db_conn.transaction::<_, MigrationError, _>(|conn| {
         println!("\tResetting db");
@@ -240,10 +255,34 @@ fn main() {
             .iter().map(|(id, level_id, two_player)| ((*level_id, *two_player), *id))
             .collect();
 
+        println!("\tInserting pack-tiers");
+
+        diesel::insert_into(aredl_pack_tiers::table)
+            .values(
+                pack_tier_data.iter().enumerate().map(|(index, tier)| (
+                    aredl_pack_tiers::name.eq(&tier.name),
+                    aredl_pack_tiers::color.eq(&tier.color),
+                    aredl_pack_tiers::placement.eq(index as i32),
+                    )).collect::<Vec<_>>()
+            ).execute(conn)?;
+
+        let pack_tier_map: HashMap<String, Uuid> = aredl_pack_tiers::table
+            .select((
+                aredl_pack_tiers::name,
+                aredl_pack_tiers::id,
+                ))
+            .load::<(String, Uuid)>(conn)?
+            .iter()
+            .flat_map(|(name, id)| pack_tier_name_map.get(name).unwrap().into_iter().map(|pack| (pack.clone(), id.clone())))
+            .collect();
+
         println!("\tInserting packs");
         diesel::insert_into(aredl_packs::table)
             .values(
-                pack_data.iter().map(|pack| aredl_packs::name.eq(&pack.name)).collect::<Vec<_>>()
+                pack_data.iter().map(|pack| (
+                    aredl_packs::name.eq(&pack.name),
+                    aredl_packs::tier.eq(pack_tier_map.get(&pack.name).unwrap())
+                )).collect::<Vec<_>>()
             ).execute(conn)?;
 
         let pack_map: HashMap<String, Uuid> = aredl_packs::table
