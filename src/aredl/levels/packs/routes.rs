@@ -1,12 +1,12 @@
 use actix_web::{get, HttpResponse, web};
 use crate::aredl::levels::LevelId;
-use crate::aredl::levels::packs::Pack;
+use crate::aredl::levels::packs::PackResolved;
 use crate::error_handler::ApiError;
 
 #[get("")]
 async fn find_all(level_id: web::Path<LevelId>) -> Result<HttpResponse, ApiError> {
     let packs = web::block(
-        || Pack::find_all(level_id.into_inner().into())
+        || PackResolved::find_all(level_id.into_inner().into())
     ).await??;
     Ok(HttpResponse::Ok().json(packs))
 }
