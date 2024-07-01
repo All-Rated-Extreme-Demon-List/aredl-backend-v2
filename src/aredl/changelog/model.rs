@@ -102,8 +102,7 @@ impl ChangelogEntry {
 impl ChangelogAction {
     pub fn from_data(entry: &ChangelogEntryData, level: &Level, level_above: &Option<Level>, level_below: &Option<Level>) -> Self {
         match (entry.legacy, entry.new_position, entry.old_position) {
-            (Some(legacy), Some(new_position), None) =>
-                Self::Placed { new_position, legacy },
+            (Some(legacy), Some(new_position), None) => Self::Placed { new_position, legacy },
             (None, Some(new_position), Some(old_position)) => {
                 let unknown = Self::Unknown {
                     new_position: Some(new_position),
@@ -119,14 +118,10 @@ impl ChangelogAction {
                     (false, _, _, _) => Self::Lowered { new_position, old_position }
                 }
             }
-            (None, None, Some(old_position)) =>
-                Self::Removed { old_position },
-            (Some(true), Some(new_position), Some(old_position)) =>
-                Self::MovedToLegacy { new_position, old_position },
-            (Some(false), Some(new_position), Some(old_position)) =>
-                Self::MovedFromLegacy { new_position, old_position },
-            (legacy, new_position, old_position) =>
-                Self::Unknown { new_position, old_position, legacy },
+            (None, None, Some(old_position)) => Self::Removed { old_position },
+            (Some(true), Some(new_position), Some(old_position)) => Self::MovedToLegacy { new_position, old_position },
+            (Some(false), Some(new_position), Some(old_position)) => Self::MovedFromLegacy { new_position, old_position },
+            (legacy, new_position, old_position) => Self::Unknown { new_position, old_position, legacy },
         }
     }
 }
