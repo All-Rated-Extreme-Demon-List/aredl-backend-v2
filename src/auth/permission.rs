@@ -11,6 +11,7 @@ use crate::schema::{permissions, roles, user_roles};
 pub enum Permission {
     LevelModify,
     RecordModify,
+    PackTierModify,
 }
 
 fn get_privilege_level(user_id: Uuid) -> Result<i32, ApiError> {
