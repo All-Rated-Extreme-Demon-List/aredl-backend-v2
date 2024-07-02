@@ -12,6 +12,7 @@ pub enum Permission {
     LevelModify,
     RecordModify,
     PackTierModify,
+    PackModify,
 }
 
 fn get_privilege_level(user_id: Uuid) -> Result<i32, ApiError> {
