@@ -1,5 +1,6 @@
 #[macro_use]
-extern crate diesel;#[macro_use]
+extern crate diesel;
+#[macro_use]
 extern crate diesel_migrations;
 
 mod db;
@@ -11,11 +12,14 @@ mod custom_schema;
 mod auth;
 mod users;
 mod page_helper;
+mod cache_control;
 
 use std::env;
+use actix_cors::Cors;
 use actix_web::{App, HttpServer, web};
 use dotenv::dotenv;
 use listenfd::ListenFd;
+use crate::cache_control::CacheController;
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
@@ -29,6 +33,8 @@ async fn main() -> std::io::Result<()> {
     let mut server = HttpServer::new(move || App::new().service(
         web::scope("/api")
             .app_data(web::Data::new(auth_app_state.clone()))
+            .wrap(CacheController::default_no_store())
+            .wrap(Cors::permissive())
             .configure(aredl::init_routes)
             .configure(auth::init_routes)
     ));

@@ -82,7 +82,7 @@ impl Creator {
     fn add_users(level_id: Uuid, creators: &Vec<Uuid>, connection: &mut DbConnection) -> Result<(), ApiError> {
         insert_into(aredl_levels_created::table)
             .values(
-                creators.iter().map(|creator| (
+                creators.into_iter().map(|creator| (
                     aredl_levels_created::level_id.eq(level_id),
                     aredl_levels_created::user_id.eq(creator)
                 )).collect::<Vec<_>>()

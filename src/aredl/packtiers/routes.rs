@@ -4,8 +4,9 @@ use crate::aredl::packtiers::model::PackTierResolved;
 use crate::aredl::packtiers::{PackTier, PackTierCreate, PackTierUpdate};
 use crate::auth::{UserAuth, Authenticated, Permission};
 use crate::error_handler::ApiError;
+use crate::cache_control::CacheController;
 
-#[get("", wrap="UserAuth::load()")]
+#[get("", wrap="UserAuth::load()", wrap="CacheController::public_cache()")]
 async fn find_all(authenticated: Option<Authenticated>) -> Result<HttpResponse, ApiError> {
     let tiers = web::block(
         || PackTierResolved::find_all(authenticated.map(|user| user.user_id))
