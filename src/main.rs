@@ -30,14 +30,23 @@ async fn main() -> std::io::Result<()> {
     let auth_app_state = auth::init_app_state().await;
 
     let mut listenfd = ListenFd::from_env();
-    let mut server = HttpServer::new(move || App::new().service(
-        web::scope("/api")
-            .app_data(web::Data::new(auth_app_state.clone()))
-            .wrap(CacheController::default_no_store())
-            .wrap(Cors::permissive())
-            .configure(aredl::init_routes)
-            .configure(auth::init_routes)
-    ));
+    let mut server = HttpServer::new(move || {
+        let cors = Cors::default()
+            .allow_any_origin()
+            .allow_any_method()
+            .allow_any_header()
+            .max_age(3600);
+
+        App::new()
+            .service(
+                web::scope("/api")
+                    .app_data(web::Data::new(auth_app_state.clone()))
+                    .wrap(CacheController::default_no_store())
+                    .wrap(cors)
+                    .configure(aredl::init_routes)
+                    .configure(auth::init_routes)
+            )
+    });
 
     server = match listenfd.take_tcp_listener(0)? {
         Some(listener) => server.listen(listener)?,
