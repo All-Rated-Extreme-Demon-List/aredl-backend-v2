@@ -9,6 +9,7 @@ use openidconnect::{AuthorizationCode, ClientId, ClientSecret, CsrfToken, Issuer
 use openidconnect::core::{CoreAuthenticationFlow, CoreClient, CoreIdTokenVerifier, CoreProviderMetadata};
 use openidconnect::reqwest::async_http_client;
 use serde::{Deserialize, Serialize};
+use actix_web::http::header;
 
 use crate::auth::app_state::AuthAppState;
 use crate::auth::token;
@@ -110,7 +111,7 @@ async fn discord_auth(data: web::Data<Arc<AuthAppState>>) -> Result<HttpResponse
 
     web::block(move || OAuthRequestData::create(&request_data)).await??;
 
-    Ok(HttpResponse::Found().append_header(("Location", authorize_url.to_string())).finish())
+    Ok(HttpResponse::Found().append_header((header::LOCATION, authorize_url.to_string())).finish())
 }
 
 #[get("/callback")]

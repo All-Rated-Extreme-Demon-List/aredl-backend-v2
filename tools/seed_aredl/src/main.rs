@@ -5,7 +5,7 @@ use std::{env, fs};
 use std::collections::{HashMap};
 use std::path::Path;
 use diesel::{Connection, ExpressionMethods, Insertable, PgConnection, QueryDsl, RunQueryDsl};
-use diesel::internal::derives::multiconnection::chrono::{Duration, Utc};
+use diesel::internal::derives::multiconnection::chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use diesel::r2d2::ConnectionManager;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use dotenv::dotenv;
@@ -14,7 +14,7 @@ use serde::de::DeserializeOwned;
 use uuid::Uuid;
 use itertools::Itertools;
 use crate::error_handler::MigrationError;
-use crate::schema::{aredl_levels, aredl_levels_created, aredl_pack_levels, aredl_pack_tiers, aredl_packs, aredl_records, roles, user_roles, users};
+use crate::schema::{aredl_levels, aredl_levels_created, aredl_pack_levels, aredl_pack_tiers, aredl_packs, aredl_position_history, aredl_records, roles, user_roles, users};
 
 type Pool = diesel::r2d2::Pool<ConnectionManager<PgConnection>>;
 type DbConnection = diesel::r2d2::PooledConnection<ConnectionManager<PgConnection>>;
@@ -89,6 +89,29 @@ pub struct LevelInfo {
     pub original_name: String,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ChangelogEntry {
+    pub date: i64,
+    pub action: String,
+    pub name: String,
+    pub to_rank: Option<i32>,
+    pub from_rank: Option<i32>,
+    pub above: Option<String>,
+    pub below: Option<String>
+}
+
+#[derive(Insertable, Debug)]
+#[diesel(table_name=aredl_position_history)]
+pub struct ChangelogResolved {
+    pub new_position: Option<i32>,
+    pub old_position: Option<i32>,
+    pub legacy: Option<bool>,
+    pub affected_level: Uuid,
+    pub level_above: Option<Uuid>,
+    pub level_below: Option<Uuid>,
+    pub created_at: NaiveDateTime
+}
+
 pub fn load_json_from_file<T>(path: &Path) -> T
 where T: DeserializeOwned,
 {
@@ -142,6 +165,15 @@ fn main() {
 
     let pack_tier_data = load_json_from_file::<Vec<PackTier>>(
         aredl_path.join("_packtiers.json").as_path());
+
+    let list_init = load_json_from_file::<Vec<String>>(
+        aredl_path.join("_list_init.json").as_path());
+
+    let list_legacy_init = load_json_from_file::<Vec<String>>(
+        aredl_path.join("_legacy_init.json").as_path());
+
+    let changelog = load_json_from_file::<Vec<ChangelogEntry>>(
+        aredl_path.join("_changelog.json").as_path());
 
     role_data.extend(role_data_supporters);
 
@@ -239,11 +271,17 @@ fn main() {
         diesel::sql_query("ALTER TABLE aredl_levels DISABLE TRIGGER aredl_level_place")
             .execute(conn)?;
 
+        diesel::sql_query("ALTER TABLE aredl_levels DISABLE TRIGGER aredl_level_place_history")
+            .execute(conn)?;
+
         diesel::insert_into(aredl_levels::table)
             .values(&level_insert)
             .execute(conn)?;
 
         diesel::sql_query("ALTER TABLE aredl_levels ENABLE TRIGGER aredl_level_place")
+            .execute(conn)?;
+
+        diesel::sql_query("ALTER TABLE aredl_levels ENABLE TRIGGER aredl_level_place_history")
             .execute(conn)?;
 
         let level_map: HashMap<(i32, bool), Uuid> = aredl_levels::table
@@ -304,6 +342,62 @@ fn main() {
                     )
                 ).collect::<Vec<_>>()
             ).execute(conn)?;
+
+        println!("\tInserting changelog");
+        let init_levels = list_init.into_iter().map(|name|
+            (level_map.get(&(*level_id_map.get(&name).unwrap(), name.ends_with("2p"))).unwrap().clone(), true)
+        ).chain(
+            list_legacy_init.into_iter().map(|name|
+                (level_map.get(&(*level_id_map.get(&name).unwrap(), name.ends_with("2p"))).unwrap().clone(), true)
+            )
+        ).collect::<Vec<(Uuid, bool)>>();
+
+        let init_changelog = init_levels.iter().enumerate().map(|(position, (id, legacy))| {
+            let above = if position > 0 {
+                Some(init_levels[position - 1].0)
+            } else {
+                None
+            };
+            let below = if position < init_levels.len() - 1 {
+                Some(init_levels[position + 1].0)
+            } else {
+                None
+            };
+            (id, legacy, above, below);
+            ChangelogResolved {
+                new_position: Some((position + 1) as i32),
+                old_position: None,
+                legacy: Some(legacy.clone()),
+                affected_level: id.clone(),
+                level_above: above,
+                level_below: below,
+                created_at: DateTime::from_timestamp(1701030687, 0).unwrap().naive_utc(),
+            }
+        });
+
+        let changelog_data = init_changelog.chain(
+            changelog.into_iter().map(|entry| {
+                let legacy = match entry.action.as_str() {
+                    "tolegacy" => Some(true),
+                    "fromlegacy" => Some(false),
+                    "placed" => Some(false),
+                    _ => None
+                };
+                ChangelogResolved {
+                    new_position: entry.to_rank,
+                    old_position: entry.from_rank,
+                    legacy,
+                    affected_level: level_map.get(&(*level_id_map.get(&entry.name).unwrap(), entry.name.ends_with("2p"))).unwrap().clone(),
+                    level_above: entry.above.map(|name| level_map.get(&(*level_id_map.get(&name).unwrap(), name.ends_with("2p"))).unwrap().clone()),
+                    level_below: entry.below.map(|name| level_map.get(&(*level_id_map.get(&name).unwrap(), name.ends_with("2p"))).unwrap().clone()),
+                    created_at: DateTime::from_timestamp(entry.date, 0).unwrap().naive_utc(),
+                }
+            })
+        ).collect::<Vec<ChangelogResolved>>();
+
+        diesel::insert_into(aredl_position_history::table)
+            .values(changelog_data)
+            .execute(conn)?;
 
         println!("\tInserting creators");
         diesel::insert_into(aredl_levels_created::table)

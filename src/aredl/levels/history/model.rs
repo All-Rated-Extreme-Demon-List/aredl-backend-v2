@@ -23,7 +23,7 @@ impl HistoryLevelFull {
         let entries = aredl_position_history_full_view::table
             .filter(aredl_position_history_full_view::affected_level.eq(id))
             .inner_join(aredl_levels::table.on(aredl_levels::id.eq(aredl_position_history_full_view::cause)))
-            .order_by(aredl_position_history_full_view::action_at)
+            .order_by(aredl_position_history_full_view::action_at.desc())
             .select((
                 aredl_position_history_full_view::position,
                 aredl_position_history_full_view::moved,
