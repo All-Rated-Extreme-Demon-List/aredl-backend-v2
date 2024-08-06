@@ -38,6 +38,9 @@ DECLARE
     a float;
     b float;
 BEGIN
+    IF pos > level_count THEN
+        return 0;
+    END IF;
     IF level_count <= 1 THEN
         return 500;
     END IF;
@@ -232,7 +235,7 @@ WHERE prev_pos <> position OR prev_legacy <> legacy OR prev_pos IS NULL;
 CREATE FUNCTION aredl_levels_points_before_update() RETURNS TRIGGER AS
 $$
 BEGIN
-    new.points := aredl_point_formula(new.position, CAST((SELECT COUNT(*) FROM aredl_levels) AS INT));
+    new.points := aredl_point_formula(new.position, CAST((SELECT COUNT(*) FROM aredl_levels WHERE legacy = false) AS INT));
     RETURN new;
 END;
 $$ LANGUAGE plpgsql;
@@ -245,7 +248,7 @@ EXECUTE PROCEDURE aredl_levels_points_before_update();
 CREATE FUNCTION aredl_levels_points_before_insert() RETURNS TRIGGER AS
 $$
 BEGIN
-    new.points := aredl_point_formula(new.position, CAST((SELECT COUNT(*) FROM aredl_levels) + 1 AS INT));
+    new.points := aredl_point_formula(new.position, CAST((SELECT COUNT(*) FROM aredl_levels WHERE legacy = false) + 1 AS INT));
     RETURN new;
 END;
 $$ LANGUAGE plpgsql;
@@ -259,7 +262,7 @@ CREATE FUNCTION aredl_recalculate_points() RETURNS void AS
 $$
 BEGIN
     UPDATE aredl_levels
-    SET points = aredl_point_formula(position, CAST((SELECT COUNT(*) FROM aredl_levels) AS INT));
+    SET points = aredl_point_formula(position, CAST((SELECT COUNT(*) FROM aredl_levels WHERE legacy = false) AS INT));
 END;
 $$ LANGUAGE plpgsql;
 

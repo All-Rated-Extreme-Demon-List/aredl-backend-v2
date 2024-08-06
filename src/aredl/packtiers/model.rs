@@ -5,7 +5,8 @@ use diesel::pg::Pg;
 use diesel::{BelongingToDsl, BoolExpressionMethods, ExpressionMethods, GroupedBy, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
 use crate::db;
 use crate::error_handler::ApiError;
-use crate::schema::{aredl_pack_tiers, aredl_packs, aredl_pack_levels, aredl_levels, aredl_records};
+use crate::schema::{aredl_pack_tiers, aredl_pack_levels, aredl_levels, aredl_records};
+use crate::custom_schema::aredl_packs_points;
 
 #[derive(Serialize, Identifiable, Selectable, Queryable, Debug)]
 #[diesel(table_name=aredl_pack_tiers, check_for_backend(Pg))]
@@ -18,11 +19,12 @@ pub struct PackTier {
 
 #[derive(Serialize, Identifiable, Associations, Selectable, Queryable, Debug)]
 #[diesel(belongs_to(PackTier, foreign_key=tier))]
-#[diesel(table_name=aredl_packs, check_for_backend(Pg))]
+#[diesel(table_name=aredl_packs_points, check_for_backend(Pg))]
 pub struct Pack {
     pub id: Uuid,
     pub name: String,
     pub tier: Uuid,
+    pub points: i32,
 }
 
 #[derive(Serialize, Identifiable, Selectable, Queryable, Debug)]
@@ -48,6 +50,7 @@ pub struct PackLevelResolved {
 pub struct PackResolved {
     pub id: Uuid,
     pub name: String,
+    pub points: i32,
     pub levels: Vec<PackLevelResolved>,
 }
 
@@ -142,6 +145,7 @@ impl PackTierResolved {
                     .map(|pack|  PackResolved {
                         id: pack.id,
                         name: pack.name,
+                        points: pack.points,
                         levels: pack_levels_map.remove(&pack.id).unwrap_or_else(Vec::new),
                     })
                     .collect::<Vec<_>>(),
