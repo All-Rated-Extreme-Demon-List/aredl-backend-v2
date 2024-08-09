@@ -1,9 +1,11 @@
+use std::sync::Arc;
+use actix_web::web;
 use diesel::{ExpressionMethods, RunQueryDsl};
 use diesel::prelude::*;
 use uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use crate::schema::{aredl_levels, aredl_records, users};
-use crate::db;
+use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug)]
@@ -79,38 +81,38 @@ pub struct ResolvedLevel {
 }
 
 impl Level {
-    pub fn find_all() -> Result<Vec<Self>, ApiError>{
+    pub fn find_all(db: web::Data<Arc<DbAppState>>) -> Result<Vec<Self>, ApiError>{
         let levels = aredl_levels::table
             .order(aredl_levels::position)
-            .load::<Self>(&mut db::connection()?)?;
+            .load::<Self>(&mut db.connection()?)?;
         Ok(levels)
     }
 
-    pub fn create(level: LevelPlace) -> Result<Self, ApiError> {
+    pub fn create(db: web::Data<Arc<DbAppState>>, level: LevelPlace) -> Result<Self, ApiError> {
         let level = diesel::insert_into(aredl_levels::table)
             .values(level)
-            .get_result(&mut db::connection()?)?;
+            .get_result(&mut db.connection()?)?;
         Ok(level)
     }
 
-    pub fn update(id: Uuid, level: LevelUpdate) -> Result<Self, ApiError> {
+    pub fn update(db: web::Data<Arc<DbAppState>>, id: Uuid, level: LevelUpdate) -> Result<Self, ApiError> {
         let level = diesel::update(aredl_levels::table)
             .set(level)
             .filter(aredl_levels::id.eq(id))
-            .get_result(&mut db::connection()?)?;
+            .get_result(&mut db.connection()?)?;
         Ok(level)
     }
 }
 
 impl ResolvedLevel {
-    pub fn find(id: Uuid) -> Result<Self, ApiError> {
+    pub fn find(db: web::Data<Arc<DbAppState>>, id: Uuid) -> Result<Self, ApiError> {
         let (level, publisher) = aredl_levels::table
             .filter(aredl_levels::id.eq(id))
             .inner_join(users::table.on(aredl_levels::publisher_id.eq(users::id)))
             .select(
                 (Level::as_select(), User::as_select())
             )
-            .first::<(Level, User)>(&mut db::connection()?)?;
+            .first::<(Level, User)>(&mut db.connection()?)?;
 
         let verification = aredl_records::table
             .filter(aredl_records::level_id.eq(id))
@@ -119,7 +121,7 @@ impl ResolvedLevel {
             .select(
                 (Record::<Uuid>::as_select(), User::as_select())
             )
-            .first::<(Record<Uuid>, User)>(&mut db::connection()?)
+            .first::<(Record<Uuid>, User)>(&mut db.connection()?)
             .optional()?;
 
         let verification = verification.map(

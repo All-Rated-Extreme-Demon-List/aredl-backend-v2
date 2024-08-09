@@ -13,8 +13,8 @@ use actix_web::http::header;
 
 use crate::auth::app_state::AuthAppState;
 use crate::auth::token;
-use crate::{db};
 use crate::auth::token::UserClaims;
+use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::schema::oauth_requests;
 use crate::users::{User, UserUpsert};
@@ -59,25 +59,25 @@ impl From<DiscordUser> for UserUpsert {
 }
 
 impl OAuthRequestData {
-    fn find(csrf_state: &str) -> Result<Self, ApiError> {
+    fn find(db: web::Data<Arc<DbAppState>>, csrf_state: &str) -> Result<Self, ApiError> {
         let request_data = oauth_requests::table
             .filter(oauth_requests::csrf_state.eq(csrf_state))
             .select(OAuthRequestData::as_select())
-            .first::<OAuthRequestData>(&mut db::connection()?)?;
+            .first::<OAuthRequestData>(&mut db.connection()?)?;
         Ok(request_data)
     }
 
-    fn delete(csrf_state: &str) -> Result<(), ApiError> {
+    fn delete(db: web::Data<Arc<DbAppState>>, csrf_state: &str) -> Result<(), ApiError> {
         diesel::delete(oauth_requests::table)
             .filter(oauth_requests::csrf_state.eq(csrf_state))
-            .execute(&mut db::connection()?)?;
+            .execute(&mut db.connection()?)?;
         Ok(())
     }
 
-    fn create(data: &Self) -> Result<(), ApiError> {
+    fn create(db: web::Data<Arc<DbAppState>>, data: &Self) -> Result<(), ApiError> {
         diesel::insert_into(oauth_requests::table)
             .values(data)
-            .execute(&mut db::connection()?)?;
+            .execute(&mut db.connection()?)?;
         Ok(())
     }
 }
@@ -90,7 +90,7 @@ struct AuthResponse {
 }
 
 #[get("")]
-async fn discord_auth(data: web::Data<Arc<AuthAppState>>) -> Result<HttpResponse, ApiError> {
+async fn discord_auth(db: web::Data<Arc<DbAppState>>, data: web::Data<Arc<AuthAppState>>) -> Result<HttpResponse, ApiError> {
     let client = &data.discord_client;
 
     let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
@@ -110,21 +110,27 @@ async fn discord_auth(data: web::Data<Arc<AuthAppState>>) -> Result<HttpResponse
         nonce: nonce.secret().to_string(),
     };
 
-    web::block(move || OAuthRequestData::create(&request_data)).await??;
+    web::block(move || OAuthRequestData::create(db, &request_data)).await??;
 
     Ok(HttpResponse::Found().append_header((header::LOCATION, authorize_url.to_string())).finish())
 }
 
 #[get("/callback")]
-async fn discord_callback(query: web::Query<OAuthCallbackQuery>, data: web::Data<Arc<AuthAppState>>) -> Result<HttpResponse, ApiError> {
+async fn discord_callback(db: web::Data<Arc<DbAppState>>, query: web::Query<OAuthCallbackQuery>, data: web::Data<Arc<AuthAppState>>) -> Result<HttpResponse, ApiError> {
     let client = &data.discord_client;
 
     // maybe combine both db actions
-    let csrf_state = query.state.clone();
-    let request_data = web::block(move || OAuthRequestData::find(&csrf_state)).await??;
+    let request_data = web::block({
+        let csrf_state = query.state.clone();
+        let db_state = db.clone();
+        move || OAuthRequestData::find(db_state, &csrf_state)
+    }).await??;
 
-    let csrf_state = query.state.clone();
-    web::block(move || OAuthRequestData::delete(&csrf_state)).await??;
+    web::block({
+        let csrf_state = query.state.clone();
+        let db_state = db.clone();
+        move || OAuthRequestData::delete(db_state.clone(), &csrf_state)
+    }).await??;
 
     let token_response = client
         .exchange_code(query.code.clone())
@@ -149,7 +155,7 @@ async fn discord_callback(query: web::Query<OAuthCallbackQuery>, data: web::Data
         .json::<DiscordUser>().await
         .map_err(|_| ApiError::new(500, "Failed to load discord data"))?;
 
-    let user = web::block(|| User::upsert(UserUpsert::from(discord_user_data))).await??;
+    let user = web::block(|| User::upsert(db, UserUpsert::from(discord_user_data))).await??;
 
     let (token, expires) = token::create_token(
         UserClaims {

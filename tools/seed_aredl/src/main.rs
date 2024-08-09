@@ -277,8 +277,6 @@ fn main() {
             .values(&level_insert)
             .execute(conn)?;
 
-        diesel::sql_query("ALTER TABLE aredl_levels ENABLE TRIGGER aredl_level_place")
-            .execute(conn)?;
 
         diesel::sql_query("ALTER TABLE aredl_levels ENABLE TRIGGER aredl_level_place_history")
             .execute(conn)?;

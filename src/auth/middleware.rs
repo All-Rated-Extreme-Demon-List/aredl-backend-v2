@@ -9,6 +9,7 @@ use futures_util::future::{LocalBoxFuture, ready, Ready};
 use crate::auth::app_state::AuthAppState;
 use crate::auth::{Permission, permission};
 use crate::auth::token::{decode_token, UserClaims};
+use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 
 pub struct UserAuth {
@@ -99,6 +100,10 @@ impl<S> Service<ServiceRequest> for AuthMiddleware<S>
             .app_data::<web::Data<Arc<AuthAppState>>>()
             .unwrap();
 
+        let db_state = req
+            .app_data::<web::Data<Arc<DbAppState>>>()
+            .unwrap().clone();
+
         let user_claims = match decode_token(
             &token.unwrap(),
             &app_state.jwt_decoding_key,
@@ -127,7 +132,7 @@ impl<S> Service<ServiceRequest> for AuthMiddleware<S>
 
         Box::pin(async move {
             let has_permission = web::block(move ||
-                permission::check_permission(user_id, required_permission)
+                permission::check_permission(db_state, user_id, required_permission)
             ).await?
                 .map_err(|_| ApiError::new(500, "Failed to retrieve permission"))?;
 

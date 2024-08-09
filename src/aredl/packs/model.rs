@@ -1,8 +1,10 @@
+use std::sync::Arc;
+use actix_web::web;
 use diesel::{ExpressionMethods, RunQueryDsl};
 use diesel::pg::Pg;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use crate::db;
+use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::schema::aredl_packs;
 
@@ -29,25 +31,25 @@ pub struct PackUpdate {
 }
 
 impl Pack {
-    pub fn create(pack: PackCreate) -> Result<Self, ApiError> {
+    pub fn create(db: web::Data<Arc<DbAppState>>, pack: PackCreate) -> Result<Self, ApiError> {
         let pack = diesel::insert_into(aredl_packs::table)
             .values(pack)
-            .get_result(&mut db::connection()?)?;
+            .get_result(&mut db.connection()?)?;
         Ok(pack)
     }
 
-    pub fn update(id: Uuid, pack: PackUpdate) -> Result<Self, ApiError> {
+    pub fn update(db: web::Data<Arc<DbAppState>>, id: Uuid, pack: PackUpdate) -> Result<Self, ApiError> {
         let pack = diesel::update(aredl_packs::table)
             .filter(aredl_packs::id.eq(id))
             .set(pack)
-            .get_result(&mut db::connection()?)?;
+            .get_result(&mut db.connection()?)?;
         Ok(pack)
     }
 
-    pub fn delete(id: Uuid) -> Result<Self, ApiError> {
+    pub fn delete(db: web::Data<Arc<DbAppState>>, id: Uuid) -> Result<Self, ApiError> {
         let pack = diesel::delete(aredl_packs::table)
             .filter(aredl_packs::id.eq(id))
-            .get_result(&mut db::connection()?)?;
+            .get_result(&mut db.connection()?)?;
         Ok(pack)
     }
 }

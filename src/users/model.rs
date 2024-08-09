@@ -1,8 +1,9 @@
+use std::sync::Arc;
+use actix_web::web;
 use diesel::RunQueryDsl;
-use diesel::pg::Pg;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use crate::db;
+use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::schema::users;
 
@@ -34,13 +35,13 @@ pub struct UserUpsert {
 }
 
 impl User {
-    pub fn upsert(user_upsert: UserUpsert) -> Result<Self, ApiError> {
+    pub fn upsert(db: web::Data<Arc<DbAppState>>, user_upsert: UserUpsert) -> Result<Self, ApiError> {
         let user = diesel::insert_into(users::table)
             .values(&user_upsert)
             .on_conflict(users::username)
             .do_update()
             .set(&user_upsert)
-            .get_result::<Self>(&mut db::connection()?)?;
+            .get_result::<Self>(&mut db.connection()?)?;
         Ok(user)
     }
 }

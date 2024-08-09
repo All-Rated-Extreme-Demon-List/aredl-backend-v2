@@ -1,15 +1,17 @@
+use std::sync::Arc;
 use actix_web::{get, HttpResponse, web};
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use crate::aredl::levels::history::HistoryLevelFull;
-use crate::aredl::levels::LevelId;
+use crate::aredl::levels::id_resolver::resolve_level_id;
+use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 
 #[get("")]
-async fn find(id: web::Path<LevelId>) -> Result<HttpResponse, ApiError> {
-    let level_id: Uuid = id.into_inner().into();
-    let entries = web::block(move || HistoryLevelFull::find(level_id)).await??;
+async fn find(db: web::Data<Arc<DbAppState>>, id: web::Path<String>) -> Result<HttpResponse, ApiError> {
+    let level_id = resolve_level_id(&db, id.into_inner().as_str())?;
+    let entries = web::block(move || HistoryLevelFull::find(db, level_id)).await??;
     // map history
     let mut prev_position: Option<i32> = None;
     let response = entries

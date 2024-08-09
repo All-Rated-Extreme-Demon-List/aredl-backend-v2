@@ -1,9 +1,11 @@
+use std::sync::Arc;
+use actix_web::web;
 use chrono::NaiveDateTime;
 use diesel::{ExpressionMethods, Insertable, JoinOnDsl, QueryDsl, RunQueryDsl, SelectableHelper};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use diesel::pg::Pg;
-use crate::db;
+use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::schema::{aredl_records, users};
 
@@ -71,57 +73,57 @@ pub struct User {
 }
 
 impl Record {
-    pub fn create(level_id: Uuid, record: RecordInsert) -> Result<Self, ApiError> {
+    pub fn create(db: web::Data<Arc<DbAppState>>, level_id: Uuid, record: RecordInsert) -> Result<Self, ApiError> {
         let record = diesel::insert_into(aredl_records::table)
             .values((record, aredl_records::level_id.eq(level_id)))
-            .get_result::<Self>(&mut db::connection()?)?;
+            .get_result::<Self>(&mut db.connection()?)?;
         Ok(record)
     }
 
-    pub fn update(level_id: Uuid, record_id: Uuid, record: RecordUpdate) -> Result<Self, ApiError> {
+    pub fn update(db: web::Data<Arc<DbAppState>>, level_id: Uuid, record_id: Uuid, record: RecordUpdate) -> Result<Self, ApiError> {
         let record = diesel::update(aredl_records::table)
             .set(record)
             .filter(aredl_records::level_id.eq(level_id))
             .filter(aredl_records::id.eq(record_id))
-            .get_result::<Self>(&mut db::connection()?)?;
+            .get_result::<Self>(&mut db.connection()?)?;
         Ok(record)
     }
 
-    pub fn delete(level_id: Uuid, record_id: Uuid) -> Result<Self, ApiError> {
+    pub fn delete(db: web::Data<Arc<DbAppState>>, level_id: Uuid, record_id: Uuid) -> Result<Self, ApiError> {
         let record = diesel::delete(aredl_records::table)
             .filter(aredl_records::level_id.eq(level_id))
             .filter(aredl_records::id.eq(record_id))
-            .get_result::<Self>(&mut db::connection()?)?;
+            .get_result::<Self>(&mut db.connection()?)?;
         Ok(record)
     }
 
-    pub fn find_all(level_id: Uuid) -> Result<Vec<Self>, ApiError> {
+    pub fn find_all(db: web::Data<Arc<DbAppState>>, level_id: Uuid) -> Result<Vec<Self>, ApiError> {
         let records = aredl_records::table
             .filter(aredl_records::level_id.eq(level_id))
             .select(Record::as_select())
             .order(aredl_records::placement_order)
-            .load::<Self>(&mut db::connection()?)?;
+            .load::<Self>(&mut db.connection()?)?;
         Ok(records)
     }
 
-    pub fn find(level_id: Uuid, record_id: Uuid) -> Result<Self, ApiError> {
+    pub fn find(db: web::Data<Arc<DbAppState>>, level_id: Uuid, record_id: Uuid) -> Result<Self, ApiError> {
         let record = aredl_records::table
             .filter(aredl_records::level_id.eq(level_id))
             .filter(aredl_records::id.eq(record_id))
-            .first::<Self>(&mut db::connection()?)?;
+            .first::<Self>(&mut db.connection()?)?;
         Ok(record)
     }
 }
 
 impl RecordResolved {
-    pub fn find_all(level_id: Uuid) -> Result<Vec<Self>, ApiError> {
+    pub fn find_all(db: web::Data<Arc<DbAppState>>, level_id: Uuid) -> Result<Vec<Self>, ApiError> {
         let records = aredl_records::table
             .filter(aredl_records::level_id.eq(level_id))
             .filter(aredl_records::placement_order.ne(0))
             .inner_join(users::table.on(aredl_records::submitted_by.eq(users::id)))
             .order(aredl_records::placement_order)
             .select((RecordUnresolved::as_select(), User::as_select()))
-            .load::<(RecordUnresolved, User)>(&mut db::connection()?)?;
+            .load::<(RecordUnresolved, User)>(&mut db.connection()?)?;
 
         let records_resolved = records
             .into_iter()

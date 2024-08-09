@@ -1,7 +1,8 @@
+use std::sync::Arc;
+use actix_web::web;
 use diesel::{Connection, ExpressionMethods, insert_into, QueryDsl, RunQueryDsl};
 use uuid::Uuid;
-use crate::db;
-use crate::db::DbConnection;
+use crate::db::{DbAppState, DbConnection};
 use crate::error_handler::ApiError;
 use crate::schema::{aredl_pack_levels};
 
@@ -10,8 +11,8 @@ pub struct Level {
 }
 
 impl Level {
-    pub fn add_all(pack_id: Uuid, levels: Vec<Uuid>) -> Result<Vec<Self>, ApiError> {
-        let conn = &mut db::connection()?;
+    pub fn add_all(db: web::Data<Arc<DbAppState>>, pack_id: Uuid, levels: Vec<Uuid>) -> Result<Vec<Self>, ApiError> {
+        let conn = &mut db.connection()?;
 
         conn.transaction(move |connection| -> Result<Vec<Self>, ApiError> {
 

@@ -1,12 +1,14 @@
+use std::sync::Arc;
 use actix_web::{get, HttpResponse, web};
 use crate::aredl::changelog::model::ChangelogEntry;
+use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::PageQuery;
 
 #[get("")]
-async fn list(page_query: web::Query<PageQuery<20>>) -> Result<HttpResponse, ApiError> {
+async fn list(db: web::Data<Arc<DbAppState>>, page_query: web::Query<PageQuery<20>>) -> Result<HttpResponse, ApiError> {
     let result = web::block(||
-        ChangelogEntry::find_all(page_query.into_inner())
+        ChangelogEntry::find_all(db, page_query.into_inner())
     ).await??;
     Ok(HttpResponse::Ok().json(result))
 }

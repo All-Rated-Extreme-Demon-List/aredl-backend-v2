@@ -1,12 +1,14 @@
 use std::collections::HashMap;
+use std::sync::Arc;
+use actix_web::web;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use diesel::pg::Pg;
 use diesel::{BelongingToDsl, BoolExpressionMethods, ExpressionMethods, GroupedBy, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
-use crate::db;
 use crate::error_handler::ApiError;
 use crate::schema::{aredl_pack_tiers, aredl_pack_levels, aredl_levels, aredl_records};
 use crate::custom_schema::aredl_packs_points;
+use crate::db::DbAppState;
 
 #[derive(Serialize, Identifiable, Selectable, Queryable, Debug)]
 #[diesel(table_name=aredl_pack_tiers, check_for_backend(Pg))]
@@ -80,8 +82,8 @@ pub struct PackTierUpdate {
 }
 
 impl PackTierResolved {
-    pub fn find_all(user_id: Option<Uuid>) -> Result<Vec<Self>, ApiError> {
-        let connection = &mut db::connection()?;
+    pub fn find_all(db: web::Data<Arc<DbAppState>>, user_id: Option<Uuid>) -> Result<Vec<Self>, ApiError> {
+        let connection = &mut db.connection()?;
 
         let pack_tiers = aredl_pack_tiers::table
             .order(aredl_pack_tiers::placement)
@@ -156,25 +158,25 @@ impl PackTierResolved {
 }
 
 impl PackTier {
-    pub fn create(pack_tier: PackTierCreate) -> Result<Self, ApiError> {
+    pub fn create(db: web::Data<Arc<DbAppState>>, pack_tier: PackTierCreate) -> Result<Self, ApiError> {
         let tier = diesel::insert_into(aredl_pack_tiers::table)
             .values(pack_tier)
-            .get_result(&mut db::connection()?)?;
+            .get_result(&mut db.connection()?)?;
         Ok(tier)
     }
 
-    pub fn update(id: Uuid, pack_tier: PackTierUpdate) -> Result<Self, ApiError> {
+    pub fn update(db: web::Data<Arc<DbAppState>>, id: Uuid, pack_tier: PackTierUpdate) -> Result<Self, ApiError> {
         let tier = diesel::update(aredl_pack_tiers::table)
             .set(pack_tier)
             .filter(aredl_pack_tiers::id.eq(id))
-            .get_result(&mut db::connection()?)?;
+            .get_result(&mut db.connection()?)?;
         Ok(tier)
     }
 
-    pub fn delete(id: Uuid) -> Result<Self, ApiError> {
+    pub fn delete(db: web::Data<Arc<DbAppState>>, id: Uuid) -> Result<Self, ApiError> {
         let tier = diesel::delete(aredl_pack_tiers::table)
             .filter(aredl_pack_tiers::id.eq(id))
-            .get_result(&mut db::connection()?)?;
+            .get_result(&mut db.connection()?)?;
         Ok(tier)
     }
 }

@@ -8,4 +8,3 @@ mod id_resolver;
 
 pub use model::*;
 pub use routes::init_routes;
-pub use id_resolver::LevelId;

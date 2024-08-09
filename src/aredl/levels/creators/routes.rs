@@ -1,37 +1,43 @@
+use std::sync::Arc;
 use actix_web::{delete, get, HttpResponse, patch, post, web};
 use uuid::Uuid;
 use crate::aredl::levels::creators::Creator;
-use crate::aredl::levels::LevelId;
+use crate::aredl::levels::id_resolver::resolve_level_id;
+use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 
 #[get("")]
-async fn find_all(level_id: web::Path<LevelId>) -> Result<HttpResponse, ApiError> {
+async fn find_all(db: web::Data<Arc<DbAppState>>, level_id: web::Path<String>) -> Result<HttpResponse, ApiError> {
+    let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
     let creators = web::block(
-        || Creator::find_all(level_id.into_inner().into())
+        move || Creator::find_all(db, level_id)
     ).await??;
     Ok(HttpResponse::Ok().json(creators))
 }
 
 #[post("")]
-async fn set(level_id: web::Path<LevelId>, creators: web::Json<Vec<Uuid>>) -> Result<HttpResponse, ApiError> {
+async fn set(db: web::Data<Arc<DbAppState>>, level_id: web::Path<String>, creators: web::Json<Vec<Uuid>>) -> Result<HttpResponse, ApiError> {
+    let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
     let creators = web::block(
-        || Creator::set_all(level_id.into_inner().into(), creators.into_inner())
+        move || Creator::set_all(db, level_id, creators.into_inner())
     ).await??;
     Ok(HttpResponse::Ok().json(creators))
 }
 
 #[patch("")]
-async fn add(level_id: web::Path<LevelId>, creators: web::Json<Vec<Uuid>>) -> Result<HttpResponse, ApiError> {
+async fn add(db: web::Data<Arc<DbAppState>>, level_id: web::Path<String>, creators: web::Json<Vec<Uuid>>) -> Result<HttpResponse, ApiError> {
+    let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
     let creators = web::block(
-        || Creator::add_all(level_id.into_inner().into(), creators.into_inner())
+        move || Creator::add_all(db, level_id, creators.into_inner())
     ).await??;
     Ok(HttpResponse::Ok().json(creators))
 }
 
 #[delete("")]
-async fn delete(level_id: web::Path<LevelId>, creators: web::Json<Vec<Uuid>>) -> Result<HttpResponse, ApiError> {
+async fn delete(db: web::Data<Arc<DbAppState>>, level_id: web::Path<String>, creators: web::Json<Vec<Uuid>>) -> Result<HttpResponse, ApiError> {
+    let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
     let creators = web::block(
-        || Creator::delete_all(level_id.into_inner().into(), creators.into_inner())
+        move || Creator::delete_all(db, level_id, creators.into_inner())
     ).await??;
     Ok(HttpResponse::Ok().json(creators))
 }

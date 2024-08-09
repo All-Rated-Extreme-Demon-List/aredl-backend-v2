@@ -13,6 +13,7 @@ mod auth;
 mod users;
 mod page_helper;
 mod cache_control;
+mod refresh_leaderboard;
 
 use std::env;
 use actix_cors::Cors;
@@ -25,7 +26,9 @@ use crate::cache_control::CacheController;
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
 
-    db::init();
+    let db_app_state = db::init_app_state();
+
+    db_app_state.run_pending_migrations();
 
     let auth_app_state = auth::init_app_state().await;
 
@@ -41,6 +44,7 @@ async fn main() -> std::io::Result<()> {
             .service(
                 web::scope("/api")
                     .app_data(web::Data::new(auth_app_state.clone()))
+                    .app_data(web::Data::new(db_app_state.clone()))
                     .wrap(CacheController::default_no_store())
                     .wrap(cors)
                     .configure(aredl::init_routes)

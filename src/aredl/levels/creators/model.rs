@@ -1,9 +1,10 @@
+use std::sync::Arc;
+use actix_web::web;
 use diesel::{Connection, delete, ExpressionMethods, insert_into, JoinOnDsl, QueryDsl, RunQueryDsl, SelectableHelper};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use diesel::pg::Pg;
-use crate::db;
-use crate::db::DbConnection;
+use crate::db::{DbAppState, DbConnection};
 use crate::error_handler::ApiError;
 use crate::schema::{aredl_levels_created, users};
 
@@ -16,17 +17,17 @@ pub struct Creator {
 }
 
 impl Creator {
-    pub fn find_all(level_id: Uuid) -> Result<Vec<Self>, ApiError> {
+    pub fn find_all(db: web::Data<Arc<DbAppState>>, level_id: Uuid) -> Result<Vec<Self>, ApiError> {
         let creators = aredl_levels_created::table
             .filter(aredl_levels_created::level_id.eq(level_id))
             .inner_join(users::table.on(aredl_levels_created::user_id.eq(users::id)))
             .select(Creator::as_select())
-            .load::<Creator>(&mut db::connection()?)?;
+            .load::<Creator>(&mut db.connection()?)?;
         Ok(creators)
     }
 
-    pub fn add_all(level_id: Uuid, creators: Vec<Uuid>) -> Result<Vec<Uuid>, ApiError> {
-        let conn = &mut db::connection()?;
+    pub fn add_all(db: web::Data<Arc<DbAppState>>, level_id: Uuid, creators: Vec<Uuid>) -> Result<Vec<Uuid>, ApiError> {
+        let conn = &mut db.connection()?;
 
         let result = conn.transaction(|connection| -> Result<Vec<Uuid>, ApiError> {
 
@@ -43,8 +44,8 @@ impl Creator {
         Ok(result)
     }
 
-    pub fn delete_all(level_id: Uuid, creators: Vec<Uuid>) -> Result<Vec<Uuid>, ApiError> {
-        let conn = &mut db::connection()?;
+    pub fn delete_all(db: web::Data<Arc<DbAppState>>, level_id: Uuid, creators: Vec<Uuid>) -> Result<Vec<Uuid>, ApiError> {
+        let conn = &mut db.connection()?;
 
         let result = conn.transaction(|connection| -> Result<Vec<Uuid>, ApiError> {
             delete(aredl_levels_created::table)
@@ -63,8 +64,8 @@ impl Creator {
         Ok(result)
     }
 
-    pub fn set_all(level_id: Uuid, creators: Vec<Uuid>) -> Result<Vec<Uuid>, ApiError> {
-        let conn = &mut db::connection()?;
+    pub fn set_all(db: web::Data<Arc<DbAppState>>, level_id: Uuid, creators: Vec<Uuid>) -> Result<Vec<Uuid>, ApiError> {
+        let conn = &mut db.connection()?;
 
         let result = conn.transaction(|connection| -> Result<Vec<Uuid>, ApiError> {
             delete(aredl_levels_created::table)

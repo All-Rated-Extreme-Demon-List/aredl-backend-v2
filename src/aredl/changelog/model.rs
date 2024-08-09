@@ -1,9 +1,11 @@
+use std::sync::Arc;
+use actix_web::web;
 use chrono::NaiveDateTime;
 use diesel::{ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use diesel::pg::Pg;
-use crate::db;
+use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::{aredl_levels, aredl_position_history};
@@ -57,7 +59,7 @@ pub struct ChangelogEntryResolved {
 }
 
 impl ChangelogEntry {
-    pub fn find_all<const D: i64>(page_query: PageQuery<D>) -> Result<Paginated<Self>, ApiError> {
+    pub fn find_all<const D: i64>(db: web::Data<Arc<DbAppState>>, page_query: PageQuery<D>) -> Result<Paginated<Self>, ApiError> {
         let (level_affected, level_above, level_below) = diesel::alias!(
             aredl_levels as level_affected,
             aredl_levels as level_above,
@@ -78,7 +80,7 @@ impl ChangelogEntry {
                     level_above.fields((aredl_levels::id, aredl_levels::name)).nullable(),
                     level_below.fields((aredl_levels::id, aredl_levels::name)).nullable(),
                 ))
-                .load::<(ChangelogEntryData, Level, Option<Level>, Option<Level>)>(&mut db::connection()?)?;
+                .load::<(ChangelogEntryData, Level, Option<Level>, Option<Level>)>(&mut db.connection()?)?;
 
         let records_resolved = records.into_iter().map(|(entry, affected, above, below)| {
             let action = ChangelogAction::from_data(&entry, &affected, &above, &below);
@@ -92,7 +94,7 @@ impl ChangelogEntry {
         }
         ).collect::<Vec<_>>();
 
-        let count: i64 = aredl_position_history::table.count().get_result(&mut db::connection()?)?;
+        let count: i64 = aredl_position_history::table.count().get_result(&mut db.connection()?)?;
         let pages = (count / page_query.per_page()) + 1;
 
         Ok(Paginated::<Self>::from_data(page_query, pages, records_resolved))

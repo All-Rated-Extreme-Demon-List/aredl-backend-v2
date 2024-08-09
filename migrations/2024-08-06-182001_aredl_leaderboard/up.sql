@@ -15,7 +15,7 @@ CREATE VIEW aredl_user_pack_points AS
     JOIN aredl_packs_points p ON p.id = cp.pack_id
     GROUP BY cp.user_id;
 
-CREATE VIEW aredl_user_leaderboard AS
+CREATE MATERIALIZED VIEW aredl_user_leaderboard AS
 WITH user_points AS (
 	SELECT r.submitted_by AS user_id, u.country, SUM(l.points)::INTEGER + COALESCE(pp.points, 0) AS total_points, COALESCE(pp.points, 0) AS pack_points
 	FROM aredl_records r

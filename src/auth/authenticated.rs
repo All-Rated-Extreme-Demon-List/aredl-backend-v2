@@ -1,8 +1,10 @@
 use std::future::{Ready, ready};
-use actix_web::{FromRequest, HttpMessage, HttpRequest};
+use std::sync::Arc;
+use actix_web::{FromRequest, HttpMessage, HttpRequest, web};
 use actix_web::dev::Payload;
 use crate::auth::{Permission, permission};
 use crate::auth::token::UserClaims;
+use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 
 pub struct Authenticated(UserClaims);
@@ -24,8 +26,8 @@ impl FromRequest for Authenticated {
 }
 
 impl Authenticated {
-    pub fn has_permission(&self, permission: Permission) -> Result<bool, ApiError> {
-        permission::check_permission(self.user_id, permission)
+    pub fn has_permission(&self, db: web::Data<Arc<DbAppState>>, permission: Permission) -> Result<bool, ApiError> {
+        permission::check_permission(db, self.user_id, permission)
     }
 }
 
