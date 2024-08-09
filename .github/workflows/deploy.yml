@@ -15,15 +15,19 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    
+
+    - name: Installing rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+        components: llvm-tools-preview
+
     - name: Build
-      run: cargo build --release
-
-    - name: List Release Directory (Debugging Step1)
-      run: ls -al ./target
-
-    - name: List Release Directory (Debugging Step2)
-      run: ls -al ./target/release
+      uses: actions-rs/cargo@v1
+      with:
+        command: release
 
     - name: Deploy to server
       uses: burnett01/rsync-deployments@6.0.0
