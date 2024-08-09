@@ -127,10 +127,9 @@ fn main() {
 
     let roles_map: HashMap<&str, (&str, i32)> = HashMap::from([
         ("owner", ("owner", 100)),
-        ("coowner", ("coowner", 90)),
         ("dev", ("developer", 80)),
         ("admin", ("admin", 70)),
-        ("trial", ("mod", 50)),
+        ("mod", ("mod", 50)),
         ("helper", ("helper", 30)),
         ("patreon", ("plus", 5)),
     ]);
