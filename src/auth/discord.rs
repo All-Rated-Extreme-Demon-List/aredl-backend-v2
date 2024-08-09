@@ -50,6 +50,7 @@ impl From<DiscordUser> for UserUpsert {
             global_name: user.global_name.or(Some(user.username)),
             discord_id: Some(user.id),
             placeholder: false,
+            country: None,
             discord_avatar: user.avatar,
             discord_banner: user.banner,
             discord_accent_color: user.accent_color,
