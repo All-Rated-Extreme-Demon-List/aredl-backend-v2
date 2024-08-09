@@ -27,7 +27,8 @@ jobs:
     - name: Build
       uses: actions-rs/cargo@v1
       with:
-        command: release
+        command: build
+        args: --release
 
     - name: Deploy to server
       uses: burnett01/rsync-deployments@6.0.0
