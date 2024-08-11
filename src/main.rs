@@ -21,7 +21,7 @@ use actix_session::config::{CookieContentSecurity, PersistentSession};
 use actix_session::SessionMiddleware;
 use actix_session::storage::CookieSessionStore;
 use actix_web::{App, HttpServer, web};
-use actix_web::cookie::Key;
+use actix_web::cookie::{Key, SameSite};
 use dotenv::dotenv;
 use listenfd::ListenFd;
 use crate::cache_control::CacheController;
@@ -55,7 +55,8 @@ async fn main() -> std::io::Result<()> {
                     .wrap(CacheController::default_no_store())
                     .wrap(SessionMiddleware::builder(CookieSessionStore::default(), cookie_key)
                         .session_lifecycle(PersistentSession::default())
-                        .cookie_secure(false)
+                        .cookie_secure(true)
+                        .cookie_same_site(SameSite::None)
                         .cookie_content_security(CookieContentSecurity::Private)
                         .build()
                     )
