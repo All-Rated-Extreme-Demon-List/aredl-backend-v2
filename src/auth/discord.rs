@@ -1,7 +1,7 @@
 use std::env;
 use std::sync::Arc;
 
-use actix_web::{get, HttpResponse, web};
+use actix_web::{get, HttpRequest, HttpResponse, web};
 use chrono::{DateTime, Duration, Utc};
 use diesel::{ExpressionMethods, RunQueryDsl};
 use diesel::prelude::*;
@@ -10,6 +10,7 @@ use openidconnect::core::{CoreAuthenticationFlow, CoreClient, CoreIdTokenVerifie
 use openidconnect::reqwest::async_http_client;
 use serde::{Deserialize, Serialize};
 use actix_web::http::header;
+use actix_web::http::header::HeaderValue;
 
 use crate::auth::app_state::AuthAppState;
 use crate::auth::token;
@@ -30,7 +31,8 @@ struct OAuthCallbackQuery {
 struct OAuthRequestData {
     pub csrf_state: String,
     pub pkce_verifier: String,
-    pub nonce: String
+    pub nonce: String,
+    pub return_url: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -89,8 +91,13 @@ struct AuthResponse {
     pub user: User,
 }
 
+#[derive(Debug, Deserialize)]
+struct AuthOptions {
+    pub return_url: Option<String>
+}
+
 #[get("")]
-async fn discord_auth(db: web::Data<Arc<DbAppState>>, data: web::Data<Arc<AuthAppState>>) -> Result<HttpResponse, ApiError> {
+async fn discord_auth(db: web::Data<Arc<DbAppState>>, data: web::Data<Arc<AuthAppState>>, options: web::Query<AuthOptions>) -> Result<HttpResponse, ApiError> {
     let client = &data.discord_client;
 
     let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
@@ -108,6 +115,7 @@ async fn discord_auth(db: web::Data<Arc<DbAppState>>, data: web::Data<Arc<AuthAp
         csrf_state: csrf_state.secret().clone(),
         pkce_verifier: pkce_verifier.secret().to_string(),
         nonce: nonce.secret().to_string(),
+        return_url: options.into_inner().return_url,
     };
 
     web::block(move || OAuthRequestData::create(db, &request_data)).await??;
@@ -166,7 +174,11 @@ async fn discord_callback(db: web::Data<Arc<DbAppState>>, query: web::Query<OAut
         Duration::weeks(52),
     )?;
 
-    Ok(HttpResponse::Ok().json(AuthResponse { token, expires, user }))
+    match request_data.return_url {
+        None => Ok(HttpResponse::Ok().json(AuthResponse { token, expires, user })),
+        Some(url) => Ok(HttpResponse::Found().append_header((header::LOCATION, format!("{}&token={}", url, token))).finish())
+    }
+
 }
 
 pub(crate) async fn create_discord_client() -> Result<CoreClient, Box<dyn std::error::Error>> {

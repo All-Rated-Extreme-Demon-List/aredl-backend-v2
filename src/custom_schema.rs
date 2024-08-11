@@ -31,3 +31,15 @@ diesel::table! {
 
 diesel::joinable!(aredl_packs_points -> aredl_pack_tiers (tier));
 diesel::joinable!(aredl_pack_levels -> aredl_packs_points (pack_id));
+
+diesel::table! {
+    aredl_user_leaderboard (user_id) {
+        rank -> Int4,
+        country_rank -> Int4,
+        user_id -> Uuid,
+        country -> Nullable<Int4>,
+        total_points -> Int4,
+        pack_points -> Int4,
+        hardest -> Nullable<Uuid>
+    }
+}

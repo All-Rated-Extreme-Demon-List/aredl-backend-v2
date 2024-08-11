@@ -21,6 +21,7 @@ use actix_web::{App, HttpServer, web};
 use dotenv::dotenv;
 use listenfd::ListenFd;
 use crate::cache_control::CacheController;
+use crate::refresh_leaderboard::start_leaderboard_refresher;
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
@@ -29,6 +30,8 @@ async fn main() -> std::io::Result<()> {
     let db_app_state = db::init_app_state();
 
     db_app_state.run_pending_migrations();
+
+    start_leaderboard_refresher(db_app_state.clone());
 
     let auth_app_state = auth::init_app_state().await;
 

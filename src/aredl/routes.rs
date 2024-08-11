@@ -1,5 +1,5 @@
 use actix_web::web;
-use crate::aredl::{changelog, levels, packs, packtiers};
+use crate::aredl::{changelog, leaderboard, levels, packs, packtiers};
 
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
@@ -8,5 +8,6 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .configure(changelog::init_routes)
             .configure(packtiers::init_routes)
             .configure(packs::init_routes)
+            .configure(leaderboard::init_routes)
     );
 }

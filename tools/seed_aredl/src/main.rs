@@ -477,6 +477,9 @@ fn main() {
                     ).collect::<Vec<_>>()
             ).execute(conn)?;
 
+        diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_user_leaderboard")
+            .execute(conn)?;
+
         Ok(())
     }).expect("Failed to migrate");
 }
