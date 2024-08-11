@@ -2,11 +2,13 @@ use std::future::{Ready, ready};
 use std::sync::Arc;
 use actix_web::{FromRequest, HttpMessage, HttpRequest, web};
 use actix_web::dev::Payload;
+use serde::{Deserialize, Serialize};
 use crate::auth::{Permission, permission};
 use crate::auth::token::UserClaims;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Authenticated(UserClaims);
 
 impl FromRequest for Authenticated {
@@ -18,7 +20,7 @@ impl FromRequest for Authenticated {
 
         let result = match value {
             Some(claims) => Ok(Authenticated(claims)),
-            None => Err(ApiError::new(500, "Authentication error")),
+            None => Err(ApiError::new(401, "Authentication error")),
         };
 
         ready(result)

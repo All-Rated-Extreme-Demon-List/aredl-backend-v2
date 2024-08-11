@@ -1,5 +1,6 @@
 use std::env;
 use std::sync::Arc;
+use actix_session::Session;
 
 use actix_web::{get, HttpRequest, HttpResponse, web};
 use chrono::{DateTime, Duration, Utc};
@@ -91,13 +92,13 @@ struct AuthResponse {
     pub user: User,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct AuthOptions {
     pub return_url: Option<String>
 }
 
 #[get("")]
-async fn discord_auth(db: web::Data<Arc<DbAppState>>, data: web::Data<Arc<AuthAppState>>, options: web::Query<AuthOptions>) -> Result<HttpResponse, ApiError> {
+async fn discord_auth(data: web::Data<Arc<AuthAppState>>, session: Session, options: web::Query<AuthOptions>) -> Result<HttpResponse, ApiError> {
     let client = &data.discord_client;
 
     let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
@@ -111,42 +112,58 @@ async fn discord_auth(db: web::Data<Arc<DbAppState>>, data: web::Data<Arc<AuthAp
         .set_pkce_challenge(pkce_challenge.clone())
         .url();
 
-    let request_data: OAuthRequestData = OAuthRequestData {
-        csrf_state: csrf_state.secret().clone(),
-        pkce_verifier: pkce_verifier.secret().to_string(),
-        nonce: nonce.secret().to_string(),
-        return_url: options.into_inner().return_url,
-    };
+    session.insert("csrf_state", csrf_state.secret().clone())
+        .map_err(|_| ApiError::new(400, "Session error"))?;
 
-    web::block(move || OAuthRequestData::create(db, &request_data)).await??;
+    session.insert("pkce_verifier", pkce_verifier.secret().to_string())
+        .map_err(|_| ApiError::new(400, "Session error"))?;
+
+    session.insert("nonce", nonce.secret().to_string())
+        .map_err(|_| ApiError::new(400, "Session error"))?;
+
+    match options.return_url.clone() {
+        Some(url) => session.insert("return_url", url)
+            .map_err(|_| ApiError::new(400, "Session error"))?,
+        _ => {}
+    };
 
     Ok(HttpResponse::Found().append_header((header::LOCATION, authorize_url.to_string())).finish())
 }
 
 #[get("/callback")]
-async fn discord_callback(db: web::Data<Arc<DbAppState>>, query: web::Query<OAuthCallbackQuery>, data: web::Data<Arc<AuthAppState>>) -> Result<HttpResponse, ApiError> {
+async fn discord_callback(db: web::Data<Arc<DbAppState>>, query: web::Query<OAuthCallbackQuery>, session: Session, data: web::Data<Arc<AuthAppState>>) -> Result<HttpResponse, ApiError> {
     let client = &data.discord_client;
 
-    // maybe combine both db actions
-    let request_data = web::block({
-        let csrf_state = query.state.clone();
-        let db_state = db.clone();
-        move || OAuthRequestData::find(db_state, &csrf_state)
-    }).await??;
+    let session_state = session.remove_as::<String>("csrf_state");
 
-    web::block({
-        let csrf_state = query.state.clone();
-        let db_state = db.clone();
-        move || OAuthRequestData::delete(db_state.clone(), &csrf_state)
-    }).await??;
+    if match session_state {
+        Some(Ok(state)) => query.state != state,
+        _ => true
+    } {
+        return Err(ApiError::new(400, "Session error"))
+    }
+
+    let pkce_verifier = session.remove_as::<String>("pkce_verifier");
+
+    let pkce_verifier = match pkce_verifier {
+        Some(Ok(pkce)) => Ok(pkce),
+        _ => Err(ApiError::new(400, "Session error"))
+    }?;
+
+    let nonce = session.remove_as::<String>("nonce");
+
+    let nonce = match nonce {
+        Some(Ok(nonce)) => Ok(nonce),
+        _ => Err(ApiError::new(400, "Session error"))
+    }?;
 
     let token_response = client
         .exchange_code(query.code.clone())
-        .set_pkce_verifier(PkceCodeVerifier::new(request_data.pkce_verifier))
+        .set_pkce_verifier(PkceCodeVerifier::new(pkce_verifier))
         .request_async(async_http_client).await
         .map_err(|_| ApiError::new(401, "Failed to request token!"))?;
 
-    let nonce: Nonce = Nonce::new(request_data.nonce);
+    let nonce: Nonce = Nonce::new(nonce);
     let id_token_verifier: CoreIdTokenVerifier = client.id_token_verifier();
     match token_response.extra_fields().id_token() {
         Some(id_token) => id_token.claims(&id_token_verifier, &nonce).map_err(|_| ApiError::new(401, "Failed to verify ID token!")),
@@ -174,11 +191,18 @@ async fn discord_callback(db: web::Data<Arc<DbAppState>>, query: web::Query<OAut
         Duration::weeks(52),
     )?;
 
-    match request_data.return_url {
-        None => Ok(HttpResponse::Ok().json(AuthResponse { token, expires, user })),
-        Some(url) => Ok(HttpResponse::Found().append_header((header::LOCATION, format!("{}&token={}", url, token))).finish())
-    }
+    session.insert("token", token.clone())
+        .map_err(|_| ApiError::new(400, "Session error"))?;
 
+    session.insert("expires", expires.clone())
+        .map_err(|_| ApiError::new(400, "Session error"))?;
+
+    let return_url = session.remove_as::<String>("return_url");
+
+    match return_url {
+        Some(Ok(url)) => Ok(HttpResponse::Found().append_header((header::LOCATION, url)).finish()),
+        _ => Ok(HttpResponse::Ok().json(AuthResponse { token, expires, user }))
+    }
 }
 
 pub(crate) async fn create_discord_client() -> Result<CoreClient, Box<dyn std::error::Error>> {

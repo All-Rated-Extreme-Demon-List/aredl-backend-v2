@@ -1,6 +1,7 @@
 use std::rc::Rc;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use actix_session::SessionExt;
 use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
 use actix_web::{HttpMessage, web};
 use actix_web::error::ErrorUnauthorized;
@@ -71,9 +72,8 @@ impl<S> Service<ServiceRequest> for AuthMiddleware<S>
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
         let require_auth = self.required_perm.is_some();
-        let token = req
-            .cookie("token")
-            .map(|c| c.value().to_string())
+        let token = req.get_session().get::<String>("token")
+            .unwrap_or(None)
             .or_else(|| {
                 req.headers()
                     .get(openidconnect::http::header::AUTHORIZATION)
@@ -84,7 +84,7 @@ impl<S> Service<ServiceRequest> for AuthMiddleware<S>
             return if require_auth {
                 Box::pin(ready(
                     Err(ErrorUnauthorized(
-                        ApiError::new(403, "Unauthorized")
+                        ApiError::new(401, "Unauthorized")
                     ))))
             } else {
                 // auth is not required

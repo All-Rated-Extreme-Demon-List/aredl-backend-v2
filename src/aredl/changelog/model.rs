@@ -58,8 +58,13 @@ pub struct ChangelogEntryResolved {
     pub level_below: Option<Level>,
 }
 
-impl ChangelogEntry {
-    pub fn find_all<const D: i64>(db: web::Data<Arc<DbAppState>>, page_query: PageQuery<D>) -> Result<Paginated<Self>, ApiError> {
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ChangelogPage {
+    pub data: Vec<ChangelogEntry>
+}
+
+impl ChangelogPage {
+    pub fn find<const D: i64>(db: web::Data<Arc<DbAppState>>, page_query: PageQuery<D>) -> Result<Paginated<Self>, ApiError> {
         let (level_affected, level_above, level_below) = diesel::alias!(
             aredl_levels as level_affected,
             aredl_levels as level_above,
@@ -97,7 +102,9 @@ impl ChangelogEntry {
         let count: i64 = aredl_position_history::table.count().get_result(&mut db.connection()?)?;
         let pages = (count / page_query.per_page()) + 1;
 
-        Ok(Paginated::<Self>::from_data(page_query, pages, records_resolved))
+        Ok(Paginated::<Self>::from_data(page_query, pages, Self {
+            data: records_resolved
+        }))
     }
 }
 

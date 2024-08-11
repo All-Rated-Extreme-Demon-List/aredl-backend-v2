@@ -11,11 +11,12 @@ pub struct Paginated<T> {
     pub page: i64,
     pub per_page: i64,
     pub pages: i64,
-    pub data: Vec<T>,
+    #[serde(flatten)]
+    pub data: T,
 }
 
 impl<T> Paginated<T> {
-    pub fn from_data<const D: i64>(query: PageQuery<D>, pages: i64, data: Vec<T>) -> Self {
+    pub fn from_data<const D: i64>(query: PageQuery<D>, pages: i64, data: T) -> Self {
         Self {
             page: query.page,
             per_page: query.per_page.unwrap_or(D),
