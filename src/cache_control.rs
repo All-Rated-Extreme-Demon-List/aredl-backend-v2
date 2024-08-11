@@ -14,7 +14,7 @@ pub struct CacheController {
 impl CacheController {
     pub fn default_no_store() -> Self {
         Self {
-            cache_directive: vec!(CacheDirective::NoCache),
+            cache_directive: vec!(CacheDirective::NoCache, CacheDirective::NoStore),
             replace: false
         }
     }
