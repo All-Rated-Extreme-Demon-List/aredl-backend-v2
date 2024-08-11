@@ -7,8 +7,12 @@ use crate::users::me::model::User;
 
 #[get("", wrap="UserAuth::load()")]
 async fn find(db: web::Data<Arc<DbAppState>>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
-    let conn = &mut db.connection()?;
-    let user = User::find(conn, authenticated.user_id);
+    let user = web::block(
+        move || {
+            let conn = &mut db.connection()?;
+            User::find(conn, authenticated.user_id)
+        }
+    ).await??;
     Ok(HttpResponse::Ok().json(user))
 }
 
