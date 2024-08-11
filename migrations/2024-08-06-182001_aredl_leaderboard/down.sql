@@ -1,4 +1,4 @@
-DROP MATERIALIZED VIEW IF EXISTS aredl_user_leaderboard;
+DROP VIEW IF EXISTS aredl_user_leaderboard;
 
 DROP VIEW IF EXISTS aredl_user_pack_points;
 
