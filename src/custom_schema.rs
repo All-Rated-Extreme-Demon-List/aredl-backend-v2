@@ -1,4 +1,4 @@
-use crate::schema::aredl_levels;
+use crate::schema::{aredl_levels, users};
 use crate::schema::aredl_pack_tiers;
 use crate::schema::aredl_pack_levels;
 
@@ -38,8 +38,24 @@ diesel::table! {
         country_rank -> Int4,
         user_id -> Uuid,
         country -> Nullable<Int4>,
+        discord_id -> Nullable<Varchar>,
+        discord_avatar -> Nullable<Varchar>,
         total_points -> Int4,
         pack_points -> Int4,
-        hardest -> Nullable<Uuid>
+        hardest -> Nullable<Uuid>,
+        extremes -> Int4
     }
 }
+
+diesel::joinable!(aredl_user_leaderboard -> users (user_id));
+diesel::joinable!(aredl_user_leaderboard -> aredl_levels (hardest));
+
+diesel::allow_tables_to_appear_in_same_query!(
+    aredl_user_leaderboard,
+    aredl_levels,
+);
+
+diesel::allow_tables_to_appear_in_same_query!(
+    aredl_user_leaderboard,
+    users,
+);

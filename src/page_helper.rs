@@ -16,10 +16,11 @@ pub struct Paginated<T> {
 }
 
 impl<T> Paginated<T> {
-    pub fn from_data<const D: i64>(query: PageQuery<D>, pages: i64, data: T) -> Self {
+    pub fn from_data<const D: i64>(query: PageQuery<D>, count: i64, data: T) -> Self {
+        let pages = (count / query.per_page()) + 1;
         Self {
             page: query.page,
-            per_page: query.per_page.unwrap_or(D),
+            per_page: query.per_page(),
             pages,
             data,
         }

@@ -19,6 +19,7 @@ pub struct Level {
     pub legacy: bool,
     pub level_id: i32,
     pub two_player: bool,
+    pub idl_enjoyment: Option<f64>,
 }
 
 #[derive(Serialize, Deserialize, Insertable)]
@@ -76,6 +77,7 @@ pub struct ResolvedLevel {
     pub legacy: bool,
     pub level_id: i32,
     pub two_player: bool,
+    pub idl_enjoyment: Option<f64>,
     pub publisher: User,
     pub verification: Option<Record<User>>,
 }
@@ -141,6 +143,7 @@ impl ResolvedLevel {
             legacy: level.legacy,
             level_id: level.level_id,
             two_player: level.two_player,
+            idl_enjoyment: level.idl_enjoyment,
             publisher,
             verification,
         }

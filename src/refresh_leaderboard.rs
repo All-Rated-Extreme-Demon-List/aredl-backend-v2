@@ -15,11 +15,7 @@ pub fn start_leaderboard_refresher(db: Arc<DbAppState>) {
 
     task::spawn(async move {
         loop {
-            let now = Utc::now();
-            let next = schedule.upcoming(Utc).next().unwrap();
-            let duration = next - now;
-
-            tokio::time::sleep(Duration::from_secs(duration.num_seconds() as u64)).await;
+            tokio::time::sleep(Duration::from_secs(10)).await;
 
             println!("Refreshing leaderboard");
 
@@ -37,7 +33,11 @@ pub fn start_leaderboard_refresher(db: Arc<DbAppState>) {
                 println!("Failed to refresh {}", result.err().unwrap())
             }
 
-            tokio::time::sleep(Duration::from_secs(10)).await;
+            let now = Utc::now();
+            let next = schedule.upcoming(Utc).next().unwrap();
+            let duration = next - now;
+
+            tokio::time::sleep(Duration::from_secs(duration.num_seconds() as u64)).await;
         }
     });
 }

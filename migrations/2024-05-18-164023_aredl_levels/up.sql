@@ -7,6 +7,7 @@ CREATE TABLE aredl_levels (
     legacy BOOLEAN NOT NULL DEFAULT false,
     level_id INT NOT NULL CHECK (level_id > 0),
     two_player BOOLEAN NOT NULL,
+    idl_enjoyment FLOAT,
     PRIMARY KEY(id),
     UNIQUE (level_id, two_player)
 );

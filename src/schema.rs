@@ -10,6 +10,7 @@ diesel::table! {
         legacy -> Bool,
         level_id -> Int4,
         two_player -> Bool,
+        idl_enjoyment -> Nullable<Float8>,
     }
 }
 

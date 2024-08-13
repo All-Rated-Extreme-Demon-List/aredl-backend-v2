@@ -100,9 +100,8 @@ impl ChangelogPage {
         ).collect::<Vec<_>>();
 
         let count: i64 = aredl_position_history::table.count().get_result(&mut db.connection()?)?;
-        let pages = (count / page_query.per_page()) + 1;
 
-        Ok(Paginated::<Self>::from_data(page_query, pages, Self {
+        Ok(Paginated::<Self>::from_data(page_query, count, Self {
             data: records_resolved
         }))
     }

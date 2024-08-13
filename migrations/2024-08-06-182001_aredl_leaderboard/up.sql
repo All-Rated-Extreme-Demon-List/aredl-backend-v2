@@ -17,12 +17,12 @@ CREATE VIEW aredl_user_pack_points AS
 
 CREATE MATERIALIZED VIEW aredl_user_leaderboard AS
 WITH user_points AS (
-	SELECT r.submitted_by AS user_id, u.country, SUM(l.points)::INTEGER + COALESCE(pp.points, 0) AS total_points, COALESCE(pp.points, 0) AS pack_points
-	FROM aredl_records r
-	JOIN aredl_levels l ON r.level_id = l.id
-	JOIN users u ON r.submitted_by = u.id
+	SELECT u.id AS user_id, u.country, u.discord_id, u.discord_avatar, (COALESCE(SUM(l.points), 0) + COALESCE(pp.points, 0))::INTEGER AS total_points, (COALESCE(pp.points, 0))::INTEGER AS pack_points
+	FROM users u
+	LEFT JOIN aredl_records r ON u.id = r.submitted_by
+	LEFT JOIN aredl_levels l ON r.level_id = l.id
 	LEFT JOIN aredl_user_pack_points pp ON pp.user_id = r.submitted_by
-	GROUP BY r.submitted_by, pp.points, u.country
+	GROUP BY u.id, u.country, u.discord_id, u.discord_avatar, pp.points
 ),
 hardest_position AS (
 	SELECT
@@ -38,11 +38,22 @@ hardest AS (
 		l.id AS level_id
 	FROM hardest_position hp
 	JOIN aredl_levels l ON hp.position = l.position
+),
+level_count AS (
+    SELECT
+        r.submitted_by AS id,
+        count(*) AS c
+    FROM aredl_records r
+    JOIN aredl_levels l ON r.level_id = l.id
+    WHERE l.legacy = false
+    GROUP BY submitted_by
 )
 SELECT
-	RANK() OVER (ORDER BY up.total_points DESC) AS rank,
-	RANK() OVER (PARTITION BY up.country ORDER BY up.total_points DESC) AS country_rank,
+	RANK() OVER (ORDER BY up.total_points DESC)::INTEGER AS rank,
+	RANK() OVER (PARTITION BY up.country ORDER BY up.total_points DESC)::INTEGER AS country_rank,
 	up.*,
-	h.level_id AS hardest
+	h.level_id AS hardest,
+	COALESCE(lc.c, 0)::INTEGER AS extremes
 FROM user_points up
-JOIN hardest h ON h.user_id = up.user_id;
+LEFT JOIN hardest h ON h.user_id = up.user_id
+LEFT JOIN level_count lc ON lc.id = up.user_id;
