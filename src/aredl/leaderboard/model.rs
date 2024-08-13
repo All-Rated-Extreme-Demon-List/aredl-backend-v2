@@ -33,7 +33,6 @@ pub struct LeaderboardEntry {
 pub struct User {
     pub id: Uuid,
     pub global_name: String,
-    pub country: Option<i32>,
     pub discord_id: Option<String>,
     pub discord_avatar: Option<String>
 }
