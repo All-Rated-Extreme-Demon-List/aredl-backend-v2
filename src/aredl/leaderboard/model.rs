@@ -15,9 +15,11 @@ use crate::schema::{aredl_levels, users};
 #[diesel(table_name=aredl_user_leaderboard, check_for_backend(Pg))]
 pub struct LeaderboardEntry {
     pub rank: i32,
-    pub country_rank: i32,
     pub extremes_rank: i32,
     pub raw_rank: i32,
+    pub country_rank: i32,
+    pub country_extremes_rank: i32,
+    pub country_raw_rank: i32,
     pub user_id: Uuid,
     pub country: Option<i32>,
     pub total_points: i32,
@@ -46,9 +48,11 @@ pub struct Level {
 #[derive(Serialize, Debug)]
 pub struct LeaderboardEntryResolved {
     pub rank: i32,
-    pub country_rank: i32,
     pub extremes_rank: i32,
     pub raw_rank: i32,
+    pub country_rank: i32,
+    pub country_extremes_rank: i32,
+    pub country_raw_rank: i32,
     pub user: User,
     pub country: Option<i32>,
     pub total_points: i32,
@@ -66,7 +70,6 @@ pub struct LeaderboardPage {
 pub enum LeaderboardOrder {
     TotalPoints,
     RawPoints,
-    Country,
     ExtremeCount,
 }
 
@@ -96,11 +99,13 @@ impl LeaderboardPage {
         );
 
         let ordering: Box< dyn BoxableExpression<_, _, SqlType = NotSelectable>> =
-            match options.order {
-                LeaderboardOrder::TotalPoints => Box::new(aredl_user_leaderboard::rank.asc()),
-                LeaderboardOrder::Country => Box::new(aredl_user_leaderboard::country_rank.asc()),
-                LeaderboardOrder::ExtremeCount => Box::new(aredl_user_leaderboard::extremes_rank.asc()),
-                LeaderboardOrder::RawPoints => Box::new(aredl_user_leaderboard::raw_rank.asc())
+            match (options.country_filter, options.order) {
+                (None, LeaderboardOrder::TotalPoints) => Box::new(aredl_user_leaderboard::rank.asc()),
+                (None, LeaderboardOrder::ExtremeCount) => Box::new(aredl_user_leaderboard::extremes_rank.asc()),
+                (None, LeaderboardOrder::RawPoints) => Box::new(aredl_user_leaderboard::raw_rank.asc()),
+                (Some(_), LeaderboardOrder::TotalPoints) => Box::new(aredl_user_leaderboard::country_rank.asc()),
+                (Some(_), LeaderboardOrder::ExtremeCount) => Box::new(aredl_user_leaderboard::country_extremes_rank.asc()),
+                (Some(_), LeaderboardOrder::RawPoints) => Box::new(aredl_user_leaderboard::country_raw_rank.asc()),
             };
 
         let query =
@@ -136,9 +141,11 @@ impl LeaderboardPage {
             .into_iter()
             .map(|(entry, user, hardest)| LeaderboardEntryResolved {
                 rank: entry.rank,
-                country_rank: entry.country_rank,
                 extremes_rank: entry.extremes_rank,
                 raw_rank: entry.raw_rank,
+                country_rank: entry.country_rank,
+                country_extremes_rank: entry.country_extremes_rank,
+                country_raw_rank: entry.country_raw_rank,
                 user,
                 country: entry.country,
                 total_points: entry.total_points,
