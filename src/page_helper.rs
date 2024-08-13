@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 pub struct PageQuery<const D: i64> {
     pub per_page: Option<i64>,
-    pub page: i64,
+    pub page: Option<i64>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -19,7 +19,7 @@ impl<T> Paginated<T> {
     pub fn from_data<const D: i64>(query: PageQuery<D>, count: i64, data: T) -> Self {
         let pages = (count / query.per_page()) + 1;
         Self {
-            page: query.page,
+            page: query.page(),
             per_page: query.per_page(),
             pages,
             data,
@@ -29,10 +29,14 @@ impl<T> Paginated<T> {
 
 impl<const D: i64> PageQuery<D> {
     pub fn offset(&self) -> i64 {
-        self.per_page.unwrap_or(D) * (self.page - 1)
+        self.per_page.unwrap_or(D) * (self.page() - 1)
     }
 
     pub fn per_page(&self) -> i64 {
         self.per_page.unwrap_or(D)
+    }
+
+    pub fn page(&self) -> i64 {
+        self.page.unwrap_or(1)
     }
 }

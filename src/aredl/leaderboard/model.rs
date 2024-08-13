@@ -77,7 +77,7 @@ pub enum LeaderboardOrder {
 pub struct LeaderboardQueryOptions {
     pub name_filter: Option<String>,
     pub country_filter: Option<i32>,
-    pub order: LeaderboardOrder,
+    pub order: Option<LeaderboardOrder>,
 }
 
 impl LeaderboardPage {
@@ -98,8 +98,10 @@ impl LeaderboardPage {
             (aredl_levels::id, aredl_levels::name).nullable()
         );
 
+        let order = options.order.unwrap_or(LeaderboardOrder::TotalPoints);
+
         let ordering: Box< dyn BoxableExpression<_, _, SqlType = NotSelectable>> =
-            match (options.country_filter, options.order) {
+            match (options.country_filter, order) {
                 (None, LeaderboardOrder::TotalPoints) => Box::new(aredl_user_leaderboard::rank.asc()),
                 (None, LeaderboardOrder::ExtremeCount) => Box::new(aredl_user_leaderboard::extremes_rank.asc()),
                 (None, LeaderboardOrder::RawPoints) => Box::new(aredl_user_leaderboard::raw_rank.asc()),
@@ -118,7 +120,7 @@ impl LeaderboardPage {
         let entries = query.clone()
             .filter(name_filter)
             .filter(country_filter)
-            .order(ordering)
+            .order((ordering, aredl_user_leaderboard::user_id))
             .select(selection)
             .load::<(LeaderboardEntry, User, Option<Level>)>(conn)?;
 
