@@ -17,12 +17,12 @@ CREATE VIEW aredl_user_pack_points AS
 
 CREATE MATERIALIZED VIEW aredl_user_leaderboard AS
 WITH user_points AS (
-	SELECT u.id AS user_id, u.country, u.discord_id, u.discord_avatar, (COALESCE(SUM(l.points), 0) + COALESCE(pp.points, 0))::INTEGER AS total_points, (COALESCE(pp.points, 0))::INTEGER AS pack_points
+	SELECT u.id AS user_id, u.country, (COALESCE(SUM(l.points), 0) + COALESCE(pp.points, 0))::INTEGER AS total_points, (COALESCE(pp.points, 0))::INTEGER AS pack_points
 	FROM users u
 	LEFT JOIN aredl_records r ON u.id = r.submitted_by
 	LEFT JOIN aredl_levels l ON r.level_id = l.id
 	LEFT JOIN aredl_user_pack_points pp ON pp.user_id = r.submitted_by
-	GROUP BY u.id, u.country, u.discord_id, u.discord_avatar, pp.points
+	GROUP BY u.id, u.country, pp.points
 ),
 hardest_position AS (
 	SELECT
@@ -51,6 +51,8 @@ level_count AS (
 SELECT
 	RANK() OVER (ORDER BY up.total_points DESC)::INTEGER AS rank,
 	RANK() OVER (PARTITION BY up.country ORDER BY up.total_points DESC)::INTEGER AS country_rank,
+	RANK() OVER (ORDER BY COALESCE(lc.c, 0) DESC)::INTEGER AS extremes_rank,
+	RANK() OVER (ORDER BY up.total_points - up.pack_points DESC)::INTEGER AS raw_rank,
 	up.*,
 	h.level_id AS hardest,
 	COALESCE(lc.c, 0)::INTEGER AS extremes

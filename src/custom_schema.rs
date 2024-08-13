@@ -36,10 +36,10 @@ diesel::table! {
     aredl_user_leaderboard (user_id) {
         rank -> Int4,
         country_rank -> Int4,
+        extremes_rank -> Int4,
+        raw_rank -> Int4,
         user_id -> Uuid,
         country -> Nullable<Int4>,
-        discord_id -> Nullable<Varchar>,
-        discord_avatar -> Nullable<Varchar>,
         total_points -> Int4,
         pack_points -> Int4,
         hardest -> Nullable<Uuid>,

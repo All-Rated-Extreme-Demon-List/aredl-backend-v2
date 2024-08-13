@@ -94,16 +94,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    oauth_requests (csrf_state) {
-        csrf_state -> Varchar,
-        pkce_verifier -> Varchar,
-        nonce -> Varchar,
-        return_url -> Nullable<Varchar>,
-        created_at -> Nullable<Timestamp>,
-    }
-}
-
-diesel::table! {
     permissions (permission) {
         privilege_level -> Int4,
         permission -> Varchar,
@@ -159,7 +149,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     aredl_position_history,
     aredl_records,
     aredl_submissions,
-    oauth_requests,
     permissions,
     roles,
     user_roles,

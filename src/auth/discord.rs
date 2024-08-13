@@ -2,23 +2,20 @@ use std::env;
 use std::sync::Arc;
 use actix_session::Session;
 
-use actix_web::{get, HttpRequest, HttpResponse, web};
+use actix_web::{get, HttpResponse, web};
 use chrono::{DateTime, Duration, Utc};
-use diesel::{ExpressionMethods, RunQueryDsl};
 use diesel::prelude::*;
 use openidconnect::{AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce, OAuth2TokenResponse, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope};
 use openidconnect::core::{CoreAuthenticationFlow, CoreClient, CoreIdTokenVerifier, CoreProviderMetadata};
 use openidconnect::reqwest::async_http_client;
 use serde::{Deserialize, Serialize};
 use actix_web::http::header;
-use actix_web::http::header::HeaderValue;
 
 use crate::auth::app_state::AuthAppState;
 use crate::auth::token;
 use crate::auth::token::UserClaims;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
-use crate::schema::oauth_requests;
 use crate::users::{User, UserUpsert};
 
 #[derive(Deserialize)]
@@ -27,14 +24,6 @@ struct OAuthCallbackQuery {
     state: String,
 }
 
-#[derive(Serialize, Deserialize, Insertable, Queryable, Selectable)]
-#[diesel(table_name=oauth_requests)]
-struct OAuthRequestData {
-    pub csrf_state: String,
-    pub pkce_verifier: String,
-    pub nonce: String,
-    pub return_url: Option<String>,
-}
 
 #[derive(Serialize, Deserialize)]
 struct DiscordUser {
@@ -58,30 +47,6 @@ impl From<DiscordUser> for UserUpsert {
             discord_banner: user.banner,
             discord_accent_color: user.accent_color,
         }
-    }
-}
-
-impl OAuthRequestData {
-    fn find(db: web::Data<Arc<DbAppState>>, csrf_state: &str) -> Result<Self, ApiError> {
-        let request_data = oauth_requests::table
-            .filter(oauth_requests::csrf_state.eq(csrf_state))
-            .select(OAuthRequestData::as_select())
-            .first::<OAuthRequestData>(&mut db.connection()?)?;
-        Ok(request_data)
-    }
-
-    fn delete(db: web::Data<Arc<DbAppState>>, csrf_state: &str) -> Result<(), ApiError> {
-        diesel::delete(oauth_requests::table)
-            .filter(oauth_requests::csrf_state.eq(csrf_state))
-            .execute(&mut db.connection()?)?;
-        Ok(())
-    }
-
-    fn create(db: web::Data<Arc<DbAppState>>, data: &Self) -> Result<(), ApiError> {
-        diesel::insert_into(oauth_requests::table)
-            .values(data)
-            .execute(&mut db.connection()?)?;
-        Ok(())
     }
 }
 

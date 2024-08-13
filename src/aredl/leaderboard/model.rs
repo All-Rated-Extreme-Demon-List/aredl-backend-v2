@@ -1,6 +1,9 @@
 use uuid::Uuid;
 use diesel::pg::Pg;
-use diesel::{ExpressionMethods, JoinOnDsl, NullableExpressionMethods, PgTextExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::{BoolExpressionMethods, BoxableExpression, ExpressionMethods, JoinOnDsl, NullableExpressionMethods, PgTextExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::expression::AsExpression;
+use diesel::expression::expression_types::NotSelectable;
+use diesel::sql_types::{Bool, Nullable};
 use serde::{Deserialize, Serialize};
 use crate::custom_schema::aredl_user_leaderboard;
 use crate::db::DbConnection;
@@ -13,10 +16,10 @@ use crate::schema::{aredl_levels, users};
 pub struct LeaderboardEntry {
     pub rank: i32,
     pub country_rank: i32,
+    pub extremes_rank: i32,
+    pub raw_rank: i32,
     pub user_id: Uuid,
     pub country: Option<i32>,
-    pub discord_id: Option<String>,
-    pub discord_avatar: Option<String>,
     pub total_points: i32,
     pub pack_points: i32,
     pub hardest: Option<Uuid>,
@@ -29,6 +32,8 @@ pub struct User {
     pub id: Uuid,
     pub global_name: String,
     pub country: Option<i32>,
+    pub discord_id: Option<String>,
+    pub discord_avatar: Option<String>
 }
 
 #[derive(Serialize, Selectable, Queryable, Debug)]
@@ -42,10 +47,10 @@ pub struct Level {
 pub struct LeaderboardEntryResolved {
     pub rank: i32,
     pub country_rank: i32,
+    pub extremes_rank: i32,
+    pub raw_rank: i32,
     pub user: User,
     pub country: Option<i32>,
-    pub discord_id: Option<String>,
-    pub discord_avatar: Option<String>,
     pub total_points: i32,
     pub pack_points: i32,
     pub hardest: Option<Level>,
@@ -58,62 +63,84 @@ pub struct LeaderboardPage {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+pub enum LeaderboardOrder {
+    TotalPoints,
+    RawPoints,
+    Country,
+    ExtremeCount,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct LeaderboardQueryOptions {
     pub name_filter: Option<String>,
-    pub country: Option<i32>
+    pub country_filter: Option<i32>,
+    pub order: LeaderboardOrder,
 }
 
 impl LeaderboardPage {
     pub fn find<const D: i64>(conn: &mut DbConnection, page_query: PageQuery<D>, options: LeaderboardQueryOptions) -> Result<Paginated<Self>, ApiError> {
-        let name_filter = match options.name_filter {
-            Some(filter) => users::global_name.ilike(filter),
-            None => users::global_name.ilike("%".to_string()),
+        let name_filter: Box<dyn BoxableExpression<_, _, SqlType = Bool>> = match options.name_filter.clone() {
+            Some(filter) => Box::new(users::global_name.ilike(filter)),
+            None => Box::new(<bool as AsExpression<Bool>>::as_expression(true)),
         };
+        let country_filter: Box<dyn BoxableExpression<_, _, SqlType = Nullable<Bool>>> = match options.country_filter.clone() {
+            Some(country) => Box::new(aredl_user_leaderboard::country.is_not_null()
+                .and(aredl_user_leaderboard::country.eq(country))),
+            None => Box::new(<bool as AsExpression<Bool>>::as_expression(true).nullable()),
+        };
+
         let selection = (
             LeaderboardEntry::as_select(),
             User::as_select(),
             (aredl_levels::id, aredl_levels::name).nullable()
         );
 
+        let ordering: Box< dyn BoxableExpression<_, _, SqlType = NotSelectable>> =
+            match options.order {
+                LeaderboardOrder::TotalPoints => Box::new(aredl_user_leaderboard::rank.asc()),
+                LeaderboardOrder::Country => Box::new(aredl_user_leaderboard::country_rank.asc()),
+                LeaderboardOrder::ExtremeCount => Box::new(aredl_user_leaderboard::extremes_rank.asc()),
+                LeaderboardOrder::RawPoints => Box::new(aredl_user_leaderboard::raw_rank.asc())
+            };
+
         let query =
             aredl_user_leaderboard::table
                 .limit(page_query.per_page())
                 .offset(page_query.offset())
-                .filter(name_filter)
                 .inner_join(users::table.on(users::id.eq(aredl_user_leaderboard::user_id)))
                 .left_join(aredl_levels::table.on(aredl_user_leaderboard::hardest.eq(aredl_levels::id.nullable())));
 
-        let (entries, count) : (Vec<(LeaderboardEntry, User, Option<Level>)>, i64) = match options.country{
-            None => {
-                let data = query.clone()
-                    .order(aredl_user_leaderboard::rank)
-                    .select(selection)
-                    .load::<(LeaderboardEntry, User, Option<Level>)>(conn)?;
-                let count = query.count().first(conn)?;
-                Ok::<(Vec<(LeaderboardEntry, User, Option<Level>)>, i64), ApiError>((data, count))
-            },
-            Some(country) => {
-                let query = query
-                    .filter(aredl_user_leaderboard::country.eq(country));
-                let data = query
-                    .clone()
-                    .order(aredl_user_leaderboard::country_rank)
-                    .select(selection)
-                    .load::<(LeaderboardEntry, User, Option<Level>)>(conn)?;
-                let count = query.count().first(conn)?;
-                Ok::<(Vec<(LeaderboardEntry, User, Option<Level>)>, i64), ApiError>((data, count))
-            }
-        }?;
+        let entries = query.clone()
+            .filter(name_filter)
+            .filter(country_filter)
+            .order(ordering)
+            .select(selection)
+            .load::<(LeaderboardEntry, User, Option<Level>)>(conn)?;
+
+        let name_filter: Box<dyn BoxableExpression<_, _, SqlType = Bool>> = match options.name_filter {
+            Some(filter) => Box::new(users::global_name.ilike(filter)),
+            None => Box::new(<bool as AsExpression<Bool>>::as_expression(true)),
+        };
+        let country_filter: Box<dyn BoxableExpression<_, _, SqlType = Nullable<Bool>>> = match options.country_filter {
+            Some(country) => Box::new(aredl_user_leaderboard::country.eq(country)),
+            None => Box::new(<bool as AsExpression<Bool>>::as_expression(true).nullable()),
+        };
+
+        let count = query
+            .filter(name_filter)
+            .filter(country_filter)
+            .count()
+            .get_result(conn)?;
 
         let entries_resolved = entries
             .into_iter()
             .map(|(entry, user, hardest)| LeaderboardEntryResolved {
                 rank: entry.rank,
                 country_rank: entry.country_rank,
+                extremes_rank: entry.extremes_rank,
+                raw_rank: entry.raw_rank,
                 user,
                 country: entry.country,
-                discord_id: entry.discord_id,
-                discord_avatar: entry.discord_avatar,
                 total_points: entry.total_points,
                 pack_points: entry.pack_points,
                 hardest,
