@@ -32,10 +32,12 @@ pub struct Record {
 pub struct Level {
     pub id: i32,
     pub name: String,
+	pub description: Option<String>,
     pub author: String,
     pub creators: Vec<String>,
     pub verifier: String,
     pub verification: String,
+    pub tags: Option<Vec<Option<String>>>,   
     pub records: Vec<Record>,
 }
 
@@ -77,10 +79,12 @@ pub struct CreateUser {
 pub struct LevelCreate {
     pub position: i32,
     pub name: String,
+	pub description: Option<String>,
     pub publisher_id: Uuid,
     pub legacy: bool,
     pub level_id: i32,
     pub two_player: bool,
+	pub tags: Option<Vec<Option<String>>>,
 }
 
 pub struct LevelInfo {
@@ -258,10 +262,12 @@ fn main() {
             .map(|(position, (level_data, level_data_ext))| LevelCreate {
                 position: (position + 1) as i32,
                 name: level_data.name.clone(),
+				description: level_data.description.clone(),
                 publisher_id: *user_map.get(&level_data.author.to_lowercase()).unwrap(),
                 legacy: level_data_ext.legacy,
                 level_id: level_data.id,
                 two_player: level_data_ext.two_player,
+				tags: level_data.tags.clone(),
             })
             .collect();
 

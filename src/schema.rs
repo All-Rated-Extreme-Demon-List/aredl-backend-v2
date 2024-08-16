@@ -5,12 +5,16 @@ diesel::table! {
         id -> Uuid,
         position -> Int4,
         name -> Varchar,
+        description -> Nullable<Varchar>,
         publisher_id -> Uuid,
         points -> Int4,
         legacy -> Bool,
         level_id -> Int4,
         two_player -> Bool,
-        idl_enjoyment -> Nullable<Float8>,
+        edel_enjoyment -> Nullable<Float8>,
+        is_edel_pending -> Nullable<Bool>,
+        gddl_tier -> Nullable<Int4>,
+        tags -> Nullable<Array<Nullable<Text>>>,
     }
 }
 
@@ -98,7 +102,7 @@ diesel::table! {
         csrf_state -> Varchar,
         pkce_verifier -> Varchar,
         nonce -> Varchar,
-        use_message -> Bool,
+        opener_origin -> Nullable<Varchar>,
         created_at -> Nullable<Timestamp>,
     }
 }

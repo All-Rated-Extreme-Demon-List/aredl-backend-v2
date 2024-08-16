@@ -11,15 +11,19 @@ use crate::error_handler::ApiError;
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug)]
 #[diesel(table_name=aredl_levels)]
 pub struct Level {
-    pub id : Uuid,
+    pub id: Uuid,
     pub position: i32,
     pub name: String,
+    pub description: Option<String>,  
     pub publisher_id: Uuid,
     pub points: i32,
     pub legacy: bool,
     pub level_id: i32,
     pub two_player: bool,
-    pub idl_enjoyment: Option<f64>,
+    pub edel_enjoyment: Option<f64>,  
+    pub is_edel_pending: Option<bool>,  
+    pub gddl_tier: Option<i32>,  
+    pub tags: Option<Vec<Option<String>>>,  
 }
 
 #[derive(Serialize, Deserialize, Insertable)]
@@ -70,14 +74,18 @@ where T : RecordSubmitter
 // Level struct that has publisher and verification resolved
 #[derive(Serialize, Debug)]
 pub struct ResolvedLevel {
-    pub id : Uuid,
+    pub id: Uuid,
     pub position: i32,
     pub name: String,
+    pub description: Option<String>,  
     pub points: i32,
     pub legacy: bool,
     pub level_id: i32,
     pub two_player: bool,
-    pub idl_enjoyment: Option<f64>,
+    pub edel_enjoyment: Option<f64>,  
+    pub is_edel_pending: Option<bool>,  
+    pub gddl_tier: Option<i32>,  
+    pub tags: Option<Vec<Option<String>>>,  
     pub publisher: User,
     pub verification: Option<Record<User>>,
 }
@@ -139,11 +147,15 @@ impl ResolvedLevel {
             id: level.id,
             position: level.position,
             name: level.name,
+			description: level.description,
             points: level.points,
             legacy: level.legacy,
             level_id: level.level_id,
             two_player: level.two_player,
-            idl_enjoyment: level.idl_enjoyment,
+            edel_enjoyment: level.edel_enjoyment,
+			is_edel_pending: level.is_edel_pending,
+			gddl_tier: level.gddl_tier,
+			tags: level.tags,
             publisher,
             verification,
         }

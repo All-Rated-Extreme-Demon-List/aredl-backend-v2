@@ -2,12 +2,16 @@ CREATE TABLE aredl_levels (
     id uuid DEFAULT uuid_generate_v4(),
     position INT NOT NULL,
     name VARCHAR NOT NULL,
+	description VARCHAR,
     publisher_id uuid NOT NULL REFERENCES users(id) ON DELETE SET NULL ON UPDATE CASCADE,
     points INT NOT NULL DEFAULT 0,
     legacy BOOLEAN NOT NULL DEFAULT false,
     level_id INT NOT NULL CHECK (level_id > 0),
     two_player BOOLEAN NOT NULL,
-    idl_enjoyment FLOAT,
+    edel_enjoyment FLOAT,
+	is_edel_pending BOOLEAN,
+	gddl_tier INT,
+	tags TEXT[],
     PRIMARY KEY(id),
     UNIQUE (level_id, two_player)
 );

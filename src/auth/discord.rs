@@ -30,7 +30,7 @@ struct OAuthRequestData {
     pub csrf_state: String,
     pub pkce_verifier: String,
     pub nonce: String,
-    pub use_message: bool,
+	pub opener_origin: Option<String>,
 }
 
 impl OAuthRequestData {
@@ -91,7 +91,7 @@ struct AuthResponse {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct AuthOptions {
-    pub use_message: Option<bool>
+	pub opener_origin: Option<String>,
 }
 
 #[get("")]
@@ -114,7 +114,7 @@ async fn discord_auth(data: web::Data<Arc<AuthAppState>>, db: web::Data<Arc<DbAp
         csrf_state: csrf_state.secret().clone(),
         pkce_verifier: pkce_verifier.secret().to_string(),
         nonce: nonce.secret().to_string(),
-        use_message: options.use_message.unwrap_or(false),
+		opener_origin: options.opener_origin.clone(),
     })?;
 
     Ok(HttpResponse::Found().append_header((header::LOCATION, authorize_url.to_string())).finish())
@@ -168,18 +168,26 @@ async fn discord_callback(db: web::Data<Arc<DbAppState>>, query: web::Query<OAut
 
     let auth_response = AuthResponse { token, expires, user };
 
-    if request_data.use_message {
-        let script = format!(
-            "<script>
-                        window.opener.postMessage({{ data: '{}' }}, window.location.origin);
-                        window.close();
-                    </script>",
-            serde_json::to_string(&auth_response)
-                .map_err(|_| ApiError::new(400, "Script generation error"))?
-        );
-        return Ok(HttpResponse::Ok().content_type("text/html").body(script))
-    }
-    Ok(HttpResponse::Ok().json(auth_response))
+    if request_data.opener_origin.is_some() {
+		let script_data = serde_json::json!({
+			"data": auth_response,
+		});
+	
+		let script = format!(
+			"<script>
+				if (window.opener) {{
+					window.opener.postMessage({}, '{}');
+				}}
+				window.close();
+			</script>",
+			script_data,
+			request_data.opener_origin.unwrap(),
+		);
+	
+		return Ok(HttpResponse::Ok().content_type("text/html").body(script));
+	}
+	
+	Ok(HttpResponse::Ok().json(auth_response))
 }
 
 pub(crate) async fn create_discord_client() -> Result<CoreClient, Box<dyn std::error::Error>> {
