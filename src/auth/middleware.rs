@@ -1,7 +1,6 @@
 use std::rc::Rc;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use actix_session::SessionExt;
 use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
 use actix_web::{HttpMessage, web};
 use actix_web::error::ErrorUnauthorized;
@@ -72,13 +71,9 @@ impl<S> Service<ServiceRequest> for AuthMiddleware<S>
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
         let require_auth = self.required_perm.is_some();
-        let token = req.get_session().get::<String>("token")
-            .unwrap_or(None)
-            .or_else(|| {
-                req.headers()
-                    .get(openidconnect::http::header::AUTHORIZATION)
-                    .map(|h| h.to_str().unwrap().split_at(7).1.to_string())
-            });
+        let token = req.headers()
+            .get(openidconnect::http::header::AUTHORIZATION)
+            .map(|h| h.to_str().unwrap().split_at(7).1.to_string());
 
         if token.is_none() {
             return if require_auth {
