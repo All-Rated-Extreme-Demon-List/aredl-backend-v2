@@ -59,7 +59,7 @@ struct AuthResponse {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct AuthOptions {
-    pub return_url: Option<String>
+    pub use_message: Option<bool>
 }
 
 #[get("")]
@@ -86,11 +86,8 @@ async fn discord_auth(data: web::Data<Arc<AuthAppState>>, session: Session, opti
     session.insert("nonce", nonce.secret().to_string())
         .map_err(|_| ApiError::new(400, "Session error"))?;
 
-    match options.return_url.clone() {
-        Some(url) => session.insert("return_url", url)
-            .map_err(|_| ApiError::new(400, "Session error"))?,
-        _ => {}
-    };
+    session.insert("use_message", "true")
+        .map_err(|_| ApiError::new(400, "Session error"))?;
 
     Ok(HttpResponse::Found().append_header((header::LOCATION, authorize_url.to_string())).finish())
 }
@@ -156,18 +153,27 @@ async fn discord_callback(db: web::Data<Arc<DbAppState>>, query: web::Query<OAut
         Duration::weeks(52),
     )?;
 
-    session.insert("token", token.clone())
-        .map_err(|_| ApiError::new(400, "Session error"))?;
+    let auth_response = AuthResponse { token, expires, user };
 
-    session.insert("expires", expires.clone())
-        .map_err(|_| ApiError::new(400, "Session error"))?;
+    let use_message = session.remove_as::<bool>("use_message");
 
-    let return_url = session.remove_as::<String>("return_url");
+    let use_message = match use_message {
+        Some(Ok(use_message)) => Ok(use_message),
+        _ => Err(ApiError::new(400, "Session error"))
+    }?;
 
-    match return_url {
-        Some(Ok(url)) => Ok(HttpResponse::Found().append_header((header::LOCATION, url)).finish()),
-        _ => Ok(HttpResponse::Ok().json(AuthResponse { token, expires, user }))
+    if (use_message) {
+        let script = format!(
+            "<script>
+                        window.opener.postMessage({{ data: '{}' }}, window.location.origin);
+                        window.close();
+                    </script>",
+            serde_json::to_string(&auth_response)
+                .map_err(|_| ApiError::new(400, "Script generation error"))?
+        );
+        return Ok(HttpResponse::Ok().content_type("text/html").body(script))
     }
+    Ok(HttpResponse::Ok().json(auth_response))
 }
 
 pub(crate) async fn create_discord_client() -> Result<CoreClient, Box<dyn std::error::Error>> {
