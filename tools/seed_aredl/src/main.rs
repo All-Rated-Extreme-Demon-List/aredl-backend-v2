@@ -480,6 +480,9 @@ fn main() {
         diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_user_leaderboard")
             .execute(conn)?;
 
+        diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_position_history_full_view")
+            .execute(conn)?;
+
         Ok(())
     }).expect("Failed to migrate");
 }

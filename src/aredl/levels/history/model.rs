@@ -13,6 +13,7 @@ use crate::schema::aredl_levels;
 #[derive(Serialize, Deserialize, Queryable)]
 pub struct HistoryLevelFull {
     pub position: Option<i32>,
+    pub pos_diff: Option<i32>,
     pub moved: bool,
     pub legacy: bool,
     pub action_at: NaiveDateTime,
@@ -25,9 +26,10 @@ impl HistoryLevelFull {
         let entries = aredl_position_history_full_view::table
             .filter(aredl_position_history_full_view::affected_level.eq(id))
             .inner_join(aredl_levels::table.on(aredl_levels::id.eq(aredl_position_history_full_view::cause)))
-            .order_by(aredl_position_history_full_view::action_at.desc())
+            .order_by(aredl_position_history_full_view::ord.asc())
             .select((
                 aredl_position_history_full_view::position,
+                aredl_position_history_full_view::pos_diff,
                 aredl_position_history_full_view::moved,
                 aredl_position_history_full_view::legacy,
                 aredl_position_history_full_view::action_at,

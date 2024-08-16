@@ -80,6 +80,8 @@ BEGIN
     INSERT INTO aredl_position_history(new_position, old_position, legacy, affected_level, level_above, level_below)
     VALUES (NEW.position, NULL, NEW.legacy, NEW.id, above, below);
 
+    REFRESH MATERIALIZED VIEW aredl_position_history_full_view;
+
     RETURN null;
 END;
 $$ LANGUAGE plpgsql;
@@ -116,6 +118,9 @@ BEGIN
 
     INSERT INTO aredl_position_history(new_position, old_position, legacy, affected_level, level_above, level_below)
     VALUES (NEW.position, OLD.position, legacy_history, NEW.id, above, below);
+
+    REFRESH MATERIALIZED VIEW aredl_position_history_full_view;
+
     RETURN null;
 END;
 $$ LANGUAGE plpgsql;
@@ -196,7 +201,7 @@ FOR EACH ROW
 WHEN (pg_trigger_depth() < 1)
 EXECUTE PROCEDURE aredl_validate_position_update();
 
-CREATE VIEW aredl_position_history_full_view AS
+CREATE MATERIALIZED VIEW aredl_position_history_full_view AS
 WITH RECURSIVE ranked_history AS (
     SELECT ROW_NUMBER() OVER (ORDER BY i) AS i, new_position, old_position, legacy, created_at, affected_level
     FROM aredl_position_history
@@ -228,10 +233,13 @@ full_history AS (
 		(r.old_position IS NOT NULL AND r.new_position IS NOT NULL) as moved
 	FROM ranked_history r
 	INNER JOIN full_history h ON r.i = h.i + 1
+),
+filtered AS (
+    SELECT i::INTEGER as ord, id as affected_level, position, moved, legacy, action_at, cause
+    FROM full_history
+    WHERE prev_pos <> position OR prev_legacy <> legacy OR prev_pos IS NULL
 )
-SELECT id as affected_level, position, moved, legacy, action_at, cause
-FROM full_history
-WHERE prev_pos <> position OR prev_legacy <> legacy OR prev_pos IS NULL;
+SELECT *, position - LAG(position, 1) OVER (PARTITION BY affected_level ORDER BY ord ASC) as pos_diff FROM filtered;
 
 CREATE FUNCTION aredl_levels_points_before_update() RETURNS TRIGGER AS
 $$

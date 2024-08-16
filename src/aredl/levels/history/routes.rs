@@ -13,14 +13,9 @@ async fn find(db: web::Data<Arc<DbAppState>>, id: web::Path<String>) -> Result<H
     let level_id = resolve_level_id(&db, id.into_inner().as_str())?;
     let entries = web::block(move || HistoryLevelFull::find(db, level_id)).await??;
     // map history
-    let mut prev_position: Option<i32> = None;
     let response = entries
         .into_iter()
-        .map(|data| {
-            let result = HistoryLevelResponse::from_data(&data, prev_position, level_id);
-            prev_position = data.position;
-            result
-        }).collect::<Vec<_>>();
+        .map(|data| HistoryLevelResponse::from_data(&data, level_id)).collect::<Vec<_>>();
     Ok(HttpResponse::Ok().json(response))
 }
 
@@ -42,8 +37,8 @@ pub enum HistoryEvent {
 }
 
 impl HistoryEvent {
-    pub fn from_history(data: &HistoryLevelFull, prev_position: Option<i32>, level_id: Uuid) -> Self {
-        match (level_id == data.cause_id, data.moved, data.position < prev_position) {
+    pub fn from_history(data: &HistoryLevelFull, level_id: Uuid) -> Self {
+        match (level_id == data.cause_id, data.moved, data.position < data.pos_diff) {
             (true, true, true) => Self::MovedUp,
             (true, true, false) => Self::MovedDown,
             (true, false, _) => Self::Placed,
@@ -63,7 +58,7 @@ pub struct HistoryLevel {
 #[derive(Serialize, Deserialize)]
 pub struct HistoryLevelResponse {
     pub position: Option<i32>,
-    pub position_diff: i32,
+    pub position_diff: Option<i32>,
     pub event: HistoryEvent,
     pub legacy: bool,
     pub action_at: NaiveDateTime,
@@ -71,11 +66,11 @@ pub struct HistoryLevelResponse {
 }
 
 impl HistoryLevelResponse {
-    pub fn from_data(data: &HistoryLevelFull, prev_position: Option<i32>, level_id: Uuid) -> Self {
+    pub fn from_data(data: &HistoryLevelFull, level_id: Uuid) -> Self {
         Self {
             position: data.position,
-            position_diff: data.position.unwrap_or(0) - prev_position.unwrap_or(0),
-            event: HistoryEvent::from_history(data, prev_position, level_id),
+            position_diff: data.pos_diff,
+            event: HistoryEvent::from_history(data, level_id),
             legacy: data.legacy,
             action_at: data.action_at,
             cause: HistoryLevel {

@@ -7,7 +7,7 @@ DROP FUNCTION aredl_levels_points_before_insert;
 DROP TRIGGER aredl_levels_points_before_update ON aredl_levels;
 DROP FUNCTION aredl_levels_points_before_update;
 
-DROP VIEW aredl_position_history_full_view;
+DROP MATERIALIZED VIEW IF EXISTS aredl_position_history_full_view;
 
 DROP TRIGGER aredl_validate_position_update ON aredl_levels;
 DROP FUNCTION aredl_validate_position_update;

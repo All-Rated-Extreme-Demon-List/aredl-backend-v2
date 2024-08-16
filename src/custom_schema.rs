@@ -4,12 +4,14 @@ use crate::schema::aredl_pack_levels;
 
 diesel::table! {
     aredl_position_history_full_view (affected_level) {
+        ord -> Int4,
         affected_level -> Uuid,
         position -> Nullable<Int4>,
         moved -> Bool,
         legacy -> Bool,
         action_at -> Timestamp,
         cause -> Uuid,
+        pos_diff -> Nullable<Int4>,
     }
 }
 
