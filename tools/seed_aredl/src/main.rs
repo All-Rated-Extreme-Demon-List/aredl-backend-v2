@@ -342,7 +342,7 @@ fn main() {
 
         println!("\tInserting changelog");
         let init_levels = list_init.into_iter().map(|name|
-            (level_map.get(&(*level_id_map.get(&name).unwrap(), name.ends_with("2p"))).unwrap().clone(), true)
+            (level_map.get(&(*level_id_map.get(&name).unwrap(), name.ends_with("2p"))).unwrap().clone(), false)
         ).chain(
             list_legacy_init.into_iter().map(|name|
                 (level_map.get(&(*level_id_map.get(&name).unwrap(), name.ends_with("2p"))).unwrap().clone(), true)
