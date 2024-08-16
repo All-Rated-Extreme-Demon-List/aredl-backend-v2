@@ -33,16 +33,18 @@ pub enum HistoryEvent {
     MovedDown,
     OtherPlaced,
     OtherRemoved,
-    OtherMoved,
+    OtherMovedUp,
+    OtherMovedDown,
 }
 
 impl HistoryEvent {
     pub fn from_history(data: &HistoryLevelFull, level_id: Uuid) -> Self {
-        match (level_id == data.cause_id, data.moved, data.position < data.pos_diff) {
+        match (level_id == data.cause_id, data.moved, data.pos_diff < Some(0)) {
             (true, true, true) => Self::MovedUp,
             (true, true, false) => Self::MovedDown,
             (true, false, _) => Self::Placed,
-            (false, true, _) => Self::OtherMoved,
+            (false, true, false) => Self::OtherMovedUp,
+            (false, true, true) => Self::OtherMovedDown,
             (false, false, true) => Self::OtherRemoved,
             (false, false, false) => Self::OtherPlaced,
         }
