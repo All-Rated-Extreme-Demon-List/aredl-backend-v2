@@ -14,6 +14,7 @@ mod users;
 mod page_helper;
 mod cache_control;
 mod refresh_leaderboard;
+mod refresh_level_data;
 
 use std::env;
 use actix_cors::Cors;
@@ -22,6 +23,7 @@ use dotenv::dotenv;
 use listenfd::ListenFd;
 use crate::cache_control::CacheController;
 use crate::refresh_leaderboard::start_leaderboard_refresher;
+use crate::refresh_level_data::start_level_data_refresher;
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
@@ -32,6 +34,8 @@ async fn main() -> std::io::Result<()> {
     db_app_state.run_pending_migrations();
 
     start_leaderboard_refresher(db_app_state.clone());
+
+    start_level_data_refresher(db_app_state.clone()).await;
 
     let auth_app_state = auth::init_app_state().await;
 

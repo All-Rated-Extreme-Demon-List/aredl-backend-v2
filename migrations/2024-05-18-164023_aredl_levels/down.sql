@@ -35,4 +35,6 @@ DROP TABLE aredl_position_history;
 
 DROP TABLE aredl_levels_created;
 
+DROP TABLE IF EXISTS aredl_last_gddl_update;
+
 DROP TABLE aredl_levels;

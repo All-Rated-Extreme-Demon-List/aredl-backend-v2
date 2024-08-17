@@ -14,16 +14,15 @@ pub struct Level {
     pub id: Uuid,
     pub position: i32,
     pub name: String,
-    pub description: Option<String>,  
     pub publisher_id: Uuid,
     pub points: i32,
     pub legacy: bool,
     pub level_id: i32,
     pub two_player: bool,
-    pub edel_enjoyment: Option<f64>,  
-    pub is_edel_pending: Option<bool>,  
-    pub gddl_tier: Option<i32>,  
-    pub tags: Option<Vec<Option<String>>>,  
+    pub tags: Vec<Option<String>>,
+    pub description: Option<String>,
+    pub edel_enjoyment: Option<f64>,
+    pub is_edel_pending: bool,
 }
 
 #[derive(Serialize, Deserialize, Insertable)]
@@ -35,6 +34,8 @@ pub struct LevelPlace {
     pub legacy: bool,
     pub level_id: i32,
     pub two_player: bool,
+    pub tags: Option<Vec<Option<String>>>,
+    pub description: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, AsChangeset)]
@@ -45,6 +46,8 @@ pub struct LevelUpdate {
     pub publisher_id: Option<Uuid>,
     pub legacy: Option<bool>,
     pub two_player: Option<bool>,
+    pub tags: Option<Vec<Option<String>>>,
+    pub description: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug)]
@@ -77,15 +80,14 @@ pub struct ResolvedLevel {
     pub id: Uuid,
     pub position: i32,
     pub name: String,
-    pub description: Option<String>,  
     pub points: i32,
     pub legacy: bool,
     pub level_id: i32,
     pub two_player: bool,
-    pub edel_enjoyment: Option<f64>,  
-    pub is_edel_pending: Option<bool>,  
-    pub gddl_tier: Option<i32>,  
-    pub tags: Option<Vec<Option<String>>>,  
+    pub tags: Vec<Option<String>>,
+    pub description: Option<String>,
+    pub edel_enjoyment: Option<f64>,
+    pub is_edel_pending: bool,
     pub publisher: User,
     pub verification: Option<Record<User>>,
 }
@@ -93,6 +95,7 @@ pub struct ResolvedLevel {
 impl Level {
     pub fn find_all(db: web::Data<Arc<DbAppState>>) -> Result<Vec<Self>, ApiError>{
         let levels = aredl_levels::table
+            .select(Level::as_select())
             .order(aredl_levels::position)
             .load::<Self>(&mut db.connection()?)?;
         Ok(levels)
@@ -101,6 +104,7 @@ impl Level {
     pub fn create(db: web::Data<Arc<DbAppState>>, level: LevelPlace) -> Result<Self, ApiError> {
         let level = diesel::insert_into(aredl_levels::table)
             .values(level)
+            .returning(Self::as_select())
             .get_result(&mut db.connection()?)?;
         Ok(level)
     }
@@ -109,6 +113,7 @@ impl Level {
         let level = diesel::update(aredl_levels::table)
             .set(level)
             .filter(aredl_levels::id.eq(id))
+            .returning(Self::as_select())
             .get_result(&mut db.connection()?)?;
         Ok(level)
     }
@@ -147,15 +152,14 @@ impl ResolvedLevel {
             id: level.id,
             position: level.position,
             name: level.name,
-			description: level.description,
             points: level.points,
             legacy: level.legacy,
             level_id: level.level_id,
             two_player: level.two_player,
+            tags: level.tags,
+            description: level.description,
             edel_enjoyment: level.edel_enjoyment,
-			is_edel_pending: level.is_edel_pending,
-			gddl_tier: level.gddl_tier,
-			tags: level.tags,
+            is_edel_pending: level.is_edel_pending,
             publisher,
             verification,
         }
