@@ -69,6 +69,7 @@ pub struct RoleList {
 #[derive(Serialize, Deserialize, Insertable)]
 #[diesel(table_name=users)]
 pub struct CreateUser {
+    pub id: Option<Uuid>,
     pub username: String,
     pub global_name: String,
     pub placeholder: bool,
@@ -78,6 +79,7 @@ pub struct CreateUser {
 #[derive(Serialize, Deserialize, Insertable, Debug)]
 #[diesel(table_name=aredl_levels)]
 pub struct LevelCreate {
+    pub id: Option<Uuid>,
     pub position: i32,
     pub name: String,
 	pub description: Option<String>,
@@ -231,6 +233,7 @@ fn main() {
         )
         .unique_by(|name| name.to_lowercase())
         .map(|name| CreateUser {
+            id: None,
             username: name.clone(),
             global_name: name.clone(),
             placeholder: true,
@@ -247,6 +250,30 @@ fn main() {
 
     println!("Migrating");
     db_conn.transaction::<_, MigrationError, _>(|conn| {
+        println!("\tLoading user and level id's");
+        let old_user_ids: HashMap<String, Uuid> = users::table.select((
+            users::global_name,
+            users::id
+            ))
+            .load::<(String, Uuid)>(conn)?
+            .into_iter()
+            .collect();
+
+        let users = users.into_iter()
+            .map(|mut user| {
+                user.id = old_user_ids.get(&user.global_name).map(|id| id.clone());
+                user
+            })
+            .collect_vec();
+
+        let old_level_ids: HashMap<String, Uuid> = aredl_levels::table.select((
+            aredl_levels::name,
+            aredl_levels::id
+        ))
+            .load::<(String, Uuid)>(conn)?
+            .into_iter()
+            .collect();
+
         println!("\tResetting db");
         conn.revert_all_migrations(MIGRATIONS)?;
         conn.run_pending_migrations(MIGRATIONS)?;
@@ -268,6 +295,7 @@ fn main() {
         let level_insert: Vec<LevelCreate> = levels.iter()
             .enumerate()
             .map(|(position, (level_data, level_data_ext))| LevelCreate {
+                id: old_level_ids.get(&level_data.name).map(|id| id.clone()),
                 position: (position + 1) as i32,
                 name: level_data.name.clone(),
 				description: level_data.description.clone(),
