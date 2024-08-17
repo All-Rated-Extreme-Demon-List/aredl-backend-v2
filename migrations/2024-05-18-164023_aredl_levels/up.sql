@@ -1,3 +1,5 @@
+ALTER DATABASE aredl SET array_nulls TO false;
+
 CREATE TABLE aredl_levels (
     id uuid DEFAULT uuid_generate_v4(),
     position INT NOT NULL,
@@ -7,9 +9,19 @@ CREATE TABLE aredl_levels (
     legacy BOOLEAN NOT NULL DEFAULT false,
     level_id INT NOT NULL CHECK (level_id > 0),
     two_player BOOLEAN NOT NULL,
-    idl_enjoyment FLOAT,
+    tags TEXT[] NOT NULL DEFAULT '{}',
+    description VARCHAR,
+    edel_enjoyment FLOAT,
+    is_edel_pending BOOLEAN NOT NULL DEFAULT false,
+    gddl_tier FLOAT,
     PRIMARY KEY(id),
     UNIQUE (level_id, two_player)
+);
+
+CREATE TABLE aredl_last_gddl_update(
+    id uuid REFERENCES aredl_levels(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(id)
 );
 
 CREATE TABLE aredl_levels_created (

@@ -1,6 +1,13 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    aredl_last_gddl_update (id) {
+        id -> Uuid,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     aredl_levels (id) {
         id -> Uuid,
         position -> Int4,
@@ -10,7 +17,11 @@ diesel::table! {
         legacy -> Bool,
         level_id -> Int4,
         two_player -> Bool,
-        idl_enjoyment -> Nullable<Float8>,
+        tags -> Array<Nullable<Text>>,
+        description -> Nullable<Varchar>,
+        edel_enjoyment -> Nullable<Float8>,
+        is_edel_pending -> Bool,
+        gddl_tier -> Nullable<Float8>,
     }
 }
 
@@ -139,6 +150,7 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(aredl_last_gddl_update -> aredl_levels (id));
 diesel::joinable!(aredl_levels -> users (publisher_id));
 diesel::joinable!(aredl_levels_created -> aredl_levels (level_id));
 diesel::joinable!(aredl_levels_created -> users (user_id));
@@ -151,6 +163,7 @@ diesel::joinable!(user_roles -> roles (role_id));
 diesel::joinable!(user_roles -> users (user_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
+    aredl_last_gddl_update,
     aredl_levels,
     aredl_levels_created,
     aredl_pack_levels,
