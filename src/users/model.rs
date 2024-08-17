@@ -16,6 +16,7 @@ pub struct User {
     pub discord_id: Option<String>,
     pub placeholder: bool,
     pub country: Option<i32>,
+    pub ban_level: i32,
     pub discord_avatar: Option<String>,
     pub discord_banner: Option<String>,
     pub discord_accent_color: Option<i32>,

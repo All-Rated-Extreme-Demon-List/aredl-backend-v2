@@ -22,6 +22,7 @@ WITH user_points AS (
 	LEFT JOIN aredl_records r ON u.id = r.submitted_by
 	LEFT JOIN aredl_levels l ON r.level_id = l.id
 	LEFT JOIN aredl_user_pack_points pp ON pp.user_id = r.submitted_by
+	WHERE u.ban_level = 0
 	GROUP BY u.id, u.country, pp.points
 ),
 hardest_position AS (

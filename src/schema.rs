@@ -144,6 +144,7 @@ diesel::table! {
         discord_id -> Nullable<Varchar>,
         placeholder -> Bool,
         country -> Nullable<Int4>,
+        ban_level -> Int4,
         discord_avatar -> Nullable<Varchar>,
         discord_banner -> Nullable<Varchar>,
         discord_accent_color -> Nullable<Int4>,

@@ -5,6 +5,7 @@ CREATE TABLE users (
     discord_id VARCHAR,
     placeholder BOOLEAN NOT NULL,
     country INTEGER,
+    ban_level INTEGER NOT NULL DEFAULT 0,
     discord_avatar VARCHAR,
     discord_banner VARCHAR,
     discord_accent_color int,

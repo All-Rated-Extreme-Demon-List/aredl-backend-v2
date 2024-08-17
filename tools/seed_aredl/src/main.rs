@@ -72,6 +72,7 @@ pub struct CreateUser {
     pub username: String,
     pub global_name: String,
     pub placeholder: bool,
+    pub ban_level: i32,
 }
 
 #[derive(Serialize, Deserialize, Insertable, Debug)]
@@ -178,6 +179,12 @@ fn main() {
     let changelog = load_json_from_file::<Vec<ChangelogEntry>>(
         aredl_path.join("_changelog.json").as_path());
 
+    let banned_users = load_json_from_file::<Vec<String>>(
+        aredl_path.join("_leaderboard_banned.json").as_path())
+        .into_iter()
+        .map(|name| name.to_lowercase())
+        .collect_vec();
+
     role_data.extend(role_data_supporters);
 
     let levels: Vec<(Level, LevelInfo)> = level_names
@@ -225,8 +232,9 @@ fn main() {
         .unique_by(|name| name.to_lowercase())
         .map(|name| CreateUser {
             username: name.clone(),
-            global_name: name,
+            global_name: name.clone(),
             placeholder: true,
+            ban_level: if banned_users.contains(&name.to_lowercase()) { 1 } else { 0 }
         })
         .collect();
 
