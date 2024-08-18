@@ -71,7 +71,7 @@ impl From<DiscordUser> for UserUpsert {
     fn from(user: DiscordUser) -> Self {
         UserUpsert {
             username: user.username.clone(),
-            global_name: user.global_name.or(Some(user.username)),
+            global_name: user.global_name.unwrap_or(user.username),
             discord_id: Some(user.id),
             placeholder: false,
             country: None,

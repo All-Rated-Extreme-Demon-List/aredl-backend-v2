@@ -143,11 +143,13 @@ diesel::table! {
         global_name -> Varchar,
         discord_id -> Nullable<Varchar>,
         placeholder -> Bool,
+        description -> Nullable<Text>,
         country -> Nullable<Int4>,
         ban_level -> Int4,
         discord_avatar -> Nullable<Varchar>,
         discord_banner -> Nullable<Varchar>,
         discord_accent_color -> Nullable<Int4>,
+        created_at -> Timestamp,
     }
 }
 

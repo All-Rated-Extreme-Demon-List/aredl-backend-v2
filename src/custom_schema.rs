@@ -1,4 +1,4 @@
-use crate::schema::{aredl_levels, users};
+use crate::schema::{aredl_levels, aredl_packs, users};
 use crate::schema::aredl_pack_tiers;
 use crate::schema::aredl_pack_levels;
 
@@ -62,4 +62,24 @@ diesel::allow_tables_to_appear_in_same_query!(
 diesel::allow_tables_to_appear_in_same_query!(
     aredl_user_leaderboard,
     users,
+);
+
+diesel::table! {
+    aredl_completed_packs (user_id) {
+        user_id -> Uuid,
+        pack_id -> Uuid,
+    }
+}
+
+diesel::joinable!(aredl_completed_packs -> users (user_id));
+diesel::joinable!(aredl_completed_packs -> aredl_packs (pack_id));
+
+diesel::allow_tables_to_appear_in_same_query!(
+    aredl_completed_packs,
+    aredl_packs,
+);
+
+diesel::allow_tables_to_appear_in_same_query!(
+    aredl_completed_packs,
+    aredl_pack_tiers,
 );
