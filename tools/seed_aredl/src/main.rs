@@ -74,6 +74,7 @@ pub struct CreateUser {
     pub global_name: String,
     pub placeholder: bool,
     pub ban_level: i32,
+    pub country: Option<i32>,
 }
 
 #[derive(Serialize, Deserialize, Insertable, Debug)]
@@ -94,6 +95,13 @@ pub struct LevelInfo {
     pub legacy: bool,
     pub two_player: bool,
     pub original_name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Country {
+    code: i32,
+    name: String,
+    users: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -181,6 +189,19 @@ fn main() {
     let changelog = load_json_from_file::<Vec<ChangelogEntry>>(
         aredl_path.join("_changelog.json").as_path());
 
+    let country_data = load_json_from_file::<Vec<Country>>(
+        aredl_path.join("_countries.json").as_path());
+
+    let mut user_country_map: HashMap<String, i32> = HashMap::new();
+    for country in &country_data {
+		let code = country.code;
+		let users = &country.users;
+		for user in users {
+			user_country_map.insert(user.to_lowercase(), code);
+		}
+	}
+
+
     let banned_users = load_json_from_file::<Vec<String>>(
         aredl_path.join("_leaderboard_banned.json").as_path())
         .into_iter()
@@ -232,12 +253,16 @@ fn main() {
             role_data.iter().flat_map(|data| data.members.iter().map(|member| member.name.clone()))
         )
         .unique_by(|name| name.to_lowercase())
-        .map(|name| CreateUser {
-            id: None,
-            username: name.clone(),
-            global_name: name.clone(),
-            placeholder: true,
-            ban_level: if banned_users.contains(&name.to_lowercase()) { 1 } else { 0 }
+        .map(|name| {
+            let country = user_country_map.get(&name.to_lowercase()).cloned();
+            CreateUser {
+                id: None,
+                username: name.clone(),
+                global_name: name.clone(),
+                placeholder: true,
+                ban_level: if banned_users.contains(&name.to_lowercase()) { 1 } else { 0 },
+                country
+            }
         })
         .collect();
 
