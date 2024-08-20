@@ -192,15 +192,12 @@ fn main() {
     let country_data = load_json_from_file::<Vec<Country>>(
         aredl_path.join("_countries.json").as_path());
 
-    let mut user_country_map: HashMap<String, i32> = HashMap::new();
-    for country in &country_data {
-		let code = country.code;
-		let users = &country.users;
-		for user in users {
-			user_country_map.insert(user.to_lowercase(), code);
-		}
-	}
-
+    let user_country_map: HashMap<String, i32> = country_data
+        .into_iter()
+        .flat_map(|country|
+            country.users.into_iter().map(move |user| (user.to_lowercase(), country.code))
+        )
+        .collect();
 
     let banned_users = load_json_from_file::<Vec<String>>(
         aredl_path.join("_leaderboard_banned.json").as_path())
