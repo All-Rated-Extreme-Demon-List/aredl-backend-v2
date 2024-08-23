@@ -111,12 +111,12 @@ impl LeaderboardPage {
 
         let query =
             aredl_user_leaderboard::table
-                .limit(page_query.per_page())
-                .offset(page_query.offset())
                 .inner_join(users::table.on(users::id.eq(aredl_user_leaderboard::user_id)))
                 .left_join(aredl_levels::table.on(aredl_user_leaderboard::hardest.eq(aredl_levels::id.nullable())));
 
         let entries = query.clone()
+            .limit(page_query.per_page())
+            .offset(page_query.offset())
             .filter(name_filter)
             .filter(country_filter)
             .order((ordering, aredl_user_leaderboard::user_id))
