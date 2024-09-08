@@ -140,6 +140,7 @@ diesel::table! {
     users (id) {
         id -> Uuid,
         username -> Varchar,
+        json_id -> Nullable<Int8>,
         global_name -> Varchar,
         discord_id -> Nullable<Varchar>,
         placeholder -> Bool,

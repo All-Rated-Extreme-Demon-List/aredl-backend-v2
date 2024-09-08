@@ -1,6 +1,7 @@
 CREATE TABLE users (
     id uuid DEFAULT uuid_generate_v4(),
     username VARCHAR NOT NULL DEFAULT substring(md5(random()::text), 0, 10),
+    json_id BIGINT,
     global_name VARCHAR NOT NULL,
     discord_id VARCHAR,
     placeholder BOOLEAN NOT NULL,
