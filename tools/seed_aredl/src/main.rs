@@ -4,7 +4,7 @@ mod error_handler;
 use std::{env, fs};
 use std::collections::{HashMap};
 use std::path::Path;
-use diesel::{Connection, ExpressionMethods, Insertable, PgConnection, QueryDsl, RunQueryDsl};
+use diesel::{Connection, ExpressionMethods, Insertable, NullableExpressionMethods, PgConnection, QueryDsl, RunQueryDsl};
 use diesel::internal::derives::multiconnection::chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use diesel::r2d2::ConnectionManager;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
@@ -23,7 +23,7 @@ pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("../../migrations")
 
 #[derive(Serialize, Deserialize)]
 pub struct Record {
-    pub user: String,
+    pub user: i64,
     pub link: String,
     pub mobile: Option<bool>,
 }
@@ -33,9 +33,9 @@ pub struct Level {
     pub id: i32,
     pub name: String,
 	pub description: Option<String>,
-    pub author: String,
-    pub creators: Vec<String>,
-    pub verifier: String,
+    pub author: i64,
+    pub creators: Vec<i64>,
+    pub verifier: i64,
     pub verification: String,
     pub tags: Option<Vec<Option<String>>>,   
     pub records: Vec<Record>,
@@ -56,7 +56,7 @@ pub struct PackTier {
 
 #[derive(Serialize, Deserialize)]
 pub struct RoleMember {
-    pub name: String,
+    pub name: i64,
     pub link: String,
 }
 
@@ -71,6 +71,7 @@ pub struct RoleList {
 pub struct CreateUser {
     pub id: Option<Uuid>,
     pub username: String,
+    pub json_id: i64,
     pub global_name: String,
     pub placeholder: bool,
     pub ban_level: i32,
@@ -101,7 +102,7 @@ pub struct LevelInfo {
 struct Country {
     code: i32,
     name: String,
-    users: Vec<String>,
+    users: Vec<i64>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -192,18 +193,18 @@ fn main() {
     let country_data = load_json_from_file::<Vec<Country>>(
         aredl_path.join("_countries.json").as_path());
 
-    let user_country_map: HashMap<String, i32> = country_data
+    let name_map = load_json_from_file::<HashMap<i64, String>>(
+        aredl_path.join("_name_map.json").as_path());
+
+    let user_country_map: HashMap<i64, i32> = country_data
         .into_iter()
         .flat_map(|country|
-            country.users.into_iter().map(move |user| (user.to_lowercase(), country.code))
+            country.users.into_iter().map(move |user| (user, country.code))
         )
         .collect();
 
-    let banned_users = load_json_from_file::<Vec<String>>(
-        aredl_path.join("_leaderboard_banned.json").as_path())
-        .into_iter()
-        .map(|name| name.to_lowercase())
-        .collect_vec();
+    let banned_users = load_json_from_file::<Vec<i64>>(
+        aredl_path.join("_leaderboard_banned.json").as_path());
 
     role_data.extend(role_data_supporters);
 
@@ -249,15 +250,17 @@ fn main() {
         .chain(
             role_data.iter().flat_map(|data| data.members.iter().map(|member| member.name.clone()))
         )
-        .unique_by(|name| name.to_lowercase())
-        .map(|name| {
-            let country = user_country_map.get(&name.to_lowercase()).cloned();
+        .unique_by(|id| id.clone())
+        .map(|id| {
+            let country = user_country_map.get(&id).cloned();
+            let username = name_map.get(&id).cloned().expect(format!("Username not found for id: {}", id).as_str());
             CreateUser {
                 id: None,
-                username: name.clone(),
-                global_name: name.clone(),
+                username: username.clone(),
+                json_id: id,
+                global_name: username,
                 placeholder: true,
-                ban_level: if banned_users.contains(&name.to_lowercase()) { 1 } else { 0 },
+                ban_level: if banned_users.contains(&id) { 1 } else { 0 },
                 country
             }
         })
@@ -273,17 +276,19 @@ fn main() {
     println!("Migrating");
     db_conn.transaction::<_, MigrationError, _>(|conn| {
         println!("\tLoading user and level id's");
-        let old_user_ids: HashMap<String, Uuid> = users::table.select((
-            users::global_name,
-            users::id
+        let old_user_ids: HashMap<i64, Uuid> = users::table
+            .filter(users::json_id.is_not_null())
+            .select((
+            users::json_id.assume_not_null(),
+            users::id,
             ))
-            .load::<(String, Uuid)>(conn)?
+            .load::<(i64, Uuid)>(conn)?
             .into_iter()
             .collect();
 
         let users = users.into_iter()
             .map(|mut user| {
-                user.id = old_user_ids.get(&user.global_name).map(|id| id.clone());
+                user.id = old_user_ids.get(&user.json_id).map(|id| id.clone());
                 user
             })
             .collect_vec();
@@ -305,12 +310,13 @@ fn main() {
             .values(&users)
             .execute(conn)?;
 
-        let user_map: HashMap<String, Uuid> = users::table.select((
+        let user_map: HashMap<i64, Uuid> = users::table
+            .filter(users::json_id.is_not_null())
+            .select((
+            users::json_id.assume_not_null(),
             users::id,
-            users::username,
-            )).load::<(Uuid, String)>(conn)?
-            .iter()
-            .map(|(id, name)| (name.to_lowercase(), id.clone()))
+            )).load::<(i64, Uuid)>(conn)?
+            .into_iter()
             .collect();
 
         println!("\tLoading levels");
@@ -321,7 +327,7 @@ fn main() {
                 position: (position + 1) as i32,
                 name: level_data.name.clone(),
 				description: level_data.description.clone(),
-                publisher_id: *user_map.get(&level_data.author.to_lowercase()).unwrap(),
+                publisher_id: user_map.get(&level_data.author).unwrap().clone(),
                 legacy: level_data_ext.legacy,
                 level_id: level_data.id,
                 two_player: level_data_ext.two_player,
@@ -470,19 +476,21 @@ fn main() {
                                 level_map.get(&(level.id, level_data_ext.two_player)).unwrap()
                             ),
                             aredl_levels_created::user_id.eq(
-                                user_map.get(&creator.to_lowercase()).unwrap()
+                                user_map.get(creator).unwrap()
                             )
                         )
                     )
                 ).collect::<Vec<_>>()
             ).execute(conn)?;
 
+        println!("\tInserting records");
+
         let now = Utc::now().naive_utc();
 
         let records = levels.iter().map(|(level,level_data_ext)|
             (
                 aredl_records::level_id.eq(level_map.get(&(level.id, level_data_ext.two_player)).unwrap()),
-                aredl_records::submitted_by.eq(user_map.get(&level.verifier.to_lowercase()).unwrap()),
+                aredl_records::submitted_by.eq(user_map.get(&level.verifier).unwrap()),
                 aredl_records::mobile.eq(false),
                 aredl_records::video_url.eq(&level.verification),
                 aredl_records::created_at.eq(now),
@@ -493,7 +501,7 @@ fn main() {
                     let created_at = now + Duration::seconds((index + 1) as i64);
                     (
                         aredl_records::level_id.eq(level_map.get(&(level.id, level_data_ext.two_player)).unwrap()),
-                        aredl_records::submitted_by.eq(user_map.get(&record.user.to_lowercase()).unwrap()),
+                        aredl_records::submitted_by.eq(user_map.get(&record.user).unwrap()),
                         aredl_records::mobile.eq(record.mobile.unwrap_or(false)),
                         aredl_records::video_url.eq(&record.link),
                         aredl_records::created_at.eq(created_at),
@@ -502,7 +510,6 @@ fn main() {
             )
         ).collect::<Vec<_>>();
 
-        println!("\tInserting records");
         for record_chunk in records.chunks(4000) {
             diesel::insert_into(aredl_records::table)
                 .values(record_chunk)
@@ -522,18 +529,17 @@ fn main() {
 
         let role_map: HashMap<String, i32> = roles::table
             .select((
-                roles::id,
-                roles::role_desc)
-            ).load::<(i32, String)>(conn)?
-            .iter().map(|(id, name)| (name.clone(), *id))
-            .collect();
+                roles::role_desc,
+                roles::id)
+            ).load::<(String, i32)>(conn)?
+            .into_iter().collect();
 
         diesel::insert_into(user_roles::table)
             .values(
                 role_data.iter()
                     .flat_map(|role_list|
                         role_list.members.iter().map(|member| (
-                            user_roles::user_id.eq(user_map.get(&member.name.to_lowercase()).unwrap()),
+                            user_roles::user_id.eq(user_map.get(&member.name).unwrap()),
                             user_roles::role_id.eq(role_map.get(
                                 roles_map.get(&role_list.role.as_str()).unwrap().0
                             ).unwrap())

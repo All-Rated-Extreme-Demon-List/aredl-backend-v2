@@ -1,9 +1,8 @@
 use std::collections::HashMap;
-use diesel::{BelongingToDsl, GroupedBy, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::{QueryDsl, RunQueryDsl, SelectableHelper};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use diesel::pg::Pg;
-use diesel::query_dsl::methods::OrderDsl;
 use itertools::Itertools;
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
