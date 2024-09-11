@@ -547,12 +547,15 @@ fn main() {
                     ).collect::<Vec<_>>()
             ).execute(conn)?;
 
-        diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_user_leaderboard")
-            .execute(conn)?;
-
-        diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_position_history_full_view")
-            .execute(conn)?;
-
         Ok(())
     }).expect("Failed to migrate");
+
+    println!("\tUpdating materialized views");
+
+    diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_user_leaderboard")
+        .execute(&mut db_conn).expect("Failed to update leaderboard");
+
+    diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_position_history_full_view")
+        .execute(&mut db_conn).expect("Failed to update position history");
+
 }
