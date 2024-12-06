@@ -29,6 +29,9 @@ fn get_privilege_level(db: web::Data<Arc<DbAppState>>, user_id: Uuid) -> Result<
 
 pub fn check_permission(db: web::Data<Arc<DbAppState>>, user_id: Uuid, permission: Permission) -> Result<bool, ApiError> {
     let max_privilege = get_privilege_level(db.clone(), user_id)?;
+    if  max_privilege >= 100 {
+        return Ok(true)
+    }
     let required_privilege = permissions::table
         .filter(permissions::permission.eq(permission.to_string()))
         .select(permissions::privilege_level)

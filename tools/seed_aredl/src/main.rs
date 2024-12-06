@@ -142,9 +142,9 @@ fn main() {
     dotenv().ok();
 
     let roles_map: HashMap<&str, (&str, i32)> = HashMap::from([
-        ("owner", ("owner", 100)),
-        ("dev", ("developer", 80)),
-        ("admin", ("admin", 70)),
+        ("owner", ("owner", 110)),
+        ("dev", ("developer", 100)),
+        ("admin", ("admin", 90)),
         ("mod", ("mod", 50)),
         ("helper", ("helper", 30)),
         ("patreon", ("plus", 5)),
