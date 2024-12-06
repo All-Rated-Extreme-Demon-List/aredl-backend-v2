@@ -14,7 +14,7 @@ use serde::de::DeserializeOwned;
 use uuid::Uuid;
 use itertools::Itertools;
 use crate::error_handler::MigrationError;
-use crate::schema::{aredl_levels, aredl_levels_created, aredl_pack_levels, aredl_pack_tiers, aredl_packs, aredl_position_history, aredl_records, roles, user_roles, users};
+use crate::schema::{aredl_levels, aredl_levels_created, aredl_pack_levels, aredl_pack_tiers, aredl_packs, aredl_position_history, aredl_records, roles, user_roles, users, permissions};
 
 type Pool = diesel::r2d2::Pool<ConnectionManager<PgConnection>>;
 type DbConnection = diesel::r2d2::PooledConnection<ConnectionManager<PgConnection>>;
@@ -149,6 +149,13 @@ fn main() {
         ("helper", ("helper", 30)),
         ("patreon", ("plus", 5)),
     ]);
+
+    let permissions_data = vec![
+        ("level_modify", 50),
+        ("record_modify", 20),
+        ("pack_tier_modify", 40),
+        ("pack_modify", 40),
+    ];
 
     let db_url = env::var("DATABASE_URL").expect("Database url not set");
     let manager = ConnectionManager::<PgConnection>::new(db_url);
@@ -545,6 +552,20 @@ fn main() {
                             ).unwrap())
                             ))
                     ).collect::<Vec<_>>()
+            ).execute(conn)?;
+
+        println!("\tInserting permissions");
+        diesel::insert_into(permissions::table)
+            .values(
+                permissions_data
+                    .iter()
+                    .map(|(permission, privilege_level)| {
+                        (
+                            permissions::permission.eq(*permission),
+                            permissions::privilege_level.eq(*privilege_level),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
             ).execute(conn)?;
 
         Ok(())
