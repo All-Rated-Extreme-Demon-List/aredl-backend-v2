@@ -62,7 +62,7 @@ impl User {
     pub fn upsert(db: web::Data<Arc<DbAppState>>, user_upsert: UserUpsert) -> Result<Self, ApiError> {
         let user = diesel::insert_into(users::table)
             .values(&user_upsert)
-            .on_conflict(users::username)
+            .on_conflict(users::discord_id)
             .do_update()
             .set(&user_upsert)
             .returning(Self::as_select())

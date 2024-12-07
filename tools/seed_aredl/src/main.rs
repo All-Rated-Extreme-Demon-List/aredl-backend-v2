@@ -76,6 +76,7 @@ pub struct CreateUser {
     pub placeholder: bool,
     pub ban_level: i32,
     pub country: Option<i32>,
+    pub discord_id: Option<String>
 }
 
 #[derive(Serialize, Deserialize, Insertable, Debug)]
@@ -204,6 +205,9 @@ fn main() {
     let name_map = load_json_from_file::<HashMap<i64, String>>(
         aredl_path.join("_name_map.json").as_path());
 
+    let discord_map = load_json_from_file::<HashMap<i64, String>>(
+        aredl_path.join("_discord_ids.json").as_path());
+
     let user_country_map: HashMap<i64, i32> = country_data
         .into_iter()
         .flat_map(|country|
@@ -269,7 +273,8 @@ fn main() {
                 global_name: username,
                 placeholder: true,
                 ban_level: if banned_users.contains(&id) { 1 } else { 0 },
-                country
+                country,
+                discord_id: discord_map.get(&id).cloned(),
             }
         })
         .collect();
