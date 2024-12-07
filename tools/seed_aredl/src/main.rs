@@ -155,6 +155,7 @@ fn main() {
         ("record_modify", 20),
         ("pack_tier_modify", 40),
         ("pack_modify", 40),
+        ("placeholder_create", 20)
     ];
 
     let db_url = env::var("DATABASE_URL").expect("Database url not set");

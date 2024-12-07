@@ -42,6 +42,11 @@ pub struct UserUpsert {
     pub discord_accent_color: Option<i32>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PlaceholderOptions {
+    pub username: String,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UserListQueryOptions {
     pub name_filter: Option<String>,
@@ -112,6 +117,29 @@ impl User {
         Ok(Paginated::<UserPage>::from_data(page_query, count, UserPage {
             data: entries
         }))
+    }
+
+    pub fn create_placeholder(
+        conn: &mut DbConnection,
+        options: PlaceholderOptions,
+    ) -> Result<Self, ApiError> {
+        let user_data = UserUpsert {
+            username: options.username.clone(),
+            global_name: options.username,
+            placeholder: true,
+            discord_id: None,
+            country: None,
+            discord_avatar: None,
+            discord_banner: None,
+            discord_accent_color: None,
+        };
+
+        let user = diesel::insert_into(users::table)
+            .values(&user_data)
+            .returning(Self::as_select())
+            .get_result::<Self>(conn)?;
+
+        Ok(user)
     }
 }
 
