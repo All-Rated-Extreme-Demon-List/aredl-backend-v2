@@ -15,7 +15,7 @@ use crate::auth::token;
 use crate::auth::token::UserClaims;
 use crate::db::{DbAppState, DbConnection};
 use crate::error_handler::ApiError;
-use crate::schema::oauth_requests;
+use crate::schema::{oauth_requests, roles, user_roles, permissions};
 use crate::users::{User, UserUpsert};
 
 #[derive(Deserialize)]
@@ -82,11 +82,21 @@ impl From<DiscordUser> for UserUpsert {
     }
 }
 
+#[derive(Serialize, Deserialize, Queryable, Selectable, Identifiable, PartialEq, Debug)]
+#[diesel(table_name = roles)]
+pub struct Role {
+    pub id: i32,
+    pub privilege_level: i32,
+    pub role_desc: String,
+}
+
 #[derive(Debug, Serialize)]
 struct AuthResponse {
     pub token: String,
     pub expires: DateTime<Utc>,
     pub user: User,
+    pub scopes: Vec<String>,
+    pub roles: Vec<Role>
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -155,6 +165,8 @@ async fn discord_callback(db: web::Data<Arc<DbAppState>>, query: web::Query<OAut
         .json::<DiscordUser>().await
         .map_err(|_| ApiError::new(500, "Failed to load discord data"))?;
 
+    let mut conn = db.connection()?;
+
     let user = web::block(|| User::upsert(db, UserUpsert::from(discord_user_data))).await??;
 
     let (token, expires) = token::create_token(
@@ -166,7 +178,30 @@ async fn discord_callback(db: web::Data<Arc<DbAppState>>, query: web::Query<OAut
         Duration::weeks(52),
     )?;
 
-    let auth_response = AuthResponse { token, expires, user };
+    let roles = user_roles::table
+        .inner_join(roles::table.on(user_roles::role_id.eq(roles::id)))
+        .filter(user_roles::user_id.eq(user.id))
+        .select(Role::as_select())
+        .load::<Role>(&mut conn)?;
+
+    let user_privilege_level: i32 = roles
+        .iter()
+        .map(|role| role.privilege_level)
+        .max()
+        .unwrap_or(0);
+
+    let all_permissions = permissions::table
+        .select((permissions::permission, permissions::privilege_level))
+        .load::<(String, i32)>(&mut conn)?;
+
+    let scopes = all_permissions
+        .into_iter()
+        .filter_map(|(permission, privilege_level)| {
+            if user_privilege_level >= privilege_level { Some(permission) } else { None }
+        })
+        .collect::<Vec<String>>();
+
+    let auth_response = AuthResponse { token, expires, user, roles, scopes };
 
     if request_data.opener_origin.is_some() {
 		let script_data = serde_json::json!({
