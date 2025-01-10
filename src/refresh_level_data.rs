@@ -158,27 +158,20 @@ async fn update_gddl_data(conn: &mut DbConnection, id: Uuid, level_id: i32, two_
 
 async fn update_edel_data(conn: &mut DbConnection, api_key: &String, spreadsheet_id: &String) -> Result<(), ApiError> {
 
-    let normal_result = read_spreadsheet(api_key, spreadsheet_id, "'IDS'!B:C").await?;
-    let pending_result = read_spreadsheet(api_key, spreadsheet_id, "'IDS'!E:F").await?;
+    let ids_result = read_spreadsheet(api_key, spreadsheet_id, "'IDS'!B:D").await?;
 
-    let data : Vec<(i32, f64, bool)> = normal_result.values
+    let data: Vec<(i32, f64, bool)> = ids_result.values
         .into_iter()
-        .map(|v| (v, false))
-        .chain(
-            pending_result.values
-                .into_iter()
-                .map(|v| (v, true)))
-
-        .filter_map(|(v, pending)| -> Option<(i32, f64, bool)> {
-            if v.len() != 2 {
+        .filter_map(|v| -> Option<(i32, f64, bool)> {
+            if v.len() < 3 {
                 return None;
             }
-            let enjoyment = v[0].parse::<f64>().ok()?;
-            let id = v[1].parse::<i32>().ok()?;
+            let id = v[0].parse::<i32>().ok()?;
+            let enjoyment = v[1].parse::<f64>().ok()?;
+            let pending = v[2].parse::<bool>().unwrap_or(false);
             Some((id, enjoyment, pending))
         })
         .collect();
-
 
     conn.transaction(|conn| {
         for (id, enjoyment, pending) in data {
