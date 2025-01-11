@@ -23,7 +23,8 @@ pub struct Level {
     pub description: Option<String>,
     pub edel_enjoyment: Option<f64>,
     pub is_edel_pending: bool,
-    pub gddl_tier: Option<f64>
+    pub gddl_tier: Option<f64>,
+    pub nlw_tier: Option<String>
 }
 
 #[derive(Serialize, Deserialize, Insertable)]
@@ -90,6 +91,7 @@ pub struct ResolvedLevel {
     pub edel_enjoyment: Option<f64>,
     pub is_edel_pending: bool,
     pub gddl_tier: Option<f64>,
+    pub nlw_tier: Option<String>,
     pub publisher: User,
     pub verification: Option<Record<User>>,
 }
@@ -163,6 +165,7 @@ impl ResolvedLevel {
             edel_enjoyment: level.edel_enjoyment,
             is_edel_pending: level.is_edel_pending,
             gddl_tier: level.gddl_tier,
+            nlw_tier: level.nlw_tier,
             publisher,
             verification,
         }

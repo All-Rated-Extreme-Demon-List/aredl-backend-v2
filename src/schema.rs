@@ -22,6 +22,7 @@ diesel::table! {
         edel_enjoyment -> Nullable<Float8>,
         is_edel_pending -> Bool,
         gddl_tier -> Nullable<Float8>,
+        nlw_tier -> Nullable<Varchar>,
     }
 }
 

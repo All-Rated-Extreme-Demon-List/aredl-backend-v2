@@ -14,6 +14,7 @@ CREATE TABLE aredl_levels (
     edel_enjoyment FLOAT,
     is_edel_pending BOOLEAN NOT NULL DEFAULT false,
     gddl_tier FLOAT,
+    nlw_tier VARCHAR,
     PRIMARY KEY(id),
     UNIQUE (level_id, two_player)
 );

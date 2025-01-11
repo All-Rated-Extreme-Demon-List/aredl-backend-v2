@@ -22,6 +22,8 @@ pub async fn start_level_data_refresher(db: Arc<DbAppState>) {
         .expect("GOOGLE_API_KEY not set");
     let edel_sheet_id = env::var("EDEL_SHEET_ID")
         .expect("EDEL_SHEET_ID not set");
+    let nlw_sheet_id = env::var("NLW_SHEET_ID")
+        .expect("NLW_SHEET_ID not set");
 
     let db_clone = db.clone();
     task::spawn(async move {
@@ -43,6 +45,12 @@ pub async fn start_level_data_refresher(db: Arc<DbAppState>) {
 
             if edel_result.is_err() {
                 println!("Failed to refresh edel {}", edel_result.err().unwrap());
+            }
+
+            let nlw_result = update_nlw_data(&mut conn, &google_api_key, &nlw_sheet_id).await;
+
+            if nlw_result.is_err() {
+                println!("Failed to refresh nlw {}", nlw_result.err().unwrap());
             }
 
             let now = Utc::now();
@@ -187,6 +195,43 @@ async fn update_edel_data(conn: &mut DbConnection, api_key: &String, spreadsheet
                     aredl_levels::edel_enjoyment.eq(enjoyment),
                     aredl_levels::is_edel_pending.eq(pending)
                     ))
+                .filter(aredl_levels::level_id.eq(id))
+                .filter(aredl_levels::two_player.eq(exists_2p))
+                .execute(conn)?;
+        }
+        Ok(())
+    })
+}
+
+async fn update_nlw_data(conn: &mut DbConnection, api_key: &String, spreadsheet_id: &String) -> Result<(), ApiError> {
+
+    let ids_result = read_spreadsheet(api_key, spreadsheet_id, "'IDS'!C:D").await?;
+
+    let data: Vec<(i32, String)> = ids_result.values
+        .into_iter()
+        .filter_map(|v| -> Option<(i32, String)> {
+            if v.len() < 2 {
+                return None;
+            }
+            let id = v[0].parse::<i32>().ok()?;
+            let tier = v[1].to_string();
+            Some((id, tier))
+        })
+        .collect();
+
+    conn.transaction(|conn| {
+        for (id, tier) in data {
+            let exists_2p = select(
+                exists(aredl_levels::table
+                    .filter(aredl_levels::level_id.eq(id))
+                    .filter(aredl_levels::two_player.eq(true))
+                )
+            ).get_result::<bool>(conn)?;
+
+            diesel::update(aredl_levels::table)
+                .set((
+                    aredl_levels::nlw_tier.eq(tier),
+                ))
                 .filter(aredl_levels::level_id.eq(id))
                 .filter(aredl_levels::two_player.eq(exists_2p))
                 .execute(conn)?;
