@@ -109,7 +109,7 @@ diesel::table! {
         csrf_state -> Varchar,
         pkce_verifier -> Varchar,
         nonce -> Varchar,
-        opener_origin -> Nullable<Varchar>,
+        callback -> Nullable<Varchar>,
         created_at -> Nullable<Timestamp>,
     }
 }

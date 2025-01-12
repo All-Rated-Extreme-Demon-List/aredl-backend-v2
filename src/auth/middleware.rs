@@ -7,7 +7,7 @@ use futures_util::future::{LocalBoxFuture, ready, Ready};
 
 use crate::auth::app_state::AuthAppState;
 use crate::auth::{Permission, permission};
-use crate::auth::token::{decode_token, UserClaims};
+use crate::auth::token::{decode_token, decode_user_claims, UserClaims};
 use crate::db::DbAppState;
 
 pub struct UserAuth {
@@ -97,9 +97,10 @@ impl<S> Service<ServiceRequest> for AuthMiddleware<S>
             .app_data::<web::Data<Arc<DbAppState>>>()
             .unwrap().clone();
 
-        let user_claims = match decode_token(
+        let token_claims = match decode_token(
             &token.unwrap(),
             &app_state.jwt_decoding_key,
+            &["initial", "access"],
         ) {
             Ok(claims) => claims,
             Err(_) => {
@@ -108,6 +109,15 @@ impl<S> Service<ServiceRequest> for AuthMiddleware<S>
                 ))
             }
 
+          };
+
+        let user_claims = match decode_user_claims(&token_claims) {
+            Ok(claims) => claims,
+            Err(_) => {
+                return Box::pin(ready(
+                    Ok(ServiceResponse::new(http_req, HttpResponse::Forbidden().reason("Failed to extract user claims").finish()))
+                ))
+            }
         };
 
         let user_id = user_claims.user_id;

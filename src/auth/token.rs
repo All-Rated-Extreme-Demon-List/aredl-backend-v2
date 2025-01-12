@@ -15,14 +15,15 @@ pub struct TokenClaims {
     pub sub: String,
     pub iat: usize,
     pub exp: usize,
+    pub token_type: String,
 }
 
 pub fn create_token(
     user_claims: UserClaims,
     encoding_key: &EncodingKey,
     expires_in: Duration,
+    token_type: &str,
 ) -> Result<(String, DateTime<Utc>), ApiError> {
-
     let now = Utc::now();
     let iat = now.timestamp() as usize;
     let expire_datetime = now + expires_in;
@@ -34,6 +35,7 @@ pub fn create_token(
         sub: user_claims_serialized,
         exp,
         iat,
+        token_type: token_type.to_string(),
     };
 
     let token = encode(
@@ -45,7 +47,7 @@ pub fn create_token(
     Ok((token, expire_datetime))
 }
 
-pub fn decode_token<T: Into<String>>(token: T, decoding_key: &DecodingKey) -> Result<UserClaims, ApiError> {
+pub fn decode_token<T: Into<String>>(token: T, decoding_key: &DecodingKey, expected_types: &[&str]) -> Result<TokenClaims, ApiError> {
     let token_str = token.into();
 
     let decoded = decode::<TokenClaims>(
@@ -54,6 +56,14 @@ pub fn decode_token<T: Into<String>>(token: T, decoding_key: &DecodingKey) -> Re
         &Validation::new(Algorithm::HS256),
     ).map_err(|e| ApiError::new(401, format!("Invalid token! {}", e.to_string()).as_str()))?;
 
-    serde_json::from_str::<UserClaims>(&decoded.claims.sub)
-        .map_err(|e| ApiError::new(401, format!("Failed to decode claims! {}", e.to_string()).as_str()))
+    if !expected_types.is_empty() && !expected_types.contains(&decoded.claims.token_type.as_str()) {
+        return Err(ApiError::new(401, "Invalid token type"));
+    }
+
+    Ok(decoded.claims)
+}
+
+pub fn decode_user_claims(token_claims: &TokenClaims) -> Result<UserClaims, ApiError> {
+    serde_json::from_str(&token_claims.sub)
+        .map_err(|e| ApiError::new(401, format!("Failed to decode user claims! {}", e.to_string()).as_str()))
 }

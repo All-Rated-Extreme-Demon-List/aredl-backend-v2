@@ -1,8 +1,8 @@
 use std::env;
 use std::sync::Arc;
 
-use actix_web::{get, HttpResponse, web};
-use chrono::{DateTime, Duration, Utc};
+use actix_web::{get, HttpResponse, HttpRequest, web};
+use chrono::{DateTime, Duration, Utc, TimeZone};
 use diesel::prelude::*;
 use openidconnect::{AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce, OAuth2TokenResponse, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope};
 use openidconnect::core::{CoreAuthenticationFlow, CoreClient, CoreIdTokenVerifier, CoreProviderMetadata};
@@ -30,7 +30,7 @@ struct OAuthRequestData {
     pub csrf_state: String,
     pub pkce_verifier: String,
     pub nonce: String,
-	pub opener_origin: Option<String>,
+	pub callback: Option<String>,
 }
 
 impl OAuthRequestData {
@@ -92,8 +92,10 @@ pub struct Role {
 
 #[derive(Debug, Serialize)]
 struct AuthResponse {
-    pub token: String,
-    pub expires: DateTime<Utc>,
+    pub access_token: String,
+    pub access_expires: DateTime<Utc>,
+    pub refresh_token: String,
+    pub refresh_expires: DateTime<Utc>,
     pub user: User,
     pub scopes: Vec<String>,
     pub roles: Vec<Role>
@@ -101,7 +103,7 @@ struct AuthResponse {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct AuthOptions {
-	pub opener_origin: Option<String>,
+	pub callback: Option<String>,
 }
 
 #[get("")]
@@ -124,7 +126,7 @@ async fn discord_auth(data: web::Data<Arc<AuthAppState>>, db: web::Data<Arc<DbAp
         csrf_state: csrf_state.secret().clone(),
         pkce_verifier: pkce_verifier.secret().to_string(),
         nonce: nonce.secret().to_string(),
-		opener_origin: options.opener_origin.clone(),
+		callback: options.callback.clone(),
     })?;
 
     Ok(HttpResponse::Found().append_header((header::LOCATION, authorize_url.to_string())).finish())
@@ -175,7 +177,25 @@ async fn discord_callback(db: web::Data<Arc<DbAppState>>, query: web::Query<OAut
             is_api_key: false,
         },
         &data.jwt_encoding_key,
-        Duration::weeks(52),
+        Duration::minutes(5),
+        "initial",
+    )?;
+
+    if let Some(callback) = request_data.callback {
+        let redirect_url = format!("{}?token={}", callback, token);
+        return Ok(HttpResponse::Found()
+            .append_header((header::LOCATION, redirect_url))
+            .finish());
+    }
+
+    let (refresh_token, refresh_expires) = token::create_token(
+        UserClaims {
+            user_id: user.id,
+            is_api_key: false,
+        },
+        &data.jwt_encoding_key,
+        Duration::weeks(2),
+        "refresh",
     )?;
 
     let roles = user_roles::table
@@ -201,28 +221,68 @@ async fn discord_callback(db: web::Data<Arc<DbAppState>>, query: web::Query<OAut
         })
         .collect::<Vec<String>>();
 
-    let auth_response = AuthResponse { token, expires, user, roles, scopes };
-
-    if request_data.opener_origin.is_some() {
-		let script_data = serde_json::json!({
-			"data": auth_response,
-		});
-	
-		let script = format!(
-			"<script>
-				if (window.opener) {{
-					window.opener.postMessage({}, '{}');
-				}}
-				window.close();
-			</script>",
-			script_data,
-			request_data.opener_origin.unwrap(),
-		);
-	
-		return Ok(HttpResponse::Ok().content_type("text/html").body(script));
-	}
+    let auth_response = AuthResponse { access_token: token, access_expires: expires, refresh_token, refresh_expires, user, roles, scopes };
 	
 	Ok(HttpResponse::Ok().json(auth_response))
+}
+
+#[get("/refresh")]
+async fn discord_refresh(db: web::Data<Arc<DbAppState>>, data: web::Data<Arc<AuthAppState>>, req: HttpRequest) -> Result<HttpResponse, ApiError> {
+    let refresh_token = req
+        .headers()
+        .get(openidconnect::http::header::AUTHORIZATION)
+        .and_then(|h| h.to_str().ok())
+        .map(|h| h.strip_prefix("Bearer ").unwrap_or("").to_string());
+
+    if refresh_token.is_none() {
+        return Err(ApiError::new(400, "No token provided"));
+    }
+
+    let decoded_token_claims = token::decode_token(
+        refresh_token.unwrap(),
+        &data.jwt_decoding_key,
+        &["refresh", "initial"]
+    )?;
+
+    let decoded_user_claims = token::decode_user_claims(&decoded_token_claims)?;
+    let user_id = decoded_user_claims.user_id;
+
+    let (access_token, access_expires) = token::create_token(
+        UserClaims {
+            user_id,
+            is_api_key: false,
+        },
+        &data.jwt_encoding_key,
+        Duration::minutes(30),
+        "access",
+    )?;
+
+    let mut response = serde_json::json!({
+        "access_token": access_token,
+        "access_expires": access_expires,
+    });
+
+    let now = Utc::now();
+    let refresh_exp = Utc.timestamp_opt(decoded_token_claims.exp as i64, 0).single().ok_or_else(|| {
+        ApiError::new(500, "Failed to parse expiration timestamp")
+    })?;
+
+    if refresh_exp - now < Duration::days(2) {
+        let (new_refresh_token, refresh_expires) = token::create_token(
+            UserClaims {
+                user_id,
+                is_api_key: false,
+            },
+            &data.jwt_encoding_key,
+            Duration::weeks(2),
+            "refresh",
+        )?;
+
+        response["refresh_token"] = serde_json::Value::String(new_refresh_token);
+        response["refresh_expires"] = serde_json::Value::String(refresh_expires.to_rfc3339());
+    }
+
+    Ok(HttpResponse::Ok().json(response))
 }
 
 pub(crate) async fn create_discord_client() -> Result<CoreClient, Box<dyn std::error::Error>> {
@@ -253,5 +313,6 @@ pub fn init_discord_routes(config: &mut web::ServiceConfig) {
         web::scope("/auth/discord")
             .service(discord_auth)
             .service(discord_callback)
+            .service(discord_refresh)
     );
 }
