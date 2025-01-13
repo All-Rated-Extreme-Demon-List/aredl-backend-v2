@@ -227,7 +227,7 @@ async fn discord_callback(db: web::Data<Arc<DbAppState>>, query: web::Query<OAut
 }
 
 #[get("/refresh")]
-async fn discord_refresh(db: web::Data<Arc<DbAppState>>, data: web::Data<Arc<AuthAppState>>, req: HttpRequest) -> Result<HttpResponse, ApiError> {
+async fn discord_refresh(data: web::Data<Arc<AuthAppState>>, req: HttpRequest) -> Result<HttpResponse, ApiError> {
     let refresh_token = req
         .headers()
         .get(openidconnect::http::header::AUTHORIZATION)

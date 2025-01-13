@@ -19,6 +19,7 @@ diesel::table! {
         two_player -> Bool,
         tags -> Array<Nullable<Text>>,
         description -> Nullable<Varchar>,
+        song -> Nullable<Int4>,
         edel_enjoyment -> Nullable<Float8>,
         is_edel_pending -> Bool,
         gddl_tier -> Nullable<Float8>,

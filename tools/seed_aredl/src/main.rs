@@ -37,6 +37,7 @@ pub struct Level {
     pub creators: Vec<i64>,
     pub verifier: i64,
     pub verification: String,
+    pub song: Option<i32>,
     pub tags: Option<Vec<Option<String>>>,   
     pub records: Vec<Record>,
 }
@@ -91,6 +92,7 @@ pub struct LevelCreate {
     pub level_id: i32,
     pub two_player: bool,
 	pub tags: Option<Vec<Option<String>>>,
+    pub song: Option<i32>,
 }
 
 pub struct LevelInfo {
@@ -347,6 +349,7 @@ fn main() {
                 level_id: level_data.id,
                 two_player: level_data_ext.two_player,
 				tags: level_data.tags.clone(),
+                song: level_data.song,
             })
             .collect();
 

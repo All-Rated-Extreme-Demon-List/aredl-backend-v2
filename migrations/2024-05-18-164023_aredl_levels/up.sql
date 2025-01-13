@@ -11,6 +11,7 @@ CREATE TABLE aredl_levels (
     two_player BOOLEAN NOT NULL,
     tags TEXT[] NOT NULL DEFAULT '{}',
     description VARCHAR,
+    song INT,
     edel_enjoyment FLOAT,
     is_edel_pending BOOLEAN NOT NULL DEFAULT false,
     gddl_tier FLOAT,
