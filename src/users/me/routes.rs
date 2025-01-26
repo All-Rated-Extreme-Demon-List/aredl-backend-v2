@@ -1,9 +1,9 @@
 use std::sync::Arc;
-use actix_web::{get, HttpResponse, web};
+use actix_web::{get, patch, HttpResponse, web};
 use crate::auth::{UserAuth, Authenticated};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
-use crate::users::me::model::User;
+use crate::users::me::model::{User, UpdateUser};
 
 #[get("", wrap="UserAuth::load()")]
 async fn find(db: web::Data<Arc<DbAppState>>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
@@ -16,9 +16,21 @@ async fn find(db: web::Data<Arc<DbAppState>>, authenticated: Authenticated) -> R
     Ok(HttpResponse::Ok().json(user))
 }
 
+#[patch("", wrap = "UserAuth::load()")]
+async fn update(db: web::Data<Arc<DbAppState>>, authenticated: Authenticated, user: web::Json<UpdateUser>) -> Result<HttpResponse, ApiError> {
+    let user = web::block(
+        move || {
+            let conn = &mut db.connection()?;
+            User::update(conn, authenticated.user_id, user.into_inner())
+        }
+    ).await??;
+    Ok(HttpResponse::Ok().json(user))
+}
+
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/@me")
             .service(find)
+            .service(update)
     );
 }

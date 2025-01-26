@@ -7,6 +7,7 @@ CREATE TABLE users (
     placeholder BOOLEAN NOT NULL,
     description TEXT,
     country INTEGER,
+    last_country_update TIMESTAMP NOT NULL DEFAULT '1970-01-01 00:00:00',
     ban_level INTEGER NOT NULL DEFAULT 0,
     discord_avatar VARCHAR,
     discord_banner VARCHAR,

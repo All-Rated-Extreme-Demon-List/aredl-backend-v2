@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use chrono::{Utc, NaiveDateTime};
 use diesel::pg::Pg;
+use diesel::dsl::now;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper, JoinOnDsl};
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
@@ -16,6 +18,15 @@ pub struct User {
     pub discord_avatar: Option<String>,
     pub discord_banner: Option<String>,
     pub discord_accent_color: Option<i32>,
+}
+
+#[derive(Serialize, Deserialize, AsChangeset, Debug)]
+#[diesel(table_name = users, check_for_backend(Pg))]
+pub struct UpdateUser {
+    pub global_name: Option<String>,
+    pub description: Option<String>,
+    pub country: Option<i32>,
+    pub ban_level: Option<i32>,
 }
 
 #[derive(Serialize, Debug)]
@@ -64,5 +75,36 @@ impl User {
             .collect::<Vec<String>>();
 
         Ok(ResolvedUser { user, roles, scopes })
+    }
+    pub fn update(conn: &mut DbConnection, id: Uuid, user: UpdateUser) -> Result<(), ApiError> {
+        let (current_ban_level, last_country_update): (i32, NaiveDateTime) = users::table
+            .filter(users::id.eq(id))
+            .select((users::ban_level, users::last_country_update))
+            .first(conn)?;
+
+        if user.ban_level.is_some() {
+            if current_ban_level > 1 {
+                return Err(ApiError::new(403, "You have been banned from the list."));
+            }
+        }
+
+        if user.country.is_some() {
+            let next_allowed_change = last_country_update + chrono::Duration::days(90);
+            let current_time = Utc::now().naive_utc();
+            if current_time < next_allowed_change {
+                let remaining = next_allowed_change - current_time;
+                return Err(ApiError::new(400, &format!(
+                    "You have recently changed your country, please wait {} days and {} hours before changing it again.",
+                    remaining.num_days(), remaining.num_hours() % 24)));
+            }
+        }
+
+        diesel::update(users::table.filter(users::id.eq(id)))
+            .set((
+                &user,
+                user.country.map(|_| users::last_country_update.eq(now)),
+            ))
+            .execute(conn)?;
+        Ok(())
     }
 }

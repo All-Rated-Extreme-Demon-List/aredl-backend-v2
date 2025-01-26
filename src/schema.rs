@@ -148,6 +148,7 @@ diesel::table! {
         placeholder -> Bool,
         description -> Nullable<Text>,
         country -> Nullable<Int4>,
+        last_country_update -> Timestamp,
         ban_level -> Int4,
         discord_avatar -> Nullable<Varchar>,
         discord_banner -> Nullable<Varchar>,
