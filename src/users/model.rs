@@ -42,6 +42,14 @@ pub struct UserUpsert {
     pub discord_accent_color: Option<i32>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Insertable, AsChangeset)]
+#[diesel(table_name=users, check_for_backend(Pg))]
+pub struct UserUpdate {
+    pub global_name: Option<String>,
+    pub description: Option<String>,
+    pub country: Option<i32>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PlaceholderOptions {
     pub username: String,
@@ -140,6 +148,18 @@ impl User {
             .get_result::<Self>(conn)?;
 
         Ok(user)
+    }
+
+    pub fn update(
+        conn: &mut DbConnection,
+        user_id: Uuid,
+        updates: UserUpdate,
+    ) -> Result<Self, ApiError> {
+        let updated_user = diesel::update(users::table.filter(users::id.eq(user_id)))
+            .set(&updates)
+            .returning(Self::as_select())
+            .get_result::<Self>(conn)?;
+        Ok(updated_user)
     }
 }
 

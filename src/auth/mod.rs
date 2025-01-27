@@ -11,4 +11,5 @@ pub use app_state::init_app_state;
 
 pub use authenticated::Authenticated;
 pub use permission::Permission;
+pub use permission::check_higher_privilege;
 pub use middleware::UserAuth;

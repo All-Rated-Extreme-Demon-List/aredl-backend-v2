@@ -40,3 +40,17 @@ pub fn check_permission(db: web::Data<Arc<DbAppState>>, user_id: Uuid, permissio
         .first::<i32>(&mut db.connection()?)?;
     Ok(required_privilege <= max_privilege)
 }
+
+pub fn check_higher_privilege(db: web::Data<Arc<DbAppState>>, acting_user_id: Uuid, target_user_id: Uuid, ) -> Result<(), ApiError> {
+    let acting_user_privilege = get_privilege_level(db.clone(), acting_user_id)?;
+    let target_user_privilege = get_privilege_level(db.clone(), target_user_id)?;
+
+    if acting_user_privilege <= target_user_privilege {
+        return Err(ApiError::new(
+            403,
+            "You do not have sufficient privilege to affect this user.",
+        ));
+    }
+
+    Ok(())
+}
