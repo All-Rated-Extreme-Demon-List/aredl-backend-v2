@@ -51,6 +51,11 @@ pub struct UserUpdate {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct UserBanUpdate {
+    pub ban_level: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PlaceholderOptions {
     pub username: String,
 }
@@ -153,13 +158,25 @@ impl User {
     pub fn update(
         conn: &mut DbConnection,
         user_id: Uuid,
-        updates: UserUpdate,
+        user: UserUpdate,
     ) -> Result<Self, ApiError> {
         let updated_user = diesel::update(users::table.filter(users::id.eq(user_id)))
-            .set(&updates)
+            .set(&user)
             .returning(Self::as_select())
             .get_result::<Self>(conn)?;
         Ok(updated_user)
+    }
+
+    pub fn ban(
+        conn: &mut DbConnection,
+        user_id: Uuid,
+        ban_level: i32,
+    ) -> Result<User, ApiError> {
+        let user = diesel::update(users::table.filter(users::id.eq(user_id)))
+            .set(users::ban_level.eq(ban_level))
+            .returning(Self::as_select())
+            .get_result::<Self>(conn)?;
+        Ok(user)
     }
 }
 

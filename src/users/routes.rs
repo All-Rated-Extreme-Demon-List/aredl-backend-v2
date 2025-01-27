@@ -5,7 +5,7 @@ use crate::auth::{UserAuth, Permission, Authenticated, check_higher_privilege};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::PageQuery;
-use crate::users::{me, names, PlaceholderOptions, User, UserUpdate, UserListQueryOptions};
+use crate::users::{me, names, PlaceholderOptions, User, UserUpdate, UserBanUpdate, UserListQueryOptions};
 
 #[get("")]
 async fn list(
@@ -34,26 +34,33 @@ async fn create_placeholder(
 
 #[patch("/{id}", wrap = "UserAuth::require(Permission::UserModify)")]
 async fn update(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, user: web::Json<UserUpdate>, authenticated: Authenticated, ) -> Result<HttpResponse, ApiError> {
-    let db_clone = db.clone();
-    let id_clone = id.clone();
-
-    web::block(move || {
-        check_higher_privilege(db_clone, authenticated.user_id, id_clone)
-    }).await??;
-
     let result = web::block(move || {
+        check_higher_privilege(db.clone(), authenticated.user_id, id.clone())?;
         let mut conn = db.connection()?;
         User::update(&mut conn, id.into_inner(), user.into_inner())
     }).await??;
 
     Ok(HttpResponse::Ok().json(result))
 }
+
+#[patch("/{id}/ban", wrap = "UserAuth::require(Permission::UserBan)")]
+async fn ban(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, user: web::Json<UserBanUpdate>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
+    let result = web::block(move || {
+        check_higher_privilege(db.clone(), authenticated.user_id, id.clone())?;
+        let mut conn = db.connection()?;
+        User::ban(&mut conn, id.into_inner(), user.into_inner().ban_level)
+    }).await??;
+
+    Ok(HttpResponse::Ok().json(result))
+}
+
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/users")
             .service(list)
             .service(create_placeholder)
             .service(update)
+            .service(ban)
             .configure(me::init_routes)
             .configure(names::init_routes)
     );

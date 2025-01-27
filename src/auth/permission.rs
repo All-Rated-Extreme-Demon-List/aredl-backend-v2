@@ -16,7 +16,8 @@ pub enum Permission {
     PackTierModify,
     PackModify,
     PlaceholderCreate,
-    UserModify
+    UserModify,
+    UserBan,
 }
 
 fn get_privilege_level(db: web::Data<Arc<DbAppState>>, user_id: Uuid) -> Result<i32, ApiError> {
