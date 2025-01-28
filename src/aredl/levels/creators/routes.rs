@@ -5,6 +5,7 @@ use crate::aredl::levels::creators::Creator;
 use crate::aredl::levels::id_resolver::resolve_level_id;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
+use crate::auth::{UserAuth, Permission};
 
 #[get("")]
 async fn find_all(db: web::Data<Arc<DbAppState>>, level_id: web::Path<String>) -> Result<HttpResponse, ApiError> {
@@ -15,7 +16,7 @@ async fn find_all(db: web::Data<Arc<DbAppState>>, level_id: web::Path<String>) -
     Ok(HttpResponse::Ok().json(creators))
 }
 
-#[post("")]
+#[post("", wrap="UserAuth::require(Permission::LevelModify)")]
 async fn set(db: web::Data<Arc<DbAppState>>, level_id: web::Path<String>, creators: web::Json<Vec<Uuid>>) -> Result<HttpResponse, ApiError> {
     let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
     let creators = web::block(
@@ -24,7 +25,7 @@ async fn set(db: web::Data<Arc<DbAppState>>, level_id: web::Path<String>, creato
     Ok(HttpResponse::Ok().json(creators))
 }
 
-#[patch("")]
+#[patch("", wrap="UserAuth::require(Permission::LevelModify)")]
 async fn add(db: web::Data<Arc<DbAppState>>, level_id: web::Path<String>, creators: web::Json<Vec<Uuid>>) -> Result<HttpResponse, ApiError> {
     let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
     let creators = web::block(
@@ -33,7 +34,7 @@ async fn add(db: web::Data<Arc<DbAppState>>, level_id: web::Path<String>, creato
     Ok(HttpResponse::Ok().json(creators))
 }
 
-#[delete("")]
+#[delete("", wrap="UserAuth::require(Permission::LevelModify)")]
 async fn delete(db: web::Data<Arc<DbAppState>>, level_id: web::Path<String>, creators: web::Json<Vec<Uuid>>) -> Result<HttpResponse, ApiError> {
     let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
     let creators = web::block(

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use actix_web::{delete, HttpResponse, patch, post, web};
 use uuid::Uuid;
-use crate::aredl::packs::{Pack, PackCreate, PackUpdate};
+use crate::aredl::packs::{Pack, PackCreate, PackUpdate, levels};
 use crate::auth::{UserAuth, Permission};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
@@ -37,5 +37,6 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .service(create)
             .service(update)
             .service(delete)
+            .configure(levels::init_routes)
     );
 }
