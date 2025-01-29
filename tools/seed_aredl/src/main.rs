@@ -439,6 +439,8 @@ fn main() {
             )
         ).collect::<Vec<(Uuid, bool)>>();
 
+        let first_timestamp = changelog.first().map(|entry| entry.date).unwrap_or(1701030687);
+
         let init_changelog = init_levels.iter().enumerate().map(|(position, (id, legacy))| {
             let above = if position > 0 {
                 Some(init_levels[position - 1].0)
@@ -458,7 +460,7 @@ fn main() {
                 affected_level: id.clone(),
                 level_above: above,
                 level_below: below,
-                created_at: DateTime::from_timestamp(1701030687, 0).unwrap().naive_utc(),
+                created_at: DateTime::from_timestamp(first_timestamp, 0).unwrap().naive_utc(),
             }
         });
 
