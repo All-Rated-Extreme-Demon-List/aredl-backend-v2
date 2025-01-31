@@ -57,11 +57,11 @@ async fn ban(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, user: web::Jso
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/users")
+            .configure(me::init_routes)
+            .configure(names::init_routes)
             .service(list)
             .service(create_placeholder)
             .service(update)
             .service(ban)
-            .configure(me::init_routes)
-            .configure(names::init_routes)
     );
 }
