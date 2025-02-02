@@ -1,6 +1,21 @@
 use actix_web::web;
+use utoipa::OpenApi;
 use crate::aredl::{changelog, leaderboard, levels, packs, packtiers, profile};
-
+#[derive(OpenApi)]
+#[openapi(
+    tags(
+        (name = "AREDL", description = "AREDL related endpoints. For list/levels data, refer to [AREDL - Levels.](#get-/api/aredl/levels)")
+    ),
+    nest(
+        (path = "/levels", api=levels::ApiDoc),
+        (path = "/leaderboard", api=leaderboard::ApiDoc),
+        (path = "/changelog", api=changelog::ApiDoc),
+        (path = "/packs", api=packs::ApiDoc),
+        (path = "/pack-tiers", api=packtiers::ApiDoc),
+        (path = "/profile", api=profile::ApiDoc),
+    ),
+)]
+pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/aredl")

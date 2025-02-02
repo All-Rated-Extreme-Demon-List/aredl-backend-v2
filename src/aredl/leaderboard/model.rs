@@ -5,13 +5,16 @@ use diesel::expression::AsExpression;
 use diesel::expression::expression_types::NotSelectable;
 use diesel::sql_types::{Bool, Nullable};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use crate::custom_schema::aredl_user_leaderboard;
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
+use crate::aredl::levels::BaseLevel;
+use crate::users::BaseDiscordUser;
 use crate::schema::{aredl_levels, users};
 
-#[derive(Serialize, Selectable, Queryable, Debug)]
+#[derive(Serialize, Selectable, Queryable, Debug, ToSchema)]
 #[diesel(table_name=aredl_user_leaderboard, check_for_backend(Pg))]
 pub struct LeaderboardEntry {
     pub rank: i32,
@@ -28,47 +31,47 @@ pub struct LeaderboardEntry {
     pub extremes: i32
 }
 
-#[derive(Serialize, Selectable, Queryable, Debug)]
-#[diesel(table_name=users, check_for_backend(Pg))]
-pub struct User {
-    pub id: Uuid,
-    pub global_name: String,
-    pub discord_id: Option<String>,
-    pub discord_avatar: Option<String>
-}
-
-#[derive(Serialize, Selectable, Queryable, Debug)]
-#[diesel(table_name=aredl_levels, check_for_backend(Pg))]
-pub struct Level {
-    pub id: Uuid,
-    pub name: String,
-}
-
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, ToSchema)]
 pub struct LeaderboardEntryResolved {
+    /// Rank of the user in the global leaderboard, sorted by total points (including packs).
     pub rank: i32,
+    /// Rank of the user in the global leaderboard, sorted by count of extremes completed.
     pub extremes_rank: i32,
+    /// Rank of the user in the global leaderboard, sorted by total points (excluding packs).
     pub raw_rank: i32,
+    /// Rank of the user in the country leaderboard, sorted by total points (including packs).
     pub country_rank: i32,
+    /// Rank of the user in the country leaderboard, sorted by count of extremes completed.
     pub country_extremes_rank: i32,
+    /// Rank of the user in the country leaderboard, sorted by total points (excluding packs).
     pub country_raw_rank: i32,
-    pub user: User,
+    /// This entry's user.
+    pub user: BaseDiscordUser,
+    /// Country of the user. Uses the ISO 3166-1 numeric country code.
     pub country: Option<i32>,
+    /// Total points of the user, including pack points.
     pub total_points: i32,
+    /// Pack points of the user.
     pub pack_points: i32,
-    pub hardest: Option<Level>,
+    /// Hardest level the user has completed.
+    pub hardest: Option<BaseLevel>,
+    /// Count of extremes the user has completed.
     pub extremes: i32
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, ToSchema)]
 pub struct LeaderboardPage {
+    /// List of leaderboard entries.
     pub data: Vec<LeaderboardEntryResolved>
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub enum LeaderboardOrder {
+    /// Sort by total points (including packs).
     TotalPoints,
+    /// Sort by total points (excluding packs).
     RawPoints,
+    /// Sort by count of extremes completed.
     ExtremeCount,
 }
 
@@ -93,7 +96,7 @@ impl LeaderboardPage {
 
         let selection = (
             LeaderboardEntry::as_select(),
-            User::as_select(),
+            BaseDiscordUser::as_select(),
             (aredl_levels::id, aredl_levels::name).nullable()
         );
 
@@ -121,7 +124,7 @@ impl LeaderboardPage {
             .filter(country_filter)
             .order((ordering, aredl_user_leaderboard::user_id))
             .select(selection)
-            .load::<(LeaderboardEntry, User, Option<Level>)>(conn)?;
+            .load::<(LeaderboardEntry, BaseDiscordUser, Option<BaseLevel>)>(conn)?;
 
         let name_filter: Box<dyn BoxableExpression<_, _, SqlType = Bool>> = match options.name_filter {
             Some(filter) => Box::new(users::global_name.ilike(filter)),

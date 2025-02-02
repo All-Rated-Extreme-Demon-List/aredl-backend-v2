@@ -7,6 +7,8 @@ edition = "2021"
 actix-web = "4.5"
 actix-rt = "2.9"
 actix-cors = "0.7"
+utoipa = { version = "5", features = ["actix_extras", "uuid", "chrono", "preserve_order", "preserve_path_order", "openapi_extensions", "macros"] }
+utoipa-rapidoc = { version = "6", features = ["actix-web"] }
 cron = "0.12"
 tokio = { version = "1.39", features = ["full"]}
 chrono = {version = "0.4", features = ["serde"]}
@@ -26,3 +28,4 @@ jsonwebtoken = { version = "9.3", features = ["default"] }
 strum = {version = "0.26", features = ["strum_macros"]}
 strum_macros = "0.26"
 itertools = "0.13.0"
+

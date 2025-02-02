@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use actix_web::{delete, get, HttpResponse, patch, post, web};
 use uuid::Uuid;
+use utoipa::OpenApi;
 use crate::aredl::packtiers::model::PackTierResolved;
 use crate::aredl::packtiers::{PackTier, PackTierCreate, PackTierUpdate};
 use crate::auth::{UserAuth, Authenticated, Permission};
@@ -8,6 +9,20 @@ use crate::error_handler::ApiError;
 use crate::cache_control::CacheController;
 use crate::db::DbAppState;
 
+#[utoipa::path(
+    get,
+    summary = "[AuthPublic]Get pack tiers",
+    description = "Get all pack tiers (and packs) information.",
+    tag = "AREDL - Pack Tiers",
+    responses(
+        (status = 200, body = PackTierResolved)
+    ),
+    security(
+        (),
+        ("access_token" = []),
+        ("api_key" = []),
+    )
+)]
 #[get("", wrap="UserAuth::load()", wrap="CacheController::public_cache()")]
 async fn find_all(db: web::Data<Arc<DbAppState>>, authenticated: Option<Authenticated>) -> Result<HttpResponse, ApiError> {
     let tiers = web::block(
@@ -16,6 +31,20 @@ async fn find_all(db: web::Data<Arc<DbAppState>>, authenticated: Option<Authenti
     Ok(HttpResponse::Ok().json(tiers))
 }
 
+#[utoipa::path(
+    post,
+    summary = "[Staff]Add tier",
+    description = "Creates a new tier",
+    tag = "AREDL - Pack Tiers",
+    request_body = PackTierCreate,
+    responses(
+        (status = 200, body = PackTier)
+    ),
+    security(
+        ("access_token" = ["PackTierModify"]),
+        ("api_key" = ["PackTierModify"]),
+    )
+)]
 #[post("", wrap="UserAuth::require(Permission::PackTierModify)")]
 async fn create(db: web::Data<Arc<DbAppState>>, tier: web::Json<PackTierCreate>) -> Result<HttpResponse, ApiError> {
     let tier = web::block(
@@ -23,7 +52,23 @@ async fn create(db: web::Data<Arc<DbAppState>>, tier: web::Json<PackTierCreate>)
     ).await??;
     Ok(HttpResponse::Ok().json(tier))
 }
-
+#[utoipa::path(
+    patch,
+    summary = "[Staff]Edit tier",
+    description = "Edits a tier base information",
+    tag = "AREDL - Pack Tiers",
+    request_body = PackTierUpdate,
+    params(
+        ("id", description = "Internal pack tier UUID")
+    ),
+    responses(
+        (status = 200, body = PackTier)
+    ),
+    security(
+        ("access_token" = ["PackTierModify"]),
+        ("api_key" = ["PackTierModify"]),
+    )
+)]
 #[patch("/{id}", wrap="UserAuth::require(Permission::PackTierModify)")]
 async fn update(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, tier: web::Json<PackTierUpdate>) -> Result<HttpResponse, ApiError> {
     let tier = web::block(
@@ -32,6 +77,22 @@ async fn update(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, tier: web::
     Ok(HttpResponse::Ok().json(tier))
 }
 
+#[utoipa::path(
+    delete,
+    summary = "[Staff]Delete tier",
+    description = "Removes a packs tier. Does not delete the packs assigned to it",
+    tag = "AREDL - Pack Tiers",
+    params(
+        ("id", description = "Internal pack tier UUID")
+    ),
+    responses(
+        (status = 200, body = PackTier)
+    ),
+    security(
+        ("access_token" = ["PackTierModify"]),
+        ("api_key" = ["PackTierModify"]),
+    )
+)]
 #[delete("/{id}", wrap="UserAuth::require(Permission::PackTierModify)")]
 async fn delete(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
     let tier = web::block(
@@ -39,6 +100,28 @@ async fn delete(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<H
     ).await??;
     Ok(HttpResponse::Ok().json(tier))
 }
+
+#[derive(OpenApi)]
+#[openapi(
+    tags(
+        (name = "AREDL - Pack Tiers", description = "Endpoints to fetch and manage AREDL pack tiers")
+    ),
+    components(
+        schemas(
+            PackTier,
+            PackTierCreate,
+            PackTierResolved,
+            PackTierUpdate
+        )
+    ),
+    paths(
+        find_all,
+        create,
+        update,
+        delete
+    )
+)]
+pub struct ApiDoc;
 
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(

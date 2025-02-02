@@ -6,4 +6,4 @@ mod packs;
 mod leaderboard;
 mod profile;
 
-pub use routes::init_routes;
+pub use routes::{init_routes, ApiDoc};

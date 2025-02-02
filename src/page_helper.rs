@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 #[derive(Serialize, Deserialize)]
 pub struct PageQuery<const D: i64> {
@@ -6,10 +7,13 @@ pub struct PageQuery<const D: i64> {
     pub page: Option<i64>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct Paginated<T> {
+    /// The currently requested page.
     pub page: i64,
+    /// The amount of items per page.
     pub per_page: i64,
+    /// The total amount of available pages with these settings.
     pub pages: i64,
     #[serde(flatten)]
     pub data: T,

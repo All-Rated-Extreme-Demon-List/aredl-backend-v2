@@ -2,75 +2,101 @@ use std::sync::Arc;
 use actix_web::web;
 use chrono::NaiveDateTime;
 use diesel::{ExpressionMethods, Insertable, JoinOnDsl, QueryDsl, RunQueryDsl, SelectableHelper};
+use utoipa::ToSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use diesel::pg::Pg;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
+use crate::users::BaseUser;
 use crate::schema::{aredl_records, users};
 
-#[derive(Serialize, Deserialize, Selectable, Queryable, Debug)]
+#[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
 #[diesel(table_name=aredl_records, check_for_backend(Pg))]
 pub struct Record {
+    /// Internal UUID of the record.
     pub id: Uuid,
+    /// Level ID in the game. May not be unique for 2P levels.
     pub level_id: Uuid,
+    /// Internal UUID of the user who submitted the record.
     pub submitted_by: Uuid,
+    /// Whether the record was completed on mobile or not.
     pub mobile: bool,
+    /// ID of the LDM used for the record, if any.
     pub ldm_id: Option<i32>,
+    /// Video link of the completion.
     pub video_url: String,
+    /// Link to the raw video file of the completion.
     pub raw_url: Option<String>,
+    /// Placement order of the record in the records list of this level.
     pub placement_order: i32,
+    /// Internal UUID of the user who reviewed the record.
     pub reviewer_id: Option<Uuid>,
+    /// Timestamp of when the record was created (first accepted).
     pub created_at: NaiveDateTime,
+    /// Timestamp of when the record was last updated.
     pub updated_at: NaiveDateTime,
 }
 
-#[derive(Serialize, Deserialize, Insertable, Debug)]
+#[derive(Serialize, Deserialize, Insertable, Debug, ToSchema)]
 #[diesel(table_name=aredl_records, check_for_backend(Pg))]
 pub struct RecordInsert {
+    /// Internal UUID of the user who submitted the record.
     pub submitted_by: Uuid,
+    /// Whether the record was completed on mobile or not.
     pub mobile: bool,
+    /// ID of the LDM used for the record, if any.
     pub ldm_id: Option<i32>,
+    /// Video link of the completion.
     pub video_url: String,
+    /// Link to the raw video file of the completion.
     pub raw_url: Option<String>,
+    /// Internal UUID of the user who reviewed the record.
     pub reviewer_id: Option<Uuid>,
+    /// Timestamp of when the record was created (first accepted).
     pub created_at: Option<NaiveDateTime>,
+    /// Timestamp of when the record was last updated.
     pub updated_at: Option<NaiveDateTime>,
 }
 
-#[derive(Serialize, Deserialize, AsChangeset, Debug)]
+#[derive(Serialize, Deserialize, AsChangeset, Debug, ToSchema)]
 #[diesel(table_name=aredl_records, check_for_backend(Pg))]
 pub struct RecordUpdate {
+    /// Internal UUID of the user who submitted the record.
     pub submitted_by: Option<Uuid>,
+    /// Whether the record was completed on mobile or not.
     pub mobile: Option<bool>,
+    /// ID of the LDM used for the record, if any.
     pub ldm_id: Option<i32>,
+    /// Video link of the completion.
     pub video_url: Option<String>,
+    /// Link to the raw video file of the completion.
     pub raw_url: Option<String>,
+    /// Internal UUID of the user who reviewed the record.
     pub reviewer_id: Option<Uuid>,
+    /// Timestamp of when the record was created (first accepted).
     pub created_at: Option<NaiveDateTime>,
+    /// Timestamp of when the record was last updated.
     pub updated_at: Option<NaiveDateTime>,
 }
 
-#[derive(Serialize, Deserialize, Selectable, Queryable, Debug)]
+#[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
 #[diesel(table_name=aredl_records, check_for_backend(Pg))]
 pub struct RecordTemplate<T> {
+    /// Internal UUID of the record.
     pub id: Uuid,
+    /// User who submitted the record.
     pub submitted_by: T,
+    /// Whether the record was completed on mobile or not.
     pub mobile: bool,
+    /// Video link of the completion.
     pub video_url: String,
+    /// Timestamp of when the record was created (first accepted).
     pub created_at: NaiveDateTime,
 }
 
 pub type RecordUnresolved = RecordTemplate<Uuid>;
-pub type RecordResolved = RecordTemplate<User>;
-
-#[derive(Serialize, Deserialize, Selectable, Queryable, Debug)]
-#[diesel(table_name=users, check_for_backend(Pg))]
-pub struct User {
-    pub id: Uuid,
-    pub username: String,
-    pub global_name: String,
-}
+pub type RecordResolved = RecordTemplate<BaseUser>;
 
 impl Record {
     pub fn create(db: web::Data<Arc<DbAppState>>, level_id: Uuid, record: RecordInsert) -> Result<Self, ApiError> {
@@ -122,8 +148,8 @@ impl RecordResolved {
             .filter(aredl_records::placement_order.ne(0))
             .inner_join(users::table.on(aredl_records::submitted_by.eq(users::id)))
             .order(aredl_records::placement_order)
-            .select((RecordUnresolved::as_select(), User::as_select()))
-            .load::<(RecordUnresolved, User)>(&mut db.connection()?)?;
+            .select((RecordUnresolved::as_select(), BaseUser::as_select()))
+            .load::<(RecordUnresolved, BaseUser)>(&mut db.connection()?)?;
 
         let records_resolved = records
             .into_iter()
@@ -133,7 +159,7 @@ impl RecordResolved {
         Ok(records_resolved)
     }
 
-    fn from_data(record: RecordUnresolved, user: User) -> Self {
+    fn from_data(record: RecordUnresolved, user: BaseUser) -> Self {
         Self {
             id: record.id,
             submitted_by: user,

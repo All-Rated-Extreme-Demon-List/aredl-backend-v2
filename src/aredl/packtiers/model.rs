@@ -5,79 +5,104 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use diesel::pg::Pg;
 use diesel::{BelongingToDsl, BoolExpressionMethods, ExpressionMethods, GroupedBy, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
+use utoipa::ToSchema;
 use crate::error_handler::ApiError;
 use crate::schema::{aredl_pack_tiers, aredl_pack_levels, aredl_levels, aredl_records};
+use crate::aredl::levels::ExtendedBaseLevel;
 use crate::custom_schema::aredl_packs_points;
 use crate::db::DbAppState;
 
-#[derive(Serialize, Identifiable, Selectable, Queryable, Debug)]
+#[derive(Serialize, Deserialize, Identifiable, Selectable, Queryable, Debug, ToSchema)]
+#[diesel(table_name=aredl_pack_tiers, check_for_backend(Pg))]
+pub struct BasePackTier {
+    /// Internal UUID of the pack tier.
+    pub id: Uuid,
+    /// Name of the pack tier.
+    pub name: String,
+    /// Color of the pack tier.
+    pub color: String,
+}
+
+#[derive(Serialize, Identifiable, Selectable, Queryable, Debug, ToSchema)]
 #[diesel(table_name=aredl_pack_tiers, check_for_backend(Pg))]
 pub struct PackTier {
+    /// Internal UUID of the pack tier.
     pub id: Uuid,
+    /// Name of the pack tier.
     pub name: String,
+    /// Color of the pack tier.
     pub color: String,
+    /// Placement order in which the pack tier is displayed.
     pub placement: i32,
 }
 
-#[derive(Serialize, Identifiable, Associations, Selectable, Queryable, Debug)]
+#[derive(Serialize, Identifiable, Associations, Selectable, Queryable, Debug, ToSchema)]
 #[diesel(belongs_to(PackTier, foreign_key=tier))]
 #[diesel(table_name=aredl_packs_points, check_for_backend(Pg))]
-pub struct Pack {
+pub struct PackWithTier {
+    /// Internal UUID of the pack.
     pub id: Uuid,
+    /// Name of the pack.
     pub name: String,
+    /// Internal UUID of the tier the pack belongs to.
     pub tier: Uuid,
+    /// Points awarded for completing the pack.
     pub points: i32,
 }
 
-#[derive(Serialize, Identifiable, Selectable, Queryable, Debug)]
-#[diesel(table_name=aredl_levels, check_for_backend(Pg))]
-pub struct PackLevel {
-    pub id: Uuid,
-    pub position: i32,
-    pub name: String,
-    pub points: i32,
-    pub level_id: i32,
-    pub two_player: bool,
-}
-
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct PackLevelResolved {
     #[serde(flatten)]
-    pub pack_level: PackLevel,
+    pub pack_level: ExtendedBaseLevel,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub completed_by_user: Option<bool>,
 }
 
-#[derive(Serialize)]
-pub struct PackResolved {
+#[derive(Serialize, ToSchema)]
+pub struct PackWithLevelsResolved {
+    /// Internal UUID of the pack.
     pub id: Uuid,
+    /// Name of the pack.
     pub name: String,
+    /// Points awarded for completing the pack.
     pub points: i32,
+    /// Levels in the pack.
     pub levels: Vec<PackLevelResolved>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct PackTierResolved {
+    /// Internal UUID of the pack tier.
     pub id: Uuid,
+    /// Name of the pack tier.
     pub name: String,
+    /// Color of the pack tier.
     pub color: String,
+    /// Placement order in which the pack tier is displayed.
     pub placement: i32,
-    pub packs: Vec<PackResolved>,
+    /// Packs that belong to this pack tier.
+    pub packs: Vec<PackWithLevelsResolved>,
 }
 
-#[derive(Serialize, Deserialize, Insertable, Debug)]
+#[derive(Serialize, Deserialize, Insertable, Debug, ToSchema)]
 #[diesel(table_name=aredl_pack_tiers, check_for_backend(Pg))]
 pub struct PackTierCreate {
+    /// Name of the pack tier to create.
     pub name: String,
+    /// Color of the pack tier to create.
     pub color: String,
+    /// Placement order of the pack tier to create.
     pub placement: i32,
 }
 
-#[derive(Serialize, Deserialize, AsChangeset, Debug)]
+#[derive(Serialize, Deserialize, AsChangeset, Debug, ToSchema)]
 #[diesel(table_name=aredl_pack_tiers, check_for_backend(Pg))]
 pub struct PackTierUpdate {
+    /// New name of the pack tier.
     pub name: Option<String>,
+    /// New color of the pack tier.
     pub color: Option<String>,
+    /// New placement order of the pack tier.
     pub placement: Option<i32>,
 }
 
@@ -89,8 +114,8 @@ impl PackTierResolved {
             .order(aredl_pack_tiers::placement)
             .select(PackTier::as_select())
             .load::<PackTier>(connection)?;
-        let packs = Pack::belonging_to(&pack_tiers)
-            .load::<Pack>(connection)?
+        let packs = PackWithTier::belonging_to(&pack_tiers)
+            .load::<PackWithTier>(connection)?
             .grouped_by(&pack_tiers);
 
         let levels_base_query =
@@ -106,8 +131,8 @@ impl PackTierResolved {
                         .left_join(aredl_records::table.on(
                             aredl_pack_levels::level_id.eq(aredl_records::level_id).and(
                             aredl_records::submitted_by.eq(user))))
-                        .select((aredl_pack_levels::pack_id, PackLevel::as_select(), aredl_records::placement_order.nullable()))
-                        .load::<(Uuid, PackLevel, Option<i32>)>(connection)?
+                        .select((aredl_pack_levels::pack_id, ExtendedBaseLevel::as_select(), aredl_records::placement_order.nullable()))
+                        .load::<(Uuid, ExtendedBaseLevel, Option<i32>)>(connection)?
                         // map Option<i32> into Option<bool> which is always Some.
                         // It will be Some(true) if user has completed the level and Some(false) otherwise.
                         // That's because None is used for non-authenticated queries.
@@ -117,8 +142,8 @@ impl PackTierResolved {
                         .collect::<Vec<_>>(),
                 None =>
                     levels_base_query
-                        .select((aredl_pack_levels::pack_id, PackLevel::as_select()))
-                        .load::<(Uuid, PackLevel)>(connection)?
+                        .select((aredl_pack_levels::pack_id, ExtendedBaseLevel::as_select()))
+                        .load::<(Uuid, ExtendedBaseLevel)>(connection)?
                         // map to add None to signify that the completed_by_user field is missing
                         .into_iter()
                         .map(|(uuid, pack_level)| (uuid, pack_level, None))
@@ -144,7 +169,7 @@ impl PackTierResolved {
                 placement: tier.placement,
                 packs: packs
                     .into_iter()
-                    .map(|pack|  PackResolved {
+                    .map(|pack|  PackWithLevelsResolved {
                         id: pack.id,
                         name: pack.name,
                         points: pack.points,

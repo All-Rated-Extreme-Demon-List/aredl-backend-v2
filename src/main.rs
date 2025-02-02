@@ -15,12 +15,16 @@ mod page_helper;
 mod cache_control;
 mod refresh_leaderboard;
 mod refresh_level_data;
+mod docs;
 
 use std::env;
 use actix_cors::Cors;
 use actix_web::{App, HttpServer, web};
 use dotenv::dotenv;
 use listenfd::ListenFd;
+use utoipa::OpenApi;
+use utoipa_rapidoc::RapiDoc;
+use crate::docs::ApiDoc;
 use crate::cache_control::CacheController;
 use crate::refresh_leaderboard::start_leaderboard_refresher;
 use crate::refresh_level_data::start_level_data_refresher;
@@ -44,6 +48,32 @@ async fn main() -> std::io::Result<()> {
 
         let cors = Cors::permissive();
 
+        let docs_html = "\
+            <!doctype html><html><head><meta charset=\"utf-8\"><script type=\"module\" src=\"https://unpkg.com/rapidoc/dist/rapidoc-min.js\"></script></head><body><rapi-doc \
+                spec-url = $specUrl \
+                show-method-in-nav-bar = as-colored-block \
+                render-style = focused \
+                allow-spec-url-load = false \
+                allow-spec-file-load = false \
+                allow-spec-file-download = false \
+                allow-server-selection = false \
+                show-components = true \
+                schema-description-expanded = true \
+                persist-auth = true \
+                default-schema-tab = schema \
+                schema-expand-level = 1 \
+                font-size = largest \
+                bg-color = #1c1c1c \
+                header-color = #ff6f00 \
+                text-color =  #ffffff \
+                primary-color = #ff6f00 \
+                nav-bg-color = #424242 \
+                nav-accent-color = #ff6f00 \
+             >\
+                <header style=\"color:white; font-weight: lighter; font-size: 1.5rem;\" slot=\"header\">All Rated Extreme Demons List | API v2 Documentation</header>\
+                <img style=\"padding: 0.5rem; height: 3rem;\" slot=\"logo\"  src=\"https://cdn.discordapp.com/attachments/379376351125438482/1335372145471000657/logo.png?ex=679fedb9&is=679e9c39&hm=3929e8d7b9144e775a3a0fa32830c45d03fb9d870e83ab33a9c20a67e14b28ae&\"/>
+            </rapi-doc></body></html>";
+
         App::new()
             .service(
                 web::scope("/api")
@@ -54,6 +84,9 @@ async fn main() -> std::io::Result<()> {
                     .configure(aredl::init_routes)
                     .configure(auth::init_routes)
                     .configure(users::init_routes)
+            )
+            .service(
+                RapiDoc::with_openapi("/api-docs/openapi.json", ApiDoc::openapi()).path("/docs").custom_html(docs_html),
             )
     });
 

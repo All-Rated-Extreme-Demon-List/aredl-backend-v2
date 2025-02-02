@@ -1,37 +1,28 @@
 use std::sync::Arc;
 use actix_web::web;
 use diesel::{Connection, delete, ExpressionMethods, insert_into, JoinOnDsl, QueryDsl, RunQueryDsl, SelectableHelper};
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use diesel::pg::Pg;
 use crate::db::{DbAppState, DbConnection};
 use crate::error_handler::ApiError;
+use crate::users::BaseUser;
 use crate::schema::{aredl_levels_created, users};
 
-#[derive(Serialize, Deserialize, Selectable, Queryable, Debug)]
-#[diesel(table_name=users, check_for_backend(Pg))]
-pub struct Creator {
-    pub id: Uuid,
-    pub username: String,
-    pub global_name: String,
-}
-
-impl Creator {
-    pub fn find_all(db: web::Data<Arc<DbAppState>>, level_id: Uuid) -> Result<Vec<Self>, ApiError> {
+impl BaseUser {
+    pub fn find_all_creators(db: web::Data<Arc<DbAppState>>, level_id: Uuid) -> Result<Vec<Self>, ApiError> {
         let creators = aredl_levels_created::table
             .filter(aredl_levels_created::level_id.eq(level_id))
             .inner_join(users::table.on(aredl_levels_created::user_id.eq(users::id)))
-            .select(Creator::as_select())
-            .load::<Creator>(&mut db.connection()?)?;
+            .select(BaseUser::as_select())
+            .load::<BaseUser>(&mut db.connection()?)?;
         Ok(creators)
     }
 
-    pub fn add_all(db: web::Data<Arc<DbAppState>>, level_id: Uuid, creators: Vec<Uuid>) -> Result<Vec<Uuid>, ApiError> {
+    pub fn add_all_creators(db: web::Data<Arc<DbAppState>>, level_id: Uuid, creators: Vec<Uuid>) -> Result<Vec<Uuid>, ApiError> {
         let conn = &mut db.connection()?;
 
         let result = conn.transaction(|connection| -> Result<Vec<Uuid>, ApiError> {
 
-            Self::add_users(level_id, creators.as_ref(), connection)?;
+            Self::add_creators(level_id, creators.as_ref(), connection)?;
 
             let creators = aredl_levels_created::table
                 .filter(aredl_levels_created::level_id.eq(level_id))
@@ -44,7 +35,7 @@ impl Creator {
         Ok(result)
     }
 
-    pub fn delete_all(db: web::Data<Arc<DbAppState>>, level_id: Uuid, creators: Vec<Uuid>) -> Result<Vec<Uuid>, ApiError> {
+    pub fn delete_all_creators(db: web::Data<Arc<DbAppState>>, level_id: Uuid, creators: Vec<Uuid>) -> Result<Vec<Uuid>, ApiError> {
         let conn = &mut db.connection()?;
 
         let result = conn.transaction(|connection| -> Result<Vec<Uuid>, ApiError> {
@@ -64,7 +55,7 @@ impl Creator {
         Ok(result)
     }
 
-    pub fn set_all(db: web::Data<Arc<DbAppState>>, level_id: Uuid, creators: Vec<Uuid>) -> Result<Vec<Uuid>, ApiError> {
+    pub fn set_all_creators(db: web::Data<Arc<DbAppState>>, level_id: Uuid, creators: Vec<Uuid>) -> Result<Vec<Uuid>, ApiError> {
         let conn = &mut db.connection()?;
 
         let result = conn.transaction(|connection| -> Result<Vec<Uuid>, ApiError> {
@@ -72,7 +63,7 @@ impl Creator {
                 .filter(aredl_levels_created::level_id.eq(level_id))
                 .execute(connection)?;
 
-            Self::add_users(level_id, creators.as_ref(), connection)?;
+            Self::add_creators(level_id, creators.as_ref(), connection)?;
 
             Ok(creators)
         })?;
@@ -80,7 +71,7 @@ impl Creator {
         Ok(result)
     }
 
-    fn add_users(level_id: Uuid, creators: &Vec<Uuid>, connection: &mut DbConnection) -> Result<(), ApiError> {
+    fn add_creators(level_id: Uuid, creators: &Vec<Uuid>, connection: &mut DbConnection) -> Result<(), ApiError> {
         insert_into(aredl_levels_created::table)
             .values(
                 creators.into_iter().map(|creator| (

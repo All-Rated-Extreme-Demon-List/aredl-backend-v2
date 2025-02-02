@@ -6,7 +6,7 @@ mod middleware;
 mod authenticated;
 mod permission;
 
-pub use routes::init_routes;
+pub use routes::{init_routes, ApiDoc};
 pub use app_state::init_app_state;
 
 pub use authenticated::Authenticated;

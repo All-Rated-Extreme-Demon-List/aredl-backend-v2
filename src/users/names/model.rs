@@ -4,24 +4,11 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use diesel::pg::Pg;
 use itertools::Itertools;
+use utoipa::ToSchema;
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
+use crate::users::{BaseUser, Role};
 use crate::schema::{roles, user_roles, users};
-
-#[derive(Serialize, Deserialize, Queryable, Selectable, Identifiable, PartialEq, Debug)]
-#[diesel(table_name = roles)]
-pub struct Role {
-    pub id: i32,
-    pub privilege_level: i32,
-    pub role_desc: String,
-}
-
-#[derive(Serialize, Deserialize, Queryable, Selectable, PartialEq, Debug)]
-#[diesel(table_name = users)]
-pub struct User {
-    pub id: Uuid,
-    pub global_name: String,
-}
 
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug)]
 #[diesel(table_name = user_roles, check_for_backend(Pg))]
@@ -30,11 +17,12 @@ pub struct UserRole {
     pub user_id: Uuid,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug,ToSchema)]
 pub struct RoleResolved {
     #[serde(flatten)]
     pub role: Role,
-    pub users: Vec<User>,
+    /// Users with this role.
+    pub users: Vec<BaseUser>,
 }
 
 impl RoleResolved {
@@ -48,12 +36,12 @@ impl RoleResolved {
 
         let user_roles = user_roles::table
             .inner_join(users::table)
-            .select((user_roles::role_id, User::as_select()))
-            .load::<(i32, User)>(conn)?;
+            .select((user_roles::role_id, BaseUser::as_select()))
+            .load::<(i32, BaseUser)>(conn)?;
 
         let result = user_roles
             .into_iter()
-            .chunk_by(|(role_id, user)| role_id.clone())
+            .chunk_by(|(role_id, _user)| role_id.clone())
             .into_iter()
             .map(|(role, users)|
                 RoleResolved {

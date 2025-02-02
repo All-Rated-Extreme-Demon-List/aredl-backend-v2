@@ -1,51 +1,29 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use chrono::{Utc, NaiveDateTime};
-use diesel::pg::Pg;
 use diesel::dsl::now;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper, JoinOnDsl};
+use utoipa::ToSchema;
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
+use crate::users::{User, UserResolved, Role};
 use crate::schema::{users, user_roles, roles, permissions};
-#[derive(Serialize, Deserialize, Selectable, Queryable, Debug)]
-#[diesel(table_name=users, check_for_backend(Pg))]
-pub struct User {
-    pub id: Uuid,
-    pub username: String,
-    pub global_name: String,
-    pub discord_id: Option<String>,
-    pub country: Option<i32>,
-    pub discord_avatar: Option<String>,
-    pub discord_banner: Option<String>,
-    pub discord_accent_color: Option<i32>,
-}
 
-#[derive(Serialize, Deserialize, AsChangeset, Debug)]
+#[derive(Serialize, Deserialize, AsChangeset, Debug, ToSchema)]
 #[diesel(table_name = users, check_for_backend(Pg))]
-pub struct UpdateUser {
+pub struct UserMeUpdate {
+    /// Your new display name.
     pub global_name: Option<String>,
+    /// Your new description.
     pub description: Option<String>,
+    /// Your new country. Uses the ISO 3166-1 numeric country code. Has a 90-day cooldown.
     pub country: Option<i32>,
+    /// Your new ban level.
     pub ban_level: Option<i32>,
 }
 
-#[derive(Serialize, Debug)]
-pub struct ResolvedUser {
-    pub user: User,
-    pub roles: Vec<Role>,
-    pub scopes: Vec<String>,
-}
-
-#[derive(Serialize, Deserialize, Queryable, Selectable, Identifiable, PartialEq, Debug)]
-#[diesel(table_name = roles)]
-pub struct Role {
-    pub id: i32,
-    pub privilege_level: i32,
-    pub role_desc: String,
-}
-
 impl User {
-    pub fn find(conn: &mut DbConnection, id: Uuid) -> Result<ResolvedUser, ApiError> {
+    pub fn find_me(conn: &mut DbConnection, id: Uuid) -> Result<UserResolved, ApiError> {
         let user = users::table
             .filter(users::id.eq(id))
             .select(User::as_select())
@@ -74,9 +52,9 @@ impl User {
             })
             .collect::<Vec<String>>();
 
-        Ok(ResolvedUser { user, roles, scopes })
+        Ok(UserResolved { user, roles, scopes })
     }
-    pub fn update(conn: &mut DbConnection, id: Uuid, user: UpdateUser) -> Result<(), ApiError> {
+    pub fn update_me(conn: &mut DbConnection, id: Uuid, user: UserMeUpdate) -> Result<(), ApiError> {
         let (current_ban_level, last_country_update): (i32, NaiveDateTime) = users::table
             .filter(users::id.eq(id))
             .select((users::ban_level, users::last_country_update))

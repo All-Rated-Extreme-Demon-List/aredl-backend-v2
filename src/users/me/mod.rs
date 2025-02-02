@@ -1,4 +1,4 @@
 mod routes;
 mod model;
 
-pub use routes::init_routes;
+pub use routes::{init_routes, ApiDoc};

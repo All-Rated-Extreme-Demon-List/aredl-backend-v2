@@ -9,6 +9,7 @@ use openidconnect::core::{CoreAuthenticationFlow, CoreClient, CoreIdTokenVerifie
 use openidconnect::reqwest::async_http_client;
 use serde::{Deserialize, Serialize};
 use actix_web::http::header;
+use utoipa::{OpenApi, ToSchema};
 
 use crate::auth::app_state::AuthAppState;
 use crate::auth::token;
@@ -16,7 +17,7 @@ use crate::auth::token::UserClaims;
 use crate::db::{DbAppState, DbConnection};
 use crate::error_handler::ApiError;
 use crate::schema::{oauth_requests, roles, user_roles, permissions};
-use crate::users::{User, UserUpsert};
+use crate::users::{User, UserUpsert, Role};
 
 #[derive(Deserialize)]
 struct OAuthCallbackQuery {
@@ -57,7 +58,7 @@ impl OAuthRequestData {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 struct DiscordUser {
     pub id: String,
     pub username: String,
@@ -82,30 +83,49 @@ impl From<DiscordUser> for UserUpsert {
     }
 }
 
-#[derive(Serialize, Deserialize, Queryable, Selectable, Identifiable, PartialEq, Debug)]
-#[diesel(table_name = roles)]
-pub struct Role {
-    pub id: i32,
-    pub privilege_level: i32,
-    pub role_desc: String,
-}
-
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 struct AuthResponse {
+    /// The access token to use for authentication. Expires after 30 minutes.
     pub access_token: String,
+    /// Timestamp of when the access token expires.
     pub access_expires: DateTime<Utc>,
+    /// The refresh token to use for getting a new access token. Expires after 2 weeks.
     pub refresh_token: String,
+    /// Timestamp of when the refresh token expires.
     pub refresh_expires: DateTime<Utc>,
+    /// The user data of the authenticated user.
     pub user: User,
+    /// The permissions scopes the user has access to.
     pub scopes: Vec<String>,
+    /// The roles the user has.
     pub roles: Vec<Role>
 }
 
+#[derive(Debug, Serialize, ToSchema)]
+struct AuthRefreshResponse {
+    /// The new access token to use for authentication. Expires after 30 minutes.
+    pub access_token: String,
+    /// Timestamp of when the access token expires.
+    pub access_expires: DateTime<Utc>,
+    /// The new refresh token to use for getting a new access token. Expires after 2 weeks.
+    pub refresh_token: Option<String>,
+    /// Timestamp of when the refresh token expires.
+    pub refresh_expires: Option<DateTime<Utc>>,
+}
 #[derive(Debug, Serialize, Deserialize)]
 struct AuthOptions {
 	pub callback: Option<String>,
 }
 
+#[utoipa::path(
+    get,
+    summary = "Login with Discord",
+    description = "Used to authenticate with discord. Creates a Discord OAuth2 flow, which then redirects to [Discord Callback](#get-/api/auth/discord/callback)",
+    tag = "Authentication",
+    responses(
+        (status = 302)
+    ),
+)]
 #[get("")]
 async fn discord_auth(data: web::Data<Arc<AuthAppState>>, db: web::Data<Arc<DbAppState>>, options: web::Query<AuthOptions>) -> Result<HttpResponse, ApiError> {
     let client = &data.discord_client;
@@ -132,6 +152,15 @@ async fn discord_auth(data: web::Data<Arc<AuthAppState>>, db: web::Data<Arc<DbAp
     Ok(HttpResponse::Found().append_header((header::LOCATION, authorize_url.to_string())).finish())
 }
 
+#[utoipa::path(
+    get,
+    summary = "Discord Callback",
+    description = "End of the discord Oauth2 flow, returns the authenticated user data",
+    tag = "Authentication",
+    responses(
+        (status = 200, body = AuthResponse)
+    ),
+)]
 #[get("/callback")]
 async fn discord_callback(db: web::Data<Arc<DbAppState>>, query: web::Query<OAuthCallbackQuery>, data: web::Data<Arc<AuthAppState>>) -> Result<HttpResponse, ApiError> {
     let client = &data.discord_client;
@@ -225,7 +254,18 @@ async fn discord_callback(db: web::Data<Arc<DbAppState>>, query: web::Query<OAut
 	
 	Ok(HttpResponse::Ok().json(auth_response))
 }
-
+#[utoipa::path(
+    get,
+    summary = "[Auth]Refresh Discord auth",
+    description = "Get a new access token for Discord auth. If the refresh token is about to expire, will also return a new one.",
+    tag = "Authentication",
+    responses(
+        (status = 200, body = AuthRefreshResponse)
+    ),
+    security(
+        ("refresh_token" = []),
+    )
+)]
 #[get("/refresh")]
 async fn discord_refresh(data: web::Data<Arc<AuthAppState>>, req: HttpRequest) -> Result<HttpResponse, ApiError> {
     let refresh_token = req
@@ -308,6 +348,21 @@ pub(crate) async fn create_discord_client() -> Result<CoreClient, Box<dyn std::e
     ).set_redirect_uri(discord_redirect_uri))
 }
 
+#[derive(OpenApi)]
+#[openapi(
+    components(
+        schemas(
+            AuthResponse,
+            AuthRefreshResponse
+        )
+    ),
+    paths(
+        discord_auth,
+        discord_callback,
+        discord_refresh,
+    )
+)]
+pub struct ApiDoc;
 pub fn init_discord_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/auth/discord")

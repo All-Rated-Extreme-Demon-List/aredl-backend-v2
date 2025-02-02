@@ -2,17 +2,19 @@ use std::sync::Arc;
 use actix_web::web;
 use diesel::{Connection, ExpressionMethods, insert_into, QueryDsl, RunQueryDsl};
 use uuid::Uuid;
-use serde::{ Serialize};
+use serde::Serialize;
+use utoipa::ToSchema;
 use crate::db::{DbAppState, DbConnection};
 use crate::error_handler::ApiError;
-use crate::schema::{aredl_pack_levels};
+use crate::schema::aredl_pack_levels;
 
-#[derive(Serialize)]
-pub struct Level {
+#[derive(Serialize, ToSchema)]
+pub struct BasePackLevel {
+    /// UUID of the level.
     pub id: Uuid
 }
 
-impl Level {
+impl BasePackLevel {
     pub fn add_all(db: web::Data<Arc<DbAppState>>, pack_id: Uuid, levels: Vec<Uuid>) -> Result<Vec<Self>, ApiError> {
         let conn = &mut db.connection()?;
 
