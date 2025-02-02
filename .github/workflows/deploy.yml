@@ -23,8 +23,15 @@ jobs:
         override: true
         components: llvm-tools-preview
         
-    - name: Cache cargo registry and build artifacts
+    - name: Cache cargo for main 
       uses: Swatinem/rust-cache@v1
+      with:
+        target-dir: target
+
+    - name: Cache cargo for seed_aredl
+      uses: Swatinem/rust-cache@v1
+      with:
+        target-dir: tools/seed_aredl/target
 
     - name: Build
       uses: actions-rs/cargo@v1
