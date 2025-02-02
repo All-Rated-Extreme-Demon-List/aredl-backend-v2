@@ -50,7 +50,7 @@ async fn main() -> std::io::Result<()> {
 
         let docs_html = "\
             <!doctype html><html><head><meta charset=\"utf-8\"><script type=\"module\" src=\"https://unpkg.com/rapidoc/dist/rapidoc-min.js\"></script></head><body><rapi-doc \
-                spec-url = $specUrl \
+                spec-url = \"../openapi.json\" \
                 show-method-in-nav-bar = as-colored-block \
                 render-style = focused \
                 allow-spec-url-load = false \
@@ -86,7 +86,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(users::init_routes)
             )
             .service(
-                RapiDoc::with_openapi("/api-docs/openapi.json", ApiDoc::openapi()).path("/docs").custom_html(docs_html),
+                RapiDoc::with_openapi("/openapi.json", ApiDoc::openapi()).path("/docs").custom_html(docs_html),
             )
     });
 
