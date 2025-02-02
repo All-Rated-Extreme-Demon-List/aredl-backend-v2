@@ -50,7 +50,7 @@ async fn main() -> std::io::Result<()> {
 
         let docs_html = "\
             <!doctype html><html><head><meta charset=\"utf-8\"><script type=\"module\" src=\"https://unpkg.com/rapidoc/dist/rapidoc-min.js\"></script></head><body><rapi-doc \
-                spec-url = \"../openapi.json\" \
+                spec-url = \"openapi.json\" \
                 show-method-in-nav-bar = as-colored-block \
                 render-style = focused \
                 allow-spec-url-load = false \
