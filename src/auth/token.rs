@@ -1,8 +1,12 @@
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, TimeZone, Utc};
 use jsonwebtoken::{Algorithm, decode, DecodingKey, encode, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use diesel::{QueryDsl, ExpressionMethods, SelectableHelper, RunQueryDsl};
 use crate::error_handler::ApiError;
+use crate::schema::users;
+use crate::db::DbConnection;
+use crate::users::User;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct UserClaims {
@@ -66,4 +70,23 @@ pub fn decode_token<T: Into<String>>(token: T, decoding_key: &DecodingKey, expec
 pub fn decode_user_claims(token_claims: &TokenClaims) -> Result<UserClaims, ApiError> {
     serde_json::from_str(&token_claims.sub)
         .map_err(|e| ApiError::new(401, format!("Failed to decode user claims! {}", e.to_string()).as_str()))
+}
+
+pub fn check_token_valid(token_claims: &TokenClaims, user_claims: &UserClaims,conn: &mut DbConnection) -> Result<(), ApiError> {
+    let user_record = users::table
+        .filter(users::id.eq(user_claims.user_id))
+        .select(User::as_select())
+        .first::<User>(conn)
+        .map_err(|_| ApiError::new(401, "User not found"))?;
+
+    let token_issue_time = match Utc.timestamp_opt(token_claims.iat as i64, 0) {
+        chrono::LocalResult::Single(dt) => dt.naive_utc(),
+        _ => return Err(ApiError::new(401, "Invalid token issue time")),
+    };
+
+    if token_issue_time < user_record.access_valid_after {
+        return Err(ApiError::new(401, "Token has been invalidated"));
+    }
+
+    Ok(())
 }

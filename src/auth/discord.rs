@@ -12,7 +12,7 @@ use actix_web::http::header;
 use utoipa::{OpenApi, ToSchema};
 
 use crate::auth::app_state::AuthAppState;
-use crate::auth::token;
+use crate::auth::token::{self, check_token_valid};
 use crate::auth::token::UserClaims;
 use crate::db::{DbAppState, DbConnection};
 use crate::error_handler::ApiError;
@@ -267,7 +267,7 @@ async fn discord_callback(db: web::Data<Arc<DbAppState>>, query: web::Query<OAut
     )
 )]
 #[get("/refresh")]
-async fn discord_refresh(data: web::Data<Arc<AuthAppState>>, req: HttpRequest) -> Result<HttpResponse, ApiError> {
+async fn discord_refresh(data: web::Data<Arc<AuthAppState>>, db: web::Data<Arc<DbAppState>>, req: HttpRequest) -> Result<HttpResponse, ApiError> {
     let refresh_token = req
         .headers()
         .get(openidconnect::http::header::AUTHORIZATION)
@@ -285,6 +285,10 @@ async fn discord_refresh(data: web::Data<Arc<AuthAppState>>, req: HttpRequest) -
     )?;
 
     let decoded_user_claims = token::decode_user_claims(&decoded_token_claims)?;
+
+    let mut conn = db.connection()?;
+    check_token_valid(&decoded_token_claims, &decoded_user_claims, &mut conn)?;
+
     let user_id = decoded_user_claims.user_id;
 
     let (access_token, access_expires) = token::create_token(

@@ -10,6 +10,8 @@ use crate::auth::{Permission, permission};
 use crate::auth::token::{decode_token, decode_user_claims, UserClaims};
 use crate::db::DbAppState;
 
+use crate::auth::token::check_token_valid;
+
 pub struct UserAuth {
     required_perm: Option<Permission>,
 }
@@ -119,6 +121,14 @@ impl<S> Service<ServiceRequest> for AuthMiddleware<S>
                 ))
             }
         };
+
+        let mut conn = &mut db_state.connection().unwrap();
+
+        if let Err(_) = check_token_valid(&token_claims, &user_claims, &mut conn) {
+            return Box::pin(ready(
+                Ok(ServiceResponse::new(http_req, HttpResponse::Forbidden().reason("Token has been invalidated").finish()))
+            ))
+        }
 
         let user_id = user_claims.user_id;
 

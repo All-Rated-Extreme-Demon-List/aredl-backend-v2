@@ -12,6 +12,7 @@ CREATE TABLE users (
     discord_avatar VARCHAR,
     discord_banner VARCHAR,
     discord_accent_color int,
+    access_valid_after TIMESTAMP NOT NULL DEFAULT '1970-01-01 00:00:00',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY(id),
     UNIQUE(username),

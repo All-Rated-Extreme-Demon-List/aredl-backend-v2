@@ -66,6 +66,8 @@ pub struct User {
     pub discord_accent_color: Option<i32>,
     /// Timestamp of when the user was created.
     pub created_at: NaiveDateTime,
+    /// Last time the user's tokens were invalidated.
+    pub access_valid_after: NaiveDateTime,
 }
 
 #[derive(Debug, Serialize, Deserialize, Insertable, AsChangeset, ToSchema)]

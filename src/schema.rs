@@ -154,6 +154,7 @@ diesel::table! {
         discord_banner -> Nullable<Varchar>,
         discord_accent_color -> Nullable<Int4>,
         created_at -> Timestamp,
+        access_valid_after -> Timestamp,
     }
 }
 

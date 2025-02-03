@@ -5,8 +5,9 @@ use serde::{Deserialize, Serialize};
 use utoipa::{OpenApi, ToSchema};
 
 use crate::auth::app_state::AuthAppState;
-use crate::auth::token;
+use crate::auth::token::{self, check_token_valid};
 use crate::auth::token::UserClaims;
+use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 
 #[derive(Debug, Deserialize)]
@@ -43,6 +44,7 @@ pub async fn create_api_key(
     req: HttpRequest,
     data: web::Data<Arc<AuthAppState>>,
 	options: web::Query<ApiKeyOptions>,
+    db: web::Data<Arc<DbAppState>>,
 ) -> Result<HttpResponse, ApiError> {
     let access_token = req
         .headers()
@@ -61,6 +63,10 @@ pub async fn create_api_key(
     )?;
 
 	let decoded_user_claims = token::decode_user_claims(&decoded_token_claims)?;
+
+    let mut conn = db.connection()?;
+    check_token_valid(&decoded_token_claims, &decoded_user_claims, &mut conn)?;
+
     let user_id = decoded_user_claims.user_id;
 
     let lifetime = Duration::minutes(options.lifetime_minutes);

@@ -154,13 +154,14 @@ fn main() {
     ]);
 
     let permissions_data = vec![
-        ("level_modify", 50),
         ("record_modify", 20),
-        ("pack_tier_modify", 30),
-        ("pack_modify", 40),
         ("placeholder_create", 25),
         ("user_modify", 25),
-        ("user_ban", 95)
+        ("pack_tier_modify", 30),
+        ("pack_modify", 40),
+        ("level_modify", 50),
+        ("user_ban", 95),
+        ("role_manage", 100),
     ];
 
     let db_url = env::var("DATABASE_URL").expect("Database url not set");
