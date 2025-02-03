@@ -84,7 +84,7 @@ async fn delete(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<H
         (name = "AREDL - Packs", description = "Internal endpoints to manage AREDL packs. To fetch packs data, refer to [AREDL - Pack Tiers](#tag/AREDL-Pack-Tiers)")
     ),
     nest(
-        (path = "/{id}/levels", api = levels::ApiDoc)
+        (path = "/{pack_id}/levels", api = levels::ApiDoc)
     ),
     components(
         schemas(

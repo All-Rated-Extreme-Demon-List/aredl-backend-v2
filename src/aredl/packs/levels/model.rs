@@ -1,40 +1,30 @@
 use std::sync::Arc;
 use actix_web::web;
-use diesel::{Connection, ExpressionMethods, insert_into, QueryDsl, RunQueryDsl};
+use diesel::{Connection, ExpressionMethods, insert_into, QueryDsl, RunQueryDsl, JoinOnDsl, SelectableHelper};
 use uuid::Uuid;
-use serde::Serialize;
-use utoipa::ToSchema;
 use crate::db::{DbAppState, DbConnection};
 use crate::error_handler::ApiError;
-use crate::schema::aredl_pack_levels;
+use crate::schema::{aredl_levels, aredl_pack_levels};
+use crate::aredl::levels::BaseLevel;
 
-#[derive(Serialize, ToSchema)]
-pub struct BasePackLevel {
-    /// UUID of the level.
-    pub id: Uuid
-}
-
-impl BasePackLevel {
-    pub fn add_all(db: web::Data<Arc<DbAppState>>, pack_id: Uuid, levels: Vec<Uuid>) -> Result<Vec<Self>, ApiError> {
+impl BaseLevel {
+    pub fn pack_add_all(db: web::Data<Arc<DbAppState>>, pack_id: Uuid, levels: Vec<Uuid>) -> Result<Vec<Self>, ApiError> {
         let conn = &mut db.connection()?;
 
         conn.transaction(move |connection| -> Result<Vec<Self>, ApiError> {
 
             Self::add_levels(pack_id, levels.as_ref(), connection)?;
 
-            let levels = aredl_pack_levels::table
+            let levels: Vec<BaseLevel> = aredl_pack_levels::table
                 .filter(aredl_pack_levels::pack_id.eq(pack_id))
-                .select(aredl_pack_levels::level_id)
-                .load(connection)?
-                .into_iter()
-                .map(|id| Self {id})
-                .collect::<Vec<Self>>();
-
+                .inner_join(aredl_levels::table.on(aredl_pack_levels::level_id.eq(aredl_levels::id)))
+                .select(BaseLevel::as_select())
+                .load(connection)?;
             Ok(levels)
         })
     }
 
-    pub fn set_all(db: web::Data<Arc<DbAppState>>, pack_id: Uuid, levels: Vec<Uuid>) -> Result<Vec<Self>, ApiError> {
+    pub fn pack_set_all(db: web::Data<Arc<DbAppState>>, pack_id: Uuid, levels: Vec<Uuid>) -> Result<Vec<Self>, ApiError> {
         let conn = &mut db.connection()?;
 
         conn.transaction(move |connection| -> Result<Vec<Self>, ApiError> {
@@ -43,33 +33,27 @@ impl BasePackLevel {
 
             Self::add_levels(pack_id, &levels, connection)?;
 
-            let levels = aredl_pack_levels::table
+            let levels: Vec<BaseLevel> = aredl_pack_levels::table
                 .filter(aredl_pack_levels::pack_id.eq(pack_id))
-                .select(aredl_pack_levels::level_id)
-                .load(connection)?
-                .into_iter()
-                .map(|id| Self { id })
-                .collect::<Vec<Self>>();
-
+                .inner_join(aredl_levels::table.on(aredl_pack_levels::level_id.eq(aredl_levels::id)))
+                .select(BaseLevel::as_select())
+                .load(connection)?;
             Ok(levels)
         })
     }
 
-    pub fn delete_all(db: web::Data<Arc<DbAppState>>, pack_id: Uuid, levels: Vec<Uuid>) -> Result<Vec<Self>, ApiError> {
+    pub fn pack_delete_all(db: web::Data<Arc<DbAppState>>, pack_id: Uuid, levels: Vec<Uuid>) -> Result<Vec<Self>, ApiError> {
         let conn = &mut db.connection()?;
 
         conn.transaction(move |connection| -> Result<Vec<Self>, ApiError> {
 
             Self::delete_levels(pack_id, &levels, connection)?;
 
-            let levels = aredl_pack_levels::table
+            let levels: Vec<BaseLevel> = aredl_pack_levels::table
                 .filter(aredl_pack_levels::pack_id.eq(pack_id))
-                .select(aredl_pack_levels::level_id)
-                .load(connection)?
-                .into_iter()
-                .map(|id| Self { id })
-                .collect::<Vec<Self>>();
-
+                .inner_join(aredl_levels::table.on(aredl_pack_levels::level_id.eq(aredl_levels::id)))
+                .select(BaseLevel::as_select())
+                .load(connection)?;
             Ok(levels)
         })
     }

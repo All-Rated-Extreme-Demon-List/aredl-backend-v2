@@ -4,7 +4,7 @@ use utoipa::openapi::path::Operation;
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, HttpBuilder, HttpAuthScheme, SecurityScheme};
 use utoipa::openapi::extensions::Extensions;
 use serde_json::json;
-use crate::{aredl, users, auth};
+use crate::{aredl, users, auth, roles};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -12,6 +12,7 @@ use crate::{aredl, users, auth};
         (path = "/aredl", api = aredl::ApiDoc),
         (path = "/users", api = users::ApiDoc),
         (path = "/auth", api = auth::ApiDoc),
+        (path = "/roles", api = roles::ApiDoc),
     )
 )]
 struct MainApiDoc;
@@ -38,7 +39,8 @@ struct MainApiDoc;
             | **AREDL - Packs** | Staff only endpoints used to manage AREDL packs. To fetch packs data, use Pack Tiers endpoints instead. |    \n\
             | **AREDL - Pack Tiers** | Endpoints to fetch and manage AREDL pack tiers |    \n\
             | **Authentication** | Endpoints for authenticating with Discord |    \n\
-            | **Users** | Endpoints for fetching and managing the list of users or your personal information |    \n\n\
+            | **Users** | Endpoints for fetching and managing the list of users or your personal information |    \n\
+            | **Roles** | Endpoints for fetching and managing the roles and their assigned users |    \n\n\
         In addition to that, endpoints are also categorized by the type of authentication they require:\n\n\
             | Type | Description |    \n\
             |--- |--- |    \n\
@@ -78,7 +80,8 @@ struct MainApiDoc;
             | **PackTierModify** | 30 |    \n\
             | **PackModify** | 40 |    \n\
             | **LevelModify** | 50 |    \n\
-            | **UserBan** | 95 |    \n\n\
+            | **UserBan** | 95 |    \n\
+            | **RoleManage** | 100 |    \n\n\
         ",
     ),
     nest(

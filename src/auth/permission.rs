@@ -18,6 +18,7 @@ pub enum Permission {
     PlaceholderCreate,
     UserModify,
     UserBan,
+    RoleManage
 }
 
 fn get_privilege_level(db: web::Data<Arc<DbAppState>>, user_id: Uuid) -> Result<i32, ApiError> {

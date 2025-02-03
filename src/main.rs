@@ -11,6 +11,7 @@ mod aredl;
 mod custom_schema;
 mod auth;
 mod users;
+mod roles;
 mod page_helper;
 mod cache_control;
 mod refresh_leaderboard;
@@ -84,6 +85,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(aredl::init_routes)
                     .configure(auth::init_routes)
                     .configure(users::init_routes)
+                    .configure(roles::init_routes)
             )
             .service(
                 RapiDoc::with_openapi("/openapi.json", ApiDoc::openapi()).path("/docs").custom_html(docs_html),
