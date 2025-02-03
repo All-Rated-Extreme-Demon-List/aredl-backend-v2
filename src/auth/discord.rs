@@ -363,7 +363,7 @@ pub(crate) async fn create_discord_client() -> Result<CoreClient, Box<dyn std::e
     )
 )]
 pub struct ApiDoc;
-pub fn init_discord_routes(config: &mut web::ServiceConfig) {
+pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/auth/discord")
             .service(discord_auth)

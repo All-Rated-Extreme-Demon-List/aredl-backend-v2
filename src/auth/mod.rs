@@ -5,6 +5,7 @@ mod token;
 mod middleware;
 mod authenticated;
 mod permission;
+mod apikey;
 
 pub use routes::{init_routes, ApiDoc};
 pub use app_state::init_app_state;
