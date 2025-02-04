@@ -107,6 +107,29 @@ diesel::table! {
 }
 
 diesel::table! {
+    merge_logs (id) {
+        id -> Uuid,
+        primary_user -> Uuid,
+        secondary_user -> Uuid,
+        secondary_username -> Varchar,
+        secondary_discord_id -> Nullable<Varchar>,
+        secondary_global_name -> Varchar,
+        merged_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    merge_requests (id) {
+        id -> Uuid,
+        primary_user -> Uuid,
+        secondary_user -> Uuid,
+        is_rejected -> Bool,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     oauth_requests (csrf_state) {
         csrf_state -> Varchar,
         pkce_verifier -> Varchar,
@@ -153,8 +176,8 @@ diesel::table! {
         discord_avatar -> Nullable<Varchar>,
         discord_banner -> Nullable<Varchar>,
         discord_accent_color -> Nullable<Int4>,
-        created_at -> Timestamp,
         access_valid_after -> Timestamp,
+        created_at -> Timestamp,
     }
 }
 
@@ -180,6 +203,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     aredl_position_history,
     aredl_records,
     aredl_submissions,
+    merge_logs,
+    merge_requests,
     oauth_requests,
     permissions,
     roles,

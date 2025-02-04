@@ -6,7 +6,7 @@ use crate::auth::{UserAuth, Permission, Authenticated, check_higher_privilege};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
-use crate::users::{me, names, PlaceholderOptions, User, UserPage, UserUpdate, UserBanUpdate, UserListQueryOptions};
+use crate::users::{me, names, merge, PlaceholderOptions, User, UserPage, UserUpdate, UserBanUpdate, UserListQueryOptions};
 
 #[utoipa::path(
     get,
@@ -130,6 +130,7 @@ async fn ban(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, user: web::Jso
     nest(
         (path = "/names", api = names::ApiDoc),
         (path = "/@me", api = me::ApiDoc),
+        (path = "/merge", api = merge::ApiDoc),
     ),
     components(
         schemas(
@@ -152,6 +153,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
         web::scope("/users")
             .configure(me::init_routes)
             .configure(names::init_routes)
+            .configure(merge::init_routes)
             .service(list)
             .service(create_placeholder)
             .service(update)
