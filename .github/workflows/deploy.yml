@@ -61,7 +61,7 @@ jobs:
       - name: Cache cargo for migration
         uses: Swatinem/rust-cache@v1
         with:
-          cache-dependency-path: tools/seed_aredl/Cargo.lock
+          working-directory: tools/seed_aredl/Cargo.lock
 
       - name: Build migration
         run: cargo build --release
