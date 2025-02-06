@@ -10,6 +10,7 @@ use crate::page_helper::{PageQuery, Paginated};
 use crate::users::merge::MergeLogPage;
 use crate::users::User;
 use crate::users::merge::model::{merge_users, MergeLog};
+use crate::users::merge::requests;
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct DirectMergeOptions {
@@ -66,6 +67,9 @@ async fn list_logs(db: web::Data<Arc<DbAppState>>, page_query: web::Query<PageQu
 
 #[derive(OpenApi)]
 #[openapi(
+    nest(
+        (path = "/requests", api = requests::ApiDoc)
+    ),
     components(
         schemas(
             MergeLog,
@@ -81,6 +85,7 @@ pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/merge")
+            .configure(requests::init_routes)
             .service(list_logs)
             .service(direct_merge)
     );

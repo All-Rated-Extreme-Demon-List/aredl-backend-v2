@@ -160,8 +160,10 @@ fn main() {
         ("pack_tier_modify", 30),
         ("pack_modify", 40),
         ("level_modify", 50),
-        ("user_ban", 95),
-        ("role_manage", 100),
+        ("merge_review", 60),
+        ("user_ban", 85),
+        ("direct_merge", 90),
+        ("role_manage", 100)
     ];
 
     let db_url = env::var("DATABASE_URL").expect("Database url not set");
