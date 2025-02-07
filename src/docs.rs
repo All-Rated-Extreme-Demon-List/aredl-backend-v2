@@ -1,9 +1,10 @@
 use utoipa::{OpenApi, Modify};
-use utoipa::openapi::PathItem;
+use utoipa::openapi::{PathItem, Server};
 use utoipa::openapi::path::Operation;
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, HttpBuilder, HttpAuthScheme, SecurityScheme};
 use utoipa::openapi::extensions::Extensions;
 use serde_json::json;
+use std::env;
 use crate::{aredl, users, auth, roles};
 
 #[derive(OpenApi)]
@@ -21,6 +22,7 @@ struct MainApiDoc;
     info(
         title = "AREDL API",
         version = "2.0 Alpha",
+
         description = "# Welcome to the AREDL API v2 Documentation!    \n\
         ## Useful Links    \n\
         **Base URL**: [https://api.aredl.net/v2/api](https://api.aredl.net/v2/api)    \n\
@@ -90,12 +92,30 @@ struct MainApiDoc;
     nest(
         (path = "/api", api = MainApiDoc),
     ),
-    modifiers(&SecurityAddon, &StaffBadgeAddon),
+    modifiers(&SecurityAddon, &StaffBadgeAddon, &ServerAddon),
 )]
 pub struct ApiDoc;
 
 struct SecurityAddon;
 struct StaffBadgeAddon;
+struct ServerAddon;
+
+impl Modify for ServerAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        let url = if cfg!(debug_assertions) {
+            format!("http://127.0.0.1:{}", env::var("PORT").expect("Please set port in .env"))
+        } else {
+            "https://api.aredl.net/v2/".to_string()
+        };
+
+        let mut server: Server = Default::default();
+            server.url = url.to_string();
+            server.description = Some("API Server".to_string());
+
+        openapi.servers = Some(vec![server]);
+
+    }
+}
 impl Modify for SecurityAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
         let components = openapi.components.as_mut().unwrap();
