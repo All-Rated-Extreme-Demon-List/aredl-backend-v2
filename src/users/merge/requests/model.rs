@@ -1,18 +1,17 @@
 use diesel::prelude::*;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::dsl::now;
 use uuid::Uuid;
 use chrono::NaiveDateTime;
 use utoipa::ToSchema;
 use serde::{Deserialize, Serialize};
 use diesel::pg::Pg;
 
-use diesel::result::Error as DieselError;
 use crate::db::DbConnection;
-
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::users::merge::model::merge_users;
-use crate::schema::merge_requests;
+use crate::schema::{users, merge_requests};
 
 #[derive(Serialize, Deserialize, Debug, ToSchema, Insertable, AsChangeset)]
 #[diesel(table_name = merge_requests, check_for_backend(Pg))]
@@ -62,40 +61,63 @@ impl MergeRequestPage {
 
 impl MergeRequest {
 	pub fn upsert(conn: &mut DbConnection, request: MergeRequestUpsert) -> Result<Self, ApiError> {
+
+		if request.primary_user == request.secondary_user {
+            return Err(ApiError::new(400, "You cannot merge your account with itself.".into()));
+        }
+
+        let existing_secondary = users::table
+            .filter(users::id.eq(request.secondary_user))
+            .select(users::id)
+            .first::<Uuid>(conn)
+            .optional()?;
+
+        if existing_secondary.is_none() {
+            return Err(ApiError::new(404, "The secondary user does not exist.".into()));
+        }
+
+		let existing_request = merge_requests::table
+			.filter(merge_requests::primary_user.eq(request.primary_user))
+			.first::<MergeRequest>(conn)
+			.optional()?;
+        
+		if let Some(existing) = existing_request {
+			if !existing.is_rejected {
+				return Err(ApiError::new(409,
+					"You already submitted a merge request for your account. Please wait until it's either accepted or denied before submitting a new one.".into(),
+				));
+			}
+		}
+
+		let changes = (
+			&request,
+			merge_requests::is_rejected.eq(false),
+			merge_requests::updated_at.eq(now),
+		);
+
 		let new_request = diesel::insert_into(merge_requests::table)
             .values(&request)
             .on_conflict(merge_requests::primary_user)
-			.filter_target(merge_requests::is_rejected.eq(true))
             .do_update()
-            .set(&request)
+            .set(changes)
             .returning(Self::as_select())
-            .get_result::<Self>(conn);
+            .get_result::<Self>(conn)?;
 
-        match new_request {
-            Ok(merge_request) => Ok(merge_request),
-            Err(DieselError::NotFound) => Err(ApiError::new(409,
-                "You already submitted a merge request for your account. Please wait until it's either accepted or denied before submitting a new one.".into(),
-            )),
-            Err(e) => Err(ApiError::from(e)),
-        }
+		Ok(new_request)
 	}
 
-	pub fn accept(conn: &mut DbConnection, id: Uuid) -> Result<MergeRequest, ApiError> {
-		
+	pub fn accept(conn: &mut DbConnection, id: Uuid) -> Result<(), ApiError> {
 		let merge_request = merge_requests::table
 			.filter(merge_requests::id.eq(id))
         	.get_result::<MergeRequest>(conn)?;
-
 		merge_users(conn, merge_request.primary_user, merge_request.secondary_user)?;
-		let result = diesel::delete(merge_requests::table)
+		diesel::delete(merge_requests::table)
 			.filter(merge_requests::id.eq(id))
-			.returning(Self::as_select())
-			.get_result(conn)?;
-		Ok(result)
+			.execute(conn)?;
+		Ok(())
 	}
 
 	pub fn reject(conn: &mut DbConnection, id: Uuid) -> Result<MergeRequest, ApiError> {
-
 		let result = diesel::update(merge_requests::table)
             .set(merge_requests::is_rejected.eq(true))
             .filter(merge_requests::id.eq(id))

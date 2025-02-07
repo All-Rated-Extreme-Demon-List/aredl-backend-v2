@@ -190,6 +190,7 @@ diesel::joinable!(aredl_pack_levels -> aredl_packs (pack_id));
 diesel::joinable!(aredl_packs -> aredl_pack_tiers (tier));
 diesel::joinable!(aredl_records -> aredl_levels (level_id));
 diesel::joinable!(aredl_submissions -> aredl_levels (level_id));
+diesel::joinable!(merge_logs -> users (primary_user));
 diesel::joinable!(user_roles -> roles (role_id));
 diesel::joinable!(user_roles -> users (user_id));
 

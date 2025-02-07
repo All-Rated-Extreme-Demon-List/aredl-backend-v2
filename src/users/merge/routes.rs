@@ -7,6 +7,7 @@ use utoipa::{OpenApi, ToSchema};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
+use crate::auth::{Permission, UserAuth};
 use crate::users::merge::MergeLogPage;
 use crate::users::User;
 use crate::users::merge::model::{merge_users, MergeLog};
@@ -30,8 +31,12 @@ pub struct DirectMergeOptions {
     responses(
         (status = 200, body = User)
     ),
+    security(
+        ("access_token" = ["DirectMerge"]),
+        ("api_key" = ["DirectMerge"]),
+    )
 )]
-#[post("")]
+#[post("", wrap="UserAuth::require(Permission::DirectMerge)")]
 async fn direct_merge(db: web::Data<Arc<DbAppState>>, options: web::Json<DirectMergeOptions> ) -> Result<HttpResponse, ApiError> {
 	let result = web::block(move || {
         let mut conn = db.connection()?;
@@ -54,8 +59,12 @@ async fn direct_merge(db: web::Data<Arc<DbAppState>>, options: web::Json<DirectM
     responses(
         (status = 200, body = Paginated<MergeLog>)
     ),
+    security(
+        ("access_token" = ["MergeReview"]),
+        ("api_key" = ["MergeReview"]),
+    )
 )]
-#[get("/logs")]
+#[get("/logs", wrap="UserAuth::require(Permission::MergeReview)")]
 async fn list_logs(db: web::Data<Arc<DbAppState>>, page_query: web::Query<PageQuery<20>>) -> Result<HttpResponse, ApiError> {
 	let result = web::block(move || {
         let mut conn = db.connection()?;
