@@ -40,12 +40,13 @@ struct MainApiDoc;
             | **AREDL - Pack Tiers** | Endpoints to fetch and manage AREDL pack tiers |    \n\
             | **Authentication** | Endpoints for authenticating with Discord |    \n\
             | **Users** | Endpoints for fetching and managing the list of users or your personal information |    \n\
+            | **Users - Merges** | Endpoints for merging users and submitting/managing merge requests |    \n\
             | **Roles** | Endpoints for fetching and managing the roles and their assigned users |    \n\n\
         In addition to that, endpoints are also categorized by the type of authentication they require:\n\n\
             | Type | Description |    \n\
             |--- |--- |    \n\
             | **Public** | Publicly available endpoints that do not require authentication whatsoever |    \n\
-            | **Authed User** | Endpoints that require you to be authenticated but that does not require any permission |    \n\
+            | **Authed User** | Endpoints that require you to be authenticated but that do not require any permission |    \n\
             | **Public / Authed** | Endpoints that are publicly available but that behave differently or offer additional features if you're authenticated |    \n\
             | **Staff Only** | Endpoints that require a specific permission |    \n\n\
         You can find what type an endpoint is by looking at the tags at the top of its page\n\
@@ -53,9 +54,9 @@ struct MainApiDoc;
         ## Authentication    \n\
         You can authenticate using either a bearer token or an API key.    \n\
         There are two types of tokens:    \n\
-            - **Access Token**: Used to make authenticated requests. Those are short lived, and expire after 5 minutes.    \n\
+            - **Access Token**: Used to make authenticated requests. Those are short lived, and expire after 30 minutes.    \n\
             - **Refresh Token**: Used to get a new access token. Those are long lived, and expire after 2 weeks.    \n\n\
-        The refresh token can't be used to make authenticated requests on classic endpoints, but is the only one that can be used on the \
+        The refresh token can not be used to make authenticated requests on classic endpoints, but is the only one that can be used on the \
         [Refresh](#get-/api/auth/discord/refresh) endpoint to get a new access token. If the refresh token is about to expire, it will also \
         return a new refresh token. Access tokens can not be used on that endpoint.    \n\
         You can also use an API key specified in the `api-key` header to authenticate. Those can be created through the AREDL website settings or the TODO endpoint, and have a custom live time.    \n\
@@ -80,7 +81,9 @@ struct MainApiDoc;
             | **PackTierModify** | 30 |    \n\
             | **PackModify** | 40 |    \n\
             | **LevelModify** | 50 |    \n\
-            | **UserBan** | 95 |    \n\
+            | **MergeReview** | 60 |    \n\
+            | **UserBan** | 85 |    \n\
+            | **DirectMerge** | 90 |    \n\
             | **RoleManage** | 100 |    \n\n\
         ",
     ),

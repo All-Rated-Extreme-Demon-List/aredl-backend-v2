@@ -66,13 +66,17 @@ impl MergeRequest {
             return Err(ApiError::new(400, "You cannot merge your account with itself.".into()));
         }
 
-        let existing_secondary = users::table
+        let secondary_user_data = users::table
             .filter(users::id.eq(request.secondary_user))
-            .select(users::id)
-            .first::<Uuid>(conn)
+            .select((users::id, users::placeholder))
+            .first::<(Uuid, bool)>(conn)
             .optional()?;
 
-        if existing_secondary.is_none() {
+        if let Some((_user_id, is_placeholder)) = secondary_user_data {
+            if !is_placeholder {
+                return Err(ApiError::new(400, "You can only submit merge requests for placeholder users. To merge your account with a user that is already linked to another discord account, please make a support post on our discord server.".into()));
+            }
+        } else {
             return Err(ApiError::new(404, "The secondary user does not exist.".into()));
         }
 

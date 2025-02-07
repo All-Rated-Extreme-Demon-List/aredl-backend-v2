@@ -1,5 +1,5 @@
 use std::fmt;
-use std::fmt::{Formatter};
+use std::fmt::Formatter;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use diesel::result::Error as DieselError;

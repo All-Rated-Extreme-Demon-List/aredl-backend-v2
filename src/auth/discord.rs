@@ -200,22 +200,33 @@ async fn discord_callback(db: web::Data<Arc<DbAppState>>, query: web::Query<OAut
 
     let user = web::block(|| User::upsert(db, UserUpsert::from(discord_user_data))).await??;
 
-    let (token, expires) = token::create_token(
-        UserClaims {
-            user_id: user.id,
-            is_api_key: false,
-        },
-        &data.jwt_encoding_key,
-        Duration::minutes(5),
-        "initial",
-    )?;
-
     if let Some(callback) = request_data.callback {
+
+        let (token, _expires) = token::create_token(
+            UserClaims {
+                user_id: user.id,
+                is_api_key: false,
+            },
+            &data.jwt_encoding_key,
+            Duration::minutes(5),
+            "initial",
+        )?;
+
         let redirect_url = format!("{}?token={}", callback, token);
         return Ok(HttpResponse::Found()
             .append_header((header::LOCATION, redirect_url))
             .finish());
     }
+
+    let (access_token, access_expires) = token::create_token(
+        UserClaims {
+            user_id: user.id,
+            is_api_key: false,
+        },
+        &data.jwt_encoding_key,
+        Duration::minutes(30),
+        "access",
+    )?;
 
     let (refresh_token, refresh_expires) = token::create_token(
         UserClaims {
@@ -250,7 +261,7 @@ async fn discord_callback(db: web::Data<Arc<DbAppState>>, query: web::Query<OAut
         })
         .collect::<Vec<String>>();
 
-    let auth_response = AuthResponse { access_token: token, access_expires: expires, refresh_token, refresh_expires, user, roles, scopes };
+    let auth_response = AuthResponse { access_token, access_expires, refresh_token, refresh_expires, user, roles, scopes };
 	
 	Ok(HttpResponse::Ok().json(auth_response))
 }
