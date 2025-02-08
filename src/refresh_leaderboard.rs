@@ -6,7 +6,7 @@ use chrono::Utc;
 use cron::Schedule;
 use diesel::RunQueryDsl;
 use tokio::task;
-use crate::db::{DbAppState};
+use crate::db::DbAppState;
 
 pub fn start_leaderboard_refresher(db: Arc<DbAppState>) {
     let schedule = Schedule::from_str(env::var("LEADERBOARD_REFRESH_SCHEDULE").expect("LEADERBOARD_REFRESH_SCHEDULE not set").as_str()).unwrap();
@@ -19,18 +19,27 @@ pub fn start_leaderboard_refresher(db: Arc<DbAppState>) {
 
             println!("Refreshing leaderboard");
 
-            let conn = db_clone.connection();
+            let conn_result = db_clone.connection();
 
-            if conn.is_err() {
-                println!("Failed to refresh {}", conn.err().unwrap());
+            if conn_result.is_err() {
+                println!("Failed to refresh {}", conn_result.err().unwrap());
                 continue;
             }
 
+            let mut conn = conn_result.unwrap();
+
             let result = diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_user_leaderboard")
-                .execute(&mut conn.unwrap());
+                .execute(&mut conn);
 
             if result.is_err() {
-                println!("Failed to refresh {}", result.err().unwrap())
+                println!("Failed to refresh user leaderboard {}", result.err().unwrap())
+            }
+
+            let result = diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_country_leaderboard")
+                .execute(&mut conn);
+
+            if result.is_err() {
+                println!("Failed to refresh country leaderboard {}", result.err().unwrap())
             }
 
             let now = Utc::now();

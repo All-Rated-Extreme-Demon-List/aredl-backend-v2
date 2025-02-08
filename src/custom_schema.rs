@@ -51,11 +51,28 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    aredl_country_leaderboard (country) {
+        rank -> Int4,
+        extremes_rank -> Int4,
+        country -> Int4,
+        level_points -> Int4,
+        hardest -> Nullable<Uuid>,
+        extremes -> Int4
+    }
+}
+
 diesel::joinable!(aredl_user_leaderboard -> users (user_id));
 diesel::joinable!(aredl_user_leaderboard -> aredl_levels (hardest));
+diesel::joinable!(aredl_country_leaderboard -> aredl_levels (hardest));
 
 diesel::allow_tables_to_appear_in_same_query!(
     aredl_user_leaderboard,
+    aredl_levels,
+);
+
+diesel::allow_tables_to_appear_in_same_query!(
+    aredl_country_leaderboard,
     aredl_levels,
 );
 

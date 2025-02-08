@@ -2,7 +2,7 @@ mod schema;
 mod error_handler;
 
 use std::{env, fs};
-use std::collections::{HashMap};
+use std::collections::HashMap;
 use std::path::Path;
 use diesel::{Connection, ExpressionMethods, Insertable, NullableExpressionMethods, PgConnection, QueryDsl, RunQueryDsl};
 use diesel::internal::derives::multiconnection::chrono::{DateTime, Duration, NaiveDateTime, Utc};
@@ -593,6 +593,9 @@ fn main() {
 
     diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_user_leaderboard")
         .execute(&mut db_conn).expect("Failed to update leaderboard");
+
+    diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_country_leaderboard")
+        .execute(&mut db_conn).expect("Failed to update country leaderboard");
 
     diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_position_history_full_view")
         .execute(&mut db_conn).expect("Failed to update position history");

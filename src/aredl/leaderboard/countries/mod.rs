@@ -1,5 +1,4 @@
 mod routes;
 mod model;
-mod countries;
 
 pub use routes::{init_routes, ApiDoc};
