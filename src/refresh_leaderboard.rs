@@ -42,6 +42,13 @@ pub fn start_leaderboard_refresher(db: Arc<DbAppState>) {
                 println!("Failed to refresh country leaderboard {}", result.err().unwrap())
             }
 
+            let result = diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_clans_leaderboard")
+                .execute(&mut conn);
+
+            if result.is_err() {
+                println!("Failed to refresh clans leaderboard {}", result.err().unwrap())
+            }
+
             let now = Utc::now();
             let next = schedule.upcoming(Utc).next().unwrap();
             let duration = next - now;

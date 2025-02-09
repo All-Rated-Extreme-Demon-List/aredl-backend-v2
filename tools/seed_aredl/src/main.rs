@@ -681,6 +681,9 @@ fn main() {
     diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_country_leaderboard")
         .execute(&mut db_conn).expect("Failed to update country leaderboard");
 
+    diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_clans_leaderboard")
+        .execute(&mut db_conn).expect("Failed to update clans leaderboard");
+
     diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_position_history_full_view")
         .execute(&mut db_conn).expect("Failed to update position history");
 
