@@ -1,27 +1,28 @@
 use std::sync::Arc;
 use actix_web::{get, HttpResponse, web};
 use utoipa::OpenApi;
-use crate::aredl::country::CountryProfileResolved;
+use uuid::Uuid;
+use crate::aredl::clan::ClanProfileResolved;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 
 #[utoipa::path(
     get,
-    summary = "Country",
-    description = "Get a country's AREDL profile",
+    summary = "Clan",
+    description = "Get a clan's AREDL profile",
     tag = "AREDL",
     params(
-        ("id" = i32, description = "The country to lookup the data for")
+        ("id" = Uuid, description = "The clan to lookup the data for")
     ),
     responses(
-        (status = 200, body = CountryProfileResolved)
+        (status = 200, body = ClanProfileResolved)
     ),
 )]
 #[get("/{id}")]
-async fn find(db: web::Data<Arc<DbAppState>>, id: web::Path<i32>) -> Result<HttpResponse, ApiError> {
+async fn find(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
     let profile = web::block(move || {
         let mut conn = db.connection()?;
-        CountryProfileResolved::find(&mut conn, id.into_inner())
+        ClanProfileResolved::find(&mut conn, id.into_inner())
     }).await??;
     Ok(HttpResponse::Ok().json(profile))
 }
@@ -30,7 +31,7 @@ async fn find(db: web::Data<Arc<DbAppState>>, id: web::Path<i32>) -> Result<Http
 #[openapi(
     components(
         schemas(
-            CountryProfileResolved
+            ClanProfileResolved
         )
     ),
     paths(
@@ -41,7 +42,7 @@ pub struct ApiDoc;
 
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
-        web::scope("country")
+        web::scope("clan")
             .service(find)
     );
 }

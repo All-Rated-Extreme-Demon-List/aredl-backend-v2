@@ -9,7 +9,7 @@ use crate::error_handler::ApiError;
 use crate::users::BaseUser;
 use crate::aredl::levels::ExtendedBaseLevel;
 use crate::schema::{aredl_levels, users};
-use crate::custom_schema::{aredl_country_leaderboard, min_placement_records};
+use crate::custom_schema::{aredl_country_leaderboard, aredl_min_placement_country_records};
 
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
 #[diesel(table_name=aredl_country_leaderboard)]
@@ -28,7 +28,7 @@ pub struct CountryProfileLevelResolved {
 }
 
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
-#[diesel(table_name=min_placement_records, check_for_backend(Pg))]
+#[diesel(table_name=aredl_min_placement_country_records, check_for_backend(Pg))]
 pub struct CountryProfileRecord {
     /// Internal UUID of the record.
     pub id: Uuid,
@@ -84,10 +84,10 @@ impl CountryProfileResolved {
             .first(conn)
             .optional()?;
 
-        let (verified, records): (Vec<_>, Vec<_>) = min_placement_records::table
-            .filter(min_placement_records::country.eq(country))
-            .inner_join(users::table.on(users::id.eq(min_placement_records::submitted_by)))
-            .inner_join(aredl_levels::table.on(aredl_levels::id.eq(min_placement_records::level_id)))
+        let (verified, records): (Vec<_>, Vec<_>) = aredl_min_placement_country_records::table
+            .filter(aredl_min_placement_country_records::country.eq(country))
+            .inner_join(users::table.on(users::id.eq(aredl_min_placement_country_records::submitted_by)))
+            .inner_join(aredl_levels::table.on(aredl_levels::id.eq(aredl_min_placement_country_records::level_id)))
             .select((
                 CountryProfileRecord::as_select(),
                 BaseUser::as_select(),

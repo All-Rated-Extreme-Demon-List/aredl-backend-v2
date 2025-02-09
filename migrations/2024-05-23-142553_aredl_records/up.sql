@@ -76,16 +76,3 @@ REFERENCING NEW TABLE as new_table
 FOR EACH STATEMENT
 WHEN (pg_trigger_depth() < 1)
 EXECUTE FUNCTION update_aredl_record_placement();
-
-CREATE OR REPLACE VIEW min_placement_records AS
-    WITH subquery AS (
-        SELECT
-            r.*,
-            u.country,
-            row_number() over ( PARTITION BY r.level_id, u.country ORDER BY r.placement_order) as order_pos
-        FROM aredl_records r
-        JOIN users u ON u.id = r.submitted_by
-    )
-    SELECT *
-    FROM subquery
-    WHERE order_pos = 1;

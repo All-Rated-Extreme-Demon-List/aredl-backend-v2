@@ -6,5 +6,6 @@ mod packs;
 mod leaderboard;
 mod profile;
 mod country;
+mod clan;
 
 pub use routes::{init_routes, ApiDoc};

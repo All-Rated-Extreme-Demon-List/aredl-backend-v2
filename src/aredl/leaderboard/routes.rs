@@ -5,7 +5,7 @@ use crate::aredl::leaderboard::model::{LeaderboardPage, LeaderboardQueryOptions,
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
-use crate::aredl::leaderboard::countries;
+use crate::aredl::leaderboard::{countries, clans};
 
 #[utoipa::path(
     get,
@@ -39,7 +39,8 @@ async fn list(
 #[derive(OpenApi)]
 #[openapi(
     nest(
-        (path = "/countries", api = countries::ApiDoc)
+        (path = "/countries", api = countries::ApiDoc),
+        (path = "/clans", api = clans::ApiDoc)
     ),
     components(
         schemas(
@@ -56,6 +57,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/leaderboard")
             .configure(countries::init_routes)
+            .configure(clans::init_routes)
             .service(list)
     );
 }

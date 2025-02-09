@@ -1,5 +1,3 @@
-DROP VIEW IF EXISTS min_placement_records;
-
 DROP TRIGGER update_aredl_record_placement_on_update ON aredl_records;
 
 DROP TRIGGER update_aredl_record_placement_on_insert ON aredl_records;

@@ -1,6 +1,4 @@
-use crate::schema::{aredl_levels, aredl_packs, users};
-use crate::schema::aredl_pack_tiers;
-use crate::schema::aredl_pack_levels;
+use crate::schema::{aredl_levels, aredl_packs, users, aredl_pack_tiers, aredl_pack_levels, clans};
 
 diesel::table! {
     aredl_position_history_full_view (affected_level) {
@@ -102,7 +100,7 @@ diesel::allow_tables_to_appear_in_same_query!(
 );
 
 diesel::table! {
-    min_placement_records (id) {
+    aredl_min_placement_country_records (id) {
         id -> Uuid,
         level_id -> Uuid,
         submitted_by -> Uuid,
@@ -119,15 +117,76 @@ diesel::table! {
     }
 }
 
-diesel::joinable!(min_placement_records -> users (submitted_by));
-diesel::joinable!(min_placement_records -> aredl_levels (level_id));
+diesel::joinable!(aredl_min_placement_country_records -> users (submitted_by));
+diesel::joinable!(aredl_min_placement_country_records -> aredl_levels (level_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
-    min_placement_records,
+    aredl_min_placement_country_records,
     users,
 );
 
 diesel::allow_tables_to_appear_in_same_query!(
-    min_placement_records,
+    aredl_min_placement_country_records,
     aredl_levels,
+);
+
+
+diesel::table! {
+    aredl_clans_leaderboard (clan_id) {
+        rank -> Int4,
+        extremes_rank -> Int4,
+        clan_id -> Uuid,
+        level_points -> Int4,
+        hardest -> Nullable<Uuid>,
+        extremes -> Int4
+    }
+}
+
+diesel::joinable!(aredl_clans_leaderboard -> aredl_levels (hardest));
+
+diesel::allow_tables_to_appear_in_same_query!(
+    aredl_clans_leaderboard,
+    aredl_levels,
+);
+
+diesel::allow_tables_to_appear_in_same_query!(
+    aredl_clans_leaderboard,
+    clans,
+);
+
+diesel::table! {
+    aredl_min_placement_clans_records (id) {
+        id -> Uuid,
+        level_id -> Uuid,
+        submitted_by -> Uuid,
+        mobile -> Bool,
+        ldm_id -> Nullable<Int4>,
+        video_url -> Varchar,
+        raw_url -> Nullable<Varchar>,
+        placement_order -> Int4,
+        reviewer_id -> Nullable<Uuid>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+        clan_id -> Uuid,
+        order_pos -> Int4,
+    }
+}
+
+diesel::joinable!(aredl_min_placement_clans_records -> users (submitted_by));
+diesel::joinable!(aredl_min_placement_clans_records -> aredl_levels (level_id));
+diesel::joinable!(aredl_min_placement_clans_records -> clans (clan_id));
+
+diesel::allow_tables_to_appear_in_same_query!(
+    aredl_min_placement_clans_records,
+    users,
+);
+
+diesel::allow_tables_to_appear_in_same_query!(
+    aredl_min_placement_clans_records,
+    aredl_levels,
+);
+
+diesel::allow_tables_to_appear_in_same_query!(
+    aredl_min_placement_clans_records,
+    clans,
 );
