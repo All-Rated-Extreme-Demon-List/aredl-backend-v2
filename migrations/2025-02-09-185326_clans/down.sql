@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS clan_members;
+DROP TABLE IF EXISTS clans;

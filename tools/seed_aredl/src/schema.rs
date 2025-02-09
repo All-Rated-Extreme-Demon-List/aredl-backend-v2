@@ -23,6 +23,7 @@ diesel::table! {
         edel_enjoyment -> Nullable<Float8>,
         is_edel_pending -> Bool,
         gddl_tier -> Nullable<Float8>,
+        nlw_tier -> Nullable<Varchar>,
     }
 }
 
@@ -106,6 +107,51 @@ diesel::table! {
 }
 
 diesel::table! {
+    clan_members (id) {
+        id -> Uuid,
+        clan_id -> Uuid,
+        user_id -> Uuid,
+        role -> Int4,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    clans (id) {
+        id -> Uuid,
+        global_name -> Varchar,
+        tag -> Varchar,
+        description -> Nullable<Text>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    merge_logs (id) {
+        id -> Uuid,
+        primary_user -> Uuid,
+        secondary_user -> Uuid,
+        secondary_username -> Varchar,
+        secondary_discord_id -> Nullable<Varchar>,
+        secondary_global_name -> Varchar,
+        merged_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    merge_requests (id) {
+        id -> Uuid,
+        primary_user -> Uuid,
+        secondary_user -> Uuid,
+        is_rejected -> Bool,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     oauth_requests (csrf_state) {
         csrf_state -> Varchar,
         pkce_verifier -> Varchar,
@@ -147,10 +193,12 @@ diesel::table! {
         placeholder -> Bool,
         description -> Nullable<Text>,
         country -> Nullable<Int4>,
+        last_country_update -> Timestamp,
         ban_level -> Int4,
         discord_avatar -> Nullable<Varchar>,
         discord_banner -> Nullable<Varchar>,
         discord_accent_color -> Nullable<Int4>,
+        access_valid_after -> Timestamp,
         created_at -> Timestamp,
     }
 }
@@ -164,6 +212,9 @@ diesel::joinable!(aredl_pack_levels -> aredl_packs (pack_id));
 diesel::joinable!(aredl_packs -> aredl_pack_tiers (tier));
 diesel::joinable!(aredl_records -> aredl_levels (level_id));
 diesel::joinable!(aredl_submissions -> aredl_levels (level_id));
+diesel::joinable!(clan_members -> clans (clan_id));
+diesel::joinable!(clan_members -> users (user_id));
+diesel::joinable!(merge_logs -> users (primary_user));
 diesel::joinable!(user_roles -> roles (role_id));
 diesel::joinable!(user_roles -> users (user_id));
 
@@ -177,6 +228,10 @@ diesel::allow_tables_to_appear_in_same_query!(
     aredl_position_history,
     aredl_records,
     aredl_submissions,
+    clan_members,
+    clans,
+    merge_logs,
+    merge_requests,
     oauth_requests,
     permissions,
     roles,

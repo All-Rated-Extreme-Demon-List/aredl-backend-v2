@@ -1,10 +1,11 @@
 mod schema;
 mod error_handler;
 
+use regex::Regex;
 use std::{env, fs};
 use std::collections::HashMap;
 use std::path::Path;
-use diesel::{Connection, ExpressionMethods, Insertable, NullableExpressionMethods, PgConnection, QueryDsl, RunQueryDsl};
+use diesel::{Connection, ExpressionMethods, TextExpressionMethods, Insertable, NullableExpressionMethods, PgConnection, QueryDsl, RunQueryDsl, OptionalExtension};
 use diesel::internal::derives::multiconnection::chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use diesel::r2d2::ConnectionManager;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
@@ -14,7 +15,7 @@ use serde::de::DeserializeOwned;
 use uuid::Uuid;
 use itertools::Itertools;
 use crate::error_handler::MigrationError;
-use crate::schema::{aredl_levels, aredl_levels_created, aredl_pack_levels, aredl_pack_tiers, aredl_packs, aredl_position_history, aredl_records, roles, user_roles, users, permissions};
+use crate::schema::{aredl_levels, aredl_levels_created, aredl_pack_levels, aredl_pack_tiers, aredl_packs, aredl_position_history, aredl_records, roles, user_roles, users, permissions, clans, clan_members};
 
 type Pool = diesel::r2d2::Pool<ConnectionManager<PgConnection>>;
 type DbConnection = diesel::r2d2::PooledConnection<ConnectionManager<PgConnection>>;
@@ -71,7 +72,6 @@ pub struct RoleList {
 #[diesel(table_name=users)]
 pub struct CreateUser {
     pub id: Option<Uuid>,
-    pub username: String,
     pub json_id: i64,
     pub global_name: String,
     pub placeholder: bool,
@@ -131,6 +131,27 @@ pub struct ChangelogResolved {
     pub created_at: NaiveDateTime
 }
 
+#[derive(Insertable)]
+#[diesel(table_name = clans)]
+pub struct NewClan {
+    pub global_name: String,
+    pub tag: String,
+    pub description: Option<String>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = clan_members)]
+pub struct NewClanMember {
+    pub clan_id: Uuid,
+    pub user_id: Uuid,
+    pub role: i32,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+
 pub fn load_json_from_file<T>(path: &Path) -> T
 where T: DeserializeOwned,
 {
@@ -141,8 +162,11 @@ where T: DeserializeOwned,
     json
 }
 
+
 fn main() {
     dotenv().ok();
+
+    let clan_regex = Regex::new(r"^\[([^\]]+)\]").unwrap();
 
     let roles_map: HashMap<&str, (&str, i32)> = HashMap::from([
         ("owner", ("owner", 110)),
@@ -275,7 +299,6 @@ fn main() {
             let username = name_map.get(&id).cloned().expect(format!("Username not found for id: {}", id).as_str());
             CreateUser {
                 id: None,
-                username: username.clone(),
                 json_id: id,
                 global_name: username,
                 placeholder: true,
@@ -586,6 +609,67 @@ fn main() {
                     .collect::<Vec<_>>(),
             ).execute(conn)?;
 
+        println!("\tInserting clans");
+
+        let clan_users: Vec<(Uuid, String)> = users::table
+            .filter(users::global_name.like("[%]%"))
+            .select((users::id, users::global_name))
+            .load(conn)?;
+
+        for (user_id, original_username) in clan_users {
+            if let Some(captures) = clan_regex.captures(&original_username) {
+                let clan_tag = captures
+                    .get(1)
+                    .map(|m| m.as_str().to_string())
+                    .expect("Failed to extract clan tag");
+
+                if clan_tag.eq_ignore_ascii_case("REDACTED") {
+                    continue;
+                }
+                
+                let new_username = clan_regex.replace(&original_username, "").trim().to_string();
+
+                let existing_clan_id: Option<Uuid> = clans::table
+                    .filter(clans::tag.eq(&clan_tag))
+                    .select(clans::id)
+                    .first(conn)
+                    .optional()?;
+                
+                    let clan_id = if let Some(id) = existing_clan_id {
+                        id
+                    } else {
+                        let now = Utc::now().naive_utc();
+                        let new_clan = NewClan {
+                            global_name: clan_tag.clone(),
+                            tag: clan_tag.clone(),
+                            description: None,
+                            created_at: now,
+                            updated_at: now,
+                        };
+                        diesel::insert_into(clans::table)
+                            .values(&new_clan)
+                            .returning(clans::id)
+                            .get_result::<Uuid>(conn)?
+                    };
+
+                diesel::update(users::table.filter(users::id.eq(user_id)))
+                    .set(users::global_name.eq(new_username))
+                    .execute(conn)?;
+
+                let now = Utc::now().naive_utc();
+                let new_member = NewClanMember {
+                    clan_id,
+                    user_id,
+                    role: 0,
+                    created_at: now,
+                    updated_at: now,
+                };
+
+                diesel::insert_into(clan_members::table)
+                    .values(&new_member)
+                    .execute(conn)?;
+            }
+        }
         Ok(())
     }).expect("Failed to migrate");
 
