@@ -35,7 +35,7 @@ pub struct Rank {
     pub extremes: i32,
 }
 
-#[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
+#[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema, QueryableByName)]
 #[diesel(table_name=aredl_records)]
 pub struct ProfileRecord {
     /// Internal UUID of the record.

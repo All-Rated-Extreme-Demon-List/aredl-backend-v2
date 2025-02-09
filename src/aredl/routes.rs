@@ -1,6 +1,6 @@
 use actix_web::web;
 use utoipa::OpenApi;
-use crate::aredl::{changelog, leaderboard, levels, packs, packtiers, profile};
+use crate::aredl::{changelog, leaderboard, levels, packs, packtiers, profile, country};
 #[derive(OpenApi)]
 #[openapi(
     tags(
@@ -13,6 +13,7 @@ use crate::aredl::{changelog, leaderboard, levels, packs, packtiers, profile};
         (path = "/packs", api=packs::ApiDoc),
         (path = "/pack-tiers", api=packtiers::ApiDoc),
         (path = "/profile", api=profile::ApiDoc),
+        (path = "/country", api=country::ApiDoc),
     ),
 )]
 pub struct ApiDoc;
@@ -25,5 +26,6 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .configure(packs::init_routes)
             .configure(leaderboard::init_routes)
             .configure(profile::init_routes)
+            .configure(country::init_routes)
     );
 }

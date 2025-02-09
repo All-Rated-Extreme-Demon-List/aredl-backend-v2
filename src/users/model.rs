@@ -248,3 +248,12 @@ impl User {
     }
 }
 
+impl From<User> for BaseUser {
+    fn from(user: User) -> Self {
+        BaseUser {
+            id: user.id,
+            username: user.username,
+            global_name: user.global_name,
+        }
+    }
+}

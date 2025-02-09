@@ -100,3 +100,34 @@ diesel::allow_tables_to_appear_in_same_query!(
     aredl_completed_packs,
     aredl_pack_tiers,
 );
+
+diesel::table! {
+    min_placement_records (id) {
+        id -> Uuid,
+        level_id -> Uuid,
+        submitted_by -> Uuid,
+        mobile -> Bool,
+        ldm_id -> Nullable<Int4>,
+        video_url -> Varchar,
+        raw_url -> Nullable<Varchar>,
+        placement_order -> Int4,
+        reviewer_id -> Nullable<Uuid>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+        country -> Int4,
+        order_pos -> Int4,
+    }
+}
+
+diesel::joinable!(min_placement_records -> users (submitted_by));
+diesel::joinable!(min_placement_records -> aredl_levels (level_id));
+
+diesel::allow_tables_to_appear_in_same_query!(
+    min_placement_records,
+    users,
+);
+
+diesel::allow_tables_to_appear_in_same_query!(
+    min_placement_records,
+    aredl_levels,
+);
