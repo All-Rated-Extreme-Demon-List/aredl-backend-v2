@@ -9,7 +9,7 @@ use utoipa::ToSchema;
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
-use crate::schema::{clans, clan_members};
+use crate::schema::{clans, clan_members, clan_invites};
 
 #[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
 #[diesel(table_name=clans, check_for_backend(Pg))]
@@ -39,6 +39,25 @@ pub struct ClanMember {
 	pub user_id: Uuid,
 	/// Role of the user in the clan.
 	pub role: i32,
+    /// Timestamp of when the user joined the clan.
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug, Serialize, Deserialize, Selectable, Queryable, ToSchema)]
+#[diesel(table_name=clan_invites, check_for_backend(Pg))]
+pub struct ClanInvite {
+    /// Internal UUID of the clan invite.
+    pub id: Uuid,
+    /// Internal UUID of the clan.
+    pub clan_id: Uuid,
+    /// Internal UUID of the user.
+    pub user_id: Uuid,
+    /// Internal UUID of the user who invited the user.
+    pub invited_by: Uuid,
+    /// Timestamp of when the invite was created.
+    pub created_at: NaiveDateTime,
+    /// Timestamp of when the invite was last updated.
+    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Debug, Serialize, Deserialize, Insertable, AsChangeset, ToSchema)]

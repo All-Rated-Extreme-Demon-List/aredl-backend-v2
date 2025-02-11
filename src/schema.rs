@@ -107,6 +107,17 @@ diesel::table! {
 }
 
 diesel::table! {
+    clan_invites (id) {
+        id -> Uuid,
+        clan_id -> Uuid,
+        user_id -> Uuid,
+        invited_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     clan_members (id) {
         id -> Uuid,
         clan_id -> Uuid,
@@ -212,6 +223,7 @@ diesel::joinable!(aredl_pack_levels -> aredl_packs (pack_id));
 diesel::joinable!(aredl_packs -> aredl_pack_tiers (tier));
 diesel::joinable!(aredl_records -> aredl_levels (level_id));
 diesel::joinable!(aredl_submissions -> aredl_levels (level_id));
+diesel::joinable!(clan_invites -> clans (clan_id));
 diesel::joinable!(clan_members -> clans (clan_id));
 diesel::joinable!(clan_members -> users (user_id));
 diesel::joinable!(merge_logs -> users (primary_user));
@@ -228,6 +240,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     aredl_position_history,
     aredl_records,
     aredl_submissions,
+    clan_invites,
     clan_members,
     clans,
     merge_logs,

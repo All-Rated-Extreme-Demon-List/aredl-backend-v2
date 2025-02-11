@@ -20,6 +20,17 @@ CREATE TABLE IF NOT EXISTS clan_members (
 	UNIQUE(clan_id, user_id)
 );
 
+CREATE TABLE IF NOT EXISTS clan_invites (
+    id uuid DEFAULT uuid_generate_v4(),
+    clan_id uuid NOT NULL REFERENCES clans(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    invited_by uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(id),
+    UNIQUE(clan_id, user_id)
+);
+
 CREATE MATERIALIZED VIEW aredl_clans_leaderboard AS
 WITH completed_levels AS (
     SELECT DISTINCT cm.clan_id, r.level_id
