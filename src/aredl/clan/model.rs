@@ -7,26 +7,10 @@ use diesel::pg::Pg;
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::users::BaseUser;
+use crate::clans::Clan;
 use crate::aredl::levels::ExtendedBaseLevel;
 use crate::schema::{aredl_levels, clan_members, clans, users};
 use crate::custom_schema::{aredl_clans_leaderboard, aredl_min_placement_clans_records};
-
-#[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
-#[diesel(table_name=clans, check_for_backend(Pg))]
-pub struct Clan {
-    /// Internal UUID of the clan.
-	pub id: Uuid,
-    /// Display name of the clan.
-	pub global_name: String,
-    /// Short tag of the clan.
-	pub tag: String,
-    /// Description of the clan.
-	pub description: Option<String>,
-    /// Timestamp of when the clan was created.
-	pub created_at: NaiveDateTime,
-    /// Timestamp of when the clan metadata was last updated.
-	pub updated_at: NaiveDateTime
-}
 
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
 #[diesel(table_name=aredl_clans_leaderboard)]

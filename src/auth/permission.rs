@@ -20,7 +20,8 @@ pub enum Permission {
     UserBan,
     RoleManage,
     MergeReview,
-    DirectMerge
+    DirectMerge,
+    ClanModify
 }
 
 fn get_privilege_level(db: web::Data<Arc<DbAppState>>, user_id: Uuid) -> Result<i32, ApiError> {

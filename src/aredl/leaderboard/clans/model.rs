@@ -11,7 +11,7 @@ use crate::page_helper::{PageQuery, Paginated};
 use crate::aredl::levels::BaseLevel;
 use crate::aredl::leaderboard::model::LeaderboardOrder;
 use crate::schema::{aredl_levels, clans};
-use crate::aredl::clan::Clan;
+use crate::clans::Clan;
 
 #[derive(Serialize, Selectable, Queryable, Debug, ToSchema)]
 #[diesel(table_name=aredl_clans_leaderboard, check_for_backend(Pg))]

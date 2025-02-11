@@ -5,7 +5,7 @@ use utoipa::openapi::security::{ApiKey, ApiKeyValue, HttpBuilder, HttpAuthScheme
 use utoipa::openapi::extensions::Extensions;
 use serde_json::json;
 use std::env;
-use crate::{aredl, users, auth, roles};
+use crate::{aredl, users, auth, roles, clans};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -14,6 +14,7 @@ use crate::{aredl, users, auth, roles};
         (path = "/users", api = users::ApiDoc),
         (path = "/auth", api = auth::ApiDoc),
         (path = "/roles", api = roles::ApiDoc),
+        (path = "/clans", api = clans::ApiDoc),
     )
 )]
 struct MainApiDoc;
@@ -43,7 +44,8 @@ struct MainApiDoc;
             | **Authentication** | Endpoints for authenticating with Discord |    \n\
             | **Users** | Endpoints for fetching and managing the list of users or your personal information |    \n\
             | **Users - Merges** | Endpoints for merging users and submitting/managing merge requests |    \n\
-            | **Roles** | Endpoints for fetching and managing the roles and their assigned users |    \n\n\
+            | **Roles** | Endpoints for fetching and managing the roles and their assigned users |    \n\
+            | **Clans** | Endpoints for fetching and managing clans and clan members, both for staff and clan leaders |    \n\n\
         In addition to that, endpoints are also categorized by the type of authentication they require:\n\n\
             | Type | Description |    \n\
             |--- |--- |    \n\
@@ -84,6 +86,7 @@ struct MainApiDoc;
             | **PackModify** | 40 |    \n\
             | **LevelModify** | 50 |    \n\
             | **MergeReview** | 60 |    \n\
+            | **ClanModify** | 70 |    \n\
             | **UserBan** | 85 |    \n\
             | **DirectMerge** | 90 |    \n\
             | **RoleManage** | 100 |    \n\n\

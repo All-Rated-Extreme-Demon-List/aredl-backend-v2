@@ -185,6 +185,7 @@ fn main() {
         ("pack_modify", 40),
         ("level_modify", 50),
         ("merge_review", 60),
+        ("clan_modify", 70),
         ("user_ban", 85),
         ("direct_merge", 90),
         ("role_manage", 100)

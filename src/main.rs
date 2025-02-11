@@ -17,6 +17,7 @@ mod cache_control;
 mod refresh_leaderboard;
 mod refresh_level_data;
 mod docs;
+mod clans;
 
 use std::env;
 use actix_cors::Cors;
@@ -86,6 +87,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(auth::init_routes)
                     .configure(users::init_routes)
                     .configure(roles::init_routes)
+                    .configure(clans::init_routes)
             )
             .service(
                 RapiDoc::with_openapi("/openapi.json", ApiDoc::openapi()).path("/docs").custom_html(docs_html),
