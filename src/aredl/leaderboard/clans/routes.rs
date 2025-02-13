@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use actix_web::{get, HttpResponse, web};
 use utoipa::OpenApi;
-use crate::aredl::leaderboard::clans::model::{ClansLeaderboardPage, ClansLeaderboardQueryOptions};
-use crate::aredl::leaderboard::model::LeaderboardOrder;
+use crate::aredl::leaderboard::clans::{ClansLeaderboardPage, ClansLeaderboardQueryOptions};
+use crate::aredl::leaderboard::LeaderboardOrder;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};

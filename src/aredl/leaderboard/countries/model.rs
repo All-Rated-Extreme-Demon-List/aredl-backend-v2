@@ -9,7 +9,7 @@ use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::aredl::levels::BaseLevel;
-use crate::aredl::leaderboard::model::LeaderboardOrder;
+use crate::aredl::leaderboard::LeaderboardOrder;
 use crate::schema::aredl_levels;
 
 #[derive(Serialize, Selectable, Queryable, Debug, ToSchema)]

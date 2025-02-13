@@ -1,5 +1,5 @@
 use chrono::NaiveDateTime;
-use diesel::{Connection, delete, ExpressionMethods, insert_into, JoinOnDsl, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::{Connection, delete, ExpressionMethods, insert_into, JoinOnDsl, QueryDsl, RunQueryDsl, SelectableHelper, OptionalExtension};
 use uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -8,6 +8,7 @@ use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::clans::{ClanMember, ClanInvite};
 use crate::schema::{clan_members, users, clan_invites};
+use crate::users::BaseUser;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Insertable, Selectable, Queryable, ToSchema)]
 #[diesel(table_name=clan_members, check_for_backend(Pg))]
@@ -34,6 +35,13 @@ pub struct ClanMemberUpdate {
 	pub role: i32
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Insertable, Selectable, Queryable, ToSchema)]
+#[diesel(table_name=clan_members, check_for_backend(Pg))]
+pub struct ClanMemberInvite {
+	/// Internal UUID of the user to invite
+	pub user_id: Uuid,
+}
+
 #[derive(Debug, Serialize, Deserialize, Selectable, Insertable, Queryable, ToSchema)]
 #[diesel(table_name=clan_invites, check_for_backend(Pg))]
 pub struct ClanInviteCreate {
@@ -45,20 +53,23 @@ pub struct ClanInviteCreate {
     pub invited_by: Uuid,
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema, Queryable)]
-pub struct ClanMemberResolved {
-	/// Internal UUID of the user.
-	pub id: Uuid,
-	/// Global name of the user.
-	pub global_name: String,
-	/// Username of the user.
-	pub username: String,
+#[derive(Debug, Serialize, Deserialize, ToSchema, Queryable, Selectable)]
+#[diesel(table_name=clan_members)]
+pub struct ClanMemberMeta {
 	/// Role of the user in the clan.
 	pub role: i32,
     /// Timestamp of when the user joined the clan.
     pub created_at: NaiveDateTime,
 }
 
+
+#[derive(Debug, Serialize, Deserialize, ToSchema, Queryable)]
+pub struct ClanMemberResolved {
+	#[serde(flatten)]
+	pub user: BaseUser,
+	#[serde(flatten)]
+	pub member: ClanMemberMeta
+}
 
 impl ClanMember {
 
@@ -67,11 +78,8 @@ impl ClanMember {
             .filter(clan_members::clan_id.eq(clan_id))
             .inner_join(users::table.on(clan_members::user_id.eq(users::id)))
             .select((
-				users::id,
-				users::global_name,
-				users::username,
-				clan_members::role,
-				clan_members::created_at
+				BaseUser::as_select(),
+				ClanMemberMeta::as_select()
 			))
             .load::<ClanMemberResolved>(conn)?;
         Ok(members)
@@ -154,6 +162,14 @@ impl ClanMember {
 
 impl ClanInvite {
 	pub fn create(conn: &mut DbConnection, invite: ClanInviteCreate) -> Result<ClanInvite, ApiError> {
+		let user_in_clan = clan_members::table
+			.filter(clan_members::user_id.eq(invite.user_id))
+			.select(clan_members::user_id)
+			.first::<Uuid>(conn)
+			.optional()?;
+		if user_in_clan.is_some() {
+			return Err(ApiError::new(400, "This user is already in a clan"));
+		}
 		let invite = insert_into(clan_invites::table)
 			.values(invite)
 			.get_result(conn)?;

@@ -10,7 +10,7 @@ use crate::page_helper::{PageQuery, Paginated};
 use crate::auth::{Permission, UserAuth};
 use crate::users::merge::MergeLogPage;
 use crate::users::User;
-use crate::users::merge::model::{merge_users, MergeLog};
+use crate::users::merge::{merge_users, MergeLog};
 use crate::users::merge::requests;
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]

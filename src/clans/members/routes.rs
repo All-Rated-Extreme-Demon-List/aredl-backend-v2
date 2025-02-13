@@ -4,7 +4,7 @@ use actix_web::{get, patch, post, delete, web, HttpResponse};
 use utoipa::OpenApi;
 use diesel::Connection;
 use crate::auth::{UserAuth, Permission, Authenticated};
-use crate::clans::members::{ClanInviteCreate, ClanMemberUpdate};
+use crate::clans::members::{ClanInviteCreate, ClanMemberInvite, ClanMemberUpdate};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::clans::{Clan, ClanCreate, ClanInvite, ClanListQueryOptions, ClanMember, ClanPage, ClanUpdate};
@@ -138,7 +138,7 @@ async fn delete(db: web::Data<Arc<DbAppState>>, clan_id: web::Path<Uuid>, member
     summary = "[Auth]Invite member",
     description = "Invite a user to join a clan",
     tag = "Clans - Members",
-    request_body = Uuid,
+    request_body = ClanMemberInvite,
     params(
         ("clan_id" = Uuid, description = "The internal UUID of the clan")
     ),
@@ -156,7 +156,7 @@ async fn delete(db: web::Data<Arc<DbAppState>>, clan_id: web::Path<Uuid>, member
 async fn invite(
     db: web::Data<Arc<DbAppState>>,
     clan_id: web::Path<Uuid>,
-    user: web::Json<Uuid>,
+    user: web::Json<ClanMemberInvite>,
     authenticated: Authenticated
 ) -> Result<HttpResponse, ApiError> {
     let result = web::block(move || {
@@ -166,7 +166,7 @@ async fn invite(
 
         ClanInvite::create(&mut conn, ClanInviteCreate {
             clan_id: *clan_id,
-            user_id: *user,
+            user_id: user.user_id,
             invited_by: authenticated.user_id,
         })
     }).await??;
@@ -178,7 +178,7 @@ async fn invite(
     summary = "[Auth]Edit member",
     description = "Changes a member's role in a clan",
     tag = "Clans - Members",
-    request_body = Uuid,
+    request_body = ClanMemberUpdate,
     params(
         ("clan_id" = Uuid, description = "The internal UUID of the clan"),
         ("user_id" = Uuid, description = "The internal UUID of the user")
@@ -197,20 +197,20 @@ async fn invite(
 #[patch("/{user_id}", wrap="UserAuth::load()")]
 async fn edit(
     db: web::Data<Arc<DbAppState>>,
-    clan_id: web::Path<Uuid>,
-    user_id: web::Path<Uuid>,
+    path: web::Path<(Uuid, Uuid)>,
     member: web::Json<ClanMemberUpdate>,
     authenticated: Authenticated
 ) -> Result<HttpResponse, ApiError> {
+    let (clan_id, user_id) = path.into_inner();
     let result = web::block(move || {
         let mut conn = db.connection()?;
 
-        authenticated.has_clan_permission(db.clone(), *clan_id, 2)?;
+        authenticated.has_clan_permission(db.clone(), clan_id, 2)?;
 
         let result = conn.transaction(|connection| -> Result<ClanMember, ApiError> {
-            let member = ClanMember::edit_member_role(connection, *clan_id, *user_id, member.into_inner())?;
+            let member = ClanMember::edit_member_role(connection, clan_id, user_id, member.into_inner())?;
             if member.role == 2 {
-                ClanMember::edit_member_role(connection, *clan_id, authenticated.user_id, ClanMemberUpdate { role: 1 })?;
+                ClanMember::edit_member_role(connection, clan_id, authenticated.user_id, ClanMemberUpdate { role: 1 })?;
             }
             Ok(member)
         })?;
@@ -231,6 +231,7 @@ async fn edit(
             ClanListQueryOptions,
 			ClanPage,
             ClanInvite,
+            ClanMemberInvite,
             ClanMemberResolved
         )
     ),

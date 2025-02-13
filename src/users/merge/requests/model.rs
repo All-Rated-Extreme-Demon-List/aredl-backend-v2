@@ -10,7 +10,7 @@ use diesel::pg::Pg;
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
-use crate::users::merge::model::merge_users;
+use crate::users::merge::merge_users;
 use crate::schema::{users, merge_requests};
 
 #[derive(Serialize, Deserialize, Debug, ToSchema, Insertable, AsChangeset)]

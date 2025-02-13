@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use actix_web::{get, HttpResponse, web};
 use utoipa::OpenApi;
-use crate::aredl::leaderboard::model::{LeaderboardPage, LeaderboardQueryOptions, LeaderboardOrder};
+use crate::aredl::leaderboard::{LeaderboardPage, LeaderboardQueryOptions, LeaderboardOrder};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};

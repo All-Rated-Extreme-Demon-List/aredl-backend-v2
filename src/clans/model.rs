@@ -95,6 +95,9 @@ pub struct ClanListQueryOptions {
 
 impl Clan {
     pub fn create(conn: &mut DbConnection, clan: ClanCreate) -> Result<Self, ApiError> {
+        if clan.tag.len() > 5 {
+            return Err(ApiError::new(400, "The clan tag can at most be 5 characters long."));
+        }
         let clan = diesel::insert_into(clans::table)
             .values(&clan)
             .returning(Self::as_select())

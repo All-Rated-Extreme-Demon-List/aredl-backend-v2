@@ -1,6 +1,5 @@
 mod model;
 mod routes;
-pub mod members;
+mod invites;
 
-pub use model::*;
 pub use routes::{init_routes, ApiDoc};

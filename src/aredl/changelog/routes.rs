@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use actix_web::{get, HttpResponse, web};
 use utoipa::OpenApi;
-use crate::aredl::changelog::model::ChangelogPage;
+use crate::aredl::changelog::ChangelogPage;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};

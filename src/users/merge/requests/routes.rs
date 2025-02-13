@@ -9,7 +9,7 @@ use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::auth::{Permission, UserAuth};
-use crate::users::merge::requests::model::{MergeRequestPage, MergeRequest, MergeRequestUpsert};
+use crate::users::merge::requests::{MergeRequestPage, MergeRequest, MergeRequestUpsert};
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct MergeRequestOptions {

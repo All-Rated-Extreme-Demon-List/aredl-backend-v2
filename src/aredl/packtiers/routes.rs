@@ -2,7 +2,7 @@ use std::sync::Arc;
 use actix_web::{delete, get, HttpResponse, patch, post, web};
 use uuid::Uuid;
 use utoipa::OpenApi;
-use crate::aredl::packtiers::model::PackTierResolved;
+use crate::aredl::packtiers::PackTierResolved;
 use crate::aredl::packtiers::{PackTier, PackTierCreate, PackTierUpdate};
 use crate::auth::{UserAuth, Authenticated, Permission};
 use crate::error_handler::ApiError;

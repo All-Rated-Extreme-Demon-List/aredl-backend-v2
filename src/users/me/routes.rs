@@ -4,14 +4,14 @@ use utoipa::OpenApi;
 use crate::auth::{UserAuth, Authenticated};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
-use crate::users::model::{User, UserResolved};
-use crate::users::me::model::UserMeUpdate;
+use crate::users::{User, UserResolved};
+use crate::users::me::{clan, UserMeUpdate};
 
 #[utoipa::path(
     get,
     summary = "[Auth]Get authenticated user",
     description = "Get information about the currently authenticated user",
-    tag = "Users",
+    tag = "Users - Me",
     responses(
         (status = 200, body = UserResolved)
     ),
@@ -35,7 +35,7 @@ async fn find(db: web::Data<Arc<DbAppState>>, authenticated: Authenticated) -> R
     patch,
     summary = "[Auth]Edit authenticated user",
     description = "Update the current authenticated user base information",
-    tag = "Users",
+    tag = "Users - Me",
     request_body = UserMeUpdate,
     responses(
         (status = 200, body = UserResolved)
@@ -58,6 +58,9 @@ async fn update(db: web::Data<Arc<DbAppState>>, authenticated: Authenticated, us
 
 #[derive(OpenApi)]
 #[openapi(
+    nest(
+        (path = "/clan", api = clan::ApiDoc)
+    ),
     components(
         schemas(
             UserResolved,
@@ -74,6 +77,7 @@ pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/@me")
+            .configure(clan::init_routes)
             .service(find)
             .service(update)
     );
