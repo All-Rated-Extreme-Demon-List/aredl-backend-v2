@@ -11,7 +11,9 @@ mod logout;
 pub use routes::{init_routes, ApiDoc};
 pub use app_state::init_app_state;
 
+pub use app_state::AuthAppState;
 pub use authenticated::Authenticated;
 pub use permission::Permission;
 pub use permission::check_higher_privilege;
 pub use middleware::UserAuth;
+pub use token::create_test_token;
