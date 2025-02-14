@@ -38,7 +38,7 @@ async fn find(db: web::Data<Arc<DbAppState>>, authenticated: Authenticated) -> R
     tag = "Users - Me",
     request_body = UserMeUpdate,
     responses(
-        (status = 200, body = UserResolved)
+        (status = 200, body = User)
     ),
     security(
         ("access_token" = []),

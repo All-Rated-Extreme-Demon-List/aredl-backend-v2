@@ -15,3 +15,8 @@ pub use authenticated::Authenticated;
 pub use permission::Permission;
 pub use permission::check_higher_privilege;
 pub use middleware::UserAuth;
+
+#[cfg(test)]
+pub use token::create_test_token;
+#[cfg(test)]
+pub use app_state::AuthAppState;
