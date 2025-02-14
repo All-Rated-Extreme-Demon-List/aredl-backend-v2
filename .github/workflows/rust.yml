@@ -8,11 +8,29 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  TEST_DATABASE_URL: postgres://postgres:password@localhost:5432/aredl_test
+  JWT_SECRET: ${{ secrets.JWT_SECRET }}
+  DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
+  DISCORD_CLIENT_SECRET: ${{ secrets.DISCORD_CLIENT_SECRET }}
+  DISCORD_REDIRECT_URI: ${{ secrets.DISCORD_REDIRECT_URI }}
 
 jobs:
   build:
 
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: aredl_test
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
 
     steps:
     - uses: actions/checkout@v4
@@ -32,6 +50,7 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: test
+
 
     - name: Build main
       uses: actions-rs/cargo@v1
