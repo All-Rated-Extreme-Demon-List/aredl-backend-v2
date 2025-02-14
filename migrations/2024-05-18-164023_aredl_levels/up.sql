@@ -1,4 +1,4 @@
-ALTER DATABASE aredl SET array_nulls TO false;
+SET array_nulls TO false;
 
 CREATE TABLE aredl_levels (
     id uuid DEFAULT uuid_generate_v4(),
