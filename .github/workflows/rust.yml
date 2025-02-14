@@ -1,7 +1,10 @@
-name: Build & Test
+name: Run tests and build
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 env:
   CARGO_TERM_COLOR: always
@@ -22,13 +25,16 @@ jobs:
         override: true
         components: llvm-tools-preview
 
-    - name: Build
+    - name: Cache cargo for main
+      uses: Swatinem/rust-cache@v1
+
+    - name: Run unit tests
+      uses: actions-rs/cargo@v1
+      with:
+        command: test
+
+    - name: Build main
       uses: actions-rs/cargo@v1
       with:
         command: build
         args: --release
-
-    - name: Test
-      uses: actions-rs/cargo@v1
-      with:
-        command: test

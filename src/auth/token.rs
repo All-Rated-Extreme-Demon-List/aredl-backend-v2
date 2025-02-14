@@ -91,6 +91,7 @@ pub fn check_token_valid(token_claims: &TokenClaims, user_claims: &UserClaims,co
     Ok(())
 }
 
+#[cfg(test)]
 pub fn create_test_token(user_id: Uuid, jwt_encoding_key: &EncodingKey) -> Result<String, ApiError> {
     let (token, _expires) = create_token(
         UserClaims {

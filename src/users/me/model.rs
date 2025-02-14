@@ -54,7 +54,7 @@ impl User {
 
         Ok(UserResolved { user, roles, scopes })
     }
-    pub fn update_me(conn: &mut DbConnection, id: Uuid, user: UserMeUpdate) -> Result<(), ApiError> {
+    pub fn update_me(conn: &mut DbConnection, id: Uuid, user: UserMeUpdate) -> Result<User, ApiError> {
         let (current_ban_level, last_country_update): (i32, NaiveDateTime) = users::table
             .filter(users::id.eq(id))
             .select((users::ban_level, users::last_country_update))
@@ -77,12 +77,13 @@ impl User {
             }
         }
 
-        diesel::update(users::table.filter(users::id.eq(id)))
+        let result = diesel::update(users::table.filter(users::id.eq(id)))
             .set((
                 &user,
                 user.country.map(|_| users::last_country_update.eq(now)),
             ))
-            .execute(conn)?;
-        Ok(())
+            .returning(User::as_select())
+            .get_result::<User>(conn)?;
+        Ok(result)
     }
 }
