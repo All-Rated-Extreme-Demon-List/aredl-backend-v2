@@ -1,5 +1,11 @@
 // @generated automatically by Diesel CLI.
 
+pub mod sql_types {
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "notification_type"))]
+    pub struct NotificationType;
+}
+
 diesel::table! {
     aredl_last_gddl_update (id) {
         id -> Uuid,
@@ -163,6 +169,19 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::NotificationType;
+
+    notifications (id) {
+        id -> Uuid,
+        user_id -> Uuid,
+        content -> Text,
+        notification_type -> NotificationType,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     oauth_requests (csrf_state) {
         csrf_state -> Varchar,
         pkce_verifier -> Varchar,
@@ -227,6 +246,7 @@ diesel::joinable!(clan_invites -> clans (clan_id));
 diesel::joinable!(clan_members -> clans (clan_id));
 diesel::joinable!(clan_members -> users (user_id));
 diesel::joinable!(merge_logs -> users (primary_user));
+diesel::joinable!(notifications -> users (user_id));
 diesel::joinable!(user_roles -> roles (role_id));
 diesel::joinable!(user_roles -> users (user_id));
 
@@ -245,6 +265,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     clans,
     merge_logs,
     merge_requests,
+    notifications,
     oauth_requests,
     permissions,
     roles,

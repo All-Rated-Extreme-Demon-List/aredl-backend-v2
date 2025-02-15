@@ -14,12 +14,13 @@ mod custom_schema;
 mod auth;
 mod users;
 mod roles;
+mod clans;
+mod docs;
 mod page_helper;
 mod cache_control;
 mod refresh_leaderboard;
 mod refresh_level_data;
-mod docs;
-mod clans;
+mod clean_notifications;
 
 use std::env;
 use actix_cors::Cors;
@@ -32,6 +33,7 @@ use crate::docs::ApiDoc;
 use crate::cache_control::CacheController;
 use crate::refresh_leaderboard::start_leaderboard_refresher;
 use crate::refresh_level_data::start_level_data_refresher;
+use crate::clean_notifications::start_notifications_cleaner;
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
@@ -42,6 +44,8 @@ async fn main() -> std::io::Result<()> {
     db_app_state.run_pending_migrations();
 
     start_leaderboard_refresher(db_app_state.clone());
+
+    start_notifications_cleaner(db_app_state.clone());
 
     start_level_data_refresher(db_app_state.clone()).await;
 
