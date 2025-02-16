@@ -10,7 +10,6 @@ use crate::error_handler::ApiError;
 use crate::clans::{Clan, ClanCreate, ClanInvite, ClanListQueryOptions, ClanMember, ClanPage, ClanUpdate};
 use crate::clans::members::ClanMemberResolved;
 
-
 #[utoipa::path(
     get,
     summary = "Get clan members",
@@ -163,12 +162,15 @@ async fn invite(
         let mut conn = db.connection()?;
 
         authenticated.has_clan_permission(db.clone(), *clan_id, 1)?;
+				
+		let invite = ClanInvite::create(&mut conn, ClanInviteCreate {
+			clan_id: *clan_id,
+			user_id: user.user_id,
+			invited_by: authenticated.user_id,
+		})?;
 
-        ClanInvite::create(&mut conn, ClanInviteCreate {
-            clan_id: *clan_id,
-            user_id: user.user_id,
-            invited_by: authenticated.user_id,
-        })
+		Ok::<ClanInvite, ApiError>(invite)
+		
     }).await??;
     Ok(HttpResponse::Ok().json(result))
 }

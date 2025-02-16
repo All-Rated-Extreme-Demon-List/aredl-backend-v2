@@ -1,7 +1,7 @@
 mod model;
 mod routes;
 mod tests;
-mod me;
+pub mod me;
 mod names;
 mod merge;
 

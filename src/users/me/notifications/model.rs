@@ -1,5 +1,6 @@
 use chrono::NaiveDateTime;
-use diesel::{Connection, delete, ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::{Connection, delete, ExpressionMethods, QueryDsl, RunQueryDsl};
+use diesel_derive_enum::DbEnum;
 use uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -7,14 +8,15 @@ use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::notifications;
 
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum)]
+#[ExistingTypePath = "crate::schema::sql_types::NotificationType"]
 pub enum NotificationType {
 	Info,
 	Success,
 	Failure
 }
 
-#[derive(Debug, Serialize, Deserialize, ToSchema, Queryable, Selectable)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, Queryable, Selectable, Insertable)]
 #[diesel(table_name = notifications)]
 pub struct Notification {
 	/// The internal UUID of the notification
@@ -34,7 +36,6 @@ impl Notification {
 	pub fn find_all_me_notifications(conn: &mut DbConnection, user_id: Uuid) -> Result<Vec<Notification>, ApiError> {
         let notifications = notifications::table
             .filter(notifications::user_id.eq(user_id))
-            .select(Notification::as_select())
             .load::<Notification>(conn)?;
         Ok(notifications)
     }
@@ -44,6 +45,25 @@ impl Notification {
 
 			delete(notifications::table)
 				.filter(notifications::user_id.eq(user_id))
+				.execute(connection)?;
+
+			Ok(())
+		})?;
+
+		Ok(())
+	}
+
+	pub fn create(conn: &mut DbConnection, user_id: Uuid, content: String, notification_type: NotificationType) -> Result<(), ApiError> {
+		conn.transaction(|connection| -> Result<(), ApiError> {
+
+			diesel::insert_into(notifications::table)
+				.values( Notification {
+					id: Uuid::new_v4(),
+					user_id,
+					content,
+					notification_type,
+					created_at: chrono::Utc::now().naive_utc()
+				})
 				.execute(connection)?;
 
 			Ok(())

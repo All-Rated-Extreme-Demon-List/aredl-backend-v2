@@ -6,7 +6,9 @@ use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::clans::{Clan, ClanInvite};
 use crate::clans::members::ClanMemberAdd;
-use crate::schema::{clan_members, clan_invites, clans};
+use crate::schema::{clan_invites, clan_members, clans, users};
+use crate::users::me::notifications::{Notification, NotificationType};
+use crate::users::BaseUser;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, Queryable)]
 pub struct ClanInviteResolved {
@@ -29,11 +31,22 @@ impl ClanInvite {
     }
 
 	pub fn accept_invite(conn: &mut DbConnection, invite_id: Uuid) -> Result<(), ApiError> {
+		
 		conn.transaction(|connection| -> Result<(), ApiError> {
 			let invite = clan_invites::table
 				.filter(clan_invites::id.eq(invite_id))
 				.select(ClanInvite::as_select())
 				.first::<ClanInvite>(connection)?;
+
+			let clan = clans::table
+				.filter(clans::id.eq(invite.clan_id))
+				.select(Clan::as_select())
+				.first::<Clan>(connection)?;
+
+			let user = users::table
+				.filter(users::id.eq(invite.user_id))
+				.select(BaseUser::as_select())
+				.first::<BaseUser>(connection)?;
 
 			delete(clan_invites::table)
 				.filter(clan_invites::user_id.eq(invite.user_id))
@@ -46,6 +59,8 @@ impl ClanInvite {
 				})
 				.execute(connection)?;
 
+			let content = format!("{} accepted your invite to join {}", user.global_name, clan.global_name);
+			Notification::create(connection, invite.invited_by, content, NotificationType::Success)?;
 			Ok(())
 		})?;
 

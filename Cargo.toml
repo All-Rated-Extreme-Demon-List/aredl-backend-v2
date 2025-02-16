@@ -16,6 +16,7 @@ chrono = {version = "0.4", features = ["serde"]}
 uuid = { version = "1.8", features = ["serde", "v4"] }
 diesel = { version = "2.1", features = ["postgres", "r2d2", "chrono", "uuid"]}
 diesel_migrations = "2.1"
+diesel-derive-enum = { version = "2.1", features = ["postgres"]}
 openidconnect = { version = "3.5", features = ["reqwest"]}
 futures-util = "0.3"
 dotenv = "0.15"

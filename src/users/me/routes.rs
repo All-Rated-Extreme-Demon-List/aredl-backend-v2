@@ -5,7 +5,7 @@ use crate::auth::{UserAuth, Authenticated};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::users::{User, UserResolved};
-use crate::users::me::{clan, UserMeUpdate};
+use crate::users::me::{clan, notifications, UserMeUpdate};
 
 #[utoipa::path(
     get,
@@ -59,7 +59,8 @@ async fn update(db: web::Data<Arc<DbAppState>>, authenticated: Authenticated, us
 #[derive(OpenApi)]
 #[openapi(
     nest(
-        (path = "/clan", api = clan::ApiDoc)
+        (path = "/clan", api = clan::ApiDoc),
+		(path = "/notifications", api = notifications::ApiDoc)
     ),
     components(
         schemas(
@@ -78,6 +79,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/@me")
             .configure(clan::init_routes)
+			.configure(notifications::init_routes)
             .service(find)
             .service(update)
     );

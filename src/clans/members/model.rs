@@ -6,8 +6,9 @@ use utoipa::ToSchema;
 use diesel::pg::Pg;
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
-use crate::clans::{ClanMember, ClanInvite};
-use crate::schema::{clan_members, users, clan_invites};
+use crate::clans::{Clan, ClanInvite, ClanMember};
+use crate::schema::{clan_invites, clan_members, clans, users};
+use crate::users::me::notifications::{Notification, NotificationType};
 use crate::users::BaseUser;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Insertable, Selectable, Queryable, ToSchema)]
@@ -170,9 +171,29 @@ impl ClanInvite {
 		if user_in_clan.is_some() {
 			return Err(ApiError::new(400, "This user is already in a clan"));
 		}
-		let invite = insert_into(clan_invites::table)
-			.values(invite)
-			.get_result(conn)?;
-		Ok(invite)
+
+		let invited_by = users::table
+			.filter(users::id.eq(invite.invited_by))
+			.select(users::global_name)
+			.first::<String>(conn)?;
+
+		let clan = clans::table
+				.filter(clans::id.eq(invite.clan_id))
+				.first::<Clan>(conn)?;
+
+		let result = conn.transaction::<_, ApiError, _>(|connection| {
+            let invite = insert_into(clan_invites::table)
+				.values(invite)
+				.returning(ClanInvite::as_select())
+				.get_result(connection)?;
+
+
+            let content = format!("{} invited you to join {}", invited_by, clan.global_name);
+            Notification::create(connection, invite.user_id, content, NotificationType::Info)?;
+
+            Ok(invite)
+        })?;
+		
+		Ok(result)
 	}
 }
