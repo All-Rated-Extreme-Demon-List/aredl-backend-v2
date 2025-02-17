@@ -54,10 +54,11 @@ async fn list(
 async fn accept(
     db: web::Data<Arc<DbAppState>>,
     invite_id: web::Path<Uuid>,
+	authenticated: Authenticated
 ) -> Result<HttpResponse, ApiError> {
     let result = web::block(move || {
         let mut conn = db.connection()?;
-        ClanInvite::accept_invite(&mut conn, *invite_id)
+        ClanInvite::accept_invite(&mut conn, *invite_id, authenticated)
     }).await??;
     Ok(HttpResponse::Ok().json(result))
 }
@@ -83,10 +84,11 @@ async fn accept(
 async fn reject(
     db: web::Data<Arc<DbAppState>>,
     invite_id: web::Path<Uuid>,
+	authenticated: Authenticated
 ) -> Result<HttpResponse, ApiError> {
     let result = web::block(move || {
         let mut conn = db.connection()?;
-        ClanInvite::reject_invite(&mut conn, *invite_id)
+        ClanInvite::reject_invite(&mut conn, *invite_id, authenticated)
     }).await??;
     Ok(HttpResponse::Ok().json(result))
 }

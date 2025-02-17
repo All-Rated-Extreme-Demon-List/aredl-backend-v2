@@ -54,9 +54,16 @@ BEGIN
 	AND ac1.level_id = ac2.level_id
 	AND ac2.user_id = p_primary_user;
 
+	DELETE FROM clan_members cm1
+	USING clan_members cm2
+	WHERE cm1.user_id = p_secondary_user
+	AND cm1.level_id = cm2.level_id
+	AND cm2.user_id = p_primary_user;
+
 	UPDATE aredl_records SET submitted_by = p_primary_user WHERE submitted_by = p_secondary_user;
 	UPDATE aredl_submissions SET submitted_by = p_primary_user WHERE submitted_by = p_secondary_user;
 	UPDATE aredl_levels_created SET user_id = p_primary_user WHERE user_id = p_secondary_user;
+	UPDATE clan_members SET user_id = p_primary_user WHERE user_id = p_secondary_user;
 	UPDATE aredl_levels SET publisher_id = p_primary_user WHERE publisher_id = p_secondary_user;
 
 	INSERT INTO merge_logs (primary_user, secondary_user, secondary_username, secondary_discord_id, secondary_global_name)

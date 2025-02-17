@@ -55,6 +55,7 @@ diesel::table! {
         extremes_rank -> Int4,
         country -> Int4,
         level_points -> Int4,
+		members_count -> Int4,
         hardest -> Nullable<Uuid>,
         extremes -> Int4
     }
@@ -137,6 +138,7 @@ diesel::table! {
         extremes_rank -> Int4,
         clan_id -> Uuid,
         level_points -> Int4,
+		members_count -> Int4,
         hardest -> Nullable<Uuid>,
         extremes -> Int4
     }

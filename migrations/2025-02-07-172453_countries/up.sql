@@ -36,16 +36,27 @@ level_count AS (
         count(*) AS c
     FROM completed_levels 
     GROUP BY country
+),
+user_count AS (
+	SELECT
+		country,
+		count(*) AS c
+	FROM users
+	WHERE ban_level = 0
+	AND country IS NOT NULL AND country <> 0
+	GROUP BY country
 )
 SELECT 
     RANK() OVER (ORDER BY lp.level_points DESC)::INTEGER AS rank,
 	RANK() OVER (ORDER BY COALESCE(lc.c, 0) DESC)::INTEGER AS extremes_rank,
 	lp.*,
+	COALESCE(uc.c, 0)::INTEGER AS members_count,
     h.level_id AS hardest,
     COALESCE(lc.c, 0)::INTEGER AS extremes
 FROM level_points lp
 LEFT JOIN hardest h ON h.country = lp.country
-LEFT JOIN level_count lc ON lc.country = lp.country;
+LEFT JOIN level_count lc ON lc.country = lp.country
+LEFT JOIN user_count uc ON uc.country = lp.country;
 
 CREATE OR REPLACE VIEW aredl_min_placement_country_records AS
     WITH subquery AS (

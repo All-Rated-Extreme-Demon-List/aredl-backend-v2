@@ -2,6 +2,7 @@ use diesel::{Connection, delete, ExpressionMethods, insert_into, JoinOnDsl, Quer
 use uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+use crate::auth::Authenticated;
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::clans::{Clan, ClanInvite};
@@ -30,13 +31,17 @@ impl ClanInvite {
         Ok(invites)
     }
 
-	pub fn accept_invite(conn: &mut DbConnection, invite_id: Uuid) -> Result<(), ApiError> {
+	pub fn accept_invite(conn: &mut DbConnection, invite_id: Uuid, authenticated: Authenticated) -> Result<(), ApiError> {
 		
 		conn.transaction(|connection| -> Result<(), ApiError> {
 			let invite = clan_invites::table
 				.filter(clan_invites::id.eq(invite_id))
 				.select(ClanInvite::as_select())
 				.first::<ClanInvite>(connection)?;
+
+			if invite.user_id != authenticated.user_id {
+				return Err(ApiError::new(403, "You can not accept an invite that's not yours"));
+			}
 
 			let clan = clans::table
 				.filter(clans::id.eq(invite.clan_id))
@@ -67,7 +72,15 @@ impl ClanInvite {
 		Ok(())
 	}
 
-	pub fn reject_invite(conn: &mut DbConnection, invite_id: Uuid) -> Result<(), ApiError> {
+	pub fn reject_invite(conn: &mut DbConnection, invite_id: Uuid, authenticated: Authenticated) -> Result<(), ApiError> {
+		let invite = clan_invites::table
+			.filter(clan_invites::id.eq(invite_id))
+			.select(ClanInvite::as_select())
+			.first::<ClanInvite>(conn)?;
+
+		if invite.user_id != authenticated.user_id {
+			return Err(ApiError::new(403, "You can not reject an invite that's not yours"));
+		}
 		delete(clan_invites::table)
 			.filter(clan_invites::id.eq(invite_id))
 			.execute(conn)?;

@@ -68,16 +68,25 @@ level_count AS (
         count(*) AS c
     FROM completed_levels 
     GROUP BY clan_id
+),
+user_count AS (
+	SELECT
+		clan_id,
+		count(*) AS c
+	FROM clan_members
+	GROUP BY clan_id
 )
 SELECT 
     RANK() OVER (ORDER BY lp.level_points DESC)::INTEGER AS rank,
 	RANK() OVER (ORDER BY COALESCE(lc.c, 0) DESC)::INTEGER AS extremes_rank,
 	lp.*,
+	COALESCE(uc.c, 0)::INTEGER AS members_count,
     h.level_id AS hardest,
     COALESCE(lc.c, 0)::INTEGER AS extremes
 FROM level_points lp
 LEFT JOIN hardest h ON h.clan_id = lp.clan_id
-LEFT JOIN level_count lc ON lc.clan_id = lp.clan_id;
+LEFT JOIN level_count lc ON lc.clan_id = lp.clan_id
+LEFT JOIN user_count uc ON uc.clan_id = lp.clan_id;
 
 CREATE OR REPLACE VIEW aredl_min_placement_clans_records AS
     WITH subquery AS (

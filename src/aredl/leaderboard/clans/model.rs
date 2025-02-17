@@ -20,6 +20,7 @@ pub struct ClansLeaderboardEntry {
     pub extremes_rank: i32,
     pub clan_id: Uuid,
     pub level_points: i32,
+	pub members_count: i32,
     pub hardest: Option<Uuid>,
     pub extremes: i32
 }
@@ -34,9 +35,11 @@ pub struct ClansLeaderboardEntryResolved {
     pub clan: Clan,
     /// Total points of the country.
     pub level_points: i32,
-    /// Hardest level completed by a user in this country.
+	/// Count of members in this clan.
+	pub members_count: i32,
+    /// Hardest level completed by a user in this clan.
     pub hardest: Option<BaseLevel>,
-    /// Count of extremes completed by users in this country.
+    /// Count of extremes completed by users in this clan.
     pub extremes: i32
 }
 
@@ -94,6 +97,7 @@ impl ClansLeaderboardPage {
                 extremes_rank: entry.extremes_rank,
 				clan,
                 level_points: entry.level_points,
+				members_count: entry.members_count,
                 hardest,
                 extremes: entry.extremes
             })

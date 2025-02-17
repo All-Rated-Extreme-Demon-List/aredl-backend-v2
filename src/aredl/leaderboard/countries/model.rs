@@ -19,6 +19,7 @@ pub struct CountryLeaderboardEntry {
     pub extremes_rank: i32,
     pub country: i32,
     pub level_points: i32,
+	pub members_count: i32,
     pub hardest: Option<Uuid>,
     pub extremes: i32
 }
@@ -33,6 +34,8 @@ pub struct CountryLeaderboardEntryResolved {
     pub country: i32,
     /// Total points of the country.
     pub level_points: i32,
+	/// Count of members in this country.
+	pub members_count: i32,
     /// Hardest level completed by a user in this country.
     pub hardest: Option<BaseLevel>,
     /// Count of extremes completed by users in this country.
@@ -89,6 +92,7 @@ impl CountryLeaderboardPage {
                 extremes_rank: entry.extremes_rank,
                 country: entry.country,
                 level_points: entry.level_points,
+				members_count: entry.members_count,
                 hardest,
                 extremes: entry.extremes
             })
