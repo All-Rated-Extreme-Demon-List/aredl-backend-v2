@@ -3,13 +3,14 @@ use diesel::{ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQuery
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use utoipa::ToSchema;
+use crate::clans::Clan;
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::users::{Role, User};
 use crate::aredl::packs::{BasePack, PackWithTierResolved};
 use crate::aredl::packtiers::BasePackTier;
 use crate::aredl::levels::ExtendedBaseLevel;
-use crate::schema::{aredl_levels, aredl_levels_created, aredl_pack_tiers, aredl_packs, aredl_records, roles, user_roles, users};
+use crate::schema::{aredl_levels, aredl_levels_created, aredl_pack_tiers, aredl_packs, aredl_records, clan_members, clans, roles, user_roles, users};
 use crate::custom_schema::{aredl_completed_packs, aredl_user_leaderboard};
 
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
@@ -65,6 +66,8 @@ pub struct ProfileRecordResolved {
 pub struct ProfileResolved {
     #[serde(flatten)]
     pub user: User,
+	/// The clan the user is in.
+	pub clan: Option<Clan>,
     /// The roles the user has.
     pub roles: Vec<Role>,
     /// Leaderboard ranks of the user.
@@ -87,6 +90,13 @@ impl ProfileResolved {
             .filter(users::id.eq(id))
             .select(User::as_select())
             .get_result::<User>(conn)?;
+
+		let clan = clans::table
+			.inner_join(clan_members::table.on(clans::id.eq(clan_members::clan_id)))
+			.filter(clan_members::user_id.eq(id))
+			.select(Clan::as_select())
+			.first::<Clan>(conn)
+			.optional()?;
 
         let roles = roles::table
             .inner_join(user_roles::table.on(user_roles::role_id.eq(roles::id)))
@@ -140,6 +150,6 @@ impl ProfileResolved {
             .map(|(pack, tier)| PackWithTierResolved { pack, tier })
             .collect::<Vec<_>>();
 
-        Ok(Self { user, roles, rank, packs, records, verified, created, published })
+        Ok(Self { user, clan, roles, rank, packs, records, verified, created, published })
     }
 }

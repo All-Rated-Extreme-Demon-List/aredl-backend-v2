@@ -8,6 +8,7 @@ use diesel::sql_types::Bool;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use utoipa::ToSchema;
+use crate::clans::Clan;
 use crate::db::{DbAppState, DbConnection};
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
@@ -87,6 +88,8 @@ pub struct UserUpsert {
 pub struct UserResolved {
     #[serde(flatten)]
     pub user: User,
+	/// Clan the user is in.
+	pub clan: Option<Clan>,
     /// Roles the user has.
     pub roles: Vec<Role>,
     /// Permissions scopes the user has.

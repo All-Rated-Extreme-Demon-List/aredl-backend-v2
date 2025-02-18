@@ -2,12 +2,13 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use chrono::{Utc, NaiveDateTime};
 use diesel::dsl::now;
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper, JoinOnDsl};
+use diesel::{ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
 use utoipa::ToSchema;
+use crate::clans::Clan;
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::users::{User, UserResolved, Role};
-use crate::schema::{users, user_roles, roles, permissions};
+use crate::schema::{clan_members, clans, permissions, roles, user_roles, users};
 
 #[derive(Serialize, Deserialize, AsChangeset, Debug, ToSchema)]
 #[diesel(table_name = users, check_for_backend(Pg))]
@@ -28,6 +29,13 @@ impl User {
             .filter(users::id.eq(id))
             .select(User::as_select())
             .first::<User>(conn)?;
+
+		let clan = clans::table
+			.inner_join(clan_members::table.on(clans::id.eq(clan_members::clan_id)))
+			.filter(clan_members::user_id.eq(id))
+			.select(Clan::as_select())
+			.first::<Clan>(conn)
+			.optional()?;
 
         let roles = user_roles::table
             .inner_join(roles::table.on(user_roles::role_id.eq(roles::id)))
@@ -52,7 +60,7 @@ impl User {
             })
             .collect::<Vec<String>>();
 
-        Ok(UserResolved { user, roles, scopes })
+        Ok(UserResolved { user, clan, roles, scopes })
     }
     pub fn update_me(conn: &mut DbConnection, id: Uuid, user: UserMeUpdate) -> Result<User, ApiError> {
         let (current_ban_level, last_country_update): (i32, NaiveDateTime) = users::table
