@@ -86,7 +86,6 @@ pub struct UserUpsert {
 
 #[derive(Serialize, Debug, ToSchema)]
 pub struct UserResolved {
-    #[serde(flatten)]
     pub user: User,
 	/// Clan the user is in.
 	pub clan: Option<Clan>,
