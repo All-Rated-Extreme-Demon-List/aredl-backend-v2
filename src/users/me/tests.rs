@@ -27,7 +27,7 @@ async fn get_authenticated_user() {
 	assert!(resp.status().is_success());
 
 	let user: serde_json::Value = test::read_body_json(resp).await;
-	assert_eq!(user["username"], username);
+	assert_eq!(user["user"]["username"], username);
 }
 
 #[actix_web::test]
@@ -53,6 +53,7 @@ async fn update_authenticated_user() {
 	assert!(resp.status().is_success());
 
 	let updated_user: serde_json::Value = test::read_body_json(resp).await;
+
 	assert_eq!(updated_user["global_name"], "Updated Name");
 	assert_eq!(updated_user["description"], "Updated description");
 	assert_eq!(updated_user["ban_level"], 1);
@@ -67,10 +68,10 @@ async fn update_authenticated_user() {
 	assert!(resp.status().is_success());
 
 	let user: serde_json::Value = test::read_body_json(resp).await;
-	assert_eq!(user["global_name"], "Updated Name");
-	assert_eq!(user["description"], "Updated description");
-	assert_eq!(user["ban_level"], 1);
-	assert_eq!(user["country"], 10);
+	assert_eq!(user["user"]["global_name"], "Updated Name");
+	assert_eq!(user["user"]["description"], "Updated description");
+	assert_eq!(user["user"]["ban_level"], 1);
+	assert_eq!(user["user"]["country"], 10);
 
 }
 
