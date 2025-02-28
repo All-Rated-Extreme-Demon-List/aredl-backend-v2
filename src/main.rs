@@ -79,7 +79,7 @@ async fn main() -> std::io::Result<()> {
                 nav-accent-color = #ff6f00 \
              >\
                 <header style=\"color:white; font-weight: lighter; font-size: 1.5rem;\" slot=\"header\">All Rated Extreme Demons List | API v2 Documentation</header>\
-                <img style=\"padding: 0.5rem; height: 3rem;\" slot=\"logo\"  src=\"https://cdn.discordapp.com/attachments/379376351125438482/1335372145471000657/logo.png?ex=679fedb9&is=679e9c39&hm=3929e8d7b9144e775a3a0fa32830c45d03fb9d870e83ab33a9c20a67e14b28ae&\"/>
+                <img style=\"padding: 0.5rem; height: 3rem;\" slot=\"logo\"  src=\"https://aredl.net/logo.png\"/>
             </rapi-doc></body></html>";
 
         App::new()
