@@ -25,7 +25,7 @@ pub struct BaseUser {
     pub global_name: String,
 }
 
-#[derive(Serialize, Selectable, Queryable, Debug, ToSchema)]
+#[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
 #[diesel(table_name=users, check_for_backend(Pg))]
 pub struct BaseDiscordUser {
     /// Internal UUID of the user.

@@ -1,3 +1,3 @@
 DROP TABLE IF EXISTS notifications;
 
-DROP TYPE notification_type;
+DROP TYPE IF EXISTS notification_type;

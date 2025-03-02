@@ -9,7 +9,7 @@ use crate::error_handler::ApiError;
 use crate::clans::{Clan, ClanInvite, ClanMember};
 use crate::schema::{clan_invites, clan_members, clans, users};
 use crate::users::me::notifications::{Notification, NotificationType};
-use crate::users::BaseUser;
+use crate::users::BaseDiscordUser;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Insertable, Selectable, Queryable, ToSchema)]
 #[diesel(table_name=clan_members, check_for_backend(Pg))]
@@ -67,7 +67,7 @@ pub struct ClanMemberMeta {
 #[derive(Debug, Serialize, Deserialize, ToSchema, Queryable)]
 pub struct ClanMemberResolved {
 	#[serde(flatten)]
-	pub user: BaseUser,
+	pub user: BaseDiscordUser,
 	#[serde(flatten)]
 	pub member: ClanMemberMeta
 }
@@ -79,7 +79,7 @@ impl ClanMember {
             .filter(clan_members::clan_id.eq(clan_id))
             .inner_join(users::table.on(clan_members::user_id.eq(users::id)))
             .select((
-				BaseUser::as_select(),
+				BaseDiscordUser::as_select(),
 				ClanMemberMeta::as_select()
 			))
             .load::<ClanMemberResolved>(conn)?;

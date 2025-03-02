@@ -319,6 +319,10 @@ fn main() {
 
     println!("Migrating");
     db_conn.transaction::<_, MigrationError, _>(|conn| {
+        println!("\tResetting db");
+        conn.revert_all_migrations(MIGRATIONS)?;
+        conn.run_pending_migrations(MIGRATIONS)?;
+        
         println!("\tLoading user and level id's");
         let old_user_ids: HashMap<i64, Uuid> = users::table
             .filter(users::json_id.is_not_null())
@@ -344,10 +348,6 @@ fn main() {
             .load::<(String, Uuid)>(conn)?
             .into_iter()
             .collect();
-
-        println!("\tResetting db");
-        conn.revert_all_migrations(MIGRATIONS)?;
-        conn.run_pending_migrations(MIGRATIONS)?;
 
         println!("\tInserting users");
         diesel::insert_into(users::table)
