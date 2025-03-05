@@ -319,20 +319,27 @@ fn main() {
 
     println!("Migrating");
     db_conn.transaction::<_, MigrationError, _>(|conn| {
-        println!("\tResetting db");
-        conn.revert_all_migrations(MIGRATIONS)?;
-        conn.run_pending_migrations(MIGRATIONS)?;
         
         println!("\tLoading user and level id's");
-        let old_user_ids: HashMap<i64, Uuid> = users::table
-            .filter(users::json_id.is_not_null())
-            .select((
-            users::json_id.assume_not_null(),
-            users::id,
-            ))
-            .load::<(i64, Uuid)>(conn)?
-            .into_iter()
-            .collect();
+        let table_exists: bool = diesel::select(diesel::dsl::sql::<diesel::sql_types::Bool>("to_regclass('public.users') IS NOT NULL"))
+            .get_result(conn)
+            .unwrap_or(false);
+
+        let old_user_ids: HashMap<i64, Uuid> = if table_exists {
+            users::table
+                .filter(users::json_id.is_not_null())
+                .select((users::json_id.assume_not_null(), users::id))
+                .load::<(i64, Uuid)>(conn)?
+                .into_iter()
+                .collect()
+        } else {
+            HashMap::new()
+        };
+
+
+        println!("\tResetting db");
+            conn.revert_all_migrations(MIGRATIONS)?;
+            conn.run_pending_migrations(MIGRATIONS)?;
 
         let users = users.into_iter()
             .map(|mut user| {
