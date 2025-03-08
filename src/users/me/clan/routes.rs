@@ -20,7 +20,7 @@ use crate::users::me::clan::invites;
 		("api_key" = []),
 	)
 )]
-#[post("", wrap="UserAuth::load()")]
+#[post("/leave", wrap="UserAuth::load()")]
 async fn leave(
     db: web::Data<Arc<DbAppState>>,
 	authenticated: Authenticated

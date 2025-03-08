@@ -240,6 +240,10 @@ fn main() {
     let discord_map = load_json_from_file::<HashMap<i64, String>>(
         aredl_path.join("_discord_ids.json").as_path());
 
+    let clan_roles: HashMap<i64, i32> = load_json_from_file(
+        aredl_path.join("_clan_roles.json").as_path()
+    );
+
     let user_country_map: HashMap<i64, i32> = country_data
         .into_iter()
         .flat_map(|country|
@@ -678,6 +682,15 @@ fn main() {
                     .execute(conn)?;
             }
         }
+
+        for (json_id, role_value) in clan_roles.iter() {
+            if let Some(user_uuid) = user_map.get(json_id) {
+                diesel::update(clan_members::table.filter(clan_members::user_id.eq(*user_uuid)))
+                    .set(clan_members::role.eq(*role_value))
+                    .execute(conn)?;
+            } 
+        }
+
         Ok(())
     }).expect("Failed to migrate");
 
