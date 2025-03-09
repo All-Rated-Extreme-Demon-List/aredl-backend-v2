@@ -1,15 +1,18 @@
 use chrono::NaiveDateTime;
 use diesel::pg::Pg;
-use diesel::{BoxableExpression, ExpressionMethods, PgTextExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::{BoxableExpression, ExpressionMethods, PgTextExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper, OptionalExtension};
 use diesel::expression::AsExpression;
 use diesel::sql_types::Bool;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use utoipa::ToSchema;
+use crate::auth::Authenticated;
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::{clans, clan_members, clan_invites};
+
+use super::members::ClanMemberAdd;
 
 #[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
 #[diesel(table_name=clans, check_for_backend(Pg))]
@@ -41,6 +44,8 @@ pub struct ClanMember {
 	pub role: i32,
     /// Timestamp of when the user joined the clan.
     pub created_at: NaiveDateTime,
+    /// Timestamp of when the user was last updated.
+    pub updated_at: NaiveDateTime
 }
 
 #[derive(Debug, Serialize, Deserialize, Selectable, Queryable, ToSchema)]
@@ -94,7 +99,7 @@ pub struct ClanListQueryOptions {
 }
 
 impl Clan {
-    pub fn create(conn: &mut DbConnection, clan: ClanCreate) -> Result<Self, ApiError> {
+    pub fn create_empty(conn: &mut DbConnection, clan: ClanCreate) -> Result<Self, ApiError> {
         if clan.tag.len() > 5 {
             return Err(ApiError::new(400, "The clan tag can at most be 5 characters long."));
         }
@@ -102,6 +107,42 @@ impl Clan {
             .values(&clan)
             .returning(Self::as_select())
             .get_result::<Self>(conn)?;
+        Ok(clan)
+    }
+
+    pub fn create_and_join(conn: &mut DbConnection, clan: ClanCreate, authenticated: Authenticated) -> Result<Self, ApiError> {
+        let existing_clan_member = clan_members::table
+            .filter(clan_members::user_id.eq(authenticated.user_id))
+            .first::<ClanMember>(conn)
+            .optional()?;
+
+        if existing_clan_member.is_some() {
+            return Err(ApiError::new(400, "You are already in a clan."));
+        }
+
+        if clan.tag.len() > 5 {
+            return Err(ApiError::new(400, "The clan tag can at most be 5 characters long."));
+        }
+
+        let clan = diesel::insert_into(clans::table)
+            .values(&clan)
+            .returning(Self::as_select())
+            .get_result::<Self>(conn)?;
+
+
+        diesel::insert_into(clan_members::table)
+            .values(ClanMemberAdd {
+                clan_id: clan.id,
+                user_id: authenticated.user_id,
+            })
+            .execute(conn)?;
+
+        diesel::update(clan_members::table)
+            .filter(clan_members::clan_id.eq(clan.id))
+            .filter(clan_members::user_id.eq(authenticated.user_id))
+            .set(clan_members::role.eq(2))
+            .execute(conn)?;
+
         Ok(clan)
     }
 

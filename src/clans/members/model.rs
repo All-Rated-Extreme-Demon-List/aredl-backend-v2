@@ -139,7 +139,7 @@ impl ClanMember {
 		let member = diesel::update(clan_members::table)
 			.filter(clan_members::clan_id.eq(clan_id))
 			.filter(clan_members::user_id.eq(user_id))
-			.set(clan_members::role.eq(member.role))
+			.set({clan_members::role.eq(member.role); clan_members::updated_at.eq(chrono::Utc::now().naive_utc())})
 			.returning(Self::as_select())
 			.get_result(conn)?;
 		Ok(member)

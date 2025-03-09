@@ -40,8 +40,8 @@ async fn list(
 
 #[utoipa::path(
     post,
-    summary = "[Auth]Create clan",
-    description = "Creates a new empty clan",
+    summary = "[Auth]Create new clan",
+    description = "Creates a new clan and sets you as owner of it. You must not be in a clan already to create one.",
     tag = "Clans",
     request_body = ClanCreate,
     responses(
@@ -53,13 +53,41 @@ async fn list(
     )
 )]
 #[post("", wrap="UserAuth::load()")]
-async fn create(
+async fn create_and_join(
+    db: web::Data<Arc<DbAppState>>,
+    clan: web::Json<ClanCreate>,
+    authenticated: Authenticated,
+) -> Result<HttpResponse, ApiError> {
+    let result = web::block(move || {
+        let mut conn = db.connection()?;
+        Clan::create_and_join(&mut conn, clan.into_inner(), authenticated)
+
+    }).await??;
+    Ok(HttpResponse::Ok().json(result))
+}
+
+#[utoipa::path(
+    post,
+    summary = "[Staff]Create empty clan",
+    description = "Creates a new empty clan. (Staff only)",
+    tag = "Clans",
+    request_body = ClanCreate,
+    responses(
+        (status = 200, body = Clan)
+    ),
+    security(
+        ("access_token" = []),
+        ("api_key" = []),
+    )
+)]
+#[post("", wrap="UserAuth::require(Permission::ClanModify)")]
+async fn create_empty(
     db: web::Data<Arc<DbAppState>>,
     clan: web::Json<ClanCreate>,
 ) -> Result<HttpResponse, ApiError> {
     let result = web::block(move || {
         let mut conn = db.connection()?;
-        Clan::create(&mut conn, clan.into_inner())
+        Clan::create_empty(&mut conn, clan.into_inner())
     }).await??;
     Ok(HttpResponse::Ok().json(result))
 }
@@ -154,7 +182,8 @@ async fn delete(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticat
     ),
     paths(
         list,
-        create,
+        create_and_join,
+        create_empty,
         update,
 		delete
     )
@@ -165,7 +194,8 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
         web::scope("/clans")
         .configure(members::init_routes)
             .service(list)
-            .service(create)
+            .service(create_and_join)
+            .service(create_empty)
             .service(update)
 			.service(delete)
     );
