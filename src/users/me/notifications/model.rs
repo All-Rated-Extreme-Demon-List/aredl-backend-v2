@@ -10,6 +10,7 @@ use crate::schema::notifications;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum)]
 #[ExistingTypePath = "crate::schema::sql_types::NotificationType"]
+#[DbValueStyle = "PascalCase"]
 pub enum NotificationType {
 	Info,
 	Success,
