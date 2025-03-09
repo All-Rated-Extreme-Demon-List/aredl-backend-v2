@@ -7,7 +7,7 @@ edition = "2021"
 regex = "1.11"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-uuid = { version = "1.8", features = ["serde"] }
+uuid = { version = "1.8", features = ["serde", "v4"] }
 diesel = { version = "2.1", features = ["postgres", "r2d2", "chrono", "uuid"]}
 diesel_migrations = "2.1"
 r2d2 = "0.8"
