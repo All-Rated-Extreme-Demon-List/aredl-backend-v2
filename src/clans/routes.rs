@@ -80,7 +80,7 @@ async fn create_and_join(
         ("api_key" = []),
     )
 )]
-#[post("", wrap="UserAuth::require(Permission::ClanModify)")]
+#[post("/placeholder", wrap="UserAuth::require(Permission::ClanModify)")]
 async fn create_empty(
     db: web::Data<Arc<DbAppState>>,
     clan: web::Json<ClanCreate>,
