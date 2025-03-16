@@ -2,7 +2,6 @@ use std::sync::Arc;
 use uuid::Uuid;
 use actix_web::{get, patch, post, delete, web, HttpResponse};
 use utoipa::OpenApi;
-use diesel::Connection;
 use crate::auth::{UserAuth, Permission, Authenticated};
 use crate::clans::members::{ClanInviteCreate, ClanMemberInvite, ClanMemberUpdate};
 use crate::db::DbAppState;
@@ -209,15 +208,9 @@ async fn edit(
 
         authenticated.has_clan_permission(db.clone(), clan_id, 2)?;
 
-        let result = conn.transaction(|connection| -> Result<ClanMember, ApiError> {
-            let member = ClanMember::edit_member_role(connection, clan_id, user_id, member.into_inner())?;
-            if member.role == 2 {
-                ClanMember::edit_member_role(connection, clan_id, authenticated.user_id, ClanMemberUpdate { role: 1 })?;
-            }
-            Ok(member)
-        })?;
+        let member =  ClanMember::edit_member_role(&mut conn, clan_id, user_id, member.into_inner())?;
 
-        Ok::<ClanMember, ApiError>(result)
+        Ok::<ClanMember, ApiError>(member)
         
     }).await??;
     Ok(HttpResponse::Ok().json(result))
@@ -240,6 +233,7 @@ async fn edit(
     paths(
         list,
         add,
+        set,
 		delete,
         invite,
         edit
@@ -252,6 +246,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
         web::scope("/{clan_id}/members")
             .service(list)
             .service(add)
+            .service(set)
 			.service(delete)
             .service(invite)
             .service(edit)

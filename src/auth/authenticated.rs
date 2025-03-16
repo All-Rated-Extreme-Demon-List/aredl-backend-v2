@@ -49,6 +49,7 @@ impl Authenticated {
 			return Err(ApiError::new(403, "You do not have the required permission to perform this action".into()));
 		}
 
+
         Ok(())
     }
 

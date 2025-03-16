@@ -136,13 +136,28 @@ impl ClanMember {
     }
 
 	pub fn edit_member_role(conn: &mut DbConnection, clan_id: Uuid, user_id: Uuid, member: ClanMemberUpdate) -> Result<Self, ApiError> {
-		let member = diesel::update(clan_members::table)
-			.filter(clan_members::clan_id.eq(clan_id))
-			.filter(clan_members::user_id.eq(user_id))
-			.set({clan_members::role.eq(member.role); clan_members::updated_at.eq(chrono::Utc::now().naive_utc())})
-			.returning(Self::as_select())
-			.get_result(conn)?;
-		Ok(member)
+		conn.transaction(|conn| {
+			if member.role == 2 {
+				diesel::update(clan_members::table)
+					.filter(clan_members::clan_id.eq(clan_id))
+					.filter(clan_members::role.eq(2))
+					.filter(clan_members::user_id.ne(user_id))
+					.set(clan_members::role.eq(1))
+					.execute(conn)?;
+			}
+	
+			let updated_member = diesel::update(clan_members::table)
+				.filter(clan_members::clan_id.eq(clan_id))
+				.filter(clan_members::user_id.eq(user_id))
+				.set((
+					clan_members::role.eq(member.role),
+					clan_members::updated_at.eq(chrono::Utc::now().naive_utc()),
+				))
+				.returning(Self::as_select())
+				.get_result(conn)?;
+	
+			Ok(updated_member)
+		})
 	}
 
 	fn add_members(clan_id: Uuid, members: &Vec<Uuid>, connection: &mut DbConnection) -> Result<(), ApiError> {
