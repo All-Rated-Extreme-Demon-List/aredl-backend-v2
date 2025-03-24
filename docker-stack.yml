@@ -19,7 +19,6 @@ services:
 
   api:
     image: ghcr.io/all-rated-extreme-demon-list/aredl_backend_api:${COMMIT_HASH:-latest}
-    restart: always
     ports:
       - "${API_HOST}:${API_PORT}:${API_PORT}"
     deploy:
@@ -78,7 +77,6 @@ services:
       - migrate_data:/migrate_data
     depends_on:
       - db
-    restart: "no"
     secrets:
       - postgres_user
       - postgres_password
