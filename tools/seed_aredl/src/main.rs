@@ -20,6 +20,15 @@ use crate::schema::{aredl_levels, aredl_levels_created, aredl_pack_levels, aredl
 type Pool = diesel::r2d2::Pool<ConnectionManager<PgConnection>>;
 type DbConnection = diesel::r2d2::PooledConnection<ConnectionManager<PgConnection>>;
 
+pub fn get_secret(var_name: &str) -> String {
+    let value = env::var(var_name).expect(&format!("Please set {} in .env", var_name));
+    if value.starts_with("/run/secrets/") {
+        fs::read_to_string(value.trim()).expect("Failed to read secret file").trim().to_string()
+    } else {
+        value
+    }
+}
+
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
 #[derive(Serialize, Deserialize)]
@@ -192,7 +201,7 @@ fn main() {
         ("role_manage", 100)
     ];
 
-    let db_url = env::var("DATABASE_URL").expect("Database url not set");
+    let db_url = get_secret("DATABASE_URL");
     let manager = ConnectionManager::<PgConnection>::new(db_url);
     let mut db_conn: DbConnection = Pool::builder()
         .test_on_check_out(true)
@@ -201,7 +210,7 @@ fn main() {
         .get().unwrap();
 
     println!("Loading data");
-    let aredl_path_str = env::var("AREDL_DATA_PATH").expect("AREDL_DATA_PATH not set");
+    let aredl_path_str = get_secret("AREDL_DATA_PATH");
 
     let aredl_path = Path::new(&aredl_path_str);
 

@@ -36,11 +36,22 @@ use dotenv::dotenv;
 use listenfd::ListenFd;
 use utoipa::OpenApi;
 use utoipa_rapidoc::RapiDoc;
+use std::fs;
 use crate::docs::ApiDoc;
 use crate::cache_control::CacheController;
 use crate::refresh_leaderboard::start_leaderboard_refresher;
 use crate::refresh_level_data::start_level_data_refresher;
 use crate::clean_notifications::start_notifications_cleaner;
+
+
+pub fn get_secret(var_name: &str) -> String {
+    let value = env::var(var_name).expect(&format!("Please set {} in .env", var_name));
+    if value.starts_with("/run/secrets/") {
+        fs::read_to_string(value.trim()).expect("Failed to read secret file").trim().to_string()
+    } else {
+        value
+    }
+}
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
@@ -125,8 +136,8 @@ async fn main() -> std::io::Result<()> {
     server = match listenfd.take_tcp_listener(0)? {
         Some(listener) => server.listen(listener)?,
         None => {
-            let host = env::var("HOST").expect("Please set host in .env");
-            let port = env::var("PORT").expect("Please set port in .env");
+            let host = get_secret("HOST");
+            let port = get_secret("PORT");
             server.bind(format!("{}:{}", host, port))?
         }
     };

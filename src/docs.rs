@@ -4,8 +4,7 @@ use utoipa::openapi::path::Operation;
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, HttpBuilder, HttpAuthScheme, SecurityScheme};
 use utoipa::openapi::extensions::Extensions;
 use serde_json::json;
-use std::env;
-use crate::{aredl, users, auth, roles, clans};
+use crate::{aredl, auth, clans, get_secret, roles, users};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -106,7 +105,7 @@ struct ServerAddon;
 impl Modify for ServerAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
         let url = if cfg!(debug_assertions) {
-            format!("http://127.0.0.1:{}", env::var("PORT").expect("Please set port in .env"))
+            format!("http://127.0.0.1:{}", get_secret("PORT")).to_string()
         } else {
             "https://api.aredl.net/v2/".to_string()
         };

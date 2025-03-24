@@ -1,4 +1,3 @@
-use std::env;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -7,9 +6,10 @@ use cron::Schedule;
 use diesel::RunQueryDsl;
 use tokio::task;
 use crate::db::DbAppState;
+use crate::get_secret;
 
 pub fn start_notifications_cleaner(db: Arc<DbAppState>) {
-    let schedule = Schedule::from_str(env::var("NOTIFICATIONS_CLEAN_SCHEDULE").expect("NOTIFICATIONS_CLEAN_SCHEDULE not set").as_str()).unwrap();
+    let schedule = Schedule::from_str(&get_secret("NOTIFICATIONS_CLEAN_SCHEDULE")).unwrap();
     let schedule = Arc::new(schedule);
     let db_clone = db.clone();
 

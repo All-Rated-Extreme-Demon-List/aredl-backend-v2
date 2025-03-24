@@ -1,4 +1,3 @@
-use std::env;
 use std::sync::Arc;
 
 use actix_web::{get, HttpResponse, HttpRequest, web};
@@ -16,6 +15,7 @@ use crate::auth::token::{self, check_token_valid};
 use crate::auth::token::UserClaims;
 use crate::db::{DbAppState, DbConnection};
 use crate::error_handler::ApiError;
+use crate::get_secret;
 use crate::schema::{oauth_requests, roles, user_roles, permissions};
 use crate::users::{User, UserUpsert, Role};
 
@@ -342,15 +342,15 @@ async fn discord_refresh(data: web::Data<Arc<AuthAppState>>, db: web::Data<Arc<D
 
 pub(crate) async fn create_discord_client() -> Result<CoreClient, Box<dyn std::error::Error>> {
     let discord_client_id = ClientId::new(
-        env::var("DISCORD_CLIENT_ID").expect("Missing the DISCORD_CLIENT_ID environment variable."),
+        get_secret("DISCORD_CLIENT_ID"),
     );
 
     let discord_client_secret = ClientSecret::new(
-        env::var("DISCORD_CLIENT_SECRET").expect("Missing the DISCORD_CLIENT_SECRET environment variable."),
+        get_secret("DISCORD_CLIENT_SECRET"),
     );
 
     let discord_redirect_uri = RedirectUrl::new(
-        env::var("DISCORD_REDIRECT_URI").expect("Missing the DISCORD_REDIRECT_URI environment variable.")
+        get_secret("DISCORD_REDIRECT_URI")
     )?;
 
     let issuer_url = IssuerUrl::new("https://discord.com".to_string())?;

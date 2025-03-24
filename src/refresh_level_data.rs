@@ -1,4 +1,3 @@
-use std::env;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -12,18 +11,15 @@ use uuid::Uuid;
 use crate::db::{DbAppState, DbConnection};
 use crate::error_handler::ApiError;
 use crate::schema::{aredl_last_gddl_update, aredl_levels};
+use crate::get_secret;
 
 pub async fn start_level_data_refresher(db: Arc<DbAppState>) {
-    let schedule = Schedule::from_str(env::var("LEVEL_DATA_REFRESH_SCHEDULE")
-        .expect("LEVEL_DATA_REFRESH_SCHEDULE not set").as_str()).unwrap();
+    let schedule = Schedule::from_str(&get_secret("LEVEL_DATA_REFRESH_SCHEDULE")).unwrap();
     let schedule = Arc::new(schedule);
 
-    let google_api_key = env::var("GOOGLE_API_KEY")
-        .expect("GOOGLE_API_KEY not set");
-    let edel_sheet_id = env::var("EDEL_SHEET_ID")
-        .expect("EDEL_SHEET_ID not set");
-    let nlw_sheet_id = env::var("NLW_SHEET_ID")
-        .expect("NLW_SHEET_ID not set");
+    let google_api_key = get_secret("GOOGLE_API_KEY");
+    let edel_sheet_id = get_secret("EDEL_SHEET_ID");
+    let nlw_sheet_id = get_secret("NLW_SHEET_ID");
 
     let db_clone = db.clone();
     task::spawn(async move {

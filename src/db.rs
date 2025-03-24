@@ -1,5 +1,5 @@
 use crate::error_handler::ApiError;
-use std::env;
+use crate::get_secret;
 use std::sync::Arc;
 use diesel::{PgConnection, r2d2};
 use diesel::r2d2::ConnectionManager;
@@ -27,7 +27,7 @@ impl DbAppState {
 }
 
 pub fn init_app_state() -> Arc<DbAppState> {
-    let db_url = env::var("DATABASE_URL").expect("Database url not set");
+    let db_url = get_secret("DATABASE_URL");
     let manager = ConnectionManager::<PgConnection>::new(db_url);
     let pool = Pool::builder()
         .test_on_check_out(true)

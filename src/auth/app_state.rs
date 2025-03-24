@@ -1,9 +1,8 @@
-use std::env;
 use std::sync::Arc;
 use jsonwebtoken::{DecodingKey, EncodingKey};
 use openidconnect::core::CoreClient;
 
-use crate::auth::discord::create_discord_client;
+use crate::{auth::discord::create_discord_client, get_secret};
 
 pub struct AuthAppState {
     pub discord_client: CoreClient,
@@ -15,8 +14,7 @@ pub async fn init_app_state() -> Arc<AuthAppState> {
     let discord_client = create_discord_client().await
         .expect("Failed to create discord client!");
 
-    let jwt_secret = env::var("JWT_SECRET")
-        .expect("Please set JWT_SECRET in .env");
+    let jwt_secret = get_secret("JWT_SECRET");
 
     Arc::new(AuthAppState {
         discord_client,
