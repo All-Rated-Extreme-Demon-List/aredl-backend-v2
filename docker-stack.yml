@@ -1,7 +1,6 @@
 services:
   db:
     image: postgres:14
-    restart: always
     environment:
       POSTGRES_USER: /run/secrets/postgres_user
       POSTGRES_PASSWORD: /run/secrets/postgres_password
@@ -13,6 +12,10 @@ services:
     secrets:
       - postgres_user
       - postgres_password
+    deploy:
+      restart_policy:
+        condition: any
+        delay: 5s
 
   api:
     image: ghcr.io/all-rated-extreme-demon-list/aredl_backend_api:${COMMIT_HASH:-latest}
@@ -80,6 +83,12 @@ services:
       - postgres_user
       - postgres_password
       - aredl_data_git
+    deploy:
+      restart_policy:
+      condition: on-failure
+      max_attempts: 1
+      delay: 10s
+         
 
 volumes:
   db_data:
