@@ -85,8 +85,8 @@ jobs:
             tags: |
               ghcr.io/${{ env.OWNER_LC }}/aredl_backend_api:latest
               ghcr.io/${{ env.OWNER_LC  }}/aredl_backend_api:${{ github.sha }}
-            cache-from: type=registry,ref=${{ env.OWNER_LC  }}/aredl_backend_api:buildcache
-            cache-to: type=registry,ref=${{ env.OWNER_LC  }}/aredl_backend_api:buildcache,mode=max
+            cache-from: type=registry,ref=ghcr.io/${{ env.OWNER_LC  }}/aredl_backend_api:buildcache
+            cache-to: type=registry,ref=ghcr.io/${{ env.OWNER_LC  }}/aredl_backend_api:buildcache,mode=max
   
   build-migrate:
     needs: test
