@@ -1,6 +1,17 @@
 #!/bin/sh
 set -e
 
+get_secret() {
+  local value=$1
+  if [ -f "$value" ]; then
+    cat "$value"
+  else
+    echo "$value"
+  fi
+}
+
+AREDL_DATA_GIT="$(get_secret "$AREDL_DATA_GIT")"
+
 if [ -z "$(ls -A ${AREDL_DATA_PARENT} 2>/dev/null)" ]; then
   echo "Cloning repository..."
   git clone --depth 1 -b main "${AREDL_DATA_GIT}" ${AREDL_DATA_PARENT}

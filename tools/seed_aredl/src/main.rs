@@ -201,7 +201,7 @@ fn main() {
         ("role_manage", 100)
     ];
 
-    let db_url = get_secret("DATABASE_URL");
+    let db_url = format!("postgres://{}:{}@db:5432/aredl", get_secret("POSTGRES_USER"), get_secret("POSTGRES_PASSWORD"));
     let manager = ConnectionManager::<PgConnection>::new(db_url);
     let mut db_conn: DbConnection = Pool::builder()
         .test_on_check_out(true)

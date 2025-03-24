@@ -20,7 +20,8 @@ services:
       HOST: "0.0.0.0"
       PORT: ${API_PORT}
 
-      DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/aredl"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
 
       JWT_SECRET: ${JWT_SECRET}
 
@@ -42,8 +43,9 @@ services:
       context: .
       dockerfile: tools/seed_aredl/Dockerfile
     environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       AREDL_DATA_GIT: ${AREDL_DATA_GIT}
-      DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/aredl"
       AREDL_DATA_PARENT: "/migrate_data/aredl_data"
     volumes:
       - migrate_data:/migrate_data

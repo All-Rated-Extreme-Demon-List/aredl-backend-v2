@@ -32,13 +32,14 @@ services:
       restart_policy:
           condition: any
           delay: 5s
-    command: >
-      sh -c "export DATABASE_URL=postgres://$$(cat /run/secrets/postgres_user):$$(cat /run/secrets/postgres_password)@db:5432/aredl && exec aredl-backend"
     environment:
       HOST: "0.0.0.0"
       PORT: ${API_PORT}
 
       JWT_SECRET: /run/secrets/jwt_secret
+
+      POSTGRES_USER: /run/secrets/postgres_user
+      POSTGRES_PASSWORD: /run/secrets/postgres_password
 
       DISCORD_CLIENT_ID: /run/secrets/discord_client_id
       DISCORD_CLIENT_SECRET: /run/secrets/discord_client_secret
@@ -71,8 +72,8 @@ services:
     environment:
       AREDL_DATA_GIT: /run/secrets/aredl_data_git
       AREDL_DATA_PARENT: "/migrate_data/aredl_data"
-    command: >
-      sh -c "export DATABASE_URL=postgres://$$(cat /run/secrets/postgres_user):$$(cat /run/secrets/postgres_password)@db:5432/aredl && export AREDL_DATA_GIT=$$(cat /run/secrets/aredl_data_git) && exec migrate.sh"
+      POSTGRES_USER: /run/secrets/postgres_user
+      POSTGRES_PASSWORD: /run/secrets/postgres_password
     volumes:
       - migrate_data:/migrate_data
     depends_on:
