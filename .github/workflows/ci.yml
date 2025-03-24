@@ -158,7 +158,7 @@ jobs:
             docker stack deploy \
             --with-registry-auth \
             --compose-file docker-stack.yml \
-            sample_app_stack"
+            aredl_backend_stack"
 
         - name: Cleanup SSH key
           run: rm -rf ~/.ssh
