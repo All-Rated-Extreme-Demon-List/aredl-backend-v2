@@ -6,11 +6,11 @@ RUN apt-get update && apt-get install -y libpq-dev
 COPY tools/seed_aredl/Cargo.toml tools/seed_aredl/Cargo.lock ./
 
 RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo fetch
-RUN rm -rf src
+RUN cargo build --release
 
 COPY migrations ./migrations
 COPY tools/seed_aredl/src ./src
+RUN touch src/main.rs
 RUN cargo build --release
 
 

@@ -5,11 +5,11 @@ RUN apt-get update && apt-get install -y libpq-dev
 
 COPY Cargo.toml Cargo.lock diesel.toml ./
 RUN mkdir src && echo 'fn main() {println!("This is a dummy file.")}' > src/main.rs
-RUN cargo fetch
-RUN rm -rf src
+RUN cargo build --release
 
 COPY src/ ./src/
 COPY migrations/ ./migrations/
+RUN touch ./src/main.rs
 RUN cargo build --release
 
 
