@@ -33,4 +33,3 @@ jsonwebtoken = { version = "9.3", features = ["default"] }
 strum = {version = "0.26", features = ["strum_macros"]}
 strum_macros = "0.26"
 itertools = "0.13.0"
-openssl = {version = "0.10", features = ["vendored"]}
