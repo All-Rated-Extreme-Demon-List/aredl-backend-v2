@@ -125,4 +125,42 @@ jobs:
               ghcr.io/${{ env.OWNER_LC  }}/migrate:${{ github.sha }}
             cache-from: type=registry,ref=ghcr.io/${{ env.OWNER_LC  }}/migrate:buildcache
             cache-to: type=registry,ref=ghcr.io/${{ env.OWNER_LC  }}/migrate:buildcache,mode=max
+  deploy:
+    needs: [test, build-api, build-migrate]
+    runs-on: ubuntu-latest
+    steps:
+        - uses: actions/checkout@v4
+        
+        - name: Create SSH key
+          run: |
+            mkdir -p ~/.ssh
+            echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/id_rsa
+            chmod 600 ~/.ssh/id_rsa
+            ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+        - name: Create env file
+          run: |
+            echo "COMMIT_HASH=${{ github.sha }}" >> .env
+            echo "API_HOST=${{ secrets.API_HOST }}" >> .env
+            echo "API_PORT=${{ secrets.API_PORT }}" >> .env
+
+        - name: Copy files
+          run: |
+            scp docker-stack.yml ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:~/docker-stack.yml
+            scp .env ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:~/.env
+
+        - name: Deploy API
+          run: |
+            ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "\
+            COMMIT_HASH=${{ github.sha }} \
+            API_HOST=${{ secrets.API_HOST }} \
+            API_PORT=${{ secrets.API_PORT }} \
+            docker stack deploy \
+            --with-registry-auth \
+            --compose-file docker-stack.yml \
+            sample_app_stack"
+
+        - name: Cleanup SSH key
+          run: rm -rf ~/.ssh
+          if: always()
 
