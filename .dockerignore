@@ -1,0 +1,12 @@
+target
+tools/seed_aredl/target
+
+.git
+.gitignore
+.github
+
+*.env
+
+Dockerfile
+tools/seed_aredl/Dockerfile
+docker-compose.yml

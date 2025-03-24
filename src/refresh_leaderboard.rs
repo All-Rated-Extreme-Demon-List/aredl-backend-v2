@@ -17,12 +17,12 @@ pub fn start_leaderboard_refresher(db: Arc<DbAppState>) {
         loop {
             tokio::time::sleep(Duration::from_secs(10)).await;
 
-            println!("Refreshing leaderboard");
+            tracing::info!("Refreshing leaderboard");
 
             let conn_result = db_clone.connection();
 
             if conn_result.is_err() {
-                println!("Failed to refresh {}", conn_result.err().unwrap());
+                tracing::error!("Failed to refresh {}", conn_result.err().unwrap());
                 continue;
             }
 
@@ -32,21 +32,21 @@ pub fn start_leaderboard_refresher(db: Arc<DbAppState>) {
                 .execute(&mut conn);
 
             if result.is_err() {
-                println!("Failed to refresh user leaderboard {}", result.err().unwrap())
+                tracing::error!("Failed to refresh user leaderboard {}", result.err().unwrap())
             }
 
             let result = diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_country_leaderboard")
                 .execute(&mut conn);
 
             if result.is_err() {
-                println!("Failed to refresh country leaderboard {}", result.err().unwrap())
+                tracing::error!("Failed to refresh country leaderboard {}", result.err().unwrap())
             }
 
             let result = diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_clans_leaderboard")
                 .execute(&mut conn);
 
             if result.is_err() {
-                println!("Failed to refresh clans leaderboard {}", result.err().unwrap())
+                tracing::error!("Failed to refresh clans leaderboard {}", result.err().unwrap())
             }
 
             let now = Utc::now();

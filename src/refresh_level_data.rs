@@ -30,12 +30,12 @@ pub async fn start_level_data_refresher(db: Arc<DbAppState>) {
         loop {
             tokio::time::sleep(Duration::from_secs(5)).await;
 
-            println!("Refreshing level data");
+            tracing::info!("Refreshing level data");
 
             let conn = db_clone.connection();
 
             if conn.is_err() {
-                println!("Failed to refresh {}", conn.err().unwrap());
+                tracing::error!("Failed to refresh {}", conn.err().unwrap());
                 continue;
             }
 
@@ -44,13 +44,13 @@ pub async fn start_level_data_refresher(db: Arc<DbAppState>) {
             let edel_result = update_edel_data(&mut conn, &google_api_key, &edel_sheet_id).await;
 
             if edel_result.is_err() {
-                println!("Failed to refresh edel {}", edel_result.err().unwrap());
+                tracing::error!("Failed to refresh edel {}", edel_result.err().unwrap());
             }
 
             let nlw_result = update_nlw_data(&mut conn, &google_api_key, &nlw_sheet_id).await;
 
             if nlw_result.is_err() {
-                println!("Failed to refresh nlw {}", nlw_result.err().unwrap());
+                tracing::error!("Failed to refresh nlw {}", nlw_result.err().unwrap());
             }
 
             let now = Utc::now();
@@ -69,12 +69,12 @@ pub async fn start_level_data_refresher(db: Arc<DbAppState>) {
         loop {
             tokio::time::sleep(Duration::from_secs(5)).await;
 
-            println!("Running gddl updater");
+            tracing::info!("Running gddl updater");
 
             let conn = db.connection();
 
             if conn.is_err() {
-                println!("Failed to refresh {}", conn.err().unwrap());
+                tracing::error!("Failed to refresh {}", conn.err().unwrap());
                 continue;
             }
 
@@ -103,14 +103,14 @@ pub async fn start_level_data_refresher(db: Arc<DbAppState>) {
                         tokio::time::sleep(Duration::from_secs(5)).await;
                         let result = update_gddl_data(&mut conn, id, level_id, two_player).await;
                         if result.is_err() {
-                            println!("Failed to request gddl: {}, {}", level_id, result.err().unwrap());
+                            tracing::error!("Failed to request gddl: {}, {}", level_id, result.err().unwrap());
                         } else {
-                            //println!("Updated gddl data for {}, {}", id, level_id)
+                            //tracing::debug!("Updated gddl data for {}, {}", id, level_id)
                         }
                     }
                 },
                 Err(e) => {
-                    println!("Failed to load gddl update db: {}", e);
+                    tracing::error!("Failed to load gddl update db: {}", e);
                 }
             }
 

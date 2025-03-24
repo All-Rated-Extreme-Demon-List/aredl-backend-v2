@@ -23,6 +23,13 @@ mod refresh_level_data;
 mod clean_notifications;
 
 use std::env;
+use actix_web::dev::{ServiceRequest, ServiceResponse};
+use actix_web::body::MessageBody;
+use actix_web::Error;
+use tracing_actix_web::{TracingLogger, RootSpanBuilder, DefaultRootSpanBuilder, root_span};
+use tracing_subscriber::EnvFilter;
+use tracing_subscriber::fmt::format::FmtSpan;
+use tracing::Span;
 use actix_cors::Cors;
 use actix_web::{App, HttpServer, web};
 use dotenv::dotenv;
@@ -39,6 +46,19 @@ use crate::clean_notifications::start_notifications_cleaner;
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
 
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::new(
+            std::env::var("RUST_LOG").unwrap_or_else(|_| "info,tower_http=error".into())
+        ))
+        .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
+        .json()
+        .flatten_event(true) 
+        .with_current_span(true)
+        .with_span_list(false)
+        .init();
+
+    tracing::info!("Initializing...");
+
     let db_app_state = db::init_app_state();
 
     db_app_state.run_pending_migrations();
@@ -50,6 +70,7 @@ async fn main() -> std::io::Result<()> {
     start_level_data_refresher(db_app_state.clone()).await;
 
     let auth_app_state = auth::init_app_state().await;
+    
 
     let mut listenfd = ListenFd::from_env();
     let mut server = HttpServer::new(move || {
@@ -88,6 +109,7 @@ async fn main() -> std::io::Result<()> {
                     .app_data(web::Data::new(auth_app_state.clone()))
                     .app_data(web::Data::new(db_app_state.clone()))
                     .wrap(CacheController::default_no_store())
+                    .wrap(TracingLogger::<AppRootSpanBuilder>::new())
                     .wrap(cors)
                     .configure(aredl::init_routes)
                     .configure(auth::init_routes)
@@ -110,4 +132,20 @@ async fn main() -> std::io::Result<()> {
     };
 
     server.run().await
+}
+
+pub struct AppRootSpanBuilder;
+
+impl RootSpanBuilder for AppRootSpanBuilder {
+    fn on_request_start(request: &ServiceRequest) -> Span {
+        let query = request.query_string();
+        let span = {
+            root_span!(request, user_id = tracing::field::Empty, query = %query, body = tracing::field::Empty)
+        };
+        span
+    }
+
+    fn on_request_end<B: MessageBody>(span: Span, outcome: &Result<ServiceResponse<B>, Error>) {
+        DefaultRootSpanBuilder::on_request_end(span, outcome);
+    }
 }

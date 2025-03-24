@@ -17,12 +17,12 @@ pub fn start_notifications_cleaner(db: Arc<DbAppState>) {
         loop {
             tokio::time::sleep(Duration::from_secs(10)).await;
 
-            println!("Removing old notifications");
+            tracing::info!("Removing old notifications");
 
             let conn_result = db_clone.connection();
 
             if conn_result.is_err() {
-                println!("Failed to clean notifications {}", conn_result.err().unwrap());
+                tracing::error!("Failed to clean notifications {}", conn_result.err().unwrap());
                 continue;
             }
 
@@ -32,7 +32,7 @@ pub fn start_notifications_cleaner(db: Arc<DbAppState>) {
                 .execute(&mut conn);
 
             if result.is_err() {
-                println!("Failed to clean notifications {}", result.err().unwrap())
+                tracing::error!("Failed to clean notifications {}", result.err().unwrap())
             }
 
             let now = Utc::now();

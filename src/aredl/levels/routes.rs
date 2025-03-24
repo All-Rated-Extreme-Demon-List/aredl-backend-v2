@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use actix_web::{get, post, patch, HttpResponse, web};
+use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
 use crate::auth::{UserAuth, Permission};
 use crate::aredl::levels::{history, packs, Level, LevelPlace, LevelUpdate, ResolvedLevel, records, creators};
@@ -38,7 +39,8 @@ async fn list(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> 
     )
 )]
 #[post("", wrap="UserAuth::require(Permission::LevelModify)")]
-async fn create(db: web::Data<Arc<DbAppState>>, level: web::Json<LevelPlace>) -> Result<HttpResponse, ApiError> {
+async fn create(db: web::Data<Arc<DbAppState>>, level: web::Json<LevelPlace>, root_span: RootSpan) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&level));
     let level = web::block(
         || Level::create(db, level.into_inner())
     ).await??;

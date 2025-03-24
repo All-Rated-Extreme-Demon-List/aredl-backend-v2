@@ -20,7 +20,7 @@ use crate::schema::{aredl_levels, aredl_levels_created, aredl_pack_levels, aredl
 type Pool = diesel::r2d2::Pool<ConnectionManager<PgConnection>>;
 type DbConnection = diesel::r2d2::PooledConnection<ConnectionManager<PgConnection>>;
 
-pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("../../migrations");
+pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
 #[derive(Serialize, Deserialize)]
 pub struct Record {

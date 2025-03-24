@@ -73,7 +73,7 @@ pub struct Level {
     pub nlw_tier: Option<String>
 }
 
-#[derive(Serialize, Deserialize, Insertable, ToSchema)]
+#[derive(Serialize, Deserialize, Insertable, ToSchema, Debug)]
 #[diesel(table_name=aredl_levels)]
 pub struct LevelPlace {
     /// The 1-indexed position of the level on the list.

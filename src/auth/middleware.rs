@@ -132,6 +132,8 @@ impl<S> Service<ServiceRequest> for AuthMiddleware<S>
 
         let user_id = user_claims.user_id;
 
+        tracing::Span::current().record("user_id", &tracing::field::display(user_id));
+
         match self.required_perm.clone() {
             Some(required_perm) => {
                 let has_permission = permission::check_permission(db_state, user_id, required_perm);
