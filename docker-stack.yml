@@ -86,13 +86,13 @@ services:
       - postgres_user
       - postgres_password
       - aredl_data_git
+    networks:
+      - api_net
     deploy:
       restart_policy:
         condition: on-failure
         max_attempts: 1
         delay: 10
-    networks:
-      - api_net
          
 volumes:
   db_data:
