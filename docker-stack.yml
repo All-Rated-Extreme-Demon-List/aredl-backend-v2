@@ -87,103 +87,11 @@ services:
         condition: on-failure
         max_attempts: 1
         delay: 10s
-  prometheus:
-    image: prom/prometheus:v2.45.0
-    environment:
-      - API_PORT=${API_PORT}
-    entrypoint: ['/bin/sh', '-c']
-    command:
-      - |
-        /bin/prometheus \
-          --config.file=/etc/prometheus/prometheus.yml \
-          --storage.tsdb.path=/prometheus \
-          --web.console.libraries=/usr/share/prometheus/console_libraries \
-          --web.console.templates=/usr/share/prometheus/consoles
-    configs:
-      - source: prometheus_yml
-        target: /etc/prometheus/prometheus.yml
-    volumes:
-      - prometheus_data:/prometheus
-    ports:
-      - "9080:9090"
-  node-exporter:
-    image: prom/node-exporter:latest
-    volumes:
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/rootfs:ro
-    command:
-      - '--path.procfs=/host/proc'
-      - '--path.rootfs=/rootfs'
-      - '--path.sysfs=/host/sys'
-      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
-  cadvisor:
-    image: gcr.io/cadvisor/cadvisor:latest
-    volumes:
-      - /:/rootfs:ro
-      - /var/run:/var/run:rw
-      - /sys:/sys:ro
-      - /var/lib/docker/:/var/lib/docker:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    command:
-      - '--docker_only=true'
-      - '--disable_metrics=disk,diskIO,network,tcp,udp,percpu,sched,process'
-
-  postgres-exporter:
-    image: prometheuscommunity/postgres-exporter:latest
-    environment:
-      DATA_SOURCE_URI: db:5432/aredl?sslmode=disable
-      DATA_SOURCE_USER_FILE: /run/secrets/postgres_user
-      DATA_SOURCE_PASS_FILE: /run/secrets/postgres_password
-    command:
-      - '--web.listen-address=:9187'
-    secrets:
-      - postgres_user
-      - postgres_password
-  grafana:
-    image: grafana/grafana:latest
-    volumes:
-      - grafana_data:/var/lib/grafana
-    restart: always
-    ports:
-      - '3000:3000'
-    environment:
-      GF_SERVER_ROOT_URL: "https://api.aredl.net/grafana/"
-      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
-    secrets:
-      - grafana_admin_password
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@localhost
-      PGADMIN_DEFAULT_PASSWORD_FILE: /run/secrets/pgadmin_password
-      PGPASS_FILE: /pgpass
-    ports:
-      - "5050:80"
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    restart: always
-    depends_on:
-      - db
-    secrets:
-      - pgadmin_password
-      - postgres_user
-      - postgres_password
-    configs:
-      - source: pgpass
-        target: /pgpass
-
          
-
 volumes:
   db_data:
   test_db_data:
   migrate_data:
-  prometheus_data:
-  grafana_data:
-  pgadmin_data:
 
 secrets:
   postgres_user:
@@ -211,13 +119,4 @@ secrets:
   nlw_sheet_id:
     external: true
   aredl_data_git:
-    external: true
-  grafana_admin_password:
-    external: true
-  pgadmin_password:
-    external: true
-configs:
-  prometheus_yml:
-    external: true
-  pgpass:
     external: true
