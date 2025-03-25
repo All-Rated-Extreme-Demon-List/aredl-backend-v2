@@ -164,6 +164,8 @@ volumes:
   db_data:
   test_db_data:
   migrate_data:
+  prometheus_data:
+  grafana_data:
 
 secrets:
   postgres_user:
@@ -191,4 +193,6 @@ secrets:
   nlw_sheet_id:
     external: true
   aredl_data_git:
+    external: true
+  grafana_admin_password:
     external: true
