@@ -1,7 +1,6 @@
 services:
   db:
     image: postgres:14
-    container_name: postgres-db
     environment:
       POSTGRES_USER_FILE: /run/secrets/postgres_user
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
@@ -20,7 +19,6 @@ services:
 
   api:
     image: ghcr.io/all-rated-extreme-demon-list/aredl_backend_api:${COMMIT_HASH:-latest}
-    container_name: api
     ports:
       - "${API_HOST}:${API_PORT}:${API_PORT}"
     deploy:
@@ -71,7 +69,6 @@ services:
       - nlw_sheet_id
   migrate:
     image: ghcr.io/all-rated-extreme-demon-list/migrate:${COMMIT_HASH:-latest}
-    container_name: migrate
     environment:
       AREDL_DATA_GIT: /run/secrets/aredl_data_git
       AREDL_DATA_PARENT: "/migrate_data/aredl_data"
@@ -92,7 +89,6 @@ services:
         delay: 10s
   prometheus:
     image: prom/prometheus:v2.45.0
-    container_name: prometheus
     entrypoint: ['/bin/sh', '-c']
     command:
       - |
@@ -112,7 +108,6 @@ services:
       - "9080:9090"
   node-exporter:
     image: prom/node-exporter:latest
-    container_name: node-exporter
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
@@ -124,7 +119,6 @@ services:
       - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
-    container_name: cadvisor
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:rw
@@ -137,7 +131,6 @@ services:
 
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:latest
-    container_name: postgres-exporter
     environment:
       DATA_SOURCE_URI: db:5432/aredl?sslmode=disable
       DATA_SOURCE_USER_FILE: /run/secrets/postgres_user
@@ -149,7 +142,6 @@ services:
       - postgres_password
   grafana:
     image: grafana/grafana:latest
-    container_name: grafana
     volumes:
       - grafana_data:/var/lib/grafana
     restart: always
