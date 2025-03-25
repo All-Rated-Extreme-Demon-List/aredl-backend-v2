@@ -26,5 +26,5 @@ scrape_configs:
       - names:
           - 'tasks.api'
         type: 'A'
-        port: __API_PORT__
+        port: {{ env "API_PORT"}}
     metrics_path: '/metrics'
