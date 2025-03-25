@@ -151,6 +151,8 @@ services:
     ports:
       - '3000:3000'
     environment:
+      GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s/grafana/"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD_FILE: /run/secrets/grafana_admin_password
          
