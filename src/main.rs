@@ -37,6 +37,7 @@ use listenfd::ListenFd;
 use utoipa::OpenApi;
 use utoipa_rapidoc::RapiDoc;
 use std::fs;
+use actix_web_prom::PrometheusMetricsBuilder;
 use crate::docs::ApiDoc;
 use crate::cache_control::CacheController;
 use crate::refresh_leaderboard::start_leaderboard_refresher;
@@ -69,6 +70,11 @@ async fn main() -> std::io::Result<()> {
         .init();
 
     tracing::info!("Initializing...");
+
+    let prometheus = PrometheusMetricsBuilder::new("api")
+        .endpoint("/metrics")
+        .build()
+        .unwrap();
 
     let db_app_state = db::init_app_state();
 
@@ -115,6 +121,7 @@ async fn main() -> std::io::Result<()> {
             </rapi-doc></body></html>";
 
         App::new()
+            .wrap(prometheus.clone())
             .service(
                 web::scope("/api")
                     .app_data(web::Data::new(auth_app_state.clone()))
