@@ -20,13 +20,7 @@ scrape_configs:
     static_configs:
       - targets: ['postgres-exporter:9187']
 
-  - job_name: 'actix-monitoring-compose'
-    honor_labels: true
-    static_configs:
-      - targets: ['api:__API_PORT__']
-    metrics_path: '/metrics'
-
-  - job_name: 'actix-monitoring-swarm'
+  - job_name: 'actix-monitoring'
     honor_labels: true
     dns_sd_configs:
       - names:
