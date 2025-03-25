@@ -154,7 +154,7 @@ services:
       GF_SERVER_ROOT_URL: "https://api.aredl.net/grafana/"
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
       GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD_FILE: /run/secrets/grafana_admin_password
+      GF_SECURITY_ADMIN_PASSWORD: $__file{/run/secrets/grafana_admin_password}
          
 
 volumes:
