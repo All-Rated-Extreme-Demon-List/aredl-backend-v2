@@ -92,7 +92,7 @@ services:
       restart_policy:
         condition: on-failure
         max_attempts: 1
-        delay: 10
+        delay: 10s
          
 volumes:
   db_data:
