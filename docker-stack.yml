@@ -16,6 +16,8 @@ services:
       restart_policy:
         condition: any
         delay: 5s
+    networks:
+      - api_net
 
   api:
     image: ghcr.io/all-rated-extreme-demon-list/aredl_backend_api:${COMMIT_HASH:-latest}
@@ -67,6 +69,8 @@ services:
       - google_api_key
       - edel_sheet_id
       - nlw_sheet_id
+    networks:
+      - api_net
   migrate:
     image: ghcr.io/all-rated-extreme-demon-list/migrate:${COMMIT_HASH:-latest}
     environment:
@@ -119,4 +123,7 @@ secrets:
   nlw_sheet_id:
     external: true
   aredl_data_git:
+    external: true
+networks:
+  api_net:
     external: true
