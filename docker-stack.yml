@@ -1,3 +1,7 @@
+configs:
+  prometheus_yml:
+    file: ./prometheus.yml.template
+    
 services:
   db:
     image: postgres:14
@@ -98,11 +102,10 @@ services:
           --storage.tsdb.path=/prometheus \
           --web.console.libraries=/usr/share/prometheus/console_libraries \
           --web.console.templates=/usr/share/prometheus/consoles
-    volumes:
-      - type: bind
-        source: ./prometheus.yml.template
+    configs:
+      - source: prometheus_yml
         target: /etc/prometheus/prometheus.yml.template
-        read_only: true
+    volumes:
       - prometheus_data:/prometheus
     ports:
       - "9080:9090"
