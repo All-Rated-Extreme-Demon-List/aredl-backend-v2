@@ -147,8 +147,6 @@ jobs:
         - name: Copy files
           run: |
             scp docker-stack.yml ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:~/docker-stack.yml
-            scp prometheus.yml.tmpl ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:~/prometheus.yml.tmpl
-            scp .pgpass.tmpl ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:~/.pgpass.tmpl
             scp .env ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:~/.env
 
         - name: Deploy API
