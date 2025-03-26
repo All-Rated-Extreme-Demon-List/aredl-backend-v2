@@ -58,6 +58,7 @@ services:
       driver: loki
       options:
         loki-url: "http://127.0.0.1:3100/loki/api/v1/push"
+        loki-pipeline-stage-file: ${LOKI_PIPELINE_STAGE_FILE}
     depends_on:
       - db
     secrets:

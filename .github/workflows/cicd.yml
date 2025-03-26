@@ -143,6 +143,7 @@ jobs:
             echo "COMMIT_HASH=${{ github.sha }}" >> .env
             echo "API_HOST=${{ secrets.API_HOST }}" >> .env
             echo "API_PORT=${{ secrets.API_PORT }}" >> .env
+            echo "LOKI_PIPELINE_STAGE_FILE=/home/${{ secrets.DEPLOY_USER }}/monitoring/loki_pipeline.yml" >> .env
 
         - name: Copy files
           run: |
@@ -156,6 +157,7 @@ jobs:
             COMMIT_HASH=${{ github.sha }} \
             API_HOST=${{ secrets.API_HOST }} \
             API_PORT=${{ secrets.API_PORT }} \
+            LOKI_PIPELINE_STAGE_FILE=/home/${{ secrets.DEPLOY_USER }}/monitoring/loki_pipeline.yml \
             docker stack deploy \
             --with-registry-auth \
             --compose-file docker-stack.yml \
