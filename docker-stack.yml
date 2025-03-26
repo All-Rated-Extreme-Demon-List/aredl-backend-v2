@@ -54,6 +54,10 @@ services:
       GOOGLE_API_KEY: /run/secrets/google_api_key
       EDEL_SHEET_ID: /run/secrets/edel_sheet_id
       NLW_SHEET_ID: /run/secrets/nlw_sheet_id
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://loki:3100/loki/api/v1/push"
     depends_on:
       - db
     secrets:
