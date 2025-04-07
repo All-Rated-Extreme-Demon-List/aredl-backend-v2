@@ -160,8 +160,8 @@ impl ChangelogAction {
                 };
                 match (new_position < old_position, (new_position - old_position).abs(), level_above, level_below) {
                     (_, 0, _, _) => unknown,
-                    (true, 1, _, Some(other_level)) => Self::Swapped { upper_position: new_position, upper_level: level.clone(), other_level: other_level.clone() },
-                    (false, 1, Some(other_level), _) => Self::Swapped { upper_position: old_position, upper_level: other_level.clone(), other_level: other_level.clone() },
+                    (true, 1, Some(other_level), _) => Self::Swapped { upper_position: new_position, upper_level: level.clone(), other_level: other_level.clone() },
+                    (false, 1, _, Some(other_level)) => Self::Swapped { upper_position: old_position, upper_level: other_level.clone(), other_level: other_level.clone() },
                     (_, 1, _, _) => unknown,
                     (true, _, _, _) => Self::Raised { new_position, old_position },
                     (false, _, _, _) => Self::Lowered { new_position, old_position }
