@@ -16,6 +16,7 @@ use crate::page_helper::{PageQuery, Paginated};
         ("page" = Option<i64>, Query, description = "The page of the clans leaderboard to fetch"),
         ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page"),
         ("order" = Option<LeaderboardOrder>, Query, description = "The sorting type to use. Defaults to using points"),
+        ("name_filter" = Option<String>, Query, description = "Search filter to apply. Uses the SQL LIKE operator syntax."),
     ),
     responses(
         (status = 200, body = [Paginated<ClansLeaderboardPage>])

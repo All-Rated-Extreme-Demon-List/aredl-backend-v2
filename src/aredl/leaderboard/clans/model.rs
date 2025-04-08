@@ -1,6 +1,6 @@
 use uuid::Uuid;
 use diesel::pg::Pg;
-use diesel::{BoxableExpression, ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::{BoxableExpression, ExpressionMethods, PgTextExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
 use diesel::expression::expression_types::NotSelectable;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -52,6 +52,7 @@ pub struct ClansLeaderboardPage {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ClansLeaderboardQueryOptions {
     pub order: Option<LeaderboardOrder>,
+    pub name_filter: Option<String>,
 }
 
 impl ClansLeaderboardPage {
@@ -71,22 +72,36 @@ impl ClansLeaderboardPage {
 				LeaderboardOrder::RawPoints => Box::new(aredl_clans_leaderboard::rank.asc()) 
             };
 
-		let query = aredl_clans_leaderboard::table
+		let mut query = aredl_clans_leaderboard::table
             .inner_join(clans::table.on(clans::id.eq(aredl_clans_leaderboard::clan_id)))
             .left_join(aredl_levels::table.on(
                 aredl_clans_leaderboard::hardest.eq(aredl_levels::id.nullable()),
-            ));
+            ))
+            .into_boxed();
 
+        if let Some(ref filter) = options.name_filter {
+            query = query.filter(clans::global_name.ilike(filter));
+        }
 
-        let entries = query.clone()
+        let entries = query
             .limit(page_query.per_page())
             .offset(page_query.offset())
             .order((ordering, aredl_clans_leaderboard::clan_id.asc()))
             .select(selection)
             .load::<(ClansLeaderboardEntry, Clan, Option<BaseLevel>)>(conn)?;
 
+        let mut count_query = aredl_clans_leaderboard::table
+            .inner_join(clans::table.on(clans::id.eq(aredl_clans_leaderboard::clan_id)))
+            .left_join(aredl_levels::table.on(
+                aredl_clans_leaderboard::hardest.eq(aredl_levels::id.nullable()),
+            ))
+            .into_boxed();
 
-        let count = query
+        if let Some(ref filter) = options.name_filter {
+            count_query = count_query.filter(clans::global_name.ilike(filter));
+        }
+        
+        let count = count_query
             .count()
             .get_result(conn)?;
 
