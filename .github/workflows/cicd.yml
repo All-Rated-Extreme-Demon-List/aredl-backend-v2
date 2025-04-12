@@ -83,6 +83,8 @@ jobs:
             context: .
             file: ./Dockerfile
             push: true
+            build-args: |
+              BUILD_PROFILE=${{ env.BUILD_PROFILE }}
             tags: |
               ghcr.io/${{ env.OWNER_LC }}/aredl_backend_api:latest
               ghcr.io/${{ env.OWNER_LC  }}/aredl_backend_api:${{ github.sha }}
