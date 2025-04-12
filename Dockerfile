@@ -1,21 +1,31 @@
-FROM rust:1.85 AS build
+FROM rust:1.86 AS build
 
+ARG BUILD_PROFILE=debug
 WORKDIR /usr/src/aredl-backend
 RUN apt-get update && apt-get install -y libpq-dev
 
 COPY Cargo.toml Cargo.lock diesel.toml ./
 RUN mkdir src && echo 'fn main() {println!("This is a dummy file.")}' > src/main.rs
-RUN cargo build --release
+RUN if [ "$BUILD_PROFILE" = "release" ]; then \
+      cargo build --release; \
+    else \
+      cargo build; \
+    fi
 
 COPY src/ ./src/
 COPY migrations/ ./migrations/
 RUN touch ./src/main.rs
-RUN cargo build --release
 
+RUN if [ "$BUILD_PROFILE" = "release" ]; then \
+      cargo build --release; \
+    else \
+      cargo build; \
+    fi
 
 FROM gcr.io/distroless/cc-debian12
 
-COPY --from=build /usr/src/aredl-backend/target/release/aredl-backend /usr/local/bin/aredl-backend
+ARG BUILD_PROFILE=debug
+COPY --from=build /usr/src/aredl-backend/target/${BUILD_PROFILE}/aredl-backend /usr/local/bin/aredl-backend
 
 COPY --from=build /usr/lib/x86_64-linux-gnu/libpq.so* /usr/lib/
 COPY --from=build /usr/lib/x86_64-linux-gnu/libgssapi_krb5* /usr/lib/

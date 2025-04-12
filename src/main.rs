@@ -58,16 +58,26 @@ pub fn get_secret(var_name: &str) -> String {
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
 
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::new(
-            std::env::var("RUST_LOG").unwrap_or_else(|_| "info,tower_http=error".into())
-        ))
-        .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
-        .json()
-        .flatten_event(true) 
-        .with_current_span(true)
-        .with_span_list(false)
-        .init();
+    if cfg!(debug_assertions) {
+        tracing_subscriber::fmt()
+            .with_env_filter(EnvFilter::new(
+                std::env::var("RUST_LOG").unwrap_or_else(|_| "info,tower_http=error".into())
+            ))
+            .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
+            .pretty()
+            .init();
+    } else {
+        tracing_subscriber::fmt()
+            .with_env_filter(EnvFilter::new(
+                std::env::var("RUST_LOG").unwrap_or_else(|_| "info,tower_http=error".into())
+            ))
+            .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
+            .json()
+            .flatten_event(true) 
+            .with_current_span(true)
+            .with_span_list(false)
+            .init();
+    }
 
     tracing::info!("Initializing...");
 
