@@ -10,6 +10,7 @@ use crate::auth::Authenticated;
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
+use crate::schema::aredl_position_history::i;
 use crate::schema::{clans, clan_members, clan_invites};
 
 use super::members::ClanMemberAdd;
@@ -100,9 +101,18 @@ pub struct ClanListQueryOptions {
 
 impl Clan {
     pub fn create_empty(conn: &mut DbConnection, clan: ClanCreate) -> Result<Self, ApiError> {
+        if clan.global_name.len() > 100 {
+            return Err(ApiError::new(400, "The clan name can at most be 100 characters long."));
+        }
+        
         if clan.tag.len() > 5 {
             return Err(ApiError::new(400, "The clan tag can at most be 5 characters long."));
         }
+
+        if clan.description.is_some() && clan.description.as_ref().unwrap().len() > 300 {
+            return Err(ApiError::new(400, "The clan description can at most be 300 characters long."));
+        }
+
         let clan = diesel::insert_into(clans::table)
             .values(&clan)
             .returning(Self::as_select())
@@ -120,8 +130,16 @@ impl Clan {
             return Err(ApiError::new(400, "You are already in a clan."));
         }
 
+        if clan.global_name.len() > 100 {
+            return Err(ApiError::new(400, "The clan name can at most be 100 characters long."));
+        }
+
         if clan.tag.len() > 5 {
             return Err(ApiError::new(400, "The clan tag can at most be 5 characters long."));
+        }
+
+        if clan.description.is_some() && clan.description.as_ref().unwrap().len() > 300 {
+            return Err(ApiError::new(400, "The clan description can at most be 300 characters long."));
         }
 
         let clan = diesel::insert_into(clans::table)
@@ -188,6 +206,19 @@ impl Clan {
         clan_id: Uuid,
         clan: ClanUpdate,
     ) -> Result<Self, ApiError> {
+
+        if clan.global_name.is_some() && clan.global_name.as_ref().unwrap().len() > 100 {
+            return Err(ApiError::new(400, "The clan name can at most be 100 characters long."));
+        }
+
+        if clan.tag.is_some() && clan.tag.as_ref().unwrap().len() > 5 {
+            return Err(ApiError::new(400, "The clan tag can at most be 5 characters long."));
+        }
+
+        if clan.description.is_some() && clan.description.as_ref().unwrap().len() > 300 {
+            return Err(ApiError::new(400, "The clan description can at most be 300 characters long."));
+        }
+        
         let updated_clan = diesel::update(clans::table.filter(clans::id.eq(clan_id)))
             .set(&clan)
             .returning(Self::as_select())

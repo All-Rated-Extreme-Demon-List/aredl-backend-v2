@@ -85,6 +85,18 @@ impl User {
             }
         }
 
+        if user.global_name.is_some() {
+            if user.global_name.as_ref().unwrap().len() > 100 {
+                return Err(ApiError::new(400, "The display name can at most be 100 characters long."));
+            }
+        }
+
+        if user.description.is_some() {
+            if user.description.as_ref().unwrap().len() > 300 {
+                return Err(ApiError::new(400, "The description can at most be 300 characters long."));
+            }
+        }
+
         let result = diesel::update(users::table.filter(users::id.eq(id)))
             .set((
                 &user,
