@@ -3,3 +3,4 @@ target
 .env
 .vscode
 .DS_Store
+docker-compose-api.yml
