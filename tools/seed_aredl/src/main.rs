@@ -323,14 +323,15 @@ fn main() {
         .map(|id| {
             let country = user_country_map.get(&id).cloned();
             let username = name_map.get(&id).cloned().expect(format!("Username not found for id: {}", id).as_str());
+            let discord = discord_map.get(&id).cloned();
             CreateUser {
                 id: None,
                 json_id: id,
                 global_name: username,
-                placeholder: true,
+                placeholder: discord.is_none(),
                 ban_level: *ban_lookup.get(&id).unwrap_or(&0),
                 country,
-                discord_id: discord_map.get(&id).cloned(),
+                discord_id: discord,
             }
         })
         .collect();
