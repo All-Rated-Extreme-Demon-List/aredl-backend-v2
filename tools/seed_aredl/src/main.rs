@@ -261,8 +261,19 @@ fn main() {
         )
         .collect();
 
-    let banned_users = load_json_from_file::<Vec<i64>>(
-        aredl_path.join("_leaderboard_banned.json").as_path());
+        let banned_users = load_json_from_file::<HashMap<String, Vec<i64>>>(
+            aredl_path.join("_leaderboard_banned.json").as_path());
+        
+        let mut ban_lookup: HashMap<i64, i32> = HashMap::new();
+        for (level_str, id_list) in banned_users {
+            let level: i32 = level_str.parse().expect("Ban level should be a valid integer");
+            for id in id_list {
+                ban_lookup
+                    .entry(id)
+                    .and_modify(|existing| *existing = (*existing).max(level))
+                    .or_insert(level);
+            }
+        }
 
     role_data.extend(role_data_supporters);
 
@@ -317,7 +328,7 @@ fn main() {
                 json_id: id,
                 global_name: username,
                 placeholder: true,
-                ban_level: if banned_users.contains(&id) { 1 } else { 0 },
+                ban_level: *ban_lookup.get(&id).unwrap_or(&0),
                 country,
                 discord_id: discord_map.get(&id).cloned(),
             }
