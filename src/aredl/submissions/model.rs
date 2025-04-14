@@ -69,7 +69,6 @@ impl Submission {
         let submissions = aredl_submissions::table
             .select(Submission::as_select())
             .load::<Self>(&mut db.connection()?)?;
-        println!("{:?}", submissions);
         Ok(submissions)
     }
     
