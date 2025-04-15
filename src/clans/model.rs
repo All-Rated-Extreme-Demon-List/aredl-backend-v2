@@ -10,7 +10,6 @@ use crate::auth::Authenticated;
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
-use crate::schema::aredl_position_history::i;
 use crate::schema::{clans, clan_members, clan_invites};
 
 use super::members::ClanMemberAdd;

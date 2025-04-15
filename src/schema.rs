@@ -4,6 +4,10 @@ pub mod sql_types {
     #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "notification_type"))]
     pub struct NotificationType;
+
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "submission_status"))]
+    pub struct SubmissionStatus;
 }
 
 diesel::table! {
@@ -94,6 +98,9 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::SubmissionStatus;
+
     aredl_submissions (id) {
         id -> Uuid,
         level_id -> Uuid,
@@ -105,10 +112,10 @@ diesel::table! {
         reviewer_id -> Nullable<Uuid>,
         priority -> Bool,
         is_update -> Bool,
-        is_rejected -> Bool,
         rejection_reason -> Nullable<Varchar>,
         additional_notes -> Nullable<Varchar>,
         created_at -> Timestamp,
+        status -> SubmissionStatus,
     }
 }
 
