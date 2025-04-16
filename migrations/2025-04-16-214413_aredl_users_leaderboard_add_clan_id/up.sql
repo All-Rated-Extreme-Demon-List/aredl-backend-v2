@@ -1,0 +1,50 @@
+DROP MATERIALIZED VIEW IF EXISTS aredl_user_leaderboard;
+CREATE MATERIALIZED VIEW aredl_user_leaderboard AS
+WITH user_points AS (
+	SELECT u.id AS user_id, u.country, (COALESCE(SUM(l.points), 0) + COALESCE(pp.points, 0))::INTEGER AS total_points, (COALESCE(pp.points, 0))::INTEGER AS pack_points
+	FROM users u
+	LEFT JOIN aredl_records r ON u.id = r.submitted_by
+	LEFT JOIN aredl_levels l ON r.level_id = l.id
+	LEFT JOIN aredl_user_pack_points pp ON pp.user_id = r.submitted_by
+	WHERE u.ban_level = 0
+	GROUP BY u.id, u.country, pp.points
+),
+hardest_position AS (
+	SELECT
+		r.submitted_by AS user_id,
+		MIN(l.position) AS position
+	FROM aredl_records r
+	JOIN aredl_levels l ON r.level_id = l.id
+	GROUP BY r.submitted_by
+),
+hardest AS (
+	SELECT
+		hp.user_id,
+		l.id AS level_id
+	FROM hardest_position hp
+	JOIN aredl_levels l ON hp.position = l.position
+),
+level_count AS (
+    SELECT
+        r.submitted_by AS id,
+        count(*) AS c
+    FROM aredl_records r
+    JOIN aredl_levels l ON r.level_id = l.id
+    WHERE l.legacy = false
+    GROUP BY submitted_by
+)
+SELECT
+	RANK() OVER (ORDER BY up.total_points DESC)::INTEGER AS rank,
+	RANK() OVER (ORDER BY up.total_points - up.pack_points DESC)::INTEGER AS raw_rank,
+	RANK() OVER (ORDER BY COALESCE(lc.c, 0) DESC)::INTEGER AS extremes_rank,
+	RANK() OVER (PARTITION BY up.country ORDER BY up.total_points DESC)::INTEGER AS country_rank,
+	RANK() OVER (PARTITION BY up.country ORDER BY up.total_points - up.pack_points DESC)::INTEGER AS country_raw_rank,
+	RANK() OVER (PARTITION BY up.country ORDER BY COALESCE(lc.c, 0) DESC)::INTEGER AS country_extremes_rank,
+	up.*,
+	h.level_id AS hardest,
+	COALESCE(lc.c, 0)::INTEGER AS extremes,
+	cm.clan_id
+FROM user_points up
+LEFT JOIN hardest h ON h.user_id = up.user_id
+LEFT JOIN level_count lc ON lc.id = up.user_id
+LEFT JOIN clan_members cm ON cm.user_id = up.user_id;

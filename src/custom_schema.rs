@@ -45,7 +45,8 @@ diesel::table! {
         total_points -> Int4,
         pack_points -> Int4,
         hardest -> Nullable<Uuid>,
-        extremes -> Int4
+        extremes -> Int4,
+        clan_id -> Nullable<Uuid>,
     }
 }
 
@@ -63,6 +64,7 @@ diesel::table! {
 
 diesel::joinable!(aredl_user_leaderboard -> users (user_id));
 diesel::joinable!(aredl_user_leaderboard -> aredl_levels (hardest));
+diesel::joinable!(aredl_user_leaderboard -> clans (clan_id));
 diesel::joinable!(aredl_country_leaderboard -> aredl_levels (hardest));
 
 diesel::allow_tables_to_appear_in_same_query!(
@@ -78,6 +80,11 @@ diesel::allow_tables_to_appear_in_same_query!(
 diesel::allow_tables_to_appear_in_same_query!(
     aredl_user_leaderboard,
     users,
+);
+
+diesel::allow_tables_to_appear_in_same_query!(
+    aredl_user_leaderboard,
+    clans,
 );
 
 diesel::table! {

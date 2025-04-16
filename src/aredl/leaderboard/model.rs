@@ -12,7 +12,8 @@ use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::aredl::levels::BaseLevel;
 use crate::users::BaseDiscordUser;
-use crate::schema::{aredl_levels, users};
+use crate::clans::Clan;
+use crate::schema::{aredl_levels, users, clans};
 
 #[derive(Serialize, Selectable, Queryable, Debug, ToSchema)]
 #[diesel(table_name=aredl_user_leaderboard, check_for_backend(Pg))]
@@ -28,7 +29,8 @@ pub struct LeaderboardEntry {
     pub total_points: i32,
     pub pack_points: i32,
     pub hardest: Option<Uuid>,
-    pub extremes: i32
+    pub extremes: i32,
+    pub clan_id: Option<Uuid>,
 }
 
 #[derive(Serialize, Debug, ToSchema)]
@@ -56,7 +58,9 @@ pub struct LeaderboardEntryResolved {
     /// Hardest level the user has completed.
     pub hardest: Option<BaseLevel>,
     /// Count of extremes the user has completed.
-    pub extremes: i32
+    pub extremes: i32,
+    /// User's clan, if any.
+    pub clan: Option<Clan>,
 }
 
 #[derive(Serialize, Debug, ToSchema)]
@@ -79,6 +83,7 @@ pub enum LeaderboardOrder {
 pub struct LeaderboardQueryOptions {
     pub name_filter: Option<String>,
     pub country_filter: Option<i32>,
+    pub clan_filter: Option<Uuid>,
     pub order: Option<LeaderboardOrder>,
 }
 
@@ -94,10 +99,17 @@ impl LeaderboardPage {
             None => Box::new(<bool as AsExpression<Bool>>::as_expression(true).nullable()),
         };
 
+        let clan_filter: Box<dyn BoxableExpression<_, _, SqlType = Nullable<Bool>>> = match options.clan_filter.clone() {
+            Some(clan_id) => Box::new(aredl_user_leaderboard::clan_id.is_not_null()
+                .and(aredl_user_leaderboard::clan_id.eq(clan_id))),
+            None => Box::new(<bool as AsExpression<Bool>>::as_expression(true).nullable()),
+        };
+
         let selection = (
             LeaderboardEntry::as_select(),
             BaseDiscordUser::as_select(),
-            (aredl_levels::id, aredl_levels::name).nullable()
+            Option::<Clan>::as_select(),
+            Option::<BaseLevel>::as_select(),
         );
 
         let order = options.order.unwrap_or(LeaderboardOrder::TotalPoints);
@@ -115,6 +127,7 @@ impl LeaderboardPage {
         let query =
             aredl_user_leaderboard::table
                 .inner_join(users::table.on(users::id.eq(aredl_user_leaderboard::user_id)))
+                .left_join(clans::table.on(aredl_user_leaderboard::clan_id.eq(clans::id.nullable())))
                 .left_join(aredl_levels::table.on(aredl_user_leaderboard::hardest.eq(aredl_levels::id.nullable())));
 
         let entries = query.clone()
@@ -122,9 +135,10 @@ impl LeaderboardPage {
             .offset(page_query.offset())
             .filter(name_filter)
             .filter(country_filter)
+            .filter(clan_filter)
             .order((ordering, aredl_user_leaderboard::user_id))
             .select(selection)
-            .load::<(LeaderboardEntry, BaseDiscordUser, Option<BaseLevel>)>(conn)?;
+            .load::<(LeaderboardEntry, BaseDiscordUser, Option<Clan>, Option<BaseLevel>,)>(conn)?;
 
         let name_filter: Box<dyn BoxableExpression<_, _, SqlType = Bool>> = match options.name_filter {
             Some(filter) => Box::new(users::global_name.ilike(filter)),
@@ -143,7 +157,7 @@ impl LeaderboardPage {
 
         let entries_resolved = entries
             .into_iter()
-            .map(|(entry, user, hardest)| LeaderboardEntryResolved {
+            .map(|(entry, user, clan, hardest)| LeaderboardEntryResolved {
                 rank: entry.rank,
                 extremes_rank: entry.extremes_rank,
                 raw_rank: entry.raw_rank,
@@ -155,7 +169,8 @@ impl LeaderboardPage {
                 total_points: entry.total_points,
                 pack_points: entry.pack_points,
                 hardest,
-                extremes: entry.extremes
+                extremes: entry.extremes,
+                clan
             })
             .collect::<Vec<_>>();
 
