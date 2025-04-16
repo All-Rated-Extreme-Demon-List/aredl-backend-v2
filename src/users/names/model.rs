@@ -37,6 +37,7 @@ impl RoleResolved {
         let user_roles = user_roles::table
             .inner_join(users::table)
             .select((user_roles::role_id, BaseUser::as_select()))
+            .order_by(user_roles::role_id)
             .load::<(i32, BaseUser)>(conn)?;
 
         let result = user_roles
