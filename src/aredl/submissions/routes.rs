@@ -64,8 +64,13 @@ async fn delete(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<H
 
 
 #[post("/claim", wrap="UserAuth::require(Permission::RecordModify)")]
-async fn claim(_db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
-    Ok(HttpResponse::ImATeapot().finish())
+async fn claim(db: web::Data<Arc<DbAppState>>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
+
+    let patched = web::block(
+        move || Submission::find_highest_priority(db, authenticated.user_id)
+    ).await??;
+
+    Ok(HttpResponse::Ok().json(patched))
 }
 #[post("/{id}/unclaim", wrap="UserAuth::require(Permission::RecordModify)")]
 async fn unclaim(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {

@@ -3,13 +3,23 @@ use chrono::NaiveDateTime;
 use actix_web::web;
 use std::sync::Arc;
 use crate::{
-    schema::aredl_submissions, 
     db::DbAppState, 
-    error_handler::ApiError
+    error_handler::ApiError, 
+    schema::{
+        aredl_submissions, aredl_submissions_with_priority
+    }
 };
 use serde::{Serialize, Deserialize};
 use utoipa::ToSchema;
-use diesel::{pg::Pg, QueryDsl, RunQueryDsl, SelectableHelper, Connection, ExpressionMethods};
+use diesel::{
+    pg::Pg, 
+    QueryDsl, 
+    RunQueryDsl, 
+    SelectableHelper,
+    Connection, 
+    ExpressionMethods, 
+    JoinOnDsl
+};
 use diesel_derive_enum::DbEnum;
 use crate::aredl::levels::records::{RecordInsert, Record};
 
@@ -77,7 +87,10 @@ pub struct SubmissionInsert {
     /// Link to the raw video file of the completion.
     pub raw_url: Option<String>,
     /// Any additional notes left by the submitter.
-    pub additional_notes: Option<String>
+    pub additional_notes: Option<String>,
+    // not documented, this will be resolved
+    // automatically in the future
+    pub priority: Option<bool>
 }
 
 #[derive(Serialize, Deserialize, Debug, AsChangeset, Default)]
@@ -123,6 +136,22 @@ impl Submission {
     pub fn find_one(db: web::Data<Arc<DbAppState>>, id: Uuid) -> Result<Submission, ApiError> {
         let submission = aredl_submissions::table
             .filter(aredl_submissions::id.eq(id))
+            .select(Self::as_select())
+            .first(&mut db.connection()?)?;
+        Ok(submission)
+    }
+
+    pub fn find_highest_priority(db: web::Data<Arc<DbAppState>>, user: Uuid) -> Result<Submission, ApiError> {
+        let _new_data = SubmissionPatch {
+            reviewer_id: Some(user),
+            status: Some(SubmissionStatus::Claimed),
+            ..Default::default()
+        };
+        // TODO: edit data
+        let submission = aredl_submissions::table
+            .inner_join(aredl_submissions_with_priority::table.on(aredl_submissions::id.eq(aredl_submissions_with_priority::id)))
+            .order(aredl_submissions_with_priority::priority_value.desc())
+            .limit(1)
             .select(Self::as_select())
             .first(&mut db.connection()?)?;
         Ok(submission)
