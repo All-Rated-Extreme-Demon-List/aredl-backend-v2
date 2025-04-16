@@ -307,6 +307,7 @@ dependencies = [
  "diesel_migrations",
  "dotenv",
  "futures-util",
+ "is-url",
  "itertools 0.13.0",
  "jsonwebtoken",
  "listenfd",
@@ -1324,6 +1325,16 @@ name = "ipnet"
 version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f518f335dce6725a761382244631d86cf0ccb2863413590b31338feb467f9c3"
+
+[[package]]
+name = "is-url"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ecc3c11df614d56dcf271409b7a7efbcec8c07f55f685651232ddf26054d166b"
+dependencies = [
+ "lazy_static",
+ "regex",
+]
 
 [[package]]
 name = "itertools"
