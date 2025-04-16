@@ -8,6 +8,7 @@ use crate::{
     auth::{Authenticated, Permission, UserAuth}, 
     db::DbAppState, error_handler::ApiError
 };
+use is_url::is_url;
 
 #[get("", wrap="UserAuth::require(Permission::RecordModify)")]
 async fn find_all(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
@@ -27,8 +28,20 @@ async fn find_one(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result
 
 #[post("", wrap="UserAuth::load()")]
 async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionInsert>) -> Result<HttpResponse, ApiError> {
+    let submission = body.into_inner();
+
+    if !is_url(&submission.video_url) {
+        return Err(ApiError::new(400, "Invalid completion URL"));
+    }
+
+    if let Some(raw_url) = submission.raw_url.as_ref() {
+        if !is_url(raw_url) {
+            return Err(ApiError::new(400, "Invalid raw footage URL"));
+        }
+    }
+    
     let created = web::block(
-        move || Submission::create(db, body.into_inner())
+        move || Submission::create(db, submission)
     ).await??;
     Ok(HttpResponse::Created().json(created))
 }
@@ -58,7 +71,6 @@ async fn claim(_db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError
 async fn unclaim(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
     let new_data = SubmissionPatch {
         status: Some(SubmissionStatus::Pending),
-        reviewer_id: None,
         ..Default::default()
     };
 
