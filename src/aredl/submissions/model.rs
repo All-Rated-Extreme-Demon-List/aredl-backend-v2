@@ -11,6 +11,7 @@ use serde::{Serialize, Deserialize};
 use utoipa::ToSchema;
 use diesel::{pg::Pg, QueryDsl, RunQueryDsl, SelectableHelper, Connection, ExpressionMethods};
 use diesel_derive_enum::DbEnum;
+use crate::aredl::levels::records::{RecordInsert, Record};
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum)]
 #[ExistingTypePath = "crate::schema::sql_types::SubmissionStatus"]
@@ -65,7 +66,10 @@ pub struct SubmissionInsert {
     /// Internal UUID of the submitter.
     pub submitted_by: Uuid,
     /// Whether the record was completed on mobile or not.
-    pub mobile: bool,
+    
+    // this is an Option so it's possible to exclude it from
+    // the request body without throwing an error
+    pub mobile: Option<bool>,
     /// ID of the LDM used for the record, if any.
     pub ldm_id: Option<i32>,
     /// Video link of the completion.
@@ -76,7 +80,7 @@ pub struct SubmissionInsert {
     pub additional_notes: Option<String>
 }
 
-#[derive(Serialize, Deserialize, Debug, AsChangeset)]
+#[derive(Serialize, Deserialize, Debug, AsChangeset, Default)]
 #[diesel(table_name=aredl_submissions, check_for_backend(Pg))]
 pub struct SubmissionPatch {
     /// UUID of the level this record is on.)
@@ -101,6 +105,12 @@ pub struct SubmissionPatch {
     pub additional_notes: Option<String>,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct RejectionData {
+    /// The reason for rejecting this record
+    pub reason: Option<String>
+}
+
 impl Submission {
     pub fn find_all(db: web::Data<Arc<DbAppState>>) -> Result<Vec<Self>, ApiError> {
         // TODO: paginate probably?
@@ -111,24 +121,20 @@ impl Submission {
     }
 
     pub fn find_one(db: web::Data<Arc<DbAppState>>, id: Uuid) -> Result<Submission, ApiError> {
-        let submissions = aredl_submissions::table
+        let submission = aredl_submissions::table
             .filter(aredl_submissions::id.eq(id))
             .select(Self::as_select())
             .first(&mut db.connection()?)?;
-        Ok(submissions)
+        Ok(submission)
     }
     
     pub fn create(db: web::Data<Arc<DbAppState>>, inserted_submission: SubmissionInsert) -> Result<Self, ApiError> {
         let mut conn = db.connection()?;
         conn.transaction(|connection| -> Result<Self, ApiError> {
-            diesel::insert_into(aredl_submissions::table)
+            let submission = diesel::insert_into(aredl_submissions::table)
                 .values(&inserted_submission)
-                .execute(connection)?;
-
-            let submission = aredl_submissions::table
-                .order(aredl_submissions::created_at.desc())
-                .select(Self::as_select())
-                .first::<Self>(connection)?;
+                .returning(Self::as_select())
+                .get_result(connection)?;
 
             Ok(submission)
         })
@@ -136,13 +142,44 @@ impl Submission {
 
     pub fn delete(db: web::Data<Arc<DbAppState>>, submission_id: Uuid) -> Result<(), ApiError> {
         let mut conn = db.connection()?;
-        conn.transaction(|connection| -> Result<(), ApiError> {
-            diesel::delete(aredl_submissions::table)
+        conn.transaction(|connection| -> Result<Submission, ApiError> {
+            let deleted = diesel::delete(aredl_submissions::table)
 				.filter(aredl_submissions::id.eq(submission_id))
-				.execute(connection)?;
-			Ok(())
+                .returning(Self::as_select())
+				.get_result(connection)?;
+			Ok(deleted)
 		})?;
 		Ok(())
+    }
+
+    pub fn accept(db: web::Data<Arc<DbAppState>>, id: Uuid, reviewer_id: Uuid) -> Result<Record, ApiError> {
+        let conn = &mut db.connection()?;
+        let new_data = SubmissionPatch {
+            status: Some(SubmissionStatus::Accepted),
+            reviewer_id: Some(reviewer_id),
+            ..Default::default()
+        };
+
+        let updated: Submission = diesel::update(aredl_submissions::table)
+            .filter(aredl_submissions::id.eq(id))
+            .set(new_data)
+            .returning(Self::as_select())
+            .get_result(conn)?;
+
+        let record = RecordInsert {
+            submitted_by: updated.submitted_by,
+            mobile: updated.mobile,
+            ldm_id: updated.ldm_id,
+            video_url: updated.video_url,
+            raw_url: updated.raw_url,
+            reviewer_id: Some(reviewer_id),
+            created_at: Some(updated.created_at),
+            updated_at: None
+        };
+
+        let inserted = Record::create(db, updated.level_id, record)?;
+
+        Ok(inserted)
     }
 }
 

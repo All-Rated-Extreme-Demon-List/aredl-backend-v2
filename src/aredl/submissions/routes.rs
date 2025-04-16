@@ -2,10 +2,10 @@ use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use uuid::Uuid;
 use crate::{
-    auth::{UserAuth, Permission},
     aredl::submissions::{
-        Submission, SubmissionInsert, SubmissionPatch
-    },
+        Submission, SubmissionInsert, SubmissionPatch, SubmissionStatus, RejectionData
+    }, 
+    auth::{Authenticated, Permission, UserAuth}, 
     db::DbAppState, error_handler::ApiError
 };
 
@@ -49,26 +49,63 @@ async fn delete(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<H
     Ok(HttpResponse::NoContent().finish())
 }
 
-// todo
-#[post("/{id}/claim", wrap="UserAuth::require(Permission::RecordModify)")]
-async fn claim(_db: web::Data<Arc<DbAppState>>, _id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
+
+#[post("/claim", wrap="UserAuth::require(Permission::RecordModify)")]
+async fn claim(_db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
     Ok(HttpResponse::ImATeapot().finish())
 }
 #[post("/{id}/unclaim", wrap="UserAuth::require(Permission::RecordModify)")]
-async fn unclaim(_db: web::Data<Arc<DbAppState>>, _id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
-    Ok(HttpResponse::ImATeapot().finish())
+async fn unclaim(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
+    let new_data = SubmissionPatch {
+        status: Some(SubmissionStatus::Pending),
+        reviewer_id: None,
+        ..Default::default()
+    };
+
+    let new_record = web::block(
+        move || SubmissionPatch::patch(new_data, id.into_inner(), db)
+    ).await??;
+    Ok(HttpResponse::Ok().json(new_record))
 }
 #[post("/{id}/accept", wrap="UserAuth::require(Permission::RecordModify)")]
-async fn accept(_db: web::Data<Arc<DbAppState>>, _id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
-    Ok(HttpResponse::ImATeapot().finish())
+async fn accept(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
+    let new_record = web::block(
+        move || Submission::accept(db, id.into_inner(), authenticated.user_id)
+    ).await??;
+    Ok(HttpResponse::Accepted().json(new_record))
 }
 #[post("/{id}/deny", wrap="UserAuth::require(Permission::RecordModify)")]
-async fn deny(_db: web::Data<Arc<DbAppState>>, _id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
-    Ok(HttpResponse::ImATeapot().finish())
+async fn deny(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticated: Authenticated, body: Option<web::Json<RejectionData>>) -> Result<HttpResponse, ApiError> {
+
+    let reason = match body {
+        Some(data) => data.into_inner().reason,
+        None => None,
+    };
+    
+    let new_data = SubmissionPatch {
+        status: Some(SubmissionStatus::Denied),
+        reviewer_id: Some(authenticated.user_id),
+        rejection_reason: reason,
+        ..Default::default()
+    };
+
+    let new_record = web::block(
+        move || SubmissionPatch::patch(new_data, id.into_inner(), db)
+    ).await??;
+    Ok(HttpResponse::Ok().json(new_record))
 }
 #[post("/{id}/underconsideration", wrap="UserAuth::require(Permission::RecordModify)")]
-async fn under_consideration(_db: web::Data<Arc<DbAppState>>, _id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
-    Ok(HttpResponse::ImATeapot().finish())
+async fn under_consideration(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
+    let new_data = SubmissionPatch {
+        status: Some(SubmissionStatus::UnderConsideration),
+        reviewer_id: Some(authenticated.user_id),
+        ..Default::default()
+    };
+
+    let new_record = web::block(
+        move || SubmissionPatch::patch(new_data, id.into_inner(), db)
+    ).await??;
+    Ok(HttpResponse::Ok().json(new_record))
 }
 
 pub fn init_routes(config: &mut web::ServiceConfig) {
