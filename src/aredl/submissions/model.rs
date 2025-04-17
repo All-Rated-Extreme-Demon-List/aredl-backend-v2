@@ -17,8 +17,7 @@ use diesel::{
     RunQueryDsl, 
     SelectableHelper,
     Connection, 
-    ExpressionMethods, 
-    JoinOnDsl
+    ExpressionMethods
 };
 use diesel_derive_enum::DbEnum;
 use crate::aredl::levels::records::{RecordInsert, Record};
@@ -142,18 +141,26 @@ impl Submission {
     }
 
     pub fn find_highest_priority(db: web::Data<Arc<DbAppState>>, user: Uuid) -> Result<Submission, ApiError> {
-        let _new_data = SubmissionPatch {
+        let new_data = SubmissionPatch {
             reviewer_id: Some(user),
             status: Some(SubmissionStatus::Claimed),
             ..Default::default()
         };
-        // TODO: edit data
-        let submission = aredl_submissions::table
-            .inner_join(aredl_submissions_with_priority::table.on(aredl_submissions::id.eq(aredl_submissions_with_priority::id)))
+        // TODO: maybe this could become one super clean query?
+        let highest_priority_id = aredl_submissions_with_priority::table
+            .filter(aredl_submissions_with_priority::status.eq(SubmissionStatus::Pending))
+            .select(aredl_submissions_with_priority::id)
             .order(aredl_submissions_with_priority::priority_value.desc())
             .limit(1)
-            .select(Self::as_select())
-            .first(&mut db.connection()?)?;
+            .first::<Uuid>(&mut db.connection()?)?;
+            
+        // we don't really need to return the priority value here
+        let submission = diesel::update(aredl_submissions::table
+            .filter(aredl_submissions::id.eq(highest_priority_id)))
+            .set(new_data)
+            .returning(Self::as_select())
+            .get_result(&mut db.connection()?)?;
+        
         Ok(submission)
     }
     
@@ -183,32 +190,33 @@ impl Submission {
 
     pub fn accept(db: web::Data<Arc<DbAppState>>, id: Uuid, reviewer_id: Uuid) -> Result<Record, ApiError> {
         let conn = &mut db.connection()?;
-        let new_data = SubmissionPatch {
-            status: Some(SubmissionStatus::Accepted),
-            reviewer_id: Some(reviewer_id),
-            ..Default::default()
-        };
+        conn.transaction(|connection| -> Result<Record, ApiError> {
+            let new_data = SubmissionPatch {
+                status: Some(SubmissionStatus::Accepted),
+                reviewer_id: Some(reviewer_id),
+                ..Default::default()
+            };
 
-        let updated: Submission = diesel::update(aredl_submissions::table)
+            let updated: Submission = diesel::update(aredl_submissions::table)
             .filter(aredl_submissions::id.eq(id))
             .set(new_data)
             .returning(Self::as_select())
-            .get_result(conn)?;
+            .get_result(connection)?;
 
-        let record = RecordInsert {
-            submitted_by: updated.submitted_by,
-            mobile: updated.mobile,
-            ldm_id: updated.ldm_id,
-            video_url: updated.video_url,
-            raw_url: updated.raw_url,
-            reviewer_id: Some(reviewer_id),
-            created_at: Some(updated.created_at),
-            updated_at: None
-        };
+            let record = RecordInsert {
+                submitted_by: updated.submitted_by,
+                mobile: updated.mobile,
+                ldm_id: updated.ldm_id,
+                video_url: updated.video_url,
+                raw_url: updated.raw_url,
+                reviewer_id: Some(reviewer_id),
+                created_at: Some(updated.created_at),
+                updated_at: None
+            };
 
-        let inserted = Record::create(db, updated.level_id, record)?;
-
-        Ok(inserted)
+            let inserted = Record::create(db, updated.level_id, record)?;
+            Ok(inserted)
+        })
     }
 }
 
