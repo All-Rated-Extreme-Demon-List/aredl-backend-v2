@@ -133,7 +133,7 @@ diesel::table! {
         raw_url -> Nullable<Varchar>,
         reviewer_id -> Nullable<Uuid>,
         priority -> Bool,
-        priority_value -> Integer,
+        priority_value -> Bigint,
         is_update -> Bool,
         rejection_reason -> Nullable<Varchar>,
         additional_notes -> Nullable<Varchar>,

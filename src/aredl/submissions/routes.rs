@@ -3,7 +3,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 use crate::{
     aredl::submissions::{
-        Submission, SubmissionInsert, SubmissionPatch, SubmissionStatus, RejectionData
+        RejectionData, Submission, SubmissionInsert, SubmissionPatch, SubmissionResolved, SubmissionStatus
     }, 
     auth::{Authenticated, Permission, UserAuth}, 
     db::DbAppState, error_handler::ApiError
@@ -17,17 +17,16 @@ async fn find_all(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiErr
     ).await??;
     Ok(HttpResponse::Ok().json(submissions))
 }
-#[get("/{id}", wrap="UserAuth::require(Permission::RecordModify)")]
-async fn find_one(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
-    tracing::debug!("{:?}", id.clone());
+#[get("/{id}", wrap="UserAuth::load()")]
+async fn find_one(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
     let submission = web::block(
-        move || Submission::find_one(db, id.into_inner())
+        move || SubmissionResolved::find_one(db, id.into_inner(), authenticated)
     ).await??;
     Ok(HttpResponse::Ok().json(submission))
 }
 
 #[post("", wrap="UserAuth::load()")]
-async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionInsert>) -> Result<HttpResponse, ApiError> {
+async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionInsert>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
     let submission = body.into_inner();
 
     if !is_url(&submission.video_url) {
@@ -41,7 +40,7 @@ async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionInsert
     }
     
     let created = web::block(
-        move || Submission::create(db, submission)
+        move || Submission::create(db, submission, authenticated)
     ).await??;
     Ok(HttpResponse::Created().json(created))
 }
@@ -49,7 +48,7 @@ async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionInsert
 #[patch("/{id}", wrap="UserAuth::require(Permission::RecordModify)")]
 async fn patch(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, body: web::Json<SubmissionPatch>) -> Result<HttpResponse, ApiError> {
     let patched = web::block(
-        move || SubmissionPatch::patch(body.into_inner(), id.into_inner(), db)
+        move || SubmissionPatch::patch(body.into_inner(), id.into_inner(), &mut db.connection()?)
     ).await??;
     Ok(HttpResponse::Ok().json(patched))
 }
@@ -67,22 +66,24 @@ async fn delete(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<H
 async fn claim(db: web::Data<Arc<DbAppState>>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
 
     let patched = web::block(
-        move || Submission::find_highest_priority(db, authenticated.user_id)
+        move || SubmissionResolved::find_highest_priority(db, authenticated.user_id)
     ).await??;
 
     Ok(HttpResponse::Ok().json(patched))
 }
 #[post("/{id}/unclaim", wrap="UserAuth::require(Permission::RecordModify)")]
 async fn unclaim(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
+    let mut conn = db.connection()?;
     let new_data = SubmissionPatch {
         status: Some(SubmissionStatus::Pending),
         ..Default::default()
     };
 
     let new_record = web::block(
-        move || SubmissionPatch::patch(new_data, id.into_inner(), db)
+        move || SubmissionPatch::patch(new_data, id.into_inner(), &mut conn)
     ).await??;
-    Ok(HttpResponse::Ok().json(new_record))
+    let resolved = SubmissionResolved::from(new_record, db, None)?;
+    Ok(HttpResponse::Ok().json(resolved))
 }
 #[post("/{id}/accept", wrap="UserAuth::require(Permission::RecordModify)")]
 async fn accept(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
@@ -95,32 +96,19 @@ async fn accept(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticat
 async fn deny(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticated: Authenticated, body: Option<web::Json<RejectionData>>) -> Result<HttpResponse, ApiError> {
 
     let reason = match body {
-        Some(data) => data.into_inner().reason,
-        None => None,
-    };
-    
-    let new_data = SubmissionPatch {
-        status: Some(SubmissionStatus::Denied),
-        reviewer_id: Some(authenticated.user_id),
-        rejection_reason: reason,
-        ..Default::default()
+        Some(body) => body.into_inner().reason,
+        None => None
     };
 
     let new_record = web::block(
-        move || SubmissionPatch::patch(new_data, id.into_inner(), db)
+        move || Submission::reject(db, id.into_inner(), authenticated, reason)
     ).await??;
     Ok(HttpResponse::Ok().json(new_record))
 }
 #[post("/{id}/underconsideration", wrap="UserAuth::require(Permission::RecordModify)")]
 async fn under_consideration(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
-    let new_data = SubmissionPatch {
-        status: Some(SubmissionStatus::UnderConsideration),
-        reviewer_id: Some(authenticated.user_id),
-        ..Default::default()
-    };
-
     let new_record = web::block(
-        move || SubmissionPatch::patch(new_data, id.into_inner(), db)
+        move || Submission::under_consideration(db, id.into_inner(), authenticated)
     ).await??;
     Ok(HttpResponse::Ok().json(new_record))
 }

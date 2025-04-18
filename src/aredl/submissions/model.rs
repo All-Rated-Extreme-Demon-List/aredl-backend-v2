@@ -6,21 +6,29 @@ use crate::{
     db::DbAppState, 
     error_handler::ApiError, 
     schema::{
-        aredl_submissions, aredl_submissions_with_priority
+        aredl_levels, aredl_records, aredl_submissions, aredl_submissions_with_priority, users
     }
 };
 use serde::{Serialize, Deserialize};
 use utoipa::ToSchema;
 use diesel::{
-    pg::Pg, 
-    QueryDsl, 
-    RunQueryDsl, 
-    SelectableHelper,
-    Connection, 
-    ExpressionMethods
+    pg::Pg, r2d2::{
+        ConnectionManager, PooledConnection
+    }, Connection, ExpressionMethods, PgConnection, QueryDsl, RunQueryDsl, SelectableHelper, OptionalExtension
 };
 use diesel_derive_enum::DbEnum;
-use crate::aredl::levels::records::{RecordInsert, Record};
+use crate::{
+    aredl::levels::{
+        BaseLevel,
+        ResolvedLevel,
+        records::{RecordInsert, Record}
+    },
+    users::{
+        BaseUser,
+        me::notifications::{Notification, NotificationType}
+    },
+    auth::{Authenticated, Permission}
+};
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum)]
 #[ExistingTypePath = "crate::schema::sql_types::SubmissionStatus"]
@@ -31,6 +39,18 @@ pub enum SubmissionStatus {
     UnderConsideration,
     Denied,
     Accepted
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct BaseSubmission {
+    /// Internal UUID of the submission.
+    pub id: Uuid,
+    /// Name of the level this submission is for.
+    pub level: String,
+    /// The submitter's name
+    pub submitter: String,
+    /// The status of this submission
+    pub status: SubmissionStatus,
 }
 
 #[derive(Serialize, Deserialize, Queryable, Insertable, Selectable, Debug, ToSchema)]
@@ -66,14 +86,85 @@ pub struct Submission {
     pub created_at: NaiveDateTime,
 }
 
+#[derive(Serialize, Deserialize, Queryable, Insertable, Selectable, Debug, ToSchema)]
+#[diesel(table_name = aredl_submissions_with_priority, check_for_backend(Pg))]
+pub struct SubmissionWithPriority {
+    /// Internal UUID of the submission.
+    pub id: Uuid,
+    /// UUID of the level this record is on.)
+    pub level_id: Uuid,
+    /// Internal UUID of the submitter.
+    pub submitted_by: Uuid,
+    /// Whether the record was completed on mobile or not.
+    pub mobile: bool,
+    /// ID of the LDM used for the record, if any.
+    pub ldm_id: Option<i32>,
+    /// Video link of the completion.
+    pub video_url: String,
+    /// Link to the raw video file of the completion.
+    pub raw_url: Option<String>,
+    /// The status of this submission
+    pub status: SubmissionStatus,
+    /// Internal UUID of the user who reviewed the record.
+    pub reviewer_id: Option<Uuid>,
+    /// Whether the record was submitted as a priority record.
+    pub priority: bool,
+    /// Whether this is a resubmission of an older record.
+    pub is_update: bool,
+    /// The reason for rejecting this submission, if any.
+    pub rejection_reason: Option<String>,
+    /// Any additional notes left by the submitter.
+    pub additional_notes: Option<String>,
+    /// Timestamp of when the submission was created.
+    pub created_at: NaiveDateTime,
+    /// The priority value of this submission
+    pub priority_value: i64,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SubmissionResolved {
+    /// Internal UUID of the submission.
+    pub id: Uuid,
+    /// UUID of the level this record is on.)
+    pub level: BaseLevel,
+    /// Internal UUID of the submitter.
+    pub submitted_by: BaseUser,
+    /// Whether the record was completed on mobile or not.
+    pub mobile: bool,
+    /// ID of the LDM used for the record, if any.
+    pub ldm_id: Option<i32>,
+    /// Video link of the completion.
+    pub video_url: String,
+    /// Link to the raw video file of the completion.
+    pub raw_url: Option<String>,
+    /// The status of this submission
+    pub status: SubmissionStatus,
+    /// Internal UUID of the user who reviewed the record.
+    pub reviewer: Option<BaseUser>,
+    /// Whether the record was submitted as a priority record.
+    pub priority: bool,
+    /// Whether this is a resubmission of an older record.
+    pub is_update: bool,
+    /// The reason for rejecting this submission, if any.
+    pub rejection_reason: Option<String>,
+    /// Any additional notes left by the submitter.
+    pub additional_notes: Option<String>,
+    /// Timestamp of when the submission was created.
+    pub created_at: NaiveDateTime,
+    /// 
+    pub priority_value: i64
+}
+
 #[derive(Serialize, Deserialize, Debug, Insertable, ToSchema)]
 #[diesel(table_name=aredl_submissions, check_for_backend(Pg))]
+// this struct does not contain the player's ID, which is computed to
+// be the logged in user. thus, this struct cannot be and is not inserted directly
+// into the query. if a new property is added here, remember to update Submission::create()
+// to insert that property into the database!
 pub struct SubmissionInsert {
     /// UUID of the level this record is on.
     /// This will eventually resolve to a UUID.
     pub level_id: Uuid,
-    /// Internal UUID of the submitter.
-    pub submitted_by: Uuid,
     /// Whether the record was completed on mobile or not.
     
     // this is an Option so it's possible to exclude it from
@@ -131,44 +222,40 @@ impl Submission {
             .load::<Self>(&mut db.connection()?)?;
         Ok(submissions)
     }
-
-    pub fn find_one(db: web::Data<Arc<DbAppState>>, id: Uuid) -> Result<Submission, ApiError> {
-        let submission = aredl_submissions::table
-            .filter(aredl_submissions::id.eq(id))
-            .select(Self::as_select())
-            .first(&mut db.connection()?)?;
-        Ok(submission)
-    }
-
-    pub fn find_highest_priority(db: web::Data<Arc<DbAppState>>, user: Uuid) -> Result<Submission, ApiError> {
-        let new_data = SubmissionPatch {
-            reviewer_id: Some(user),
-            status: Some(SubmissionStatus::Claimed),
-            ..Default::default()
-        };
-        // TODO: maybe this could become one super clean query?
-        let highest_priority_id = aredl_submissions_with_priority::table
-            .filter(aredl_submissions_with_priority::status.eq(SubmissionStatus::Pending))
-            .select(aredl_submissions_with_priority::id)
-            .order(aredl_submissions_with_priority::priority_value.desc())
-            .limit(1)
-            .first::<Uuid>(&mut db.connection()?)?;
-            
-        // we don't really need to return the priority value here
-        let submission = diesel::update(aredl_submissions::table
-            .filter(aredl_submissions::id.eq(highest_priority_id)))
-            .set(new_data)
-            .returning(Self::as_select())
-            .get_result(&mut db.connection()?)?;
-        
-        Ok(submission)
-    }
     
-    pub fn create(db: web::Data<Arc<DbAppState>>, inserted_submission: SubmissionInsert) -> Result<Self, ApiError> {
+    pub fn create(db: web::Data<Arc<DbAppState>>, inserted_submission: SubmissionInsert, authenticated: Authenticated) -> Result<Self, ApiError> {
         let mut conn = db.connection()?;
         conn.transaction(|connection| -> Result<Self, ApiError> {
+            let exists = aredl_records::table
+                .filter(aredl_records::submitted_by.eq(authenticated.user_id))
+                .filter(aredl_records::level_id.eq(inserted_submission.level_id))
+                .select(aredl_records::id)
+                .first::<Uuid>(connection)
+                .optional()?;
+
+            if exists.is_some() {
+                return Err(ApiError::new(409, "This user already has a record on this level."));
+            }
             let submission = diesel::insert_into(aredl_submissions::table)
-                .values(&inserted_submission)
+                .values((
+                    // this is fun
+                    aredl_submissions::submitted_by.eq(authenticated.user_id),
+                    aredl_submissions::level_id.eq(inserted_submission.level_id),
+                    // what the fuck
+                    inserted_submission.mobile.map_or_else(
+                        || aredl_submissions::mobile.eq(false),
+                        |mobile| aredl_submissions::mobile.eq(mobile)
+                    ),
+                    aredl_submissions::ldm_id.eq(inserted_submission.ldm_id),
+                    aredl_submissions::video_url.eq(inserted_submission.video_url),
+                    aredl_submissions::raw_url.eq(inserted_submission.raw_url),
+                    aredl_submissions::additional_notes.eq(inserted_submission.additional_notes),
+                    // what the fuck part 2
+                    inserted_submission.priority.map_or_else(
+                        || aredl_submissions::priority.eq(false),
+                        |priority| aredl_submissions::priority.eq(priority)
+                    )
+                ))
                 .returning(Self::as_select())
                 .get_result(connection)?;
 
@@ -198,10 +285,10 @@ impl Submission {
             };
 
             let updated: Submission = diesel::update(aredl_submissions::table)
-            .filter(aredl_submissions::id.eq(id))
-            .set(new_data)
-            .returning(Self::as_select())
-            .get_result(connection)?;
+                .filter(aredl_submissions::id.eq(id))
+                .set(new_data)
+                .returning(Self::as_select())
+                .get_result(connection)?;
 
             let record = RecordInsert {
                 submitted_by: updated.submitted_by,
@@ -215,18 +302,236 @@ impl Submission {
             };
 
             let inserted = Record::create(db, updated.level_id, record)?;
+
+            let level_name = aredl_levels::table
+                .filter(aredl_levels::id.eq(updated.level_id))
+                .select(aredl_levels::name)
+                .first::<String>(connection)?;
+
+            let content = format!("Your record on {:?} has been accepted!", level_name);
+            Notification::create(
+                connection, 
+                inserted.submitted_by, 
+                content, 
+                NotificationType::Success
+            )?;
             Ok(inserted)
         })
+    }
+    pub fn reject(
+        db: web::Data<Arc<DbAppState>>,
+        id: Uuid, 
+        authenticated: Authenticated,
+        reason: Option<String>
+    ) -> Result<SubmissionResolved, ApiError> { 
+        let connection = &mut db.connection()?;
+        let new_data = SubmissionPatch {
+            status: Some(SubmissionStatus::Denied),
+            reviewer_id: Some(authenticated.user_id),
+            rejection_reason: reason,
+            ..Default::default()
+        };
+
+        let new_record = SubmissionPatch::patch(new_data, id, &mut db.connection()?)?;
+
+        let upgraded = SubmissionResolved::from(new_record, db, None)?;
+        
+        let content = format!("Your record on {:?} has been denied...", upgraded.level.name);
+        Notification::create(
+            connection, 
+            upgraded.submitted_by.id, 
+            content, 
+            NotificationType::Failure
+        )?;
+        Ok(upgraded)
+    }
+    pub fn under_consideration(db: web::Data<Arc<DbAppState>>, id: Uuid, authenticated: Authenticated) -> Result<SubmissionResolved, ApiError> {
+        let connection = &mut db.connection()?;
+        let new_data = SubmissionPatch {
+            status: Some(SubmissionStatus::UnderConsideration),
+            reviewer_id: Some(authenticated.user_id),
+            ..Default::default()
+        };
+
+        let new_record = SubmissionPatch::patch(new_data, id, connection)?;
+
+        let upgraded = SubmissionResolved::from(new_record, db, None)?;
+        
+        let content = format!("Your record on {:?} has been placed under consideration.", upgraded.level.name);
+        Notification::create(
+            connection,
+            upgraded.submitted_by.id,
+            content, 
+            NotificationType::Info
+        )?;
+        Ok(upgraded)
+
     }
 }
 
 impl SubmissionPatch {
-    pub fn patch(patch: Self, id: Uuid, db: web::Data<Arc<DbAppState>>) -> Result<Submission, ApiError> {
+    pub fn patch(patch: Self, id: Uuid, conn: &mut PooledConnection<ConnectionManager<PgConnection>>) -> Result<Submission, ApiError> {
         let submission = diesel::update(aredl_submissions::table)
             .set(patch)
             .filter(aredl_submissions::id.eq(id))
             .returning(Submission::as_select())
-            .get_result(&mut db.connection()?)?;
+            .get_result(conn)?;
         Ok(submission)
+    }
+}
+
+impl SubmissionResolved {
+    pub fn from(submission: Submission, db: web::Data<Arc<DbAppState>>, priority: Option<i64>) -> Result<SubmissionResolved, ApiError> {
+
+        let conn = &mut db.connection()?;
+        let level = ResolvedLevel::find(db, submission.level_id)?;
+        let base_level = BaseLevel {
+            id: level.id,
+            name: level.name
+        };
+
+        let submitter = users::table
+            .filter(users::id.eq(submission.submitted_by))
+            .select((users::username, users::global_name))
+            .first::<(String, String)>(conn)?;
+        let submitted_by = BaseUser {
+            id: submission.submitted_by,
+            username: submitter.0,
+            global_name: submitter.1,
+        };
+
+        let reviewer: Option<BaseUser> = match submission.reviewer_id {
+            Some(reviewer_id) => {
+                let reviewer_db = users::table
+                    .filter(users::id.eq(reviewer_id))
+                    .select((users::username, users::global_name))
+                    .first::<(String, String)>(conn)?;
+                Some(BaseUser {
+                    id: reviewer_id,
+                    username: reviewer_db.0,
+                    global_name: reviewer_db.1,
+                })
+            },
+            None => None,
+        };
+
+
+        let priority_value = match priority {
+            None => {
+                aredl_submissions_with_priority::table
+                    .filter(aredl_submissions_with_priority::id.eq(submission.id))
+                    .select(aredl_submissions_with_priority::priority_value)
+                    .first::<i64>(conn)?
+            },
+            Some(v) => v
+        };
+        Ok(SubmissionResolved {
+            id: submission.id,
+            level: base_level,
+            submitted_by,
+            mobile: submission.mobile,
+            ldm_id: submission.ldm_id,
+            video_url: submission.video_url,
+            raw_url: submission.raw_url,
+            status: submission.status,
+            reviewer,
+            priority: submission.priority,
+            is_update: submission.is_update,
+            rejection_reason: submission.rejection_reason,
+            additional_notes: submission.additional_notes,
+            created_at: submission.created_at,
+            priority_value,
+        })
+    }
+    pub fn find_one(db: web::Data<Arc<DbAppState>>, id: Uuid, authenticated: Authenticated) -> Result<SubmissionResolved, ApiError> {
+        let conn = &mut db.connection()?;
+        let has_auth = Authenticated::has_permission(&authenticated, db.clone(), Permission::RecordModify)?;
+        
+        let mut query = aredl_submissions_with_priority::table
+            .filter(aredl_submissions_with_priority::id.eq(id))
+            .into_boxed();
+
+        if !has_auth {
+            query = query.filter(aredl_submissions_with_priority::submitted_by.eq(authenticated.user_id));
+        }
+
+        let submission = query
+            .select(SubmissionWithPriority::as_select())
+            .first(conn)?;
+            
+        let level = ResolvedLevel::find(db, submission.level_id)?;
+        let base_level = BaseLevel {
+            id: level.id,
+            name: level.name
+        };
+
+        let submitter = users::table
+            .filter(users::id.eq(submission.submitted_by))
+            .select((users::username, users::global_name))
+            .first::<(String, String)>(conn)?;
+        let submitted_by = BaseUser {
+            id: submission.submitted_by,
+            username: submitter.0,
+            global_name: submitter.1,
+        };
+
+        let reviewer: Option<BaseUser> = match submission.reviewer_id {
+            Some(reviewer_id) => {
+                let reviewer_db = users::table
+                    .filter(users::id.eq(reviewer_id))
+                    .select((users::username, users::global_name))
+                    .first::<(String, String)>(conn)?;
+                Some(BaseUser {
+                    id: reviewer_id,
+                    username: reviewer_db.0,
+                    global_name: reviewer_db.1,
+                })
+            },
+            None => None,
+        };
+
+        Ok(SubmissionResolved {
+            id: submission.id,
+            level: base_level,
+            submitted_by,
+            mobile: submission.mobile,
+            ldm_id: submission.ldm_id,
+            video_url: submission.video_url,
+            raw_url: submission.raw_url,
+            status: submission.status,
+            reviewer,
+            priority: submission.priority,
+            is_update: submission.is_update,
+            rejection_reason: submission.rejection_reason,
+            additional_notes: submission.additional_notes,
+            created_at: submission.created_at,
+            priority_value: submission.priority_value,
+        })
+    }
+    pub fn find_highest_priority(db: web::Data<Arc<DbAppState>>, user: Uuid) -> Result<SubmissionResolved, ApiError> {
+        let conn = &mut db.connection()?;
+        let new_data = SubmissionPatch {
+            reviewer_id: Some(user),
+            status: Some(SubmissionStatus::Claimed),
+            ..Default::default()
+        };
+        // TODO: maybe this could become one super clean query?
+        let highest_priority_id = aredl_submissions_with_priority::table
+            .filter(aredl_submissions_with_priority::status.eq(SubmissionStatus::Pending))
+            .select((aredl_submissions_with_priority::id, aredl_submissions_with_priority::priority_value))
+            .order(aredl_submissions_with_priority::priority_value.desc())
+            .limit(1)
+            .first::<(Uuid, i64)>(conn)?;
+            
+        // we don't really need to return the priority value here
+        let submission = diesel::update(aredl_submissions::table
+            .filter(aredl_submissions::id.eq(highest_priority_id.0)))
+            .set(new_data)
+            .returning(Submission::as_select())
+            .get_result(conn)?;
+
+        let upgraded = SubmissionResolved::from(submission, db, Some(highest_priority_id.1))?;
+        
+        Ok(upgraded)
     }
 }
