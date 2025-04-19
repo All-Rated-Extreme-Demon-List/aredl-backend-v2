@@ -3,17 +3,18 @@ use std::sync::Arc;
 use uuid::Uuid;
 use crate::{
     aredl::submissions::{
-        RejectionData, Submission, SubmissionInsert, SubmissionPatch, SubmissionResolved, SubmissionStatus, SubmissionQueue
+        RejectionData, Submission, SubmissionInsert, SubmissionPage, SubmissionPatch, SubmissionQueryOptions, SubmissionQueue, SubmissionResolved, SubmissionStatus
     }, 
     auth::{Authenticated, Permission, UserAuth}, 
-    db::DbAppState, error_handler::ApiError
+    db::DbAppState, error_handler::ApiError,
+    page_helper::PageQuery
 };
 use is_url::is_url;
 
 #[get("", wrap="UserAuth::require(Permission::RecordModify)")]
-async fn find_all(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
+async fn find_all(db: web::Data<Arc<DbAppState>>, page_query: web::Query<PageQuery<50>>, options: web::Query<SubmissionQueryOptions>) -> Result<HttpResponse, ApiError> {
     let submissions = web::block(
-        move || Submission::find_all(db)
+        move || SubmissionPage::find_all(db, page_query.into_inner(), options.into_inner())
     ).await??;
     Ok(HttpResponse::Ok().json(submissions))
 }
@@ -23,6 +24,13 @@ async fn find_one(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authentic
         move || SubmissionResolved::find_one(db, id.into_inner(), authenticated)
     ).await??;
     Ok(HttpResponse::Ok().json(submission))
+}
+#[get("/@me", wrap="UserAuth::load()")]
+async fn me(db: web::Data<Arc<DbAppState>>, page_query: web::Query<PageQuery<50>>, options: web::Query<SubmissionQueryOptions>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
+    let submissions = web::block(
+        move || SubmissionPage::find_own(db, page_query.into_inner(), options.into_inner(), authenticated)
+    ).await??;
+    Ok(HttpResponse::Ok().json(submissions))
 }
 
 #[get("/queue")]
@@ -130,6 +138,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
         web::scope("/submissions")
             .service(create)
             .service(find_all)
+            .service(me)
             .service(get_queue)
             .service(claim)
             .service(find_one)

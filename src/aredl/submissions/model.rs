@@ -3,7 +3,7 @@ use chrono::NaiveDateTime;
 use actix_web::web;
 use std::sync::Arc;
 use crate::{
-    db::DbAppState, error_handler::ApiError, schema::{
+    db::DbAppState, error_handler::ApiError, page_helper::Paginated, schema::{
         aredl_levels, aredl_records, aredl_submissions, aredl_submissions_with_priority, users
     }
 };
@@ -12,7 +12,18 @@ use utoipa::ToSchema;
 use diesel::{
     pg::Pg, r2d2::{
         ConnectionManager, PooledConnection
-    }, Connection, ExpressionMethods, PgConnection, QueryDsl, RunQueryDsl, SelectableHelper, OptionalExtension
+    }, 
+    expression::AsExpression,
+    sql_types::Bool,
+    PgExpressionMethods,
+    Connection, 
+    ExpressionMethods, 
+    PgConnection, 
+    QueryDsl, 
+    RunQueryDsl, 
+    SelectableHelper, 
+    OptionalExtension,
+    BoxableExpression
 };
 use diesel_derive_enum::DbEnum;
 use crate::{
@@ -25,7 +36,8 @@ use crate::{
         BaseUser,
         me::notifications::{Notification, NotificationType}
     },
-    auth::{Authenticated, Permission}
+    auth::{Authenticated, Permission},
+    page_helper::PageQuery
 };
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum)]
@@ -208,6 +220,7 @@ pub struct SubmissionPatch {
 
 #[derive(Serialize, Deserialize)]
 pub struct SubmissionQueue {
+    /// The amount of pending submissions in the database.
     pub levels_in_queue: i32
 }
 
@@ -217,15 +230,21 @@ pub struct RejectionData {
     pub reason: Option<String>
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct SubmissionPage {
+    data: Vec<Submission>
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SubmissionQueryOptions {
+    pub status_filter: Option<SubmissionStatus>,
+    pub mobile_fiter: Option<bool>,
+    pub level_filter: Option<Uuid>,
+    pub submitter_filter: Option<Uuid>,
+    pub priority_filter: Option<bool>,
+}
+
 impl Submission {
-    pub fn find_all(db: web::Data<Arc<DbAppState>>) -> Result<Vec<Self>, ApiError> {
-        // TODO: paginate probably?
-        let submissions = aredl_submissions::table
-            .select(Self::as_select())
-            .load::<Self>(&mut db.connection()?)?;
-        Ok(submissions)
-    }
-    
     pub fn create(db: web::Data<Arc<DbAppState>>, inserted_submission: SubmissionInsert, authenticated: Authenticated) -> Result<Self, ApiError> {
         let mut conn = db.connection()?;
         conn.transaction(|connection| -> Result<Self, ApiError> {
@@ -559,4 +578,49 @@ impl SubmissionQueue {
         Ok(Self { levels_in_queue: levels })
     }
     
+}
+
+impl SubmissionPage {
+    pub fn find_all<const D: i64>(db: web::Data<Arc<DbAppState>>, page_query: PageQuery<D>, _options: SubmissionQueryOptions) -> Result<Paginated<Self>, ApiError> {
+        let conn = &mut db.connection()?;
+        let query = aredl_submissions::table;
+
+
+
+        let total_count: i64 = query
+            .count()
+            .get_result(conn)?;
+
+        let submissions = query
+            .limit(page_query.per_page())
+            .offset(page_query.offset())
+            .select(Submission::as_select())
+            .load::<Submission>(conn)?;
+
+        Ok(Paginated::<Self>::from_data(page_query, total_count, Self {
+            data: submissions
+        }))
+    }
+
+    pub fn find_own<const D: i64>(db: web::Data<Arc<DbAppState>>, page_query: PageQuery<D>, _options: SubmissionQueryOptions, authenticated: Authenticated) -> Result<Paginated<Self>, ApiError> {
+        let conn = &mut db.connection()?;
+        let query = aredl_submissions::table;
+
+
+
+        let total_count: i64 = query
+            .count()
+            .get_result(conn)?;
+
+        let submissions = query
+            .filter(aredl_submissions::submitted_by.eq(authenticated.user_id))
+            .limit(page_query.per_page())
+            .offset(page_query.offset())
+            .select(Submission::as_select())
+            .load::<Submission>(conn)?;
+
+        Ok(Paginated::<Self>::from_data(page_query, total_count, Self {
+            data: submissions
+        }))
+    }
 }
