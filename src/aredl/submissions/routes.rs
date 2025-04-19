@@ -45,10 +45,14 @@ async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionInsert
     Ok(HttpResponse::Created().json(created))
 }
 
-#[patch("/{id}", wrap="UserAuth::require(Permission::RecordModify)")]
-async fn patch(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, body: web::Json<SubmissionPatch>) -> Result<HttpResponse, ApiError> {
+#[patch("/{id}", wrap="UserAuth::load()")]
+async fn patch(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, body: web::Json<SubmissionPatch>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
+    
+    let mut conn = db.connection()?;
+    let has_auth = authenticated.has_permission(db, Permission::RecordModify)?;
+    
     let patched = web::block(
-        move || SubmissionPatch::patch(body.into_inner(), id.into_inner(), &mut db.connection()?)
+        move || SubmissionPatch::patch(body.into_inner(), id.into_inner(), &mut conn, has_auth, authenticated.user_id)
     ).await??;
     Ok(HttpResponse::Ok().json(patched))
 }
@@ -72,7 +76,7 @@ async fn claim(db: web::Data<Arc<DbAppState>>, authenticated: Authenticated) -> 
     Ok(HttpResponse::Ok().json(patched))
 }
 #[post("/{id}/unclaim", wrap="UserAuth::require(Permission::RecordModify)")]
-async fn unclaim(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
+async fn unclaim(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
     let mut conn = db.connection()?;
     let new_data = SubmissionPatch {
         status: Some(SubmissionStatus::Pending),
@@ -80,7 +84,7 @@ async fn unclaim(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<
     };
 
     let new_record = web::block(
-        move || SubmissionPatch::patch(new_data, id.into_inner(), &mut conn)
+        move || SubmissionPatch::patch(new_data, id.into_inner(), &mut conn, true, authenticated.user_id)
     ).await??;
     let resolved = SubmissionResolved::from(new_record, db, None)?;
     Ok(HttpResponse::Ok().json(resolved))

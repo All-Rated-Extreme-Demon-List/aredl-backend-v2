@@ -3,9 +3,7 @@ use chrono::NaiveDateTime;
 use actix_web::web;
 use std::sync::Arc;
 use crate::{
-    db::DbAppState, 
-    error_handler::ApiError, 
-    schema::{
+    db::DbAppState, error_handler::ApiError, schema::{
         aredl_levels, aredl_records, aredl_submissions, aredl_submissions_with_priority, users
     }
 };
@@ -332,7 +330,7 @@ impl Submission {
             ..Default::default()
         };
 
-        let new_record = SubmissionPatch::patch(new_data, id, &mut db.connection()?)?;
+        let new_record = SubmissionPatch::patch(new_data, id, &mut db.connection()?, true, authenticated.user_id)?;
 
         let upgraded = SubmissionResolved::from(new_record, db, None)?;
         
@@ -353,7 +351,7 @@ impl Submission {
             ..Default::default()
         };
 
-        let new_record = SubmissionPatch::patch(new_data, id, connection)?;
+        let new_record = SubmissionPatch::patch(new_data, id, connection, true, authenticated.user_id)?;
 
         let upgraded = SubmissionResolved::from(new_record, db, None)?;
         
@@ -370,13 +368,21 @@ impl Submission {
 }
 
 impl SubmissionPatch {
-    pub fn patch(patch: Self, id: Uuid, conn: &mut PooledConnection<ConnectionManager<PgConnection>>) -> Result<Submission, ApiError> {
-        let submission = diesel::update(aredl_submissions::table)
-            .set(patch)
+    pub fn patch(patch: Self, id: Uuid, conn: &mut PooledConnection<ConnectionManager<PgConnection>>, has_auth: bool, user: Uuid) -> Result<Submission, ApiError> {
+        let mut query = diesel::update(aredl_submissions::table)
             .filter(aredl_submissions::id.eq(id))
+            .set(patch)
             .returning(Submission::as_select())
-            .get_result(conn)?;
-        Ok(submission)
+            .into_boxed();
+
+        if !has_auth {
+            query = query
+                .filter(aredl_submissions::submitted_by.eq(user))
+                .filter(aredl_submissions::status.eq(SubmissionStatus::Pending));
+        }
+
+        let result = query.get_result::<Submission>(conn)?;
+        Ok(result)
     }
 }
 
