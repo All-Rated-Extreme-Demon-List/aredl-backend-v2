@@ -3,7 +3,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 use crate::{
     aredl::submissions::{
-        RejectionData, Submission, SubmissionInsert, SubmissionPatch, SubmissionResolved, SubmissionStatus
+        RejectionData, Submission, SubmissionInsert, SubmissionPatch, SubmissionResolved, SubmissionStatus, SubmissionQueue
     }, 
     auth::{Authenticated, Permission, UserAuth}, 
     db::DbAppState, error_handler::ApiError
@@ -21,6 +21,14 @@ async fn find_all(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiErr
 async fn find_one(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
     let submission = web::block(
         move || SubmissionResolved::find_one(db, id.into_inner(), authenticated)
+    ).await??;
+    Ok(HttpResponse::Ok().json(submission))
+}
+
+#[get("/queue")]
+async fn get_queue(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
+    let submission = web::block(
+        move || SubmissionQueue::get_queue(db)
     ).await??;
     Ok(HttpResponse::Ok().json(submission))
 }
@@ -122,10 +130,11 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
         web::scope("/submissions")
             .service(create)
             .service(find_all)
+            .service(get_queue)
+            .service(claim)
             .service(find_one)
             .service(patch)
             .service(delete)
-            .service(claim)
             .service(unclaim)
             .service(accept)
             .service(deny)

@@ -207,6 +207,11 @@ pub struct SubmissionPatch {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct SubmissionQueue {
+    pub levels_in_queue: i32
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct RejectionData {
     /// The reason for rejecting this record
     pub reason: Option<String>
@@ -540,4 +545,18 @@ impl SubmissionResolved {
         
         Ok(upgraded)
     }
+}
+
+impl SubmissionQueue {
+    pub fn get_queue(db: web::Data<Arc<DbAppState>>) -> Result<Self, ApiError> {
+        let conn = &mut db.connection()?;
+
+        let levels = aredl_submissions::table
+            .filter(aredl_submissions::status.eq(SubmissionStatus::Pending))
+            .count()
+            .get_result::<i64>(conn)? as i32;
+
+        Ok(Self { levels_in_queue: levels })
+    }
+    
 }
