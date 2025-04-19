@@ -13,9 +13,7 @@ use diesel::{
     pg::Pg, r2d2::{
         ConnectionManager, PooledConnection
     }, 
-    expression::AsExpression,
     sql_types::Bool,
-    PgExpressionMethods,
     Connection, 
     ExpressionMethods, 
     PgConnection, 
@@ -23,7 +21,8 @@ use diesel::{
     RunQueryDsl, 
     SelectableHelper, 
     OptionalExtension,
-    BoxableExpression
+    BoxableExpression,
+    IntoSql
 };
 use diesel_derive_enum::DbEnum;
 use crate::{
@@ -581,7 +580,7 @@ impl SubmissionQueue {
 }
 
 impl SubmissionPage {
-    pub fn find_all<const D: i64>(db: web::Data<Arc<DbAppState>>, page_query: PageQuery<D>, _options: SubmissionQueryOptions) -> Result<Paginated<Self>, ApiError> {
+    pub fn find_all<const D: i64>(db: web::Data<Arc<DbAppState>>, page_query: PageQuery<D>, options: SubmissionQueryOptions) -> Result<Paginated<Self>, ApiError> {
         let conn = &mut db.connection()?;
         let query = aredl_submissions::table;
 
@@ -592,6 +591,36 @@ impl SubmissionPage {
             .get_result(conn)?;
 
         let submissions = query
+            .filter(
+                options.status_filter.map_or_else(
+                    || Box::new(true.into_sql::<Bool>()) as Box<dyn BoxableExpression<_, _, SqlType = Bool>>,
+                    |status| Box::new(aredl_submissions::status.eq(status))
+                )
+            )
+            .filter(
+                options.mobile_fiter.map_or_else(
+                    || Box::new(true.into_sql::<Bool>()) as Box<dyn BoxableExpression<_, _, SqlType = Bool>>,
+                    |mobile| Box::new(aredl_submissions::mobile.eq(mobile))
+                )
+            )
+            .filter(
+                options.level_filter.map_or_else(
+                    || Box::new(true.into_sql::<Bool>()) as Box<dyn BoxableExpression<_, _, SqlType = Bool>>,
+                    |level| Box::new(aredl_submissions::level_id.eq(level))
+                )
+            )
+            .filter(
+                options.submitter_filter.map_or_else(
+                    || Box::new(true.into_sql::<Bool>()) as Box<dyn BoxableExpression<_, _, SqlType = Bool>>,
+                    |submitter| Box::new(aredl_submissions::submitted_by.eq(submitter))
+                )
+            )
+            .filter(
+                options.priority_filter.map_or_else(
+                    || Box::new(true.into_sql::<Bool>()) as Box<dyn BoxableExpression<_, _, SqlType = Bool>>,
+                    |priority| Box::new(aredl_submissions::priority.eq(priority))
+                )
+            )
             .limit(page_query.per_page())
             .offset(page_query.offset())
             .select(Submission::as_select())
@@ -602,17 +631,39 @@ impl SubmissionPage {
         }))
     }
 
-    pub fn find_own<const D: i64>(db: web::Data<Arc<DbAppState>>, page_query: PageQuery<D>, _options: SubmissionQueryOptions, authenticated: Authenticated) -> Result<Paginated<Self>, ApiError> {
+    pub fn find_own<const D: i64>(db: web::Data<Arc<DbAppState>>, page_query: PageQuery<D>, options: SubmissionQueryOptions, authenticated: Authenticated) -> Result<Paginated<Self>, ApiError> {
         let conn = &mut db.connection()?;
         let query = aredl_submissions::table;
-
-
 
         let total_count: i64 = query
             .count()
             .get_result(conn)?;
 
         let submissions = query
+            .filter(
+                options.status_filter.map_or_else(
+                    || Box::new(true.into_sql::<Bool>()) as Box<dyn BoxableExpression<_, _, SqlType = Bool>>,
+                    |status| Box::new(aredl_submissions::status.eq(status))
+                )
+            )
+            .filter(
+                options.mobile_fiter.map_or_else(
+                    || Box::new(true.into_sql::<Bool>()) as Box<dyn BoxableExpression<_, _, SqlType = Bool>>,
+                    |mobile| Box::new(aredl_submissions::mobile.eq(mobile))
+                )
+            )
+            .filter(
+                options.level_filter.map_or_else(
+                    || Box::new(true.into_sql::<Bool>()) as Box<dyn BoxableExpression<_, _, SqlType = Bool>>,
+                    |level| Box::new(aredl_submissions::level_id.eq(level))
+                )
+            )
+            .filter(
+                options.priority_filter.map_or_else(
+                    || Box::new(true.into_sql::<Bool>()) as Box<dyn BoxableExpression<_, _, SqlType = Bool>>,
+                    |priority| Box::new(aredl_submissions::priority.eq(priority))
+                )
+            )
             .filter(aredl_submissions::submitted_by.eq(authenticated.user_id))
             .limit(page_query.per_page())
             .offset(page_query.offset())
