@@ -14,9 +14,11 @@ use crate::aredl::{changelog, leaderboard, submissions, levels, packs, packtiers
         (path = "/pack-tiers", api=packtiers::ApiDoc),
         (path = "/profile", api=profile::ApiDoc),
         (path = "/country", api=country::ApiDoc),
-        (path = "/clan", api=clan::ApiDoc)
+        (path = "/clan", api=clan::ApiDoc),
+        (path = "/submissions", api=submissions::ApiDoc)
     ),
 )]
+
 pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(

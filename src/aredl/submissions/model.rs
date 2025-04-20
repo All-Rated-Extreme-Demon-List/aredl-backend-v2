@@ -3,16 +3,24 @@ use chrono::NaiveDateTime;
 use actix_web::web;
 use std::sync::Arc;
 use crate::{
-    db::DbAppState, error_handler::ApiError, page_helper::Paginated, schema::{
-        aredl_levels, aredl_records, aredl_submissions, aredl_submissions_with_priority, users
+    db::DbAppState, 
+    error_handler::ApiError, 
+    page_helper::Paginated, 
+    schema::{
+        aredl_levels, 
+        aredl_records, 
+        aredl_submissions, 
+        aredl_submissions_with_priority, 
+        users
     }
 };
 use serde::{Serialize, Deserialize};
 use utoipa::ToSchema;
 use diesel::{
-    pg::Pg, r2d2::{
+    r2d2::{
         ConnectionManager, PooledConnection
     }, 
+    pg::Pg,
     sql_types::Bool,
     Connection, 
     ExpressionMethods, 
@@ -38,6 +46,7 @@ use crate::{
     auth::{Authenticated, Permission},
     page_helper::PageQuery
 };
+use is_url::is_url;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum)]
 #[ExistingTypePath = "crate::schema::sql_types::SubmissionStatus"]
@@ -130,11 +139,11 @@ pub struct SubmissionWithPriority {
     pub priority_value: i64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct SubmissionResolved {
     /// Internal UUID of the submission.
     pub id: Uuid,
-    /// UUID of the level this record is on.)
+    /// The level this submission is on
     pub level: BaseLevel,
     /// Internal UUID of the submitter.
     pub submitted_by: BaseUser,
@@ -172,12 +181,8 @@ pub struct SubmissionResolved {
 // to insert that property into the database!
 pub struct SubmissionInsert {
     /// UUID of the level this record is on.
-    /// This will eventually resolve to a UUID.
     pub level_id: Uuid,
-    /// Whether the record was completed on mobile or not.
-    
-    // this is an Option so it's possible to exclude it from
-    // the request body without throwing an error
+    /// Set to `true` if this completion is on a mobile device.
     pub mobile: Option<bool>,
     /// ID of the LDM used for the record, if any.
     pub ldm_id: Option<i32>,
@@ -192,7 +197,7 @@ pub struct SubmissionInsert {
     pub priority: Option<bool>
 }
 
-#[derive(Serialize, Deserialize, Debug, AsChangeset, Default)]
+#[derive(Serialize, Deserialize, Debug, AsChangeset, Default, ToSchema)]
 #[diesel(table_name=aredl_submissions, check_for_backend(Pg))]
 pub struct SubmissionPatch {
     /// UUID of the level this record is on.)
@@ -217,24 +222,24 @@ pub struct SubmissionPatch {
     pub additional_notes: Option<String>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct SubmissionQueue {
     /// The amount of pending submissions in the database.
     pub levels_in_queue: i32
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct RejectionData {
     /// The reason for rejecting this record
     pub reason: Option<String>
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct SubmissionPage {
     data: Vec<Submission>
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct SubmissionQueryOptions {
     pub status_filter: Option<SubmissionStatus>,
     pub mobile_fiter: Option<bool>,
@@ -246,17 +251,49 @@ pub struct SubmissionQueryOptions {
 impl Submission {
     pub fn create(db: web::Data<Arc<DbAppState>>, inserted_submission: SubmissionInsert, authenticated: Authenticated) -> Result<Self, ApiError> {
         let mut conn = db.connection()?;
+
+        if !is_url(&inserted_submission.video_url) {
+            return Err(ApiError::new(400, "Invalid completion URL"));
+        }
+    
+        if let Some(raw_url) = inserted_submission.raw_url.as_ref() {
+            if !is_url(raw_url) {
+                return Err(ApiError::new(400, "Invalid raw footage URL"));
+            }
+        }
+
         conn.transaction(|connection| -> Result<Self, ApiError> {
-            let exists = aredl_records::table
+            let exists_record = aredl_records::table
                 .filter(aredl_records::submitted_by.eq(authenticated.user_id))
                 .filter(aredl_records::level_id.eq(inserted_submission.level_id))
                 .select(aredl_records::id)
                 .first::<Uuid>(connection)
                 .optional()?;
 
-            if exists.is_some() {
+            let exists_submission = aredl_submissions::table
+                .filter(aredl_submissions::submitted_by.eq(authenticated.user_id))
+                .filter(aredl_submissions::level_id.eq(inserted_submission.level_id))
+                .select(aredl_submissions::id)
+                .first::<Uuid>(connection)
+                .optional()?;
+                
+            if exists_record.is_some() {
                 return Err(ApiError::new(409, "This user already has a record on this level."));
             }
+
+            if exists_submission.is_some() {
+                return Err(ApiError::new(409, "You already have a submission for this level"))
+            }
+
+            let submitter_ban = users::table
+                .filter(users::id.eq(&authenticated.user_id))
+                .select(users::ban_level)
+                .first::<i32>(connection)?;
+            
+            if submitter_ban <= 3 {
+                return Err(ApiError::new(403, "You are banned from submitting records."))
+            }
+
             let submission = diesel::insert_into(aredl_submissions::table)
                 .values((
                     // this is fun
@@ -284,14 +321,21 @@ impl Submission {
         })
     }
 
-    pub fn delete(db: web::Data<Arc<DbAppState>>, submission_id: Uuid) -> Result<(), ApiError> {
+    pub fn delete(db: web::Data<Arc<DbAppState>>, submission_id: Uuid, authenticated: Authenticated) -> Result<(), ApiError> {
         let mut conn = db.connection()?;
-        conn.transaction(|connection| -> Result<Submission, ApiError> {
-            let deleted = diesel::delete(aredl_submissions::table)
+        conn.transaction(|connection| -> Result<(), ApiError> {
+            let has_auth = authenticated.has_permission(db, Permission::RecordModify)?;
+            let mut query  = diesel::delete(aredl_submissions::table)
 				.filter(aredl_submissions::id.eq(submission_id))
-                .returning(Self::as_select())
-				.get_result(connection)?;
-			Ok(deleted)
+                .into_boxed();
+            
+            if !has_auth {
+                query = query
+                    .filter(aredl_submissions::submitted_by.eq(authenticated.user_id))
+                    .filter(aredl_submissions::status.eq(SubmissionStatus::Pending));
+            }
+            query.execute(connection)?;
+			Ok(())
 		})?;
 		Ok(())
     }
@@ -386,8 +430,22 @@ impl Submission {
             NotificationType::Info
         )?;
         Ok(upgraded)
-
     }
+
+    /*
+    pub fn resubmit(db: web::Data<Arc<DbAppState>>, id: Uuid, authenticated: Authenticated) {
+        let conn = db.connection()?;
+
+        if old_submission.level_id.is_some() {
+            
+        }
+
+        let old = aredl_submissions::table
+            .filter(aredl_submissions::status.eq(SubmissionStatus::Accepted))
+            .filter(aredl_submissions::id.eq(id))
+            .select((aredl_submissions::))
+    }
+     */
 }
 
 impl SubmissionPatch {
@@ -576,7 +634,6 @@ impl SubmissionQueue {
 
         Ok(Self { levels_in_queue: levels })
     }
-    
 }
 
 impl SubmissionPage {
