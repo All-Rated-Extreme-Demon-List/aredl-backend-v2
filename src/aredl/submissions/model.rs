@@ -10,9 +10,9 @@ use crate::{
         aredl_levels, 
         aredl_records, 
         aredl_submissions, 
-        aredl_submissions_with_priority, 
         users
-    }
+    },
+    custom_schema::aredl_submissions_with_priority
 };
 use serde::{Serialize, Deserialize};
 use utoipa::ToSchema;
@@ -37,7 +37,7 @@ use crate::{
     aredl::levels::{
         BaseLevel,
         ResolvedLevel,
-        records::{RecordInsert, Record}
+        records::Record
     },
     users::{
         BaseUser,
