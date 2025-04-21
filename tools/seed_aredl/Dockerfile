@@ -50,7 +50,8 @@ COPY --from=build /lib/libdir/libcom_err* /lib/
 COPY --from=build /lib/libdir/libkeyutils* /lib/
 
 COPY tools/seed_aredl/migrate.sh /usr/local/bin/migrate.sh
-RUN chmod +x /usr/local/bin/migrate.sh
 
+RUN sed -i 's/\r$//' /usr/local/bin/migrate.sh
+RUN chmod +x /usr/local/bin/migrate.sh
 
 CMD ["migrate.sh"]
