@@ -48,7 +48,7 @@ use crate::{
 };
 use is_url::is_url;
 
-#[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone)]
 #[ExistingTypePath = "crate::schema::sql_types::SubmissionStatus"]
 #[DbValueStyle = "PascalCase"]
 pub enum SubmissionStatus {
@@ -56,7 +56,8 @@ pub enum SubmissionStatus {
     Claimed,
     UnderConsideration,
     Denied,
-    Accepted
+    // Accepted (unused, but removing options from postgres enums is a pain)
+    // TODO: remove this from db
 }
 
 #[derive(Serialize, Deserialize)]
@@ -197,7 +198,7 @@ pub struct SubmissionInsert {
     pub priority: Option<bool>
 }
 
-#[derive(Serialize, Deserialize, Debug, AsChangeset, Default, ToSchema)]
+#[derive(Serialize, Deserialize, Debug, AsChangeset, Default, ToSchema, Clone)]
 #[diesel(table_name=aredl_submissions, check_for_backend(Pg))]
 pub struct SubmissionPatch {
     /// UUID of the level this record is on.)
@@ -290,7 +291,7 @@ impl Submission {
                 .select(users::ban_level)
                 .first::<i32>(connection)?;
             
-            if submitter_ban <= 3 {
+            if submitter_ban >= 2 {
                 return Err(ApiError::new(403, "You are banned from submitting records."))
             }
 
@@ -343,17 +344,11 @@ impl Submission {
     pub fn accept(db: web::Data<Arc<DbAppState>>, id: Uuid, reviewer_id: Uuid) -> Result<Record, ApiError> {
         let conn = &mut db.connection()?;
         conn.transaction(|connection| -> Result<Record, ApiError> {
-            let new_data = SubmissionPatch {
-                status: Some(SubmissionStatus::Accepted),
-                reviewer_id: Some(reviewer_id),
-                ..Default::default()
-            };
 
-            let updated: Submission = diesel::update(aredl_submissions::table)
+            let updated = aredl_submissions::table
                 .filter(aredl_submissions::id.eq(id))
-                .set(new_data)
-                .returning(Self::as_select())
-                .get_result(connection)?;
+                .select(Submission::as_select())
+                .first::<Submission>(connection)?;
 
             let record = RecordInsert {
                 submitted_by: updated.submitted_by,
@@ -380,6 +375,11 @@ impl Submission {
                 content, 
                 NotificationType::Success
             )?;
+
+            diesel::delete(aredl_submissions::table)
+                .filter(aredl_submissions::id.eq(id))
+                .execute(connection)?;
+
             Ok(inserted)
         })
     }
@@ -450,13 +450,36 @@ impl Submission {
 
 impl SubmissionPatch {
     pub fn patch(patch: Self, id: Uuid, conn: &mut PooledConnection<ConnectionManager<PgConnection>>, has_auth: bool, user: Uuid) -> Result<Submission, ApiError> {
+        if let Some(video_url) = patch.video_url.as_ref() {
+            if !is_url(video_url) {
+                return Err(ApiError::new(400, "Invalid raw footage URL"));
+            }
+        }
+    
+        if let Some(raw_url) = patch.raw_url.as_ref() {
+            if !is_url(raw_url) {
+                return Err(ApiError::new(400, "Invalid raw footage URL"));
+            }
+        }
+
         let mut query = diesel::update(aredl_submissions::table)
             .filter(aredl_submissions::id.eq(id))
-            .set(patch)
+            .set(patch.clone())
             .returning(Submission::as_select())
             .into_boxed();
 
         if !has_auth {
+
+            // blacklisted fields from non-permission users (lol?)
+            if  patch.rejection_reason.is_some() ||
+                patch.submitted_by.is_some() ||
+                patch.status.is_some() ||
+                patch.rejection_reason.is_some() ||
+                patch.reviewer_id.is_some() 
+            {
+                return Err(ApiError::new(403, "You are not permitted to change some fields in your request!"))
+            }
+
             query = query
                 .filter(aredl_submissions::submitted_by.eq(user))
                 .filter(aredl_submissions::status.eq(SubmissionStatus::Pending));
