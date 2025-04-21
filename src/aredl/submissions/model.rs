@@ -264,43 +264,30 @@ impl Submission {
         }
 
         conn.transaction(|connection| -> Result<Self, ApiError> {
-            let exists_record = aredl_records::table
-                .filter(aredl_records::submitted_by.eq(authenticated.user_id))
-                .filter(aredl_records::level_id.eq(inserted_submission.level_id))
-                .select(aredl_records::id)
-                .first::<Uuid>(connection)
-                .optional()?;
-
             let exists_submission = aredl_submissions::table
                 .filter(aredl_submissions::submitted_by.eq(authenticated.user_id))
                 .filter(aredl_submissions::level_id.eq(inserted_submission.level_id))
                 .select(aredl_submissions::id)
                 .first::<Uuid>(connection)
                 .optional()?;
-                
-            if exists_record.is_some() {
-                return Err(ApiError::new(409, "This user already has a record on this level."));
-            }
-
+        
             if exists_submission.is_some() {
                 return Err(ApiError::new(409, "You already have a submission for this level"))
             }
-
+        
             let submitter_ban = users::table
                 .filter(users::id.eq(&authenticated.user_id))
                 .select(users::ban_level)
                 .first::<i32>(connection)?;
-            
+        
             if submitter_ban >= 2 {
                 return Err(ApiError::new(403, "You are banned from submitting records."))
             }
-
+        
             let submission = diesel::insert_into(aredl_submissions::table)
                 .values((
-                    // this is fun
                     aredl_submissions::submitted_by.eq(authenticated.user_id),
                     aredl_submissions::level_id.eq(inserted_submission.level_id),
-                    // what the fuck
                     inserted_submission.mobile.map_or_else(
                         || aredl_submissions::mobile.eq(false),
                         |mobile| aredl_submissions::mobile.eq(mobile)
@@ -309,7 +296,6 @@ impl Submission {
                     aredl_submissions::video_url.eq(inserted_submission.video_url),
                     aredl_submissions::raw_url.eq(inserted_submission.raw_url),
                     aredl_submissions::additional_notes.eq(inserted_submission.additional_notes),
-                    // what the fuck part 2
                     inserted_submission.priority.map_or_else(
                         || aredl_submissions::priority.eq(false),
                         |priority| aredl_submissions::priority.eq(priority)
@@ -317,9 +303,9 @@ impl Submission {
                 ))
                 .returning(Self::as_select())
                 .get_result(connection)?;
-
+        
             Ok(submission)
-        })
+        })        
     }
 
     pub fn delete(db: web::Data<Arc<DbAppState>>, submission_id: Uuid, authenticated: Authenticated) -> Result<(), ApiError> {
@@ -344,30 +330,51 @@ impl Submission {
     pub fn accept(db: web::Data<Arc<DbAppState>>, id: Uuid, reviewer_id: Uuid) -> Result<Record, ApiError> {
         let conn = &mut db.connection()?;
         conn.transaction(|connection| -> Result<Record, ApiError> {
-
             let updated = aredl_submissions::table
                 .filter(aredl_submissions::id.eq(id))
                 .select(Submission::as_select())
                 .first::<Submission>(connection)?;
-
-            let record = RecordInsert {
-                submitted_by: updated.submitted_by,
-                mobile: updated.mobile,
-                ldm_id: updated.ldm_id,
-                video_url: updated.video_url,
-                raw_url: updated.raw_url,
-                reviewer_id: Some(reviewer_id),
-                created_at: Some(updated.created_at),
-                updated_at: None
+    
+            // Check if a record already exists for this user on this level
+            let existing_record_id = aredl_records::table
+                .filter(aredl_records::submitted_by.eq(updated.submitted_by))
+                .filter(aredl_records::level_id.eq(updated.level_id))
+                .select(aredl_records::id)
+                .first::<Uuid>(connection)
+                .optional()?;
+    
+            // Build the record update/insert data
+            let record_data = (
+                aredl_records::mobile.eq(updated.mobile),
+                aredl_records::ldm_id.eq(updated.ldm_id),
+                aredl_records::video_url.eq(updated.video_url),
+                aredl_records::raw_url.eq(updated.raw_url),
+                aredl_records::reviewer_id.eq(Some(reviewer_id)),
+                aredl_records::updated_at.eq(chrono::Utc::now().naive_utc()),
+            );
+    
+            // If a record already exists, update it. Otherwise, insert a new one.
+            let inserted = if let Some(record_id) = existing_record_id {
+                diesel::update(aredl_records::table.filter(aredl_records::id.eq(record_id)))
+                    .set(record_data)
+                    .returning(Record::as_select())
+                    .get_result::<Record>(connection)?
+            } else {
+                diesel::insert_into(aredl_records::table)
+                    .values((
+                        aredl_records::submitted_by.eq(updated.submitted_by),
+                        aredl_records::level_id.eq(updated.level_id),
+                        record_data
+                    ))
+                    .returning(Record::as_select())
+                    .get_result::<Record>(connection)?
             };
-
-            let inserted = Record::create(db, updated.level_id, record)?;
-
+    
             let level_name = aredl_levels::table
                 .filter(aredl_levels::id.eq(updated.level_id))
                 .select(aredl_levels::name)
                 .first::<String>(connection)?;
-
+    
             let content = format!("Your record on {:?} has been accepted!", level_name);
             Notification::create(
                 connection, 
@@ -375,14 +382,14 @@ impl Submission {
                 content, 
                 NotificationType::Success
             )?;
-
+    
             diesel::delete(aredl_submissions::table)
                 .filter(aredl_submissions::id.eq(id))
                 .execute(connection)?;
-
+    
             Ok(inserted)
         })
-    }
+    }    
     pub fn reject(
         db: web::Data<Arc<DbAppState>>,
         id: Uuid, 
