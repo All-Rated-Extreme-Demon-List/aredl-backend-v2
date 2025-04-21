@@ -1,8 +1,9 @@
 use std::rc::Rc;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use actix_web::body::BoxBody;
 use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
-use actix_web::{HttpMessage, web, HttpResponse};
+use actix_web::{web, Error, HttpMessage, HttpRequest, HttpResponse, ResponseError};
 use futures_util::future::{LocalBoxFuture, ready, Ready};
 
 use crate::auth::app_state::AuthAppState;
@@ -11,6 +12,7 @@ use crate::auth::token::{decode_token, decode_user_claims, UserClaims};
 use crate::db::DbAppState;
 
 use crate::auth::token::check_token_valid;
+use crate::error_handler::ApiError;
 
 pub struct UserAuth {
     required_perm: Option<Permission>,
@@ -53,6 +55,17 @@ pub struct AuthMiddleware<S> {
     required_perm: Option<Permission>,
 }
 
+impl<S> AuthMiddleware<S> {
+    fn error_future(
+        http_req: HttpRequest,
+        api_err: ApiError,
+    ) -> LocalBoxFuture<'static, Result<ServiceResponse<BoxBody>, Error>> {
+        let http_res = api_err.error_response().map_into_boxed_body();
+        Box::pin(ready(Ok(ServiceResponse::new(http_req, http_res))))
+    }
+}
+
+
 impl<S> Service<ServiceRequest> for AuthMiddleware<S>
     where
         S: Service<
@@ -61,6 +74,7 @@ impl<S> Service<ServiceRequest> for AuthMiddleware<S>
             Error = actix_web::Error
         > + 'static,
 {
+    
     type Response = ServiceResponse<actix_web::body::BoxBody>;
     type Error = actix_web::Error;
     type Future = LocalBoxFuture<'static, Result<Self::Response, actix_web::Error>>;
@@ -105,29 +119,18 @@ impl<S> Service<ServiceRequest> for AuthMiddleware<S>
             &["initial", "access"],
         ) {
             Ok(claims) => claims,
-            Err(_) => {
-                return Box::pin(ready(
-                    Ok(ServiceResponse::new(http_req, HttpResponse::Forbidden().reason("Failed to decode token").finish()))
-                ))
-            }
-
+            Err(_) => return Self::error_future(http_req, ApiError::new(403, "Failed to decode token"))
           };
 
         let user_claims = match decode_user_claims(&token_claims) {
             Ok(claims) => claims,
-            Err(_) => {
-                return Box::pin(ready(
-                    Ok(ServiceResponse::new(http_req, HttpResponse::Forbidden().reason("Failed to extract user claims").finish()))
-                ))
-            }
+            Err(_) => return Self::error_future(http_req, ApiError::new(403, "Failed to extract user claims"))
         };
 
         let mut conn = &mut db_state.connection().unwrap();
 
         if let Err(_) = check_token_valid(&token_claims, &user_claims, &mut conn) {
-            return Box::pin(ready(
-                Ok(ServiceResponse::new(http_req, HttpResponse::Forbidden().reason("Token has been invalidated").finish()))
-            ))
+            return Self::error_future(http_req, ApiError::new(403, "Token has been invalidated"));
         }
 
         let user_id = user_claims.user_id;
@@ -140,16 +143,10 @@ impl<S> Service<ServiceRequest> for AuthMiddleware<S>
                 match has_permission {
                     Ok(permission) => {
                         if !permission {
-                            return Box::pin(ready(
-                                Ok(ServiceResponse::new(http_req, HttpResponse::Forbidden().reason("No permission to access this endpoint").finish()))
-                            ))
+                            return Self::error_future(http_req, ApiError::new(403, "You are not allowed to access this endpoint"));
                         }
                     },
-                    Err(_) => {
-                        return Box::pin(ready(
-                            Ok(ServiceResponse::new(http_req, HttpResponse::Forbidden().reason("Failed to load permissions").finish()))
-                        ))
-                    }
+                    Err(_) => return Self::error_future(http_req, ApiError::new(403, "Failed to load permissions")),
                 }
             },
             None => {}
