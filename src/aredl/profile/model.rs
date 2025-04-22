@@ -49,8 +49,6 @@ pub struct ProfileRecord {
     pub ldm_id: Option<i32>,
     /// Video link of the completion.
     pub video_url: String,
-    /// Link to the raw video file of the completion.
-    pub raw_url: Option<String>,
     /// Timestamp of when the record was created (first accepted).
     pub created_at: NaiveDateTime,
 }

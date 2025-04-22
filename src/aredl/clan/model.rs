@@ -43,8 +43,6 @@ pub struct ClanProfileRecord {
     pub ldm_id: Option<i32>,
     /// Video link of the completion.
     pub video_url: String,
-    /// Link to the raw video file of the completion.
-    pub raw_url: Option<String>,
     #[serde(skip_serializing)]
     pub placement_order: i32,
     /// Internal UUID of the user who reviewed the record.
