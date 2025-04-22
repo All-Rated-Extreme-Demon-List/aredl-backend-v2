@@ -31,6 +31,8 @@ pub struct MergeRequest {
 	pub secondary_user: Uuid,
 	/// Whether the request was rejected or not (still pending)
 	pub is_rejected: bool,
+	/// Whether the request was claimed and under review or not
+	pub is_claimed: bool,
 	/// Timestamp of when the request was made
 	pub created_at: NaiveDateTime,
 	/// Timestamp of when the request was last updated
@@ -82,6 +84,7 @@ impl MergeRequest {
 
 		let existing_request = merge_requests::table
 			.filter(merge_requests::primary_user.eq(request.primary_user))
+			.select(MergeRequest::as_select())
 			.first::<MergeRequest>(conn)
 			.optional()?;
         
@@ -110,9 +113,44 @@ impl MergeRequest {
 		Ok(new_request)
 	}
 
+	pub fn claim(conn: &mut DbConnection) -> Result<Option<Self>, ApiError> {
+		
+		let next_id = merge_requests::table
+			.filter(merge_requests::is_claimed.eq(false))
+			.filter(merge_requests::is_rejected.eq(false))
+			.select(merge_requests::id)
+			.order(merge_requests::updated_at.asc())
+			.for_update()
+			.skip_locked()
+			.first::<Uuid>(conn)
+			.optional()?;
+
+		if next_id.is_none() {
+			return Ok(None);
+		}
+
+		let result = diesel::update(merge_requests::table)
+			.set(merge_requests::is_claimed.eq(true))
+			.filter(merge_requests::id.eq(next_id.unwrap()))
+			.returning(Self::as_select())
+			.get_result::<Self>(conn)
+			.optional()?;
+		Ok(result)
+	}
+
+	pub fn unclaim(conn: &mut DbConnection, id: Uuid) -> Result<Self, ApiError> {
+		let result = diesel::update(merge_requests::table)
+			.set(merge_requests::is_claimed.eq(false))
+			.filter(merge_requests::id.eq(id))
+			.returning(Self::as_select())
+			.get_result::<Self>(conn)?;
+		Ok(result)
+	}
+
 	pub fn accept(conn: &mut DbConnection, id: Uuid) -> Result<(), ApiError> {
 		let merge_request = merge_requests::table
 			.filter(merge_requests::id.eq(id))
+			.select(MergeRequest::as_select())
         	.get_result::<MergeRequest>(conn)?;
 		merge_users(conn, merge_request.primary_user, merge_request.secondary_user)?;
 		diesel::delete(merge_requests::table)

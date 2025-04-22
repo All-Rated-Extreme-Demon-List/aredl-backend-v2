@@ -99,7 +99,7 @@ diesel::table! {
 
 diesel::table! {
     use diesel::sql_types::*;
-    use crate::schema::sql_types::SubmissionStatus;
+    use super::sql_types::SubmissionStatus;
 
     aredl_submissions (id) {
         id -> Uuid,
@@ -172,12 +172,13 @@ diesel::table! {
         is_rejected -> Bool,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        is_claimed -> Bool,
     }
 }
 
 diesel::table! {
     use diesel::sql_types::*;
-    use crate::schema::sql_types::NotificationType;
+    use super::sql_types::NotificationType;
 
     notifications (id) {
         id -> Uuid,
@@ -214,6 +215,20 @@ diesel::table! {
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::SubmissionStatus;
+
+    submission_history (id) {
+        id -> Uuid,
+        submission_id -> Nullable<Uuid>,
+        record_id -> Nullable<Uuid>,
+        rejection_reason -> Nullable<Text>,
+        status -> SubmissionStatus,
+        timestamp -> Timestamp,
+    }
+}
+
+diesel::table! {
     user_roles (role_id, user_id) {
         role_id -> Int4,
         user_id -> Uuid,
@@ -237,43 +252,6 @@ diesel::table! {
         discord_accent_color -> Nullable<Int4>,
         access_valid_after -> Timestamp,
         created_at -> Timestamp,
-    }
-}
-
-diesel::table! {
-    use diesel::sql_types::*;
-    use crate::schema::sql_types::SubmissionStatus;
-
-    aredl_submissions_with_priority (id) {
-        id -> Uuid,
-        level_id -> Uuid,
-        submitted_by -> Uuid,
-        mobile -> Bool,
-        ldm_id -> Nullable<Int4>,
-        video_url -> Varchar,
-        raw_url -> Nullable<Varchar>,
-        status -> SubmissionStatus,
-        reviewer_id -> Nullable<Uuid>,
-        priority -> Bool,
-        is_update -> Bool,
-        rejection_reason -> Nullable<Varchar>,
-        additional_notes -> Nullable<Varchar>,
-        created_at -> Timestamp,
-        priority_value -> Int8,
-    }
-}
-
-diesel::table! {
-    use diesel::sql_types::*;
-    use crate::schema::sql_types::SubmissionStatus;
-
-    submission_history (id) {
-        id -> Uuid,
-        submission_id -> Nullable<Uuid>,
-        record_id -> Nullable<Uuid>,
-        status -> SubmissionStatus,
-        rejection_reason -> Nullable<Text>,
-        timestamp -> Timestamp,
     }
 }
 
@@ -313,8 +291,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     oauth_requests,
     permissions,
     roles,
+    submission_history,
     user_roles,
     users,
-    aredl_submissions_with_priority,
-    submission_history
 );

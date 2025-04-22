@@ -45,6 +45,29 @@ async fn list(db: web::Data<Arc<DbAppState>>, page_query: web::Query<PageQuery<2
 }
 
 #[utoipa::path(
+    get,
+    summary = "[Staff]Claim merge request",
+    description = "Finds the oldest unclaimed merge request, marks it as claimed and returns it.",
+    tag = "Users - Merges",
+    responses(
+        (status = 200, body = MergeRequest)
+    ),
+    security(
+        ("access_token" = ["MergeReview"]),
+        ("api_key" = ["MergeReview"]),
+    )
+)]
+#[get("/claim", wrap="UserAuth::require(Permission::MergeReview)")]
+async fn claim(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
+	let result = web::block(move || {
+        let mut conn = db.connection()?;
+        MergeRequest::claim(&mut conn)
+    })
+    .await??;
+    Ok(HttpResponse::Ok().json(result))
+}
+
+#[utoipa::path(
     post,
     summary = "[Auth]Create merge request",
     description = "Creates a new merge request for the given user (secondary user) to be merged into the authenticated user (primary user).",
@@ -75,6 +98,9 @@ async fn create(db: web::Data<Arc<DbAppState>>, options: web::Json<MergeRequestO
     summary = "[Staff]Accept merge request",
     description = "Accepts an existing merge request, merges both users and deletes the request.",
     tag = "Users - Merges",
+    params(
+		("id" = Uuid, Path, description = "Internal UUID of the merge request to accept"),
+	),
     responses(
         (status = 200, body = MergeRequest)
     ),
@@ -99,6 +125,9 @@ async fn accept(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<H
     summary = "[Staff]Deny merge request",
     description = "Rejects an existing merge request. Does not delete the request, but marks it as rejected.",
     tag = "Users - Merges",
+    params(
+		("id" = Uuid, Path, description = "Internal UUID of the merge request to reject"),
+	),
     responses(
         (status = 200, body = MergeRequest)
     ),
@@ -118,6 +147,33 @@ async fn reject(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<H
     Ok(HttpResponse::Ok().json(result))
 }
 
+#[utoipa::path(
+    post,
+    summary = "[Staff]Unclaim merge request",
+    description = "Unclaims an existing merge request to make it available again",
+    tag = "Users - Merges",
+    params(
+		("id" = Uuid, Path, description = "Internal UUID of the merge request to unclaim"),
+	),
+    responses(
+        (status = 200, body = MergeRequest)
+    ),
+    security(
+        ("access_token" = ["MergeReview"]),
+        ("api_key" = ["MergeReview"]),
+    )
+)]
+#[post("/{id}/unclaim", wrap="UserAuth::require(Permission::MergeReview)")]
+async fn unclaim(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
+	let result = web::block(move || {
+        let mut conn = db.connection()?;
+        MergeRequest::unclaim(&mut conn, id.into_inner())
+    })
+    .await??;
+    Ok(HttpResponse::Ok().json(result))
+}
+
+
 #[derive(OpenApi)]
 #[openapi(
     components(
@@ -129,6 +185,7 @@ async fn reject(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<H
     ),
     paths(
 		list,
+        claim,
 		create,
         accept,
         reject
@@ -139,6 +196,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/requests")
             .service(list)
+            .service(claim)
             .service(create)
             .service(accept)
             .service(reject)
