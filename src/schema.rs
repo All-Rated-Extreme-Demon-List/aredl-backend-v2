@@ -99,7 +99,7 @@ diesel::table! {
 
 diesel::table! {
     use diesel::sql_types::*;
-    use super::sql_types::SubmissionStatus;
+    use crate::schema::sql_types::SubmissionStatus;
 
     aredl_submissions (id) {
         id -> Uuid,
@@ -177,7 +177,7 @@ diesel::table! {
 
 diesel::table! {
     use diesel::sql_types::*;
-    use super::sql_types::NotificationType;
+    use crate::schema::sql_types::NotificationType;
 
     notifications (id) {
         id -> Uuid,
@@ -242,7 +242,30 @@ diesel::table! {
 
 diesel::table! {
     use diesel::sql_types::*;
-    use super::sql_types::SubmissionStatus;
+    use crate::schema::sql_types::SubmissionStatus;
+
+    aredl_submissions_with_priority (id) {
+        id -> Uuid,
+        level_id -> Uuid,
+        submitted_by -> Uuid,
+        mobile -> Bool,
+        ldm_id -> Nullable<Int4>,
+        video_url -> Varchar,
+        raw_url -> Nullable<Varchar>,
+        status -> SubmissionStatus,
+        reviewer_id -> Nullable<Uuid>,
+        priority -> Bool,
+        is_update -> Bool,
+        rejection_reason -> Nullable<Varchar>,
+        additional_notes -> Nullable<Varchar>,
+        created_at -> Timestamp,
+        priority_value -> Int8,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use crate::schema::sql_types::SubmissionStatus;
 
     submission_history (id) {
         id -> Uuid,
