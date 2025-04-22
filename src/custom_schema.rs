@@ -223,6 +223,7 @@ diesel::table! {
         additional_notes -> Nullable<Varchar>,
         created_at -> Timestamp,
         status -> SubmissionStatus,
+        mod_menu -> Nullable<Varchar>,
     }
 }
 

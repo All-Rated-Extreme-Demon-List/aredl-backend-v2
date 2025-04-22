@@ -110,6 +110,7 @@ diesel::table! {
         ldm_id -> Nullable<Int4>,
         video_url -> Varchar,
         raw_url -> Nullable<Varchar>,
+        mod_menu -> Nullable<Varchar>,
         reviewer_id -> Nullable<Uuid>,
         priority -> Bool,
         is_update -> Bool,
