@@ -45,7 +45,7 @@ pub struct CountryProfileRecord {
     /// Link to the raw video file of the completion.
     pub raw_url: Option<String>,
     #[serde(skip_serializing)]
-    pub placement_order: i32,
+    pub is_verification: bool,
     /// Internal UUID of the user who reviewed the record.
     pub reviewer_id: Option<Uuid>,
     /// Timestamp of when the record was created (first accepted).
@@ -84,7 +84,7 @@ impl CountryProfileResolved {
             .first(conn)
             .optional()?;
 
-        let (verified, records): (Vec<_>, Vec<_>) = aredl_min_placement_country_records::table
+        let (verified, records ): (Vec<_>, Vec<_>) = aredl_min_placement_country_records::table
             .filter(aredl_min_placement_country_records::country.eq(country))
             .inner_join(users::table.on(users::id.eq(aredl_min_placement_country_records::submitted_by)))
             .inner_join(aredl_levels::table.on(aredl_levels::id.eq(aredl_min_placement_country_records::level_id)))
@@ -96,7 +96,7 @@ impl CountryProfileResolved {
             .load::<(CountryProfileRecord, BaseUser, ExtendedBaseLevel)>(conn)?
             .into_iter()
             .map(|(record, user, level)| CountryProfileRecordResolved { record, user, level })
-            .partition(|resolved| resolved.record.placement_order == 0);
+            .partition(|resolved| resolved.record.is_verification);
         
         let published: Vec<CountryProfileLevelResolved> = aredl_levels::table
             .inner_join(users::table.on(users::id.eq(aredl_levels::publisher_id)))

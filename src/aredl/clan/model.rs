@@ -46,7 +46,7 @@ pub struct ClanProfileRecord {
     /// Link to the raw video file of the completion.
     pub raw_url: Option<String>,
     #[serde(skip_serializing)]
-    pub placement_order: i32,
+    pub is_verification: bool,
     /// Internal UUID of the user who reviewed the record.
     pub reviewer_id: Option<Uuid>,
     /// Timestamp of when the record was created (first accepted).
@@ -91,7 +91,7 @@ impl ClanProfileResolved {
             .first(conn)
             .optional()?;
 
-        let (verified, records): (Vec<_>, Vec<_>) = aredl_min_placement_clans_records::table
+        let (records, verified): (Vec<_>, Vec<_>) = aredl_min_placement_clans_records::table
             .filter(aredl_min_placement_clans_records::clan_id.eq(clan_id))
             .inner_join(users::table.on(users::id.eq(aredl_min_placement_clans_records::submitted_by)))
             .inner_join(aredl_levels::table.on(aredl_levels::id.eq(aredl_min_placement_clans_records::level_id)))
@@ -103,7 +103,7 @@ impl ClanProfileResolved {
             .load::<(ClanProfileRecord, BaseUser, ExtendedBaseLevel)>(conn)?
             .into_iter()
             .map(|(record, user, level)| ClanProfileRecordResolved { record, user, level })
-            .partition(|resolved| resolved.record.placement_order == 0);
+            .partition(|resolved| resolved.record.is_verification);
         
         let published: Vec<ClanProfileLevelResolved> = aredl_levels::table
             .inner_join(users::table.on(users::id.eq(aredl_levels::publisher_id)))

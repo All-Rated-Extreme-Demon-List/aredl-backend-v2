@@ -170,8 +170,8 @@ pub struct ResolvedLevel {
     pub nlw_tier: Option<String>,
     /// User who published the level.
     pub publisher: BaseUser,
-    /// Record that is the verification for the level.
-    pub verification: Option<Record<BaseUser>>,
+    /// Records that are marked as verifications for the level.
+    pub verifications: Vec<Record<BaseUser>>,
 }
 
 
@@ -212,25 +212,26 @@ impl ResolvedLevel {
             )
             .first::<(Level, BaseUser)>(&mut db.connection()?)?;
 
-        let verification = aredl_records::table
+        let verifications_rows = aredl_records::table
             .filter(aredl_records::level_id.eq(id))
-            .filter(aredl_records::placement_order.eq(0))
+            .filter(aredl_records::is_verification.eq(true))
+            .order(aredl_records::placement_order.asc())
             .inner_join(users::table.on(aredl_records::submitted_by.eq(users::id)))
             .select(
                 (Record::<Uuid>::as_select(), BaseUser::as_select())
             )
-            .first::<(Record<Uuid>, BaseUser)>(&mut db.connection()?)
-            .optional()?;
+            .load::<(Record<Uuid>, BaseUser)>(&mut db.connection()?)?;
 
-        let verification = verification.map(
-            |record| Record::from(record)
-        );
+        let verifications = verifications_rows
+            .into_iter()
+            .map(|(record, user)| Record::from((record, user)))
+            .collect::<Vec<_>>();
 
-        let resolved_level = Self::from_data(level, publisher, verification);
+        let resolved_level = Self::from_data(level, publisher, verifications);
         Ok(resolved_level)
     }
 
-    pub fn from_data(level: Level, publisher: BaseUser, verification: Option<Record<BaseUser>>) -> Self {
+    pub fn from_data(level: Level, publisher: BaseUser, verifications: Vec<Record<BaseUser>>) -> Self {
         Self {
             id: level.id,
             position: level.position,
@@ -247,7 +248,7 @@ impl ResolvedLevel {
             gddl_tier: level.gddl_tier,
             nlw_tier: level.nlw_tier,
             publisher,
-            verification,
+            verifications,
         }
     }
 }

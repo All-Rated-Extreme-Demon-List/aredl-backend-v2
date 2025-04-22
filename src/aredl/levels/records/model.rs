@@ -28,6 +28,8 @@ pub struct Record {
     pub video_url: String,
     /// Link to the raw video file of the completion.
     pub raw_url: Option<String>,
+    /// Whether this record is the verification of this level or not.
+    pub is_verification: bool,
     /// Placement order of the record in the records list of this level.
     pub placement_order: i32,
     /// Internal UUID of the user who reviewed the record.
@@ -49,6 +51,8 @@ pub struct RecordInsert {
     pub ldm_id: Option<i32>,
     /// Video link of the completion.
     pub video_url: String,
+    /// Whether this record is the verification of this level or not.
+    pub is_verification: Option<bool>,
     /// Link to the raw video file of the completion.
     pub raw_url: Option<String>,
     /// Internal UUID of the user who reviewed the record.
@@ -70,6 +74,8 @@ pub struct RecordUpdate {
     pub ldm_id: Option<i32>,
     /// Video link of the completion.
     pub video_url: Option<String>,
+    /// Whether this record is the verification of this level or not.
+    pub is_verification: Option<bool>,
     /// Link to the raw video file of the completion.
     pub raw_url: Option<String>,
     /// Internal UUID of the user who reviewed the record.
@@ -102,6 +108,7 @@ impl Record {
     pub fn create(db: web::Data<Arc<DbAppState>>, level_id: Uuid, record: RecordInsert) -> Result<Self, ApiError> {
         let record = diesel::insert_into(aredl_records::table)
             .values((record, aredl_records::level_id.eq(level_id)))
+            .returning(Record::as_select())
             .get_result::<Self>(&mut db.connection()?)?;
         Ok(record)
     }
@@ -111,6 +118,7 @@ impl Record {
             .set(record)
             .filter(aredl_records::level_id.eq(level_id))
             .filter(aredl_records::id.eq(record_id))
+            .returning(Record::as_select())
             .get_result::<Self>(&mut db.connection()?)?;
         Ok(record)
     }
@@ -119,6 +127,7 @@ impl Record {
         let record = diesel::delete(aredl_records::table)
             .filter(aredl_records::level_id.eq(level_id))
             .filter(aredl_records::id.eq(record_id))
+            .returning(Record::as_select())
             .get_result::<Self>(&mut db.connection()?)?;
         Ok(record)
     }
@@ -127,7 +136,8 @@ impl Record {
         let records = aredl_records::table
             .filter(aredl_records::level_id.eq(level_id))
             .select(Record::as_select())
-            .order(aredl_records::placement_order)
+            .order(aredl_records::is_verification.desc())
+            .then_order_by(aredl_records::placement_order.asc())
             .load::<Self>(&mut db.connection()?)?;
         Ok(records)
     }
@@ -136,6 +146,7 @@ impl Record {
         let record = aredl_records::table
             .filter(aredl_records::level_id.eq(level_id))
             .filter(aredl_records::id.eq(record_id))
+            .select(Record::as_select())
             .first::<Self>(&mut db.connection()?)?;
         Ok(record)
     }
@@ -145,9 +156,9 @@ impl RecordResolved {
     pub fn find_all(db: web::Data<Arc<DbAppState>>, level_id: Uuid) -> Result<Vec<Self>, ApiError> {
         let records = aredl_records::table
             .filter(aredl_records::level_id.eq(level_id))
-            .filter(aredl_records::placement_order.ne(0))
+            .filter(aredl_records::is_verification.eq(false))
             .inner_join(users::table.on(aredl_records::submitted_by.eq(users::id)))
-            .order(aredl_records::placement_order)
+            .order(aredl_records::placement_order.asc())
             .select((RecordUnresolved::as_select(), BaseUser::as_select()))
             .load::<(RecordUnresolved, BaseUser)>(&mut db.connection()?)?;
 

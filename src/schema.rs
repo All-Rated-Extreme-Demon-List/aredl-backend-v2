@@ -94,6 +94,7 @@ diesel::table! {
         reviewer_id -> Nullable<Uuid>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        is_verification -> Bool,
     }
 }
 

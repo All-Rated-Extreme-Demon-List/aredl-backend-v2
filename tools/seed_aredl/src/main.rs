@@ -751,6 +751,7 @@ fn main() {
                 aredl_records::mobile.eq(false),
                 aredl_records::video_url.eq(&level.verification),
                 aredl_records::created_at.eq(now),
+                aredl_records::is_verification.eq(true),
             )
         ).chain(
             levels.iter().flat_map(|(level,level_data_ext)|
@@ -762,6 +763,7 @@ fn main() {
                         aredl_records::mobile.eq(record.mobile.unwrap_or(false)),
                         aredl_records::video_url.eq(&record.link),
                         aredl_records::created_at.eq(created_at),
+                        aredl_records::is_verification.eq(false),
                     )
                 })
             )

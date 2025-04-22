@@ -44,7 +44,7 @@ pub struct ProfileRecord {
     /// Whether the record was completed on mobile or not.
     pub mobile: bool,
     #[serde(skip_serializing)]
-    pub placement_order: i32,
+    pub is_verification: bool,
     /// ID of the LDM used for the record, if any.
     pub ldm_id: Option<i32>,
     /// Video link of the completion.
@@ -123,8 +123,8 @@ impl ProfileResolved {
             })
             .collect::<Vec<_>>();
 
-        let (records, verified) = full_records.into_iter()
-            .partition(|record| record.record.placement_order != 0);
+        let (verified, records) = full_records.into_iter()
+            .partition(|record| record.record.is_verification);
 
         let created = aredl_levels::table
             .inner_join(aredl_levels_created::table.on(aredl_levels_created::level_id.eq(aredl_levels::id)))

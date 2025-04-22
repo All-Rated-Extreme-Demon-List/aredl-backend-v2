@@ -1,5 +1,15 @@
 // @generated automatically by Diesel CLI.
 
+pub mod sql_types {
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "notification_type"))]
+    pub struct NotificationType;
+
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "submission_status"))]
+    pub struct SubmissionStatus;
+}
+
 diesel::table! {
     aredl_last_gddl_update (id) {
         id -> Uuid,
@@ -84,10 +94,14 @@ diesel::table! {
         reviewer_id -> Nullable<Uuid>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        is_verification -> Bool,
     }
 }
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::SubmissionStatus;
+
     aredl_submissions (id) {
         id -> Uuid,
         level_id -> Uuid,
@@ -99,10 +113,21 @@ diesel::table! {
         reviewer_id -> Nullable<Uuid>,
         priority -> Bool,
         is_update -> Bool,
-        is_rejected -> Bool,
         rejection_reason -> Nullable<Varchar>,
         additional_notes -> Nullable<Varchar>,
         created_at -> Timestamp,
+        status -> SubmissionStatus,
+    }
+}
+
+diesel::table! {
+    clan_invites (id) {
+        id -> Uuid,
+        clan_id -> Uuid,
+        user_id -> Uuid,
+        invited_by -> Uuid,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
     }
 }
 
@@ -148,6 +173,20 @@ diesel::table! {
         is_rejected -> Bool,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        is_claimed -> Bool,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::NotificationType;
+
+    notifications (id) {
+        id -> Uuid,
+        user_id -> Uuid,
+        content -> Text,
+        notification_type -> NotificationType,
+        created_at -> Timestamp,
     }
 }
 
@@ -173,6 +212,20 @@ diesel::table! {
         id -> Int4,
         privilege_level -> Int4,
         role_desc -> Varchar,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::SubmissionStatus;
+
+    submission_history (id) {
+        id -> Uuid,
+        submission_id -> Nullable<Uuid>,
+        record_id -> Nullable<Uuid>,
+        rejection_reason -> Nullable<Text>,
+        status -> SubmissionStatus,
+        timestamp -> Timestamp,
     }
 }
 
@@ -212,9 +265,11 @@ diesel::joinable!(aredl_pack_levels -> aredl_packs (pack_id));
 diesel::joinable!(aredl_packs -> aredl_pack_tiers (tier));
 diesel::joinable!(aredl_records -> aredl_levels (level_id));
 diesel::joinable!(aredl_submissions -> aredl_levels (level_id));
+diesel::joinable!(clan_invites -> clans (clan_id));
 diesel::joinable!(clan_members -> clans (clan_id));
 diesel::joinable!(clan_members -> users (user_id));
 diesel::joinable!(merge_logs -> users (primary_user));
+diesel::joinable!(notifications -> users (user_id));
 diesel::joinable!(user_roles -> roles (role_id));
 diesel::joinable!(user_roles -> users (user_id));
 
@@ -228,13 +283,16 @@ diesel::allow_tables_to_appear_in_same_query!(
     aredl_position_history,
     aredl_records,
     aredl_submissions,
+    clan_invites,
     clan_members,
     clans,
     merge_logs,
     merge_requests,
+    notifications,
     oauth_requests,
     permissions,
     roles,
+    submission_history,
     user_roles,
     users,
 );
