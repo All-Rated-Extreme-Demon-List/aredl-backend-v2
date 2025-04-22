@@ -263,6 +263,20 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::SubmissionStatus;
+
+    submission_history (id) {
+        id -> Uuid,
+        submission_id -> Nullable<Uuid>,
+        record_id -> Nullable<Uuid>,
+        status -> SubmissionStatus,
+        rejection_reason -> Nullable<Text>,
+        timestamp -> Timestamp,
+    }
+}
+
 diesel::joinable!(aredl_last_gddl_update -> aredl_levels (id));
 diesel::joinable!(aredl_levels -> users (publisher_id));
 diesel::joinable!(aredl_levels_created -> aredl_levels (level_id));
@@ -302,5 +316,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     roles,
     user_roles,
     users,
-    aredl_submissions_with_priority
+    aredl_submissions_with_priority,
+    submission_history
 );

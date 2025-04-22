@@ -11,7 +11,8 @@ use crate::{
         aredl_records, 
         aredl_submissions, 
         aredl_submissions_with_priority, 
-        users
+        users,
+        submission_history,
     }
 };
 use serde::{Serialize, Deserialize};
@@ -72,7 +73,7 @@ pub struct BaseSubmission {
     pub status: SubmissionStatus,
 }
 
-#[derive(Serialize, Deserialize, Queryable, Insertable, Selectable, Debug, ToSchema)]
+#[derive(Serialize, Deserialize, Queryable, Insertable, Selectable, Debug, ToSchema, Clone)]
 #[diesel(table_name = aredl_submissions, check_for_backend(Pg))]
 pub struct Submission {
     /// Internal UUID of the submission.
@@ -249,10 +250,21 @@ pub struct SubmissionQueryOptions {
     pub priority_filter: Option<bool>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Queryable, Insertable)]
+#[diesel(table_name = submission_history)]
+pub struct SubmissionHistory {
+    pub id: Uuid,
+    pub submission_id: Option<Uuid>,
+    pub record_id: Option<Uuid>,
+    pub status: SubmissionStatus,
+    pub rejection_reason: Option<String>,
+    pub timestamp: NaiveDateTime,
+}
+
 impl Submission {
     pub fn create(db: web::Data<Arc<DbAppState>>, inserted_submission: SubmissionInsert, authenticated: Authenticated) -> Result<Self, ApiError> {
         let mut conn = db.connection()?;
-
+    
         if !is_url(&inserted_submission.video_url) {
             return Err(ApiError::new(400, "Invalid completion URL"));
         }
@@ -262,7 +274,7 @@ impl Submission {
                 return Err(ApiError::new(400, "Invalid raw footage URL"));
             }
         }
-
+    
         conn.transaction(|connection| -> Result<Self, ApiError> {
             let exists_submission = aredl_submissions::table
                 .filter(aredl_submissions::submitted_by.eq(authenticated.user_id))
@@ -270,20 +282,20 @@ impl Submission {
                 .select(aredl_submissions::id)
                 .first::<Uuid>(connection)
                 .optional()?;
-        
+    
             if exists_submission.is_some() {
                 return Err(ApiError::new(409, "You already have a submission for this level"))
             }
-        
+    
             let submitter_ban = users::table
                 .filter(users::id.eq(&authenticated.user_id))
                 .select(users::ban_level)
                 .first::<i32>(connection)?;
-        
+    
             if submitter_ban >= 2 {
                 return Err(ApiError::new(403, "You are banned from submitting records."))
             }
-        
+    
             let submission = diesel::insert_into(aredl_submissions::table)
                 .values((
                     aredl_submissions::submitted_by.eq(authenticated.user_id),
@@ -303,7 +315,21 @@ impl Submission {
                 ))
                 .returning(Self::as_select())
                 .get_result(connection)?;
-        
+    
+            // Log submission creation history
+            let history = SubmissionHistory {
+                id: Uuid::new_v4(),
+                submission_id: Some(submission.id),
+                record_id: None,
+                status: SubmissionStatus::Pending,
+                rejection_reason: None,
+                timestamp: chrono::Utc::now().naive_utc(),
+            };
+    
+            diesel::insert_into(submission_history::table)
+                .values(&history)
+                .execute(connection)?;
+    
             Ok(submission)
         })        
     }
@@ -312,19 +338,34 @@ impl Submission {
         let mut conn = db.connection()?;
         conn.transaction(|connection| -> Result<(), ApiError> {
             let has_auth = authenticated.has_permission(db, Permission::RecordModify)?;
+    
+            // Log deletion in submission history
+            let history = SubmissionHistory {
+                id: Uuid::new_v4(),
+                submission_id: Some(submission_id),
+                record_id: None,
+                status: SubmissionStatus::Denied, // Or SubmissionStatus::Deleted if you add it
+                rejection_reason: Some("Submission deleted".into()),
+                timestamp: chrono::Utc::now().naive_utc(),
+            };
+            diesel::insert_into(submission_history::table)
+                .values(&history)
+                .execute(connection)?;
+    
             let mut query  = diesel::delete(aredl_submissions::table)
-				.filter(aredl_submissions::id.eq(submission_id))
+                .filter(aredl_submissions::id.eq(submission_id))
                 .into_boxed();
-            
+    
             if !has_auth {
                 query = query
                     .filter(aredl_submissions::submitted_by.eq(authenticated.user_id))
                     .filter(aredl_submissions::status.eq(SubmissionStatus::Pending));
             }
+    
             query.execute(connection)?;
-			Ok(())
-		})?;
-		Ok(())
+            Ok(())
+        })?;
+        Ok(())
     }
 
     pub fn accept(db: web::Data<Arc<DbAppState>>, id: Uuid, reviewer_id: Uuid) -> Result<Record, ApiError> {
@@ -334,16 +375,14 @@ impl Submission {
                 .filter(aredl_submissions::id.eq(id))
                 .select(Submission::as_select())
                 .first::<Submission>(connection)?;
-    
-            // Check if a record already exists for this user on this level
+
             let existing_record_id = aredl_records::table
                 .filter(aredl_records::submitted_by.eq(updated.submitted_by))
                 .filter(aredl_records::level_id.eq(updated.level_id))
                 .select(aredl_records::id)
                 .first::<Uuid>(connection)
                 .optional()?;
-    
-            // Build the record update/insert data
+
             let record_data = (
                 aredl_records::mobile.eq(updated.mobile),
                 aredl_records::ldm_id.eq(updated.ldm_id),
@@ -352,8 +391,7 @@ impl Submission {
                 aredl_records::reviewer_id.eq(Some(reviewer_id)),
                 aredl_records::updated_at.eq(chrono::Utc::now().naive_utc()),
             );
-    
-            // If a record already exists, update it. Otherwise, insert a new one.
+
             let inserted = if let Some(record_id) = existing_record_id {
                 diesel::update(aredl_records::table.filter(aredl_records::id.eq(record_id)))
                     .set(record_data)
@@ -369,12 +407,25 @@ impl Submission {
                     .returning(Record::as_select())
                     .get_result::<Record>(connection)?
             };
-    
+
+            // Log submission history
+            let history = SubmissionHistory {
+                id: Uuid::new_v4(),
+                submission_id: Some(updated.id),
+                record_id: Some(inserted.id),
+                status: SubmissionStatus::Claimed,
+                rejection_reason: None,
+                timestamp: chrono::Utc::now().naive_utc(),
+            };
+            diesel::insert_into(submission_history::table)
+                .values(&history)
+                .execute(connection)?;
+
             let level_name = aredl_levels::table
                 .filter(aredl_levels::id.eq(updated.level_id))
                 .select(aredl_levels::name)
                 .first::<String>(connection)?;
-    
+
             let content = format!("Your record on {:?} has been accepted!", level_name);
             Notification::create(
                 connection, 
@@ -382,14 +433,15 @@ impl Submission {
                 content, 
                 NotificationType::Success
             )?;
-    
+
             diesel::delete(aredl_submissions::table)
                 .filter(aredl_submissions::id.eq(id))
                 .execute(connection)?;
-    
+
             Ok(inserted)
         })
-    }    
+    }
+
     pub fn reject(
         db: web::Data<Arc<DbAppState>>,
         id: Uuid, 
@@ -400,14 +452,27 @@ impl Submission {
         let new_data = SubmissionPatch {
             status: Some(SubmissionStatus::Denied),
             reviewer_id: Some(authenticated.user_id),
-            rejection_reason: reason,
+            rejection_reason: reason.clone(),
             ..Default::default()
         };
 
         let new_record = SubmissionPatch::patch(new_data, id, &mut db.connection()?, true, authenticated.user_id)?;
 
-        let upgraded = SubmissionResolved::from(new_record, db, None)?;
-        
+        let upgraded = SubmissionResolved::from(new_record.clone(), db, None)?;
+
+        // Log submission history
+        let history = SubmissionHistory {
+            id: Uuid::new_v4(),
+            submission_id: Some(new_record.id),
+            record_id: None,
+            status: SubmissionStatus::Denied,
+            rejection_reason: reason,
+            timestamp: chrono::Utc::now().naive_utc(),
+        };
+        diesel::insert_into(submission_history::table)
+            .values(&history)
+            .execute(connection)?;
+
         let content = format!("Your record on {:?} has been denied...", upgraded.level.name);
         Notification::create(
             connection, 
@@ -417,6 +482,7 @@ impl Submission {
         )?;
         Ok(upgraded)
     }
+
     pub fn under_consideration(db: web::Data<Arc<DbAppState>>, id: Uuid, authenticated: Authenticated) -> Result<SubmissionResolved, ApiError> {
         let connection = &mut db.connection()?;
         let new_data = SubmissionPatch {
@@ -427,8 +493,21 @@ impl Submission {
 
         let new_record = SubmissionPatch::patch(new_data, id, connection, true, authenticated.user_id)?;
 
-        let upgraded = SubmissionResolved::from(new_record, db, None)?;
-        
+        let upgraded = SubmissionResolved::from(new_record.clone(), db, None)?;
+
+        // Log submission history
+        let history = SubmissionHistory {
+            id: Uuid::new_v4(),
+            submission_id: Some(new_record.id),
+            record_id: None,
+            status: SubmissionStatus::UnderConsideration,
+            rejection_reason: None,
+            timestamp: chrono::Utc::now().naive_utc(),
+        };
+        diesel::insert_into(submission_history::table)
+            .values(&history)
+            .execute(connection)?;
+
         let content = format!("Your record on {:?} has been placed under consideration.", upgraded.level.name);
         Notification::create(
             connection,
