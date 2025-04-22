@@ -1,4 +1,7 @@
-use crate::schema::{aredl_levels, aredl_packs, users, aredl_pack_tiers, aredl_pack_levels, clans};
+use crate::schema::{aredl_levels, aredl_packs, users, aredl_pack_tiers, aredl_pack_levels, clans, aredl_submissions,};
+
+// this should be used to declare things like views, which 
+// diesel won't autogenerate in schema.rs
 
 diesel::table! {
     aredl_position_history_full_view (affected_level) {
@@ -198,4 +201,34 @@ diesel::allow_tables_to_appear_in_same_query!(
 diesel::allow_tables_to_appear_in_same_query!(
     aredl_min_placement_clans_records,
     clans,
+);
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use crate::schema::sql_types::SubmissionStatus;
+
+    aredl_submissions_with_priority (id) {
+        id -> Uuid,
+        level_id -> Uuid,
+        submitted_by -> Uuid,
+        mobile -> Bool,
+        ldm_id -> Nullable<Int4>,
+        video_url -> Varchar,
+        raw_url -> Nullable<Varchar>,
+        reviewer_id -> Nullable<Uuid>,
+        priority -> Bool,
+        priority_value -> Bigint,
+        is_update -> Bool,
+        rejection_reason -> Nullable<Varchar>,
+        additional_notes -> Nullable<Varchar>,
+        created_at -> Timestamp,
+        status -> SubmissionStatus,
+    }
+}
+
+diesel::joinable!(aredl_submissions -> aredl_submissions_with_priority (id));
+
+diesel::allow_tables_to_appear_in_same_query!(
+    aredl_submissions,
+    aredl_submissions_with_priority
 );

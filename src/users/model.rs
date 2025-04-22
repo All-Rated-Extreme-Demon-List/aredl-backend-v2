@@ -2,7 +2,7 @@ use std::sync::Arc;
 use actix_web::web;
 use chrono::NaiveDateTime;
 use diesel::pg::Pg;
-use diesel::{BoxableExpression, ExpressionMethods, PgTextExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::{BoxableExpression, ExpressionMethods, PgTextExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper, OptionalExtension};
 use diesel::expression::AsExpression;
 use diesel::sql_types::Bool;
 use serde::{Deserialize, Serialize};
@@ -84,6 +84,16 @@ pub struct UserUpsert {
     pub discord_accent_color: Option<i32>,
 }
 
+#[derive(Debug, Serialize, Deserialize, AsChangeset, ToSchema)]
+#[diesel(table_name=users, check_for_backend(Pg))]
+pub struct UserUpdateOnLogin {
+    pub username: String,
+    pub discord_id: Option<String>,
+    pub discord_avatar: Option<String>,
+    pub discord_banner: Option<String>,
+    pub discord_accent_color: Option<i32>,
+}
+
 #[derive(Serialize, Debug, ToSchema)]
 pub struct UserResolved {
     pub user: User,
@@ -143,14 +153,39 @@ pub struct UserPage {
 
 impl User {
     pub fn upsert(db: web::Data<Arc<DbAppState>>, user_upsert: UserUpsert) -> Result<Self, ApiError> {
-        let user = diesel::insert_into(users::table)
-            .values(&user_upsert)
-            .on_conflict(users::discord_id)
-            .do_update()
-            .set(&user_upsert)
-            .returning(Self::as_select())
-            .get_result::<Self>(&mut db.connection()?)?;
-        Ok(user)
+        let mut conn = db.connection()?;
+
+        let existing_user = users::table
+            .filter(users::discord_id.eq(user_upsert.discord_id.clone()))
+            .select(Self::as_select())
+            .first::<Self>(&mut conn)
+            .optional()?;
+
+        match existing_user {
+            Some(user) => {
+                let updated_user = diesel::update(users::table.filter(users::id.eq(user.id)))
+                    .set(
+                        UserUpdateOnLogin {
+                            username: user_upsert.username.clone(),
+                            discord_id: user_upsert.discord_id.clone(),
+                            discord_avatar: user_upsert.discord_avatar,
+                            discord_banner: user_upsert.discord_banner,
+                            discord_accent_color: user_upsert.discord_accent_color,
+                        }
+                    )
+                    .returning(Self::as_select())
+                    .get_result::<Self>(&mut conn)?;
+                return Ok(updated_user);
+            }
+            None => {
+                let user = diesel::insert_into(users::table)
+                    .values(&user_upsert)
+                    .returning(Self::as_select())
+                    .get_result::<Self>(&mut conn)?;
+                return Ok(user)
+            }
+        }
+        
     }
 
     pub fn find<const D: i64>(

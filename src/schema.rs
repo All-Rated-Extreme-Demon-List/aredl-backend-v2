@@ -120,29 +120,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    use diesel::sql_types::*;
-    use super::sql_types::SubmissionStatus;
-
-    aredl_submissions_with_priority (id) {
-        id -> Uuid,
-        level_id -> Uuid,
-        submitted_by -> Uuid,
-        mobile -> Bool,
-        ldm_id -> Nullable<Int4>,
-        video_url -> Varchar,
-        raw_url -> Nullable<Varchar>,
-        reviewer_id -> Nullable<Uuid>,
-        priority -> Bool,
-        priority_value -> Bigint,
-        is_update -> Bool,
-        rejection_reason -> Nullable<Varchar>,
-        additional_notes -> Nullable<Varchar>,
-        created_at -> Timestamp,
-        status -> SubmissionStatus,
-    }
-}
-
-diesel::table! {
     clan_invites (id) {
         id -> Uuid,
         clan_id -> Uuid,
@@ -293,7 +270,6 @@ diesel::joinable!(merge_logs -> users (primary_user));
 diesel::joinable!(notifications -> users (user_id));
 diesel::joinable!(user_roles -> roles (role_id));
 diesel::joinable!(user_roles -> users (user_id));
-diesel::joinable!(aredl_submissions -> aredl_submissions_with_priority (id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     aredl_last_gddl_update,
