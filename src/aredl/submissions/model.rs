@@ -57,8 +57,7 @@ pub enum SubmissionStatus {
     Claimed,
     UnderConsideration,
     Denied,
-    // Accepted (unused, but removing options from postgres enums is a pain)
-    // TODO: remove this from db
+    // Accepted (unused)
 }
 
 #[derive(Serialize, Deserialize)]
@@ -90,6 +89,8 @@ pub struct Submission {
     pub video_url: String,
     /// Link to the raw video file of the completion.
     pub raw_url: Option<String>,
+    /// The mod menu used in this record
+    pub mod_menu: Option<String>,
     /// The status of this submission
     pub status: SubmissionStatus,
     /// Internal UUID of the user who reviewed the record.
@@ -123,6 +124,8 @@ pub struct SubmissionWithPriority {
     pub video_url: String,
     /// Link to the raw video file of the completion.
     pub raw_url: Option<String>,
+    /// The mod menu used in this record
+    pub mod_menu: Option<String>,
     /// The status of this submission
     pub status: SubmissionStatus,
     /// Internal UUID of the user who reviewed the record.
@@ -157,6 +160,8 @@ pub struct SubmissionResolved {
     pub video_url: String,
     /// Link to the raw video file of the completion.
     pub raw_url: Option<String>,
+    /// The mod menu used in this record
+    pub mod_menu: Option<String>,
     /// The status of this submission
     pub status: SubmissionStatus,
     /// Internal UUID of the user who reviewed the record.
@@ -192,6 +197,8 @@ pub struct SubmissionInsert {
     pub video_url: String,
     /// Link to the raw video file of the completion.
     pub raw_url: Option<String>,
+    /// The mod menu used in this record
+    pub mod_menu: Option<String>,
     /// Any additional notes left by the submitter.
     pub additional_notes: Option<String>,
     // not documented, this will be resolved
@@ -214,6 +221,8 @@ pub struct SubmissionPatch {
     pub video_url: Option<String>,
     /// Link to the raw video file of the completion.
     pub raw_url: Option<String>,
+    /// The mod menu used in this record
+    pub mod_menu: Option<String>,
     /// The status of this submission
     pub status: Option<SubmissionStatus>,
     /// Internal UUID of the user who reviewed the record.
@@ -307,6 +316,7 @@ impl Submission {
                     aredl_submissions::ldm_id.eq(inserted_submission.ldm_id),
                     aredl_submissions::video_url.eq(inserted_submission.video_url),
                     aredl_submissions::raw_url.eq(inserted_submission.raw_url),
+                    aredl_submissions::mod_menu.eq(inserted_submission.mod_menu),
                     aredl_submissions::additional_notes.eq(inserted_submission.additional_notes),
                     inserted_submission.priority.map_or_else(
                         || aredl_submissions::priority.eq(false),
@@ -629,6 +639,7 @@ impl SubmissionResolved {
             ldm_id: submission.ldm_id,
             video_url: submission.video_url,
             raw_url: submission.raw_url,
+            mod_menu: submission.mod_menu,
             status: submission.status,
             reviewer,
             priority: submission.priority,
@@ -643,66 +654,21 @@ impl SubmissionResolved {
         let conn = &mut db.connection()?;
         let has_auth = Authenticated::has_permission(&authenticated, db.clone(), Permission::RecordModify)?;
         
-        let mut query = aredl_submissions_with_priority::table
-            .filter(aredl_submissions_with_priority::id.eq(id))
+        let mut query = aredl_submissions::table
+            .filter(aredl_submissions::id.eq(id))
             .into_boxed();
 
         if !has_auth {
-            query = query.filter(aredl_submissions_with_priority::submitted_by.eq(authenticated.user_id));
+            query = query.filter(aredl_submissions::submitted_by.eq(authenticated.user_id));
         }
 
         let submission = query
-            .select(SubmissionWithPriority::as_select())
+            .select(Submission::as_select())
             .first(conn)?;
-            
-        let level = ResolvedLevel::find(db, submission.level_id)?;
-        let base_level = BaseLevel {
-            id: level.id,
-            name: level.name
-        };
 
-        let submitter = users::table
-            .filter(users::id.eq(submission.submitted_by))
-            .select((users::username, users::global_name))
-            .first::<(String, String)>(conn)?;
-        let submitted_by = BaseUser {
-            id: submission.submitted_by,
-            username: submitter.0,
-            global_name: submitter.1,
-        };
+        let resolved = SubmissionResolved::from(submission, db, None)?;
 
-        let reviewer: Option<BaseUser> = match submission.reviewer_id {
-            Some(reviewer_id) => {
-                let reviewer_db = users::table
-                    .filter(users::id.eq(reviewer_id))
-                    .select((users::username, users::global_name))
-                    .first::<(String, String)>(conn)?;
-                Some(BaseUser {
-                    id: reviewer_id,
-                    username: reviewer_db.0,
-                    global_name: reviewer_db.1,
-                })
-            },
-            None => None,
-        };
-
-        Ok(SubmissionResolved {
-            id: submission.id,
-            level: base_level,
-            submitted_by,
-            mobile: submission.mobile,
-            ldm_id: submission.ldm_id,
-            video_url: submission.video_url,
-            raw_url: submission.raw_url,
-            status: submission.status,
-            reviewer,
-            priority: submission.priority,
-            is_update: submission.is_update,
-            rejection_reason: submission.rejection_reason,
-            additional_notes: submission.additional_notes,
-            created_at: submission.created_at,
-            priority_value: submission.priority_value,
-        })
+        Ok(resolved)
     }
     pub fn find_highest_priority(db: web::Data<Arc<DbAppState>>, user: Uuid) -> Result<SubmissionResolved, ApiError> {
         let conn = &mut db.connection()?;
