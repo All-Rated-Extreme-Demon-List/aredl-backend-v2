@@ -264,12 +264,12 @@ impl Submission {
         let mut conn = db.connection()?;
     
         if !is_url(&inserted_submission.video_url) {
-            return Err(ApiError::new(400, "Invalid completion URL"));
+            return Err(ApiError::new(400, "Your completion link is not a URL!"));
         }
     
         if let Some(raw_url) = inserted_submission.raw_url.as_ref() {
             if !is_url(raw_url) {
-                return Err(ApiError::new(400, "Invalid raw footage URL"));
+                return Err(ApiError::new(400, "Your raw footage is not a URL!"));
             }
         }
     
@@ -283,7 +283,7 @@ impl Submission {
                 .optional()?;
     
             if exists_submission.is_some() {
-                return Err(ApiError::new(409, "You already have a submission for this level"))
+                return Err(ApiError::new(409, "You already have a submission for this level!"))
             }
 
             let exists_record = aredl_records::table
@@ -305,10 +305,10 @@ impl Submission {
                 .optional()?;
 
             match level_is_legacy {
-                None => return Err(ApiError::new(404, "Could not find a level with the specified ID!")),
+                None => return Err(ApiError::new(404, "Could not find this level!")),
                 Some(is) => {
                     if is == true {
-                        return Err(ApiError::new(400, "This level is legacy!"))
+                        return Err(ApiError::new(400, "This level is on the legacy list and is not accepting records!"))
                     }
                 }
             }
@@ -547,34 +547,19 @@ impl Submission {
         )?;
         Ok(upgraded)
     }
-
-    /*
-    pub fn resubmit(db: web::Data<Arc<DbAppState>>, id: Uuid, authenticated: Authenticated) {
-        let conn = db.connection()?;
-
-        if old_submission.level_id.is_some() {
-            
-        }
-
-        let old = aredl_submissions::table
-            .filter(aredl_submissions::status.eq(SubmissionStatus::Accepted))
-            .filter(aredl_submissions::id.eq(id))
-            .select((aredl_submissions::))
-    }
-     */
 }
 
 impl SubmissionPatch {
     pub fn patch(patch: Self, id: Uuid, conn: &mut PooledConnection<ConnectionManager<PgConnection>>, has_auth: bool, user: Uuid) -> Result<Submission, ApiError> {
         if let Some(video_url) = patch.video_url.as_ref() {
             if !is_url(video_url) {
-                return Err(ApiError::new(400, "Invalid raw footage URL"));
+                return Err(ApiError::new(400, "Your video is not a URL!"));
             }
         }
     
         if let Some(raw_url) = patch.raw_url.as_ref() {
             if !is_url(raw_url) {
-                return Err(ApiError::new(400, "Invalid raw footage URL"));
+                return Err(ApiError::new(400, "Your raw footage is not a URL!"));
             }
         }
 
@@ -601,10 +586,10 @@ impl SubmissionPatch {
                 .optional()?;
 
             match submitter_ban {
-                None => return Err(ApiError::new(404, "Could not find this submitter!")),
+                None => return Err(ApiError::new(404, "Could not find the new user!")),
                 Some(ban) => {
                     if ban >= 2 {
-                        return Err(ApiError::new(403, "This submitter is submission banned!"))
+                        return Err(ApiError::new(403, "This user is submission banned!"))
                     }
                 }
             }
@@ -618,10 +603,10 @@ impl SubmissionPatch {
                 .optional()?;
 
             match level_exists {
-                None => return Err(ApiError::new(404, "Could not find a level with the specified ID!")),
+                None => return Err(ApiError::new(404, "Could not find the new level!")),
                 Some(is_legacy) => {
                     if is_legacy == true {
-                        return Err(ApiError::new(400, "You can't submit records for a legacy level!"))
+                        return Err(ApiError::new(400, "This level is on the legacy list, and is not accepting records!"))
                     }
                 }
             }
