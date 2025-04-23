@@ -27,9 +27,9 @@ use diesel_derive_enum::DbEnum;
 use crate::{
     aredl::levels::{
         BaseLevel,
-        ResolvedLevel,
-        records::Record
+        ResolvedLevel
     },
+    aredl::records::Record,
     users::{
         BaseUser,
         me::notifications::{Notification, NotificationType}

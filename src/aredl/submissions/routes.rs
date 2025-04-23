@@ -15,7 +15,7 @@ use crate::{
             SubmissionResolved, 
             SubmissionStatus
         }, 
-        levels::records::Record
+        records::Record
     },
     auth::{Authenticated, Permission, UserAuth}, 
     db::DbAppState, 

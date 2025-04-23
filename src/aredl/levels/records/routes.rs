@@ -1,10 +1,11 @@
 use std::sync::Arc;
-use actix_web::{delete, get, HttpResponse, patch, post, web};
+use actix_web::{get, HttpResponse, web};
 use uuid::Uuid;
 use utoipa::OpenApi;
 use crate::aredl::levels::id_resolver::resolve_level_id;
 use crate::auth::{UserAuth, Permission};
-use crate::aredl::levels::records::{Record, RecordInsert, RecordResolved, RecordUpdate};
+use crate::aredl::records::RecordResolved;
+use crate::aredl::records::Record;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 
@@ -54,87 +55,6 @@ async fn find_all_full(db: web::Data<Arc<DbAppState>>, level_id: web::Path<Strin
     Ok(HttpResponse::Ok().json(records))
 }
 
-#[utoipa::path(
-    post,
-    summary = "[Staff]Create record",
-    description = "Create a new record for this level",
-    tag = "AREDL - Levels (Records)",
-    request_body = RecordInsert,
-    params(
-        ("level_id" = String, description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
-    ),
-    responses(
-        (status = 200, body = Record)
-    ),
-    security(
-        ("access_token" = ["RecordModify"]),
-        ("api_key" = ["RecordModify"]),
-    )
-)]
-#[post("", wrap="UserAuth::require(Permission::RecordModify)")]
-async fn create(db: web::Data<Arc<DbAppState>>, level_id: web::Path<String>, record: web::Json<RecordInsert>) -> Result<HttpResponse, ApiError> {
-    let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
-    let record = web::block(
-        move || Record::create(db, level_id, record.into_inner())
-    ).await??;
-    Ok(HttpResponse::Ok().json(record))
-}
-
-#[utoipa::path(
-    patch,
-    summary = "[Staff]Edit record",
-    description = "Edit a specific record of this level",
-    tag = "AREDL - Levels (Records)",
-    request_body = RecordUpdate,
-    params(
-        ("level_id" = String, description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)"),
-        ("id" = Uuid, description = "Internal record UUID")
-    ),
-    responses(
-        (status = 200, body = Record)
-    ),
-    security(
-        ("access_token" = ["RecordModify"]),
-        ("api_key" = ["RecordModify"]),
-    )
-)]
-#[patch("/{id}", wrap="UserAuth::require(Permission::RecordModify)")]
-async fn update(db: web::Data<Arc<DbAppState>>, path: web::Path<(String, Uuid)>, record: web::Json<RecordUpdate>) -> Result<HttpResponse, ApiError> {
-    let (level_id, id) = path.into_inner();
-    let level_id = resolve_level_id(&db, level_id.as_str())?;
-    let record = web::block(
-        move || Record::update(db, level_id, id, record.into_inner())
-    ).await??;
-    Ok(HttpResponse::Ok().json(record))
-}
-
-#[utoipa::path(
-    delete,
-    summary = "[Staff]Delete record",
-    description = "Remove a specific record from this level",
-    tag = "AREDL - Levels (Records)",
-    params(
-        ("level_id" = String, description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)"),
-        ("id" = Uuid, description = "Internal record UUID")
-    ),
-    responses(
-        (status = 200)
-    ),
-    security(
-        ("access_token" = ["RecordModify"]),
-        ("api_key" = ["RecordModify"]),
-    )
-)]
-#[delete("/{id}", wrap="UserAuth::require(Permission::RecordModify)")]
-async fn delete(db: web::Data<Arc<DbAppState>>, path: web::Path<(String, Uuid)>) -> Result<HttpResponse, ApiError> {
-    let (level_id, id) = path.into_inner();
-    let level_id = resolve_level_id(&db, level_id.as_str())?;
-    let record = web::block(
-        move || Record::delete(db, level_id, id)
-    ).await??;
-    Ok(HttpResponse::Ok().json(record))
-}
-
 #[get("/{id}", wrap="UserAuth::require(Permission::RecordModify)")]
 async fn find(db: web::Data<Arc<DbAppState>>, path: web::Path<(String, Uuid)>) -> Result<HttpResponse, ApiError> {
     let (level_id, id) = path.into_inner();
@@ -153,17 +73,12 @@ async fn find(db: web::Data<Arc<DbAppState>>, path: web::Path<(String, Uuid)>) -
     components(
         schemas(
             Record,
-            RecordUpdate,
             RecordResolved,
-            RecordUpdate,
         )
     ),
     paths(
         find_all,
         find_all_full,
-        create,
-        update,
-        delete
     )
 )]
 pub struct ApiDoc;
@@ -174,8 +89,5 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .service(find_all)
             .service(find_all_full)
             .service(find)
-            .service(create)
-            .service(update)
-            .service(delete)
     );
 }

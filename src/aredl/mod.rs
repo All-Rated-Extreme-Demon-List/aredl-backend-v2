@@ -8,5 +8,6 @@ mod profile;
 mod country;
 mod clan;
 mod submissions;
+mod records;
 
 pub use routes::{init_routes, ApiDoc};
