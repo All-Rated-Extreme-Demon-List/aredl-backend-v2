@@ -89,7 +89,7 @@ impl ClanProfileResolved {
             .first(conn)
             .optional()?;
 
-        let (records, verified): (Vec<_>, Vec<_>) = aredl_min_placement_clans_records::table
+        let (verified, records): (Vec<_>, Vec<_>) = aredl_min_placement_clans_records::table
             .filter(aredl_min_placement_clans_records::clan_id.eq(clan_id))
             .inner_join(users::table.on(users::id.eq(aredl_min_placement_clans_records::submitted_by)))
             .inner_join(aredl_levels::table.on(aredl_levels::id.eq(aredl_min_placement_clans_records::level_id)))
