@@ -18,20 +18,9 @@ use crate::{
 use serde::{Serialize, Deserialize};
 use utoipa::ToSchema;
 use diesel::{
-    r2d2::{
+    pg::Pg, r2d2::{
         ConnectionManager, PooledConnection
-    }, 
-    pg::Pg,
-    sql_types::Bool,
-    Connection, 
-    ExpressionMethods, 
-    PgConnection, 
-    QueryDsl, 
-    RunQueryDsl, 
-    SelectableHelper, 
-    OptionalExtension,
-    BoxableExpression,
-    IntoSql
+    }, sql_types::Bool, BoxableExpression, Connection, ExpressionMethods, IntoSql, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SelectableHelper
 };
 use diesel_derive_enum::DbEnum;
 use crate::{
@@ -285,6 +274,7 @@ impl Submission {
         }
     
         conn.transaction(|connection| -> Result<Self, ApiError> {
+            // a bunch of validation yay
             let exists_submission = aredl_submissions::table
                 .filter(aredl_submissions::submitted_by.eq(authenticated.user_id))
                 .filter(aredl_submissions::level_id.eq(inserted_submission.level_id))
@@ -295,12 +285,42 @@ impl Submission {
             if exists_submission.is_some() {
                 return Err(ApiError::new(409, "You already have a submission for this level"))
             }
-    
+
+            let exists_record = aredl_records::table
+                .filter(aredl_records::submitted_by.eq(authenticated.user_id))
+                .filter(aredl_records::level_id.eq(inserted_submission.level_id))
+                .select(aredl_records::id)
+                .first::<Uuid>(connection)
+                .optional()?;
+
+            if exists_record.is_some() {
+                return Err(ApiError::new(409, "You already have a record on this level!"))
+            }
+
+            // check that this level exists and is not legacy
+            let level_is_legacy = aredl_levels::table
+                .filter(aredl_levels::id.eq(inserted_submission.level_id))
+                .select(aredl_levels::legacy)
+                .first::<bool>(connection)
+                .optional()?;
+
+            match level_is_legacy {
+                None => return Err(ApiError::new(404, "Could not find a level with the specified ID!")),
+                Some(is) => {
+                    if is == true {
+                        return Err(ApiError::new(400, "This level is legacy!"))
+                    }
+                }
+            }
+            
+            // check that this user ID is not banned
+            // we know this user exists because it's based on the 
+            // authenticated user
             let submitter_ban = users::table
                 .filter(users::id.eq(&authenticated.user_id))
                 .select(users::ban_level)
                 .first::<i32>(connection)?;
-    
+
             if submitter_ban >= 2 {
                 return Err(ApiError::new(403, "You are banned from submitting records."))
             }
@@ -558,6 +578,77 @@ impl SubmissionPatch {
             }
         }
 
+        let old_submission = aredl_submissions::table
+            .filter(aredl_submissions::id.eq(id))
+            .select(Submission::as_select())
+            .first::<Submission>(conn)?;
+        
+        let level_id = match patch.level_id {
+            Some(new_level_id) => new_level_id,
+            None => old_submission.level_id,
+        };
+
+        let submitted_by = match patch.submitted_by {
+            Some(new_submitter_id) => new_submitter_id,
+            None => old_submission.submitted_by,
+        };
+
+        if let Some(new_submitter) = patch.submitted_by {
+            let submitter_ban = users::table
+                .filter(users::id.eq(new_submitter))
+                .select(users::ban_level)
+                .first::<i32>(conn)
+                .optional()?;
+
+            match submitter_ban {
+                None => return Err(ApiError::new(404, "Could not find this submitter!")),
+                Some(ban) => {
+                    if ban >= 2 {
+                        return Err(ApiError::new(403, "This submitter is submission banned!"))
+                    }
+                }
+            }
+        }
+
+        if let Some(new_level) = patch.level_id {
+            let level_exists = aredl_levels::table
+                .filter(aredl_levels::id.eq(new_level))
+                .select(aredl_levels::legacy)
+                .first::<bool>(conn)
+                .optional()?;
+
+            match level_exists {
+                None => return Err(ApiError::new(404, "Could not find a level with the specified ID!")),
+                Some(is_legacy) => {
+                    if is_legacy == true {
+                        return Err(ApiError::new(400, "You can't submit records for a legacy level!"))
+                    }
+                }
+            }
+        }
+
+        let existing_submission = aredl_submissions::table
+            .filter(aredl_submissions::level_id.eq(level_id))
+            .filter(aredl_submissions::submitted_by.eq(submitted_by))
+            .select(aredl_submissions::id)
+            .first::<Uuid>(conn)
+            .optional()?;
+
+        if existing_submission.is_some() {
+            return Err(ApiError::new(409, "This user already has a submission for this level!"))
+        }
+
+        let existing_record = aredl_records::table
+            .filter(aredl_records::level_id.eq(level_id))
+            .filter(aredl_records::submitted_by.eq(submitted_by))
+            .select(aredl_records::id)
+            .first::<Uuid>(conn)
+            .optional()?;
+
+        if existing_record.is_some() {
+            return Err(ApiError::new(409, "This user already has a record on this level!"))
+        }
+
         let mut query = diesel::update(aredl_submissions::table)
             .filter(aredl_submissions::id.eq(id))
             .set(patch.clone())
@@ -571,7 +662,7 @@ impl SubmissionPatch {
                 patch.submitted_by.is_some() ||
                 patch.status.is_some() ||
                 patch.rejection_reason.is_some() ||
-                patch.reviewer_id.is_some() 
+                patch.reviewer_id.is_some()
             {
                 return Err(ApiError::new(403, "You are not permitted to change some fields in your request!"))
             }
