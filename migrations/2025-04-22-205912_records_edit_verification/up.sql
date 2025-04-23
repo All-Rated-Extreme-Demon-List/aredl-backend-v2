@@ -1,7 +1,9 @@
+DROP VIEW IF EXISTS aredl_min_placement_country_records;
+DROP VIEW IF EXISTS aredl_min_placement_clans_records;
+
 ALTER TABLE aredl_records 
     ADD COLUMN is_verification BOOLEAN NOT NULL DEFAULT false;
 
-DROP VIEW IF EXISTS aredl_min_placement_country_records;
 CREATE VIEW aredl_min_placement_country_records AS
 WITH subquery AS (
     SELECT
@@ -18,7 +20,6 @@ SELECT *
 FROM subquery
 WHERE order_pos = 1;
 
-DROP VIEW IF EXISTS aredl_min_placement_clans_records;
 CREATE VIEW aredl_min_placement_clans_records AS
     WITH subquery AS (
         SELECT
