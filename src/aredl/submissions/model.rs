@@ -39,7 +39,7 @@ use crate::{
 };
 use is_url::is_url;
 
-#[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq)]
 #[ExistingTypePath = "crate::schema::sql_types::SubmissionStatus"]
 #[DbValueStyle = "PascalCase"]
 pub enum SubmissionStatus {
@@ -196,7 +196,7 @@ pub struct SubmissionInsert {
     pub priority: Option<bool>
 }
 
-#[derive(Serialize, Deserialize, Debug, AsChangeset, Default, ToSchema, Clone)]
+#[derive(Serialize, Deserialize, Debug, AsChangeset, Default, ToSchema, Clone, PartialEq)]
 #[diesel(table_name=aredl_submissions, check_for_backend(Pg))]
 pub struct SubmissionPatch {
     /// UUID of the level this record is on.)
@@ -276,6 +276,8 @@ impl Submission {
     
         conn.transaction(|connection| -> Result<Self, ApiError> {
             // a bunch of validation yay
+
+            // check if any submissions exist already
             let exists_submission = aredl_submissions::table
                 .filter(aredl_submissions::submitted_by.eq(authenticated.user_id))
                 .filter(aredl_submissions::level_id.eq(inserted_submission.level_id))
@@ -285,17 +287,6 @@ impl Submission {
     
             if exists_submission.is_some() {
                 return Err(ApiError::new(409, "You already have a submission for this level!"))
-            }
-
-            let exists_record = aredl_records::table
-                .filter(aredl_records::submitted_by.eq(authenticated.user_id))
-                .filter(aredl_records::level_id.eq(inserted_submission.level_id))
-                .select(aredl_records::id)
-                .first::<Uuid>(connection)
-                .optional()?;
-
-            if exists_record.is_some() {
-                return Err(ApiError::new(409, "You already have a record on this level!"))
             }
 
             // check that this level exists and is not legacy
@@ -584,6 +575,10 @@ impl Submission {
 
 impl SubmissionPatch {
     pub fn patch(patch: Self, id: Uuid, conn: &mut PooledConnection<ConnectionManager<PgConnection>>, has_auth: bool, user: Uuid) -> Result<Submission, ApiError> {
+        if patch == Self::default() {
+            return Err(ApiError::new(400, "No changes were provided in the patch!"));
+        }
+
         if let Some(video_url) = patch.video_url.as_ref() {
             if !is_url(video_url) {
                 return Err(ApiError::new(400, "Your video is not a URL!"));
@@ -600,6 +595,8 @@ impl SubmissionPatch {
             .filter(aredl_submissions::id.eq(id))
             .select(Submission::as_select())
             .first::<Submission>(conn)?;
+        
+        let _resub = old_submission.status == SubmissionStatus::Denied;
         
         let level_id = match patch.level_id {
             Some(new_level_id) => new_level_id,
@@ -648,23 +645,13 @@ impl SubmissionPatch {
         let existing_submission = aredl_submissions::table
             .filter(aredl_submissions::level_id.eq(level_id))
             .filter(aredl_submissions::submitted_by.eq(submitted_by))
+            .filter(aredl_submissions::id.ne(id))
             .select(aredl_submissions::id)
             .first::<Uuid>(conn)
             .optional()?;
 
         if existing_submission.is_some() {
             return Err(ApiError::new(409, "This user already has a submission for this level!"))
-        }
-
-        let existing_record = aredl_records::table
-            .filter(aredl_records::level_id.eq(level_id))
-            .filter(aredl_records::submitted_by.eq(submitted_by))
-            .select(aredl_records::id)
-            .first::<Uuid>(conn)
-            .optional()?;
-
-        if existing_record.is_some() {
-            return Err(ApiError::new(409, "This user already has a record on this level!"))
         }
 
         let mut query = diesel::update(aredl_submissions::table)
