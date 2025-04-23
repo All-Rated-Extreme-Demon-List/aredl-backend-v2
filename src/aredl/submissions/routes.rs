@@ -68,6 +68,42 @@ async fn find_one(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authentic
     Ok(HttpResponse::Ok().json(submission))
 }
 
+#[derive(serde::Serialize, utoipa::ToSchema)]
+pub struct QueuePositionResponse {
+    pub position: i64,
+    pub total: i64,
+}
+
+#[utoipa::path(
+    get,
+    summary = "[Auth]Get queue position for a submission",
+    description = "Returns the position of a specific submission in the pending queue.",
+    tag = "AREDL - Submissions",
+    responses(
+        (status = 200, description = "Queue position found", body = QueuePositionResponse),
+        (status = 404, description = "Submission not found or not pending"),
+    ),
+    security(
+        ("access_token" = []),
+        ("api_key" = []),
+    ),
+    params(
+        ("id" = Uuid, description = "The ID of the submission to check position for")
+    )
+)]
+#[get("/{id}/queue-position", wrap="UserAuth::load()")]
+async fn get_queue_position(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<Uuid>,
+    _auth: Authenticated
+) -> Result<HttpResponse, ApiError> {
+    let id = id.into_inner();
+
+    let (position, total) = web::block(move || Submission::get_queue_position(db, id)).await??;
+
+    Ok(HttpResponse::Ok().json(QueuePositionResponse { position, total }))
+}
+
 #[utoipa::path(
     get,
     summary = "[Auth]Get own submissions",
@@ -337,6 +373,7 @@ async fn under_consideration(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>
         get_queue,
         claim,
         find_one,
+        get_queue_position,
         patch,
         delete,
         unclaim,
@@ -355,6 +392,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .service(get_queue)
             .service(claim)
             .service(find_one)
+            .service(get_queue_position)
             .service(patch)
             .service(delete)
             .service(unclaim)
