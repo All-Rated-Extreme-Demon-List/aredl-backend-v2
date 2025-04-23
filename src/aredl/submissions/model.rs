@@ -22,6 +22,7 @@ use diesel::{
         ConnectionManager, PooledConnection
     }, sql_types::Bool, BoxableExpression, Connection, ExpressionMethods, IntoSql, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SelectableHelper
 };
+use diesel::expression_methods::BoolExpressionMethods;
 use diesel_derive_enum::DbEnum;
 use crate::{
     aredl::levels::{
@@ -546,6 +547,38 @@ impl Submission {
             NotificationType::Info
         )?;
         Ok(upgraded)
+    }
+
+    pub fn get_queue_position(db: web::Data<Arc<DbAppState>>, submission_id: Uuid) -> Result<(i64, i64), ApiError> {
+        let conn = &mut db.connection()?;
+
+        // Get the priority and created_at of the target submission
+        let (target_priority, target_created_at): (i64, NaiveDateTime) = aredl_submissions_with_priority::table
+            .filter(aredl_submissions_with_priority::id.eq(submission_id))
+            .filter(aredl_submissions_with_priority::status.eq(SubmissionStatus::Pending))
+            .select((aredl_submissions_with_priority::priority_value, aredl_submissions_with_priority::created_at))
+            .first(conn)?;
+
+        // Count how many pending submissions come before this one
+        let position = aredl_submissions_with_priority::table
+            .filter(aredl_submissions_with_priority::status.eq(SubmissionStatus::Pending))
+            .filter(
+                aredl_submissions_with_priority::priority_value
+                    .gt(target_priority)
+                    .or(aredl_submissions_with_priority::priority_value
+                        .eq(target_priority)
+                        .and(aredl_submissions_with_priority::created_at.lt(target_created_at)))
+            )
+            .count()
+            .get_result::<i64>(conn)? + 1;
+
+        // Total number of pending submissions
+        let total = aredl_submissions_with_priority::table
+            .filter(aredl_submissions_with_priority::status.eq(SubmissionStatus::Pending))
+            .count()
+            .get_result::<i64>(conn)?;
+
+        Ok((position, total))
     }
 }
 
