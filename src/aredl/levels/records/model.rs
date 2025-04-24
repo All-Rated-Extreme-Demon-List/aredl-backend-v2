@@ -1,15 +1,14 @@
-use std::sync::Arc;
-use actix_web::web;
-use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl, SelectableHelper};
-use uuid::Uuid;
+use crate::aredl::records::{Record, RecordResolved, RecordUnresolved};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
-use crate::users::BaseUser;
-use crate::aredl::records::{RecordUnresolved, RecordResolved, Record};
 use crate::schema::{aredl_records, users};
+use crate::users::BaseUser;
+use actix_web::web;
+use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl, SelectableHelper};
+use std::sync::Arc;
+use uuid::Uuid;
 
 impl Record {
-
     pub fn find_all(db: web::Data<Arc<DbAppState>>, level_id: Uuid) -> Result<Vec<Self>, ApiError> {
         let records = aredl_records::table
             .filter(aredl_records::level_id.eq(level_id))
@@ -20,7 +19,11 @@ impl Record {
         Ok(records)
     }
 
-    pub fn find(db: web::Data<Arc<DbAppState>>, level_id: Uuid, record_id: Uuid) -> Result<Self, ApiError> {
+    pub fn find(
+        db: web::Data<Arc<DbAppState>>,
+        level_id: Uuid,
+        record_id: Uuid,
+    ) -> Result<Self, ApiError> {
         let record = aredl_records::table
             .filter(aredl_records::level_id.eq(level_id))
             .filter(aredl_records::id.eq(record_id))

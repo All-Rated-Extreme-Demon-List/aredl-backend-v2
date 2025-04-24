@@ -47,7 +47,7 @@ async fn find_all(db: web::Data<Arc<DbAppState>>, page_query: web::Query<PageQue
 #[utoipa::path(
     get,
     summary = "[Auth]Get a submission",
-    description = "Get a specific submission by its ID. If you are staff, the submission must be yours.",
+    description = "Get a specific submission by its ID. If you aren't staff, the submission must be yours.",
     tag = "AREDL - Submissions",
     responses(
         (status = 200, body = SubmissionResolved)
@@ -166,7 +166,7 @@ async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionInsert
 #[utoipa::path(
     patch,
     summary = "[Auth]Edit a submission",
-    description = "Edit a submission. If you are staff, the submission must be submitted by you and in the pending state.",
+    description = "Edit a submission. If you aren't staff, the submission must be submitted by you and in the pending state.",
     tag = "AREDL - Submissions",
     responses(
         (status = 200, body = SubmissionPatch)
@@ -350,7 +350,7 @@ async fn under_consideration(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>
 #[derive(OpenApi)]
 #[openapi(
     tags(
-        (name = "AREDL - Levels (Records)", description = "Endpoints for fetching and managing records of a specific level")
+        (name = "AREDL - Levels (Submissions)", description = "Endpoints for fetching and managing submissions")
     ),
     components(
         schemas(

@@ -1,12 +1,13 @@
-use std::sync::Arc;
-use actix_web::{delete, HttpResponse, patch, post, web};
-use uuid::Uuid;
-use utoipa::OpenApi;
-use crate::auth::{UserAuth, Permission};
-use crate::aredl::records::{Record, RecordResolved};
+use crate::aredl::records::model::{RecordInsert, RecordUpdate};
+use crate::aredl::records::{FullRecordResolved, Record, RecordResolved, RecordsQueryOptions};
+use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
-use crate::aredl::records::model::{RecordInsert, RecordUpdate};
+use crate::page_helper::PageQuery;
+use actix_web::{delete, get, patch, post, web, HttpResponse};
+use std::sync::Arc;
+use utoipa::OpenApi;
+use uuid::Uuid;
 
 #[utoipa::path(
     post,
@@ -22,11 +23,12 @@ use crate::aredl::records::model::{RecordInsert, RecordUpdate};
         ("api_key" = ["RecordModify"]),
     )
 )]
-#[post("", wrap="UserAuth::require(Permission::RecordModify)")]
-async fn create(db: web::Data<Arc<DbAppState>>, record: web::Json<RecordInsert>) -> Result<HttpResponse, ApiError> {
-    let record = web::block(
-        move || Record::create(db, record.into_inner())
-    ).await??;
+#[post("", wrap = "UserAuth::require(Permission::RecordModify)")]
+async fn create(
+    db: web::Data<Arc<DbAppState>>,
+    record: web::Json<RecordInsert>,
+) -> Result<HttpResponse, ApiError> {
+    let record = web::block(move || Record::create(db, record.into_inner())).await??;
     Ok(HttpResponse::Ok().json(record))
 }
 
@@ -47,12 +49,14 @@ async fn create(db: web::Data<Arc<DbAppState>>, record: web::Json<RecordInsert>)
         ("api_key" = ["RecordModify"]),
     )
 )]
-#[patch("/{id}", wrap="UserAuth::require(Permission::RecordModify)")]
-async fn update(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, record: web::Json<RecordUpdate>) -> Result<HttpResponse, ApiError> {
-	let id = id.into_inner();
-    let record = web::block(
-        move || Record::update(db, id, record.into_inner())
-    ).await??;
+#[patch("/{id}", wrap = "UserAuth::require(Permission::RecordModify)")]
+async fn update(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<Uuid>,
+    record: web::Json<RecordUpdate>,
+) -> Result<HttpResponse, ApiError> {
+    let id = id.into_inner();
+    let record = web::block(move || Record::update(db, id, record.into_inner())).await??;
     Ok(HttpResponse::Ok().json(record))
 }
 
@@ -72,13 +76,81 @@ async fn update(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, record: web
         ("api_key" = ["RecordModify"]),
     )
 )]
-#[delete("/{id}", wrap="UserAuth::require(Permission::RecordModify)")]
-async fn delete(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
-	let id = id.into_inner();
-    let record = web::block(
-        move || Record::delete(db, id)
-    ).await??;
+#[delete("/{id}", wrap = "UserAuth::require(Permission::RecordModify)")]
+async fn delete(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<Uuid>,
+) -> Result<HttpResponse, ApiError> {
+    let id = id.into_inner();
+    let record = web::block(move || Record::delete(db, id)).await??;
     Ok(HttpResponse::Ok().json(record))
+}
+
+#[utoipa::path(
+    get,
+    summary = "[Staff]List records",
+    description = "List a possibly filtered list of all records",
+    tag = "AREDL - Records",
+    params(
+        ("page" = Option<i64>, Query, description = "The page of the list to fetch"),
+        ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page"),
+        ("level_filter" = Option<Uuid>, Query, description = "The level internal UUID to filter by"),
+        ("mobile_filter" = Option<bool>, Query, description = "Whether to show only/hide mobile records"),
+        ("submitter_filter" = Option<Uuid>, Query, description = "The submitter user internal UUID to filter by"),
+    ),
+    responses(
+        (status = 200, body = [FullRecordResolved])
+    ),
+    security(
+        ("access_token" = ["RecordModify"]),
+        ("api_key" = ["RecordModify"]),
+    )
+)]
+#[get("", wrap = "UserAuth::require(Permission::RecordModify)")]
+async fn find_all(
+    db: web::Data<Arc<DbAppState>>,
+    page_query: web::Query<PageQuery<100>>,
+    options: web::Query<RecordsQueryOptions>,
+) -> Result<HttpResponse, ApiError> {
+    let records = web::block(move || {
+        FullRecordResolved::find_all(db, page_query.into_inner(), options.into_inner())
+    })
+    .await??;
+    Ok(HttpResponse::Ok().json(records))
+}
+
+#[utoipa::path(
+    get,
+    summary = "[Auth]List my records",
+    description = "List all of the authenticated user's records",
+    tag = "AREDL - Records",
+    responses(
+        (status = 200, body = [Record])
+    ),
+    params(
+        ("page" = Option<i64>, Query, description = "The page of the list to fetch"),
+        ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page"),
+    ),
+    security(
+        ("access_token" = [""]),
+        ("api_key" = [""]),
+    )
+)]
+#[get("/@me", wrap = "UserAuth::load()")]
+async fn find_me(
+    db: web::Data<Arc<DbAppState>>,
+    page_query: web::Query<PageQuery<100>>,
+    authenticated: Authenticated,
+) -> Result<HttpResponse, ApiError> {
+    let options = RecordsQueryOptions {
+        level_filter: None,
+        mobile_filter: None,
+        submitter_filter: Some(authenticated.user_id),
+    };
+    let records =
+        web::block(move || FullRecordResolved::find_all(db, page_query.into_inner(), options))
+            .await??;
+    Ok(HttpResponse::Ok().json(records))
 }
 
 #[derive(OpenApi)]
@@ -92,12 +164,15 @@ async fn delete(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<H
             RecordUpdate,
             RecordResolved,
             RecordUpdate,
+            FullRecordResolved,
         )
     ),
     paths(
         create,
         update,
-        delete
+        delete,
+        find_all,
+        find_me,
     )
 )]
 pub struct ApiDoc;
@@ -108,5 +183,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .service(create)
             .service(update)
             .service(delete)
+            .service(find_all)
+            .service(find_me),
     );
 }
