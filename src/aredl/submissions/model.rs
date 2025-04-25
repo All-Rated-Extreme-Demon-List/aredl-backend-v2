@@ -80,12 +80,10 @@ pub struct Submission {
     pub reviewer_id: Option<Uuid>,
     /// Whether the record was submitted as a priority record.
     pub priority: bool,
-    /// Whether this is a resubmission of an older record.
-    pub is_update: bool,
-    /// The reason for rejecting this submission, if any.
-    pub rejection_reason: Option<String>,
+    /// Notes given by the reviewer when reviewing the record.
+    pub reviewer_notes: Option<String>,
     /// Any additional notes left by the submitter.
-    pub additional_notes: Option<String>,
+    pub user_notes: Option<String>,
     /// Timestamp of when the submission was created.
     pub created_at: NaiveDateTime,
 }
@@ -115,12 +113,10 @@ pub struct SubmissionWithPriority {
     pub reviewer_id: Option<Uuid>,
     /// Whether the record was submitted as a priority record.
     pub priority: bool,
-    /// Whether this is a resubmission of an older record.
-    pub is_update: bool,
-    /// The reason for rejecting this submission, if any.
-    pub rejection_reason: Option<String>,
+    /// Notes given by the reviewer when reviewing the record.
+    pub reviewer_notes: Option<String>,
     /// Any additional notes left by the submitter.
-    pub additional_notes: Option<String>,
+    pub user_notes: Option<String>,
     /// Timestamp of when the submission was created.
     pub created_at: NaiveDateTime,
     /// The priority value of this submission
@@ -151,12 +147,10 @@ pub struct SubmissionResolved {
     pub reviewer: Option<BaseUser>,
     /// Whether the record was submitted as a priority record.
     pub priority: bool,
-    /// Whether this is a resubmission of an older record.
-    pub is_update: bool,
-    /// The reason for rejecting this submission, if any.
-    pub rejection_reason: Option<String>,
+    /// Notes given by the reviewer when reviewing the record.
+    pub reviewer_notes: Option<String>,
     /// Any additional notes left by the submitter.
-    pub additional_notes: Option<String>,
+    pub user_notes: Option<String>,
     /// Timestamp of when the submission was created.
     pub created_at: NaiveDateTime,
     ///
@@ -183,7 +177,7 @@ pub struct SubmissionInsert {
     /// The mod menu used in this record
     pub mod_menu: Option<String>,
     /// Any additional notes left by the submitter.
-    pub additional_notes: Option<String>,
+    pub user_notes: Option<String>,
     // not documented, this will be resolved
     // automatically in the future
     pub priority: Option<bool>,
@@ -210,10 +204,10 @@ pub struct SubmissionPatch {
     pub status: Option<SubmissionStatus>,
     /// Internal UUID of the user who reviewed the record.
     pub reviewer_id: Option<Uuid>,
-    /// The reason for rejecting this submission, if any.
-    pub rejection_reason: Option<String>,
+    /// Notes given by the reviewer when reviewing the record.
+    pub reviewer_notes: Option<String>,
     /// Any additional notes left by the submitter.
-    pub additional_notes: Option<String>,
+    pub user_notes: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -335,7 +329,7 @@ impl Submission {
                     aredl_submissions::video_url.eq(inserted_submission.video_url),
                     aredl_submissions::raw_url.eq(inserted_submission.raw_url),
                     aredl_submissions::mod_menu.eq(inserted_submission.mod_menu),
-                    aredl_submissions::additional_notes.eq(inserted_submission.additional_notes),
+                    aredl_submissions::user_notes.eq(inserted_submission.user_notes),
                     inserted_submission.priority.map_or_else(
                         || aredl_submissions::priority.eq(false),
                         |priority| aredl_submissions::priority.eq(priority),
@@ -425,6 +419,9 @@ impl Submission {
                 aredl_records::video_url.eq(updated.video_url),
                 aredl_records::raw_url.eq(updated.raw_url),
                 aredl_records::reviewer_id.eq(Some(reviewer_id)),
+                aredl_records::mod_menu.eq(updated.mod_menu),
+                aredl_records::user_notes.eq(updated.user_notes),
+                aredl_records::reviewer_notes.eq(updated.reviewer_notes),
                 aredl_records::updated_at.eq(chrono::Utc::now().naive_utc()),
             );
 
@@ -488,7 +485,7 @@ impl Submission {
         let new_data = SubmissionPatch {
             status: Some(SubmissionStatus::Denied),
             reviewer_id: Some(authenticated.user_id),
-            rejection_reason: reason.clone(),
+            reviewer_notes: reason.clone(),
             ..Default::default()
         };
 
@@ -713,10 +710,10 @@ impl SubmissionPatch {
 
         if !has_auth {
             // blacklisted fields from non-permission users (lol?)
-            if patch.rejection_reason.is_some()
+            if patch.reviewer_notes.is_some()
+                || patch.level_id.is_some()
                 || patch.submitted_by.is_some()
                 || patch.status.is_some()
-                || patch.rejection_reason.is_some()
                 || patch.reviewer_id.is_some()
             {
                 return Err(ApiError::new(
@@ -792,9 +789,8 @@ impl SubmissionResolved {
             status: submission.status,
             reviewer,
             priority: submission.priority,
-            is_update: submission.is_update,
-            rejection_reason: submission.rejection_reason,
-            additional_notes: submission.additional_notes,
+            reviewer_notes: submission.reviewer_notes,
+            user_notes: submission.user_notes,
             created_at: submission.created_at,
             priority_value,
         })

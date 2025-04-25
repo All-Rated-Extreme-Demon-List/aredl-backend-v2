@@ -95,6 +95,9 @@ diesel::table! {
         created_at -> Timestamp,
         updated_at -> Timestamp,
         is_verification -> Bool,
+        reviewer_notes -> Nullable<Varchar>,
+        mod_menu -> Nullable<Varchar>,
+        user_notes -> Nullable<Varchar>,
     }
 }
 
@@ -110,14 +113,13 @@ diesel::table! {
         ldm_id -> Nullable<Int4>,
         video_url -> Varchar,
         raw_url -> Nullable<Varchar>,
-        mod_menu -> Nullable<Varchar>,
         reviewer_id -> Nullable<Uuid>,
         priority -> Bool,
-        is_update -> Bool,
-        rejection_reason -> Nullable<Varchar>,
-        additional_notes -> Nullable<Varchar>,
+        reviewer_notes -> Nullable<Varchar>,
+        user_notes -> Nullable<Varchar>,
         created_at -> Timestamp,
         status -> SubmissionStatus,
+        mod_menu -> Nullable<Varchar>,
     }
 }
 

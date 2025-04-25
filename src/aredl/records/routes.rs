@@ -1,13 +1,38 @@
 use crate::aredl::records::model::{RecordInsert, RecordUpdate};
-use crate::aredl::records::{FullRecordResolved, Record, RecordResolved, RecordsQueryOptions};
+use crate::aredl::records::{
+    FullRecordResolved, FullRecordUnresolved, FullRecordUnresolvedDto, FullResolvedRecordPage,
+    FullUnresolvedRecordPage, Record, RecordsQueryOptions,
+};
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
-use crate::page_helper::PageQuery;
+use crate::page_helper::{PageQuery, Paginated};
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use utoipa::OpenApi;
 use uuid::Uuid;
+
+#[utoipa::path(
+    get,
+    summary = "[Staff]Get record",
+    description = "Fetch details of a specific record",
+    tag = "AREDL - Records",
+    responses(
+        (status = 200, body = FullRecordResolved),
+    ),
+    security(
+        ("access_token" = ["RecordModify"]),
+        ("api_key" = ["RecordModify"]),
+    )
+)]
+#[get("/{id}", wrap = "UserAuth::require(Permission::RecordModify)")]
+async fn find(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<Uuid>,
+) -> Result<HttpResponse, ApiError> {
+    let record = web::block(move || FullRecordResolved::find(db, id.into_inner())).await??;
+    Ok(HttpResponse::Ok().json(record))
+}
 
 #[utoipa::path(
     post,
@@ -89,7 +114,7 @@ async fn delete(
 #[utoipa::path(
     get,
     summary = "[Staff]List records",
-    description = "List a possibly filtered list of all records",
+    description = "List a possibly filtered list of all records, unresolved",
     tag = "AREDL - Records",
     params(
         ("page" = Option<i64>, Query, description = "The page of the list to fetch"),
@@ -99,7 +124,7 @@ async fn delete(
         ("submitter_filter" = Option<Uuid>, Query, description = "The submitter user internal UUID to filter by"),
     ),
     responses(
-        (status = 200, body = [FullRecordResolved])
+        (status = 200, body = Paginated<FullUnresolvedRecordPage>)
     ),
     security(
         ("access_token" = ["RecordModify"]),
@@ -108,6 +133,39 @@ async fn delete(
 )]
 #[get("", wrap = "UserAuth::require(Permission::RecordModify)")]
 async fn find_all(
+    db: web::Data<Arc<DbAppState>>,
+    page_query: web::Query<PageQuery<100>>,
+    options: web::Query<RecordsQueryOptions>,
+) -> Result<HttpResponse, ApiError> {
+    let records = web::block(move || {
+        FullRecordUnresolved::find_all(db, page_query.into_inner(), options.into_inner(), false)
+    })
+    .await??;
+    Ok(HttpResponse::Ok().json(records))
+}
+
+#[utoipa::path(
+    get,
+    summary = "[Staff]List full records",
+    description = "List a possibly filtered list of all records, with resolved levels and users data",
+    tag = "AREDL - Records",
+    params(
+        ("page" = Option<i64>, Query, description = "The page of the list to fetch"),
+        ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page"),
+        ("level_filter" = Option<Uuid>, Query, description = "The level internal UUID to filter by"),
+        ("mobile_filter" = Option<bool>, Query, description = "Whether to show only/hide mobile records"),
+        ("submitter_filter" = Option<Uuid>, Query, description = "The submitter user internal UUID to filter by"),
+    ),
+    responses(
+        (status = 200, body = Paginated<FullResolvedRecordPage>)
+    ),
+    security(
+        ("access_token" = ["RecordModify"]),
+        ("api_key" = ["RecordModify"]),
+    )
+)]
+#[get("/full", wrap = "UserAuth::require(Permission::RecordModify)")]
+async fn find_all_full(
     db: web::Data<Arc<DbAppState>>,
     page_query: web::Query<PageQuery<100>>,
     options: web::Query<RecordsQueryOptions>,
@@ -125,7 +183,7 @@ async fn find_all(
     description = "List all of the authenticated user's records",
     tag = "AREDL - Records",
     responses(
-        (status = 200, body = [Record])
+        (status = 200, body = [FullRecordUnresolvedDto])
     ),
     params(
         ("page" = Option<i64>, Query, description = "The page of the list to fetch"),
@@ -147,9 +205,10 @@ async fn find_me(
         mobile_filter: None,
         submitter_filter: Some(authenticated.user_id),
     };
-    let records =
-        web::block(move || FullRecordResolved::find_all(db, page_query.into_inner(), options))
-            .await??;
+    let records = web::block(move || {
+        FullRecordUnresolved::find_all(db, page_query.into_inner(), options, true)
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(records))
 }
 
@@ -162,9 +221,8 @@ async fn find_me(
         schemas(
             Record,
             RecordUpdate,
-            RecordResolved,
-            RecordUpdate,
             FullRecordResolved,
+            FullRecordUnresolvedDto
         )
     ),
     paths(
@@ -172,6 +230,7 @@ async fn find_me(
         update,
         delete,
         find_all,
+        find_all_full,
         find_me,
     )
 )]
@@ -184,6 +243,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .service(update)
             .service(delete)
             .service(find_all)
+            .service(find_all_full)
             .service(find_me),
     );
 }

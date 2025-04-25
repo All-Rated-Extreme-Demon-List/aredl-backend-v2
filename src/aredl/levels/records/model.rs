@@ -1,4 +1,4 @@
-use crate::aredl::records::{Record, RecordResolved, RecordUnresolved};
+use crate::aredl::records::{PublicRecordResolved, PublicRecordUnresolved};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::schema::{aredl_records, users};
@@ -8,40 +8,18 @@ use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl, SelectableHelp
 use std::sync::Arc;
 use uuid::Uuid;
 
-impl Record {
-    pub fn find_all(db: web::Data<Arc<DbAppState>>, level_id: Uuid) -> Result<Vec<Self>, ApiError> {
-        let records = aredl_records::table
-            .filter(aredl_records::level_id.eq(level_id))
-            .select(Record::as_select())
-            .order(aredl_records::is_verification.desc())
-            .then_order_by(aredl_records::placement_order.asc())
-            .load::<Self>(&mut db.connection()?)?;
-        Ok(records)
-    }
-
-    pub fn find(
+impl PublicRecordResolved {
+    pub fn find_all_by_level(
         db: web::Data<Arc<DbAppState>>,
         level_id: Uuid,
-        record_id: Uuid,
-    ) -> Result<Self, ApiError> {
-        let record = aredl_records::table
-            .filter(aredl_records::level_id.eq(level_id))
-            .filter(aredl_records::id.eq(record_id))
-            .select(Record::as_select())
-            .first::<Self>(&mut db.connection()?)?;
-        Ok(record)
-    }
-}
-
-impl RecordResolved {
-    pub fn find_all(db: web::Data<Arc<DbAppState>>, level_id: Uuid) -> Result<Vec<Self>, ApiError> {
+    ) -> Result<Vec<Self>, ApiError> {
         let records = aredl_records::table
             .filter(aredl_records::level_id.eq(level_id))
             .filter(aredl_records::is_verification.eq(false))
             .inner_join(users::table.on(aredl_records::submitted_by.eq(users::id)))
             .order(aredl_records::placement_order.asc())
-            .select((RecordUnresolved::as_select(), BaseUser::as_select()))
-            .load::<(RecordUnresolved, BaseUser)>(&mut db.connection()?)?;
+            .select((PublicRecordUnresolved::as_select(), BaseUser::as_select()))
+            .load::<(PublicRecordUnresolved, BaseUser)>(&mut db.connection()?)?;
 
         let records_resolved = records
             .into_iter()
@@ -51,7 +29,7 @@ impl RecordResolved {
         Ok(records_resolved)
     }
 
-    fn from_data(record: RecordUnresolved, user: BaseUser) -> Self {
+    pub fn from_data(record: PublicRecordUnresolved, user: BaseUser) -> Self {
         Self {
             id: record.id,
             submitted_by: user,

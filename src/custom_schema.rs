@@ -1,6 +1,8 @@
-use crate::schema::{aredl_levels, aredl_packs, users, aredl_pack_tiers, aredl_pack_levels, clans, aredl_submissions,};
+use crate::schema::{
+    aredl_levels, aredl_pack_levels, aredl_pack_tiers, aredl_packs, aredl_submissions, clans, users,
+};
 
-// this should be used to declare things like views, which 
+// this should be used to declare things like views, which
 // diesel won't autogenerate in schema.rs
 
 diesel::table! {
@@ -18,10 +20,7 @@ diesel::table! {
 
 diesel::joinable!(aredl_position_history_full_view -> aredl_levels (affected_level));
 
-diesel::allow_tables_to_appear_in_same_query!(
-    aredl_levels,
-    aredl_position_history_full_view,
-);
+diesel::allow_tables_to_appear_in_same_query!(aredl_levels, aredl_position_history_full_view,);
 
 diesel::table! {
     aredl_packs_points (id) {
@@ -59,7 +58,7 @@ diesel::table! {
         extremes_rank -> Int4,
         country -> Int4,
         level_points -> Int4,
-		members_count -> Int4,
+        members_count -> Int4,
         hardest -> Nullable<Uuid>,
         extremes -> Int4
     }
@@ -70,25 +69,13 @@ diesel::joinable!(aredl_user_leaderboard -> aredl_levels (hardest));
 diesel::joinable!(aredl_user_leaderboard -> clans (clan_id));
 diesel::joinable!(aredl_country_leaderboard -> aredl_levels (hardest));
 
-diesel::allow_tables_to_appear_in_same_query!(
-    aredl_user_leaderboard,
-    aredl_levels,
-);
+diesel::allow_tables_to_appear_in_same_query!(aredl_user_leaderboard, aredl_levels,);
 
-diesel::allow_tables_to_appear_in_same_query!(
-    aredl_country_leaderboard,
-    aredl_levels,
-);
+diesel::allow_tables_to_appear_in_same_query!(aredl_country_leaderboard, aredl_levels,);
 
-diesel::allow_tables_to_appear_in_same_query!(
-    aredl_user_leaderboard,
-    users,
-);
+diesel::allow_tables_to_appear_in_same_query!(aredl_user_leaderboard, users,);
 
-diesel::allow_tables_to_appear_in_same_query!(
-    aredl_user_leaderboard,
-    clans,
-);
+diesel::allow_tables_to_appear_in_same_query!(aredl_user_leaderboard, clans,);
 
 diesel::table! {
     aredl_completed_packs (user_id) {
@@ -100,15 +87,9 @@ diesel::table! {
 diesel::joinable!(aredl_completed_packs -> users (user_id));
 diesel::joinable!(aredl_completed_packs -> aredl_packs (pack_id));
 
-diesel::allow_tables_to_appear_in_same_query!(
-    aredl_completed_packs,
-    aredl_packs,
-);
+diesel::allow_tables_to_appear_in_same_query!(aredl_completed_packs, aredl_packs,);
 
-diesel::allow_tables_to_appear_in_same_query!(
-    aredl_completed_packs,
-    aredl_pack_tiers,
-);
+diesel::allow_tables_to_appear_in_same_query!(aredl_completed_packs, aredl_pack_tiers,);
 
 diesel::table! {
     aredl_min_placement_country_records (id) {
@@ -131,16 +112,9 @@ diesel::table! {
 diesel::joinable!(aredl_min_placement_country_records -> users (submitted_by));
 diesel::joinable!(aredl_min_placement_country_records -> aredl_levels (level_id));
 
-diesel::allow_tables_to_appear_in_same_query!(
-    aredl_min_placement_country_records,
-    users,
-);
+diesel::allow_tables_to_appear_in_same_query!(aredl_min_placement_country_records, users,);
 
-diesel::allow_tables_to_appear_in_same_query!(
-    aredl_min_placement_country_records,
-    aredl_levels,
-);
-
+diesel::allow_tables_to_appear_in_same_query!(aredl_min_placement_country_records, aredl_levels,);
 
 diesel::table! {
     aredl_clans_leaderboard (clan_id) {
@@ -148,7 +122,7 @@ diesel::table! {
         extremes_rank -> Int4,
         clan_id -> Uuid,
         level_points -> Int4,
-		members_count -> Int4,
+        members_count -> Int4,
         hardest -> Nullable<Uuid>,
         extremes -> Int4
     }
@@ -156,15 +130,9 @@ diesel::table! {
 
 diesel::joinable!(aredl_clans_leaderboard -> aredl_levels (hardest));
 
-diesel::allow_tables_to_appear_in_same_query!(
-    aredl_clans_leaderboard,
-    aredl_levels,
-);
+diesel::allow_tables_to_appear_in_same_query!(aredl_clans_leaderboard, aredl_levels,);
 
-diesel::allow_tables_to_appear_in_same_query!(
-    aredl_clans_leaderboard,
-    clans,
-);
+diesel::allow_tables_to_appear_in_same_query!(aredl_clans_leaderboard, clans,);
 
 diesel::table! {
     aredl_min_placement_clans_records (id) {
@@ -188,20 +156,11 @@ diesel::joinable!(aredl_min_placement_clans_records -> users (submitted_by));
 diesel::joinable!(aredl_min_placement_clans_records -> aredl_levels (level_id));
 diesel::joinable!(aredl_min_placement_clans_records -> clans (clan_id));
 
-diesel::allow_tables_to_appear_in_same_query!(
-    aredl_min_placement_clans_records,
-    users,
-);
+diesel::allow_tables_to_appear_in_same_query!(aredl_min_placement_clans_records, users,);
 
-diesel::allow_tables_to_appear_in_same_query!(
-    aredl_min_placement_clans_records,
-    aredl_levels,
-);
+diesel::allow_tables_to_appear_in_same_query!(aredl_min_placement_clans_records, aredl_levels,);
 
-diesel::allow_tables_to_appear_in_same_query!(
-    aredl_min_placement_clans_records,
-    clans,
-);
+diesel::allow_tables_to_appear_in_same_query!(aredl_min_placement_clans_records, clans,);
 
 diesel::table! {
     use diesel::sql_types::*;
@@ -218,9 +177,8 @@ diesel::table! {
         reviewer_id -> Nullable<Uuid>,
         priority -> Bool,
         priority_value -> Bigint,
-        is_update -> Bool,
-        rejection_reason -> Nullable<Varchar>,
-        additional_notes -> Nullable<Varchar>,
+        reviewer_notes -> Nullable<Varchar>,
+        user_notes -> Nullable<Varchar>,
         created_at -> Timestamp,
         status -> SubmissionStatus,
         mod_menu -> Nullable<Varchar>,
@@ -229,7 +187,4 @@ diesel::table! {
 
 diesel::joinable!(aredl_submissions -> aredl_submissions_with_priority (id));
 
-diesel::allow_tables_to_appear_in_same_query!(
-    aredl_submissions,
-    aredl_submissions_with_priority
-);
+diesel::allow_tables_to_appear_in_same_query!(aredl_submissions, aredl_submissions_with_priority);

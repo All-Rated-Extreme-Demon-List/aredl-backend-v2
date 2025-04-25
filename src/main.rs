@@ -4,51 +4,54 @@ extern crate diesel;
 extern crate diesel_migrations;
 
 mod db;
-mod schema;
 mod error_handler;
+mod schema;
 #[cfg(test)]
 mod test_utils;
 
 mod aredl;
-mod custom_schema;
 mod auth;
-mod users;
-mod roles;
+mod cache_control;
 mod clans;
+mod clean_notifications;
+mod custom_schema;
 mod docs;
 mod page_helper;
-mod cache_control;
 mod refresh_leaderboard;
 mod refresh_level_data;
-mod clean_notifications;
+mod roles;
+mod users;
 
-use std::env;
-use actix_web::dev::{ServiceRequest, ServiceResponse};
-use actix_web::body::MessageBody;
-use actix_web::Error;
-use tracing_actix_web::{TracingLogger, RootSpanBuilder, DefaultRootSpanBuilder, root_span};
-use tracing_subscriber::EnvFilter;
-use tracing_subscriber::fmt::format::FmtSpan;
-use tracing::Span;
-use actix_cors::Cors;
-use actix_web::{App, HttpServer, web};
-use dotenv::dotenv;
-use listenfd::ListenFd;
-use utoipa::OpenApi;
-use utoipa_rapidoc::RapiDoc;
-use std::fs;
-use actix_web_prom::PrometheusMetricsBuilder;
-use crate::docs::ApiDoc;
 use crate::cache_control::CacheController;
+use crate::clean_notifications::start_notifications_cleaner;
+use crate::docs::ApiDoc;
 use crate::refresh_leaderboard::start_leaderboard_refresher;
 use crate::refresh_level_data::start_level_data_refresher;
-use crate::clean_notifications::start_notifications_cleaner;
-
+use actix_cors::Cors;
+use actix_web::body::MessageBody;
+use actix_web::dev::{ServiceRequest, ServiceResponse};
+use actix_web::middleware::NormalizePath;
+use actix_web::Error;
+use actix_web::{web, App, HttpServer};
+use actix_web_prom::PrometheusMetricsBuilder;
+use dotenv::dotenv;
+use listenfd::ListenFd;
+use std::env;
+use std::fs;
+use tracing::Span;
+use tracing_actix_web::{root_span, DefaultRootSpanBuilder, RootSpanBuilder, TracingLogger};
+use tracing_subscriber::fmt::format::FmtSpan;
+use tracing_subscriber::EnvFilter;
+use utoipa::OpenApi;
+use utoipa_rapidoc::RapiDoc;
 
 pub fn get_secret(var_name: &str) -> String {
     let value = env::var(var_name).expect(&format!("Please set {} in .env", var_name));
     if value.starts_with("/run/secrets/") {
-        fs::read_to_string(value.trim()).expect("Failed to read secret file").trim().to_string()
+        fs::read_to_string(value.trim())
+            .expect("Failed to read secret file")
+            .trim()
+            .to_string()
     } else {
         value
     }
@@ -61,7 +64,7 @@ async fn main() -> std::io::Result<()> {
     if cfg!(debug_assertions) {
         tracing_subscriber::fmt()
             .with_env_filter(EnvFilter::new(
-                std::env::var("RUST_LOG").unwrap_or_else(|_| "info,tower_http=error".into())
+                std::env::var("RUST_LOG").unwrap_or_else(|_| "info,tower_http=error".into()),
             ))
             .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
             .pretty()
@@ -69,11 +72,11 @@ async fn main() -> std::io::Result<()> {
     } else {
         tracing_subscriber::fmt()
             .with_env_filter(EnvFilter::new(
-                std::env::var("RUST_LOG").unwrap_or_else(|_| "info,tower_http=error".into())
+                std::env::var("RUST_LOG").unwrap_or_else(|_| "info,tower_http=error".into()),
             ))
             .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
             .json()
-            .flatten_event(true) 
+            .flatten_event(true)
             .with_current_span(true)
             .with_span_list(false)
             .init();
@@ -97,11 +100,9 @@ async fn main() -> std::io::Result<()> {
     start_level_data_refresher(db_app_state.clone()).await;
 
     let auth_app_state = auth::init_app_state().await;
-    
 
     let mut listenfd = ListenFd::from_env();
     let mut server = HttpServer::new(move || {
-
         let cors = Cors::permissive();
 
         let docs_html = "\
@@ -137,16 +138,19 @@ async fn main() -> std::io::Result<()> {
                     .app_data(web::Data::new(auth_app_state.clone()))
                     .app_data(web::Data::new(db_app_state.clone()))
                     .wrap(CacheController::default_no_store())
+                    .wrap(NormalizePath::trim())
                     .wrap(TracingLogger::<AppRootSpanBuilder>::new())
                     .wrap(cors)
                     .configure(aredl::init_routes)
                     .configure(auth::init_routes)
                     .configure(users::init_routes)
                     .configure(roles::init_routes)
-                    .configure(clans::init_routes)
+                    .configure(clans::init_routes),
             )
             .service(
-                RapiDoc::with_openapi("/openapi.json", ApiDoc::openapi()).path("/docs").custom_html(docs_html),
+                RapiDoc::with_openapi("/openapi.json", ApiDoc::openapi())
+                    .path("/docs")
+                    .custom_html(docs_html),
             )
     });
 
