@@ -283,20 +283,27 @@ impl Submission {
                 ));
             }
 
-            // check that this level exists and is not legacy
-            let level_is_legacy = aredl_levels::table
+            // check that this level exists, is not legacy, and 
+            // raw footage is provided for ranks 400+
+            let level_info = aredl_levels::table
                 .filter(aredl_levels::id.eq(inserted_submission.level_id))
-                .select(aredl_levels::legacy)
-                .first::<bool>(connection)
+                .select((aredl_levels::legacy, aredl_levels::position))
+                .first::<(bool, i32)>(connection)
                 .optional()?;
 
-            match level_is_legacy {
+            match level_info {
                 None => return Err(ApiError::new(404, "Could not find this level!")),
-                Some(is) => {
-                    if is == true {
+                Some((legacy, pos)) => {
+                    if legacy == true {
                         return Err(ApiError::new(
                             400,
                             "This level is on the legacy list and is not accepting records!",
+                        ));
+                    }
+                    if pos <= 400 && inserted_submission.raw_url.is_none() {
+                        return Err(ApiError::new(
+                            400,
+                            "This level is top 400 and requires raw footage!",
                         ));
                     }
                 }
