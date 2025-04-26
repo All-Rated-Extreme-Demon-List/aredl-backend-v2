@@ -23,7 +23,8 @@ use diesel::{
     r2d2::{ConnectionManager, PooledConnection},
     sql_types::Bool,
     BoxableExpression, Connection, ExpressionMethods, IntoSql, OptionalExtension, PgConnection,
-    QueryDsl, RunQueryDsl, SelectableHelper,
+    QueryDsl, RunQueryDsl, SelectableHelper, select,
+    dsl::exists
 };
 use diesel_derive_enum::DbEnum;
 use is_url::is_url;
@@ -185,11 +186,9 @@ pub struct SubmissionInsert {
 
 #[derive(Serialize, Deserialize, Debug, AsChangeset, Default, ToSchema, Clone, PartialEq)]
 #[diesel(table_name=aredl_submissions, check_for_backend(Pg))]
-pub struct SubmissionPatch {
+pub struct SubmissionPatchUser {
     /// UUID of the level this record is on.)
     pub level_id: Option<Uuid>,
-    /// Internal UUID of the submitter.
-    pub submitted_by: Option<Uuid>,
     /// Whether the record was completed on mobile or not.
     pub mobile: Option<bool>,
     /// ID of the LDM used for the record, if any.
@@ -200,9 +199,32 @@ pub struct SubmissionPatch {
     pub raw_url: Option<String>,
     /// The mod menu used in this record
     pub mod_menu: Option<String>,
-    /// Internal UUID of the user who reviewed the record.
+    /// Any additional notes left by the submitter.
+    pub user_notes: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, AsChangeset, Default, ToSchema, Clone, PartialEq)]
+#[diesel(table_name=aredl_submissions, check_for_backend(Pg))]
+pub struct SubmissionPatchMod {
+    /// UUID of the level this record is on.)
+    pub level_id: Option<Uuid>,
+    /// [Mod only] Internal UUID of the submitter.
+    pub submitted_by: Option<Uuid>,
+    /// Whether the record was completed on mobile or not.
+    pub mobile: Option<bool>,
+    /// ID of the LDM used for the record, if any.
+    pub ldm_id: Option<i32>,
+    /// Video link of the completion.
+    pub video_url: Option<String>,
+    /// Link to the raw video file of the completion.
+    pub raw_url: Option<String>,
+    /// [Mod only] The status of the submission
+    pub status: Option<SubmissionStatus>,
+    /// The mod menu used in this record
+    pub mod_menu: Option<String>,
+    /// [Mod only] Internal UUID of the user who reviewed the record.
     pub reviewer_id: Option<Uuid>,
-    /// Notes given by the reviewer when reviewing the record.
+    /// [Mod only] Notes given by the reviewer when reviewing the record.
     pub reviewer_notes: Option<String>,
     /// Any additional notes left by the submitter.
     pub user_notes: Option<String>,
@@ -650,12 +672,11 @@ impl Submission {
     }
 }
 
-impl SubmissionPatch {
+impl SubmissionPatchUser {
     pub fn patch(
         patch: Self,
         id: Uuid,
         conn: &mut PooledConnection<ConnectionManager<PgConnection>>,
-        has_auth: bool,
         user: Uuid,
     ) -> Result<Submission, ApiError> {
         if patch == Self::default() {
@@ -680,6 +701,95 @@ impl SubmissionPatch {
             .first::<Submission>(conn)?;
 
         let resub = old_submission.status == SubmissionStatus::Denied;
+
+        let level_id = match patch.level_id {
+            Some(new_level_id) => new_level_id,
+            None => old_submission.level_id,
+        };
+
+        if let Some(new_level) = patch.level_id {
+            let level_exists = select(
+                exists(aredl_levels::table
+                    .filter(aredl_levels::id.eq(new_level))
+                )
+            ).get_result::<bool>(conn)?;
+
+            if level_exists == false {
+                return Err(ApiError::new(404, "Could not find the new level!"))
+            }
+        }
+
+        let existing_submission = aredl_submissions::table
+            .filter(aredl_submissions::level_id.eq(level_id))
+            .filter(aredl_submissions::submitted_by.eq(old_submission.submitted_by))
+            .filter(aredl_submissions::id.ne(id))
+            .select(aredl_submissions::id)
+            .first::<Uuid>(conn)
+            .optional()?;
+
+        if existing_submission.is_some() {
+            return Err(ApiError::new(
+                409,
+                "This user already has a submission for this level!",
+            ));
+        }
+
+        let result = diesel::update(aredl_submissions::table)
+            .filter(aredl_submissions::id.eq(id))
+            .filter(aredl_submissions::submitted_by.eq(user))
+            .filter(aredl_submissions::status.eq(SubmissionStatus::Pending)
+                    .or(aredl_submissions::status.eq(SubmissionStatus::Denied))
+            )
+            .set((
+                patch.clone(),
+                // FIXME: this is very silly
+                if resub {
+                    (
+                        aredl_submissions::status.eq(SubmissionStatus::Pending),
+                        aredl_submissions::reviewer_id.eq::<Option<Uuid>>(None),
+                        aredl_submissions::reviewer_notes.eq::<Option<String>>(None),
+                    )
+                } else {
+                    (
+                        aredl_submissions::status.eq(old_submission.status),
+                        aredl_submissions::reviewer_id.eq(old_submission.reviewer_id),
+                        aredl_submissions::reviewer_notes.eq(old_submission.reviewer_notes),
+                    )
+                },
+            ))
+            .returning(Submission::as_select())
+            .get_result::<Submission>(conn)?;
+        
+        Ok(result)
+    }
+}
+
+impl SubmissionPatchMod {
+    pub fn patch_mod(
+        patch: Self,
+        id: Uuid,
+        conn: &mut PooledConnection<ConnectionManager<PgConnection>>,
+    ) -> Result<Submission, ApiError> {
+        if patch == Self::default() {
+            return Err(ApiError::new(400, "No changes were provided in the patch!"));
+        }
+
+        if let Some(video_url) = patch.video_url.as_ref() {
+            if !is_url(video_url) {
+                return Err(ApiError::new(400, "Your video is not a URL!"));
+            }
+        }
+
+        if let Some(raw_url) = patch.raw_url.as_ref() {
+            if !is_url(raw_url) {
+                return Err(ApiError::new(400, "Your raw footage is not a URL!"));
+            }
+        }
+
+        let old_submission = aredl_submissions::table
+            .filter(aredl_submissions::id.eq(id))
+            .select(Submission::as_select())
+            .first::<Submission>(conn)?;
 
         let level_id = match patch.level_id {
             Some(new_level_id) => new_level_id,
@@ -743,41 +853,25 @@ impl SubmissionPatch {
             ));
         }
 
-        let mut query = diesel::update(aredl_submissions::table)
+        let result = diesel::update(aredl_submissions::table)
             .filter(aredl_submissions::id.eq(id))
-            .set((
-                patch.clone(),
-                if resub {
-                    aredl_submissions::status.eq(SubmissionStatus::Pending)
-                    // TODO: reset reviewer ID and notes (this syntax sucks)
-                } else {
-                    // keep the status the same
-                    aredl_submissions::status.eq(old_submission.status)
-                },
-            ))
+            .set(patch.clone())
             .returning(Submission::as_select())
-            .into_boxed();
-
-        if !has_auth {
-            // blacklisted fields from non-permission users (lol?)
-            if patch.reviewer_notes.is_some()
-                || patch.level_id.is_some()
-                || patch.submitted_by.is_some()
-                || patch.reviewer_id.is_some()
-            {
-                return Err(ApiError::new(
-                    403,
-                    "You are not permitted to change some fields in your request!",
-                ));
-            }
-
-            query = query
-                .filter(aredl_submissions::submitted_by.eq(user))
-                .filter(aredl_submissions::status.eq(SubmissionStatus::Pending));
-        }
-
-        let result = query.get_result::<Submission>(conn)?;
+            .get_result::<Submission>(conn)?;
+        
         Ok(result)
+    }
+
+    pub fn downgrade(s: Self) -> SubmissionPatchUser {
+        SubmissionPatchUser {
+            level_id: s.level_id,
+            mobile: s.mobile,
+            ldm_id: s.ldm_id,
+            video_url: s.video_url,
+            raw_url: s.raw_url,
+            mod_menu: s.mod_menu,
+            user_notes: s.user_notes
+        }
     }
 }
 
