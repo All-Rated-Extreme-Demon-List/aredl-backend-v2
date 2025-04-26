@@ -7,13 +7,12 @@ use crate::{
         me::notifications::{Notification, NotificationType},
         BaseUser,
     },
-};
-use crate::{
+    roles::Role,
     custom_schema::aredl_submissions_with_priority,
     db::DbAppState,
     error_handler::ApiError,
     page_helper::Paginated,
-    schema::{aredl_levels, aredl_records, aredl_submissions, submission_history, users},
+    schema::{aredl_levels, aredl_records, aredl_submissions, submission_history, users, roles, user_roles},
 };
 use actix_web::web;
 use chrono::NaiveDateTime;
@@ -24,7 +23,8 @@ use diesel::{
     sql_types::Bool,
     BoxableExpression, Connection, ExpressionMethods, IntoSql, OptionalExtension, PgConnection,
     QueryDsl, RunQueryDsl, SelectableHelper, select,
-    dsl::exists
+    dsl::exists,
+    JoinOnDsl,
 };
 use diesel_derive_enum::DbEnum;
 use is_url::is_url;
@@ -179,9 +179,6 @@ pub struct SubmissionInsert {
     pub mod_menu: Option<String>,
     /// Any additional notes left by the submitter.
     pub user_notes: Option<String>,
-    // not documented, this will be resolved
-    // automatically in the future
-    pub priority: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, AsChangeset, Default, ToSchema, Clone, PartialEq)]
@@ -222,6 +219,8 @@ pub struct SubmissionPatchMod {
     pub status: Option<SubmissionStatus>,
     /// The mod menu used in this record
     pub mod_menu: Option<String>,
+    /// Whether the record was submitted as a priority record.
+    pub priority: Option<bool>,
     /// [Mod only] Internal UUID of the user who reviewed the record.
     pub reviewer_id: Option<Uuid>,
     /// [Mod only] Notes given by the reviewer when reviewing the record.
@@ -343,6 +342,16 @@ impl Submission {
                     "You are banned from submitting records.",
                 ));
             }
+            
+            let roles = user_roles::table
+                .inner_join(roles::table.on(user_roles::role_id.eq(roles::id)))
+                .filter(user_roles::user_id.eq(authenticated.user_id))
+                .select(Role::as_select())
+                .load::<Role>(connection)?;
+
+            let has_role = roles
+                .iter()
+                .any(|role| role.privilege_level == 5);
 
             let submission = diesel::insert_into(aredl_submissions::table)
                 .values((
@@ -357,10 +366,7 @@ impl Submission {
                     aredl_submissions::raw_url.eq(inserted_submission.raw_url),
                     aredl_submissions::mod_menu.eq(inserted_submission.mod_menu),
                     aredl_submissions::user_notes.eq(inserted_submission.user_notes),
-                    inserted_submission.priority.map_or_else(
-                        || aredl_submissions::priority.eq(false),
-                        |priority| aredl_submissions::priority.eq(priority),
-                    ),
+                    aredl_submissions::priority.eq(has_role)
                 ))
                 .returning(Self::as_select())
                 .get_result(connection)?;
