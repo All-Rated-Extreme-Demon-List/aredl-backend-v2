@@ -745,9 +745,16 @@ impl SubmissionPatch {
 
         let mut query = diesel::update(aredl_submissions::table)
             .filter(aredl_submissions::id.eq(id))
-            .set(
-                patch.clone()
-            )
+            .set((
+                patch.clone(),
+                if resub {
+                    aredl_submissions::status.eq(SubmissionStatus::Pending)
+                    // TODO: reset reviewer ID and notes (this syntax sucks)
+                } else {
+                    // keep the status the same
+                    aredl_submissions::status.eq(old_submission.status)
+                },
+            ))
             .returning(Submission::as_select())
             .into_boxed();
 
