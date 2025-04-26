@@ -707,15 +707,38 @@ impl SubmissionPatchUser {
             None => old_submission.level_id,
         };
 
-        if let Some(new_level) = patch.level_id {
-            let level_exists = select(
-                exists(aredl_levels::table
-                    .filter(aredl_levels::id.eq(new_level))
-                )
-            ).get_result::<bool>(conn)?;
+        let raw_footage = match patch.raw_url.clone() {
+            Some(raw) => Some(raw),
+            None => old_submission.raw_url
+        };
 
-            if level_exists == false {
-                return Err(ApiError::new(404, "Could not find the new level!"))
+        // if either of these fields changed, we need revalidate the raw
+        if patch.level_id.is_some() || patch.raw_url.is_some() {
+            let level_exists = aredl_levels::table
+                .filter(aredl_levels::id.eq(level_id))
+                .select((
+                    aredl_levels::legacy,
+                    aredl_levels::position
+                ))
+                .first::<(bool, i32)>(conn)
+                .optional()?;
+
+            match level_exists {
+                None => return Err(ApiError::new(404, "Could not find the new level!")),
+                Some((is_legacy, pos)) => {
+                    if is_legacy == true {
+                        return Err(ApiError::new(
+                            400,
+                            "This level is on the legacy list, and is not accepting records!",
+                        ));
+                    }
+                    if pos < 400 && raw_footage.is_none() {
+                        return Err(ApiError::new(
+                            400,
+                            "This level is top 400 and requires raw footage!"
+                        ))
+                    }
+                }
             }
         }
 
@@ -819,22 +842,14 @@ impl SubmissionPatchMod {
         }
 
         if let Some(new_level) = patch.level_id {
-            let level_exists = aredl_levels::table
-                .filter(aredl_levels::id.eq(new_level))
-                .select(aredl_levels::legacy)
-                .first::<bool>(conn)
-                .optional()?;
+            let level_exists = select(
+                exists(aredl_levels::table
+                    .filter(aredl_levels::id.eq(new_level))
+                )
+            ).get_result::<bool>(conn)?;
 
-            match level_exists {
-                None => return Err(ApiError::new(404, "Could not find the new level!")),
-                Some(is_legacy) => {
-                    if is_legacy == true {
-                        return Err(ApiError::new(
-                            400,
-                            "This level is on the legacy list, and is not accepting records!",
-                        ));
-                    }
-                }
+            if level_exists == false {
+                return Err(ApiError::new(404, "Could not find the new level!"))
             }
         }
 
