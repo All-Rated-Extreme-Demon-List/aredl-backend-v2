@@ -255,18 +255,12 @@ async fn claim(db: web::Data<Arc<DbAppState>>, authenticated: Authenticated) -> 
     ),
 )]
 #[post("/{id}/unclaim", wrap="UserAuth::require(Permission::RecordModify)")]
-async fn unclaim(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
-    let mut conn = db.connection()?;
-    let new_data = SubmissionPatch {
-        status: Some(SubmissionStatus::Pending),
-        ..Default::default()
-    };
+async fn unclaim(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
 
-    let new_record = web::block(
-        move || SubmissionPatch::patch(new_data, id.into_inner(), &mut conn, true, authenticated.user_id)
+    let patched = web::block(
+        move || Submission::unclaim(db, id.into_inner())
     ).await??;
-    let resolved = SubmissionResolved::from(new_record, db, None)?;
-    Ok(HttpResponse::Ok().json(resolved))
+    Ok(HttpResponse::Ok().json(patched))
 }
 
 #[utoipa::path(

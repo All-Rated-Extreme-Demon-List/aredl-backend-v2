@@ -200,8 +200,6 @@ pub struct SubmissionPatch {
     pub raw_url: Option<String>,
     /// The mod menu used in this record
     pub mod_menu: Option<String>,
-    /// The status of this submission
-    pub status: Option<SubmissionStatus>,
     /// Internal UUID of the user who reviewed the record.
     pub reviewer_id: Option<Uuid>,
     /// Notes given by the reviewer when reviewing the record.
@@ -489,20 +487,18 @@ impl Submission {
         reason: Option<String>,
     ) -> Result<SubmissionResolved, ApiError> {
         let connection = &mut db.connection()?;
-        let new_data = SubmissionPatch {
-            status: Some(SubmissionStatus::Denied),
-            reviewer_id: Some(authenticated.user_id),
-            reviewer_notes: reason.clone(),
-            ..Default::default()
-        };
 
-        let new_record = SubmissionPatch::patch(
-            new_data,
-            id,
-            &mut db.connection()?,
-            true,
-            authenticated.user_id,
-        )?;
+        let new_data = (
+            aredl_submissions::status.eq(SubmissionStatus::Denied),
+            aredl_submissions::reviewer_id.eq(authenticated.user_id),
+            aredl_submissions::reviewer_notes.eq(reason.clone())
+        );
+
+        let new_record = diesel::update(aredl_submissions::table)
+            .filter(aredl_submissions::id.eq(id))
+            .set(new_data)
+            .returning(Submission::as_select())
+            .get_result::<Submission>(connection)?;
 
         let upgraded = SubmissionResolved::from(new_record.clone(), db, None)?;
 
@@ -538,14 +534,17 @@ impl Submission {
         authenticated: Authenticated,
     ) -> Result<SubmissionResolved, ApiError> {
         let connection = &mut db.connection()?;
-        let new_data = SubmissionPatch {
-            status: Some(SubmissionStatus::UnderConsideration),
-            reviewer_id: Some(authenticated.user_id),
-            ..Default::default()
-        };
 
-        let new_record =
-            SubmissionPatch::patch(new_data, id, connection, true, authenticated.user_id)?;
+        let new_data = (
+            aredl_submissions::status.eq(SubmissionStatus::UnderConsideration),
+            aredl_submissions::reviewer_id.eq(authenticated.user_id)
+        );
+
+        let new_record = diesel::update(aredl_submissions::table)
+            .filter(aredl_submissions::id.eq(id))
+            .set(new_data)
+            .returning(Submission::as_select())
+            .get_result::<Submission>(connection)?;
 
         let upgraded = SubmissionResolved::from(new_record.clone(), db, None)?;
 
@@ -572,6 +571,41 @@ impl Submission {
             content,
             NotificationType::Info,
         )?;
+        Ok(upgraded)
+    }
+
+    pub fn unclaim(
+        db: web::Data<Arc<DbAppState>>,
+        id: Uuid
+    ) -> Result<SubmissionResolved, ApiError> {
+        let connection = &mut db.connection()?;
+
+        let new_data = (
+            aredl_submissions::status.eq(SubmissionStatus::Pending),
+            aredl_submissions::reviewer_id.eq::<Option<Uuid>>(None)
+        );
+
+        let new_record = diesel::update(aredl_submissions::table)
+            .filter(aredl_submissions::id.eq(id))
+            .set(new_data)
+            .returning(Submission::as_select())
+            .get_result::<Submission>(connection)?;
+
+        let upgraded = SubmissionResolved::from(new_record.clone(), db, None)?;
+
+        // Log submission history
+        let history = SubmissionHistory {
+            id: Uuid::new_v4(),
+            submission_id: Some(new_record.id),
+            record_id: None,
+            status: SubmissionStatus::Pending,
+            rejection_reason: None,
+            timestamp: chrono::Utc::now().naive_utc(),
+        };
+        diesel::insert_into(submission_history::table)
+            .values(&history)
+            .execute(connection)?;
+        
         Ok(upgraded)
     }
 
@@ -645,7 +679,7 @@ impl SubmissionPatch {
             .select(Submission::as_select())
             .first::<Submission>(conn)?;
 
-        let _resub = old_submission.status == SubmissionStatus::Denied;
+        let resub = old_submission.status == SubmissionStatus::Denied;
 
         let level_id = match patch.level_id {
             Some(new_level_id) => new_level_id,
@@ -711,7 +745,9 @@ impl SubmissionPatch {
 
         let mut query = diesel::update(aredl_submissions::table)
             .filter(aredl_submissions::id.eq(id))
-            .set(patch.clone())
+            .set(
+                patch.clone()
+            )
             .returning(Submission::as_select())
             .into_boxed();
 
@@ -720,7 +756,6 @@ impl SubmissionPatch {
             if patch.reviewer_notes.is_some()
                 || patch.level_id.is_some()
                 || patch.submitted_by.is_some()
-                || patch.status.is_some()
                 || patch.reviewer_id.is_some()
             {
                 return Err(ApiError::new(
@@ -830,11 +865,11 @@ impl SubmissionResolved {
         user: Uuid,
     ) -> Result<SubmissionResolved, ApiError> {
         let conn = &mut db.connection()?;
-        let new_data = SubmissionPatch {
-            reviewer_id: Some(user),
-            status: Some(SubmissionStatus::Claimed),
-            ..Default::default()
-        };
+        let new_data = (
+            aredl_submissions::status.eq(SubmissionStatus::Claimed),
+            aredl_submissions::reviewer_id.eq(user)
+        );
+       
         // TODO: maybe this could become one super clean query?
         let highest_priority_id = aredl_submissions_with_priority::table
             .filter(aredl_submissions_with_priority::status.eq(SubmissionStatus::Pending))
