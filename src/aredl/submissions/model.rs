@@ -7,13 +7,12 @@ use crate::{
         me::notifications::{Notification, NotificationType},
         BaseUser,
     },
-};
-use crate::{
+    roles::Role,
     custom_schema::aredl_submissions_with_priority,
     db::DbAppState,
     error_handler::ApiError,
     page_helper::Paginated,
-    schema::{aredl_levels, aredl_records, aredl_submissions, submission_history, users},
+    schema::{aredl_levels, aredl_records, aredl_submissions, submission_history, users, roles, user_roles},
 };
 use actix_web::web;
 use chrono::NaiveDateTime;
@@ -23,7 +22,9 @@ use diesel::{
     r2d2::{ConnectionManager, PooledConnection},
     sql_types::Bool,
     BoxableExpression, Connection, ExpressionMethods, IntoSql, OptionalExtension, PgConnection,
-    QueryDsl, RunQueryDsl, SelectableHelper,
+    QueryDsl, RunQueryDsl, SelectableHelper, select,
+    dsl::exists,
+    JoinOnDsl,
 };
 use diesel_derive_enum::DbEnum;
 use is_url::is_url;
@@ -178,18 +179,13 @@ pub struct SubmissionInsert {
     pub mod_menu: Option<String>,
     /// Any additional notes left by the submitter.
     pub user_notes: Option<String>,
-    // not documented, this will be resolved
-    // automatically in the future
-    pub priority: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, AsChangeset, Default, ToSchema, Clone, PartialEq)]
 #[diesel(table_name=aredl_submissions, check_for_backend(Pg))]
-pub struct SubmissionPatch {
+pub struct SubmissionPatchUser {
     /// UUID of the level this record is on.)
     pub level_id: Option<Uuid>,
-    /// Internal UUID of the submitter.
-    pub submitted_by: Option<Uuid>,
     /// Whether the record was completed on mobile or not.
     pub mobile: Option<bool>,
     /// ID of the LDM used for the record, if any.
@@ -200,11 +196,34 @@ pub struct SubmissionPatch {
     pub raw_url: Option<String>,
     /// The mod menu used in this record
     pub mod_menu: Option<String>,
-    /// The status of this submission
+    /// Any additional notes left by the submitter.
+    pub user_notes: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, AsChangeset, Default, ToSchema, Clone, PartialEq)]
+#[diesel(table_name=aredl_submissions, check_for_backend(Pg))]
+pub struct SubmissionPatchMod {
+    /// UUID of the level this record is on.)
+    pub level_id: Option<Uuid>,
+    /// [Mod only] Internal UUID of the submitter.
+    pub submitted_by: Option<Uuid>,
+    /// Whether the record was completed on mobile or not.
+    pub mobile: Option<bool>,
+    /// ID of the LDM used for the record, if any.
+    pub ldm_id: Option<i32>,
+    /// Video link of the completion.
+    pub video_url: Option<String>,
+    /// Link to the raw video file of the completion.
+    pub raw_url: Option<String>,
+    /// [Mod only] The status of the submission
     pub status: Option<SubmissionStatus>,
-    /// Internal UUID of the user who reviewed the record.
+    /// The mod menu used in this record
+    pub mod_menu: Option<String>,
+    /// Whether the record was submitted as a priority record.
+    pub priority: Option<bool>,
+    /// [Mod only] Internal UUID of the user who reviewed the record.
     pub reviewer_id: Option<Uuid>,
-    /// Notes given by the reviewer when reviewing the record.
+    /// [Mod only] Notes given by the reviewer when reviewing the record.
     pub reviewer_notes: Option<String>,
     /// Any additional notes left by the submitter.
     pub user_notes: Option<String>,
@@ -283,20 +302,27 @@ impl Submission {
                 ));
             }
 
-            // check that this level exists and is not legacy
-            let level_is_legacy = aredl_levels::table
+            // check that this level exists, is not legacy, and 
+            // raw footage is provided for ranks 400+
+            let level_info = aredl_levels::table
                 .filter(aredl_levels::id.eq(inserted_submission.level_id))
-                .select(aredl_levels::legacy)
-                .first::<bool>(connection)
+                .select((aredl_levels::legacy, aredl_levels::position))
+                .first::<(bool, i32)>(connection)
                 .optional()?;
 
-            match level_is_legacy {
+            match level_info {
                 None => return Err(ApiError::new(404, "Could not find this level!")),
-                Some(is) => {
-                    if is == true {
+                Some((legacy, pos)) => {
+                    if legacy == true {
                         return Err(ApiError::new(
                             400,
                             "This level is on the legacy list and is not accepting records!",
+                        ));
+                    }
+                    if pos <= 400 && inserted_submission.raw_url.is_none() {
+                        return Err(ApiError::new(
+                            400,
+                            "This level is top 400 and requires raw footage!",
                         ));
                     }
                 }
@@ -316,6 +342,16 @@ impl Submission {
                     "You are banned from submitting records.",
                 ));
             }
+            
+            let roles = user_roles::table
+                .inner_join(roles::table.on(user_roles::role_id.eq(roles::id)))
+                .filter(user_roles::user_id.eq(authenticated.user_id))
+                .select(Role::as_select())
+                .load::<Role>(connection)?;
+
+            let has_role = roles
+                .iter()
+                .any(|role| role.privilege_level == 5);
 
             let submission = diesel::insert_into(aredl_submissions::table)
                 .values((
@@ -330,10 +366,7 @@ impl Submission {
                     aredl_submissions::raw_url.eq(inserted_submission.raw_url),
                     aredl_submissions::mod_menu.eq(inserted_submission.mod_menu),
                     aredl_submissions::user_notes.eq(inserted_submission.user_notes),
-                    inserted_submission.priority.map_or_else(
-                        || aredl_submissions::priority.eq(false),
-                        |priority| aredl_submissions::priority.eq(priority),
-                    ),
+                    aredl_submissions::priority.eq(has_role)
                 ))
                 .returning(Self::as_select())
                 .get_result(connection)?;
@@ -482,20 +515,18 @@ impl Submission {
         reason: Option<String>,
     ) -> Result<SubmissionResolved, ApiError> {
         let connection = &mut db.connection()?;
-        let new_data = SubmissionPatch {
-            status: Some(SubmissionStatus::Denied),
-            reviewer_id: Some(authenticated.user_id),
-            reviewer_notes: reason.clone(),
-            ..Default::default()
-        };
 
-        let new_record = SubmissionPatch::patch(
-            new_data,
-            id,
-            &mut db.connection()?,
-            true,
-            authenticated.user_id,
-        )?;
+        let new_data = (
+            aredl_submissions::status.eq(SubmissionStatus::Denied),
+            aredl_submissions::reviewer_id.eq(authenticated.user_id),
+            aredl_submissions::reviewer_notes.eq(reason.clone())
+        );
+
+        let new_record = diesel::update(aredl_submissions::table)
+            .filter(aredl_submissions::id.eq(id))
+            .set(new_data)
+            .returning(Submission::as_select())
+            .get_result::<Submission>(connection)?;
 
         let upgraded = SubmissionResolved::from(new_record.clone(), db, None)?;
 
@@ -531,14 +562,17 @@ impl Submission {
         authenticated: Authenticated,
     ) -> Result<SubmissionResolved, ApiError> {
         let connection = &mut db.connection()?;
-        let new_data = SubmissionPatch {
-            status: Some(SubmissionStatus::UnderConsideration),
-            reviewer_id: Some(authenticated.user_id),
-            ..Default::default()
-        };
 
-        let new_record =
-            SubmissionPatch::patch(new_data, id, connection, true, authenticated.user_id)?;
+        let new_data = (
+            aredl_submissions::status.eq(SubmissionStatus::UnderConsideration),
+            aredl_submissions::reviewer_id.eq(authenticated.user_id)
+        );
+
+        let new_record = diesel::update(aredl_submissions::table)
+            .filter(aredl_submissions::id.eq(id))
+            .set(new_data)
+            .returning(Submission::as_select())
+            .get_result::<Submission>(connection)?;
 
         let upgraded = SubmissionResolved::from(new_record.clone(), db, None)?;
 
@@ -565,6 +599,41 @@ impl Submission {
             content,
             NotificationType::Info,
         )?;
+        Ok(upgraded)
+    }
+
+    pub fn unclaim(
+        db: web::Data<Arc<DbAppState>>,
+        id: Uuid
+    ) -> Result<SubmissionResolved, ApiError> {
+        let connection = &mut db.connection()?;
+
+        let new_data = (
+            aredl_submissions::status.eq(SubmissionStatus::Pending),
+            aredl_submissions::reviewer_id.eq::<Option<Uuid>>(None)
+        );
+
+        let new_record = diesel::update(aredl_submissions::table)
+            .filter(aredl_submissions::id.eq(id))
+            .set(new_data)
+            .returning(Submission::as_select())
+            .get_result::<Submission>(connection)?;
+
+        let upgraded = SubmissionResolved::from(new_record.clone(), db, None)?;
+
+        // Log submission history
+        let history = SubmissionHistory {
+            id: Uuid::new_v4(),
+            submission_id: Some(new_record.id),
+            record_id: None,
+            status: SubmissionStatus::Pending,
+            rejection_reason: None,
+            timestamp: chrono::Utc::now().naive_utc(),
+        };
+        diesel::insert_into(submission_history::table)
+            .values(&history)
+            .execute(connection)?;
+        
         Ok(upgraded)
     }
 
@@ -609,12 +678,11 @@ impl Submission {
     }
 }
 
-impl SubmissionPatch {
+impl SubmissionPatchUser {
     pub fn patch(
         patch: Self,
         id: Uuid,
         conn: &mut PooledConnection<ConnectionManager<PgConnection>>,
-        has_auth: bool,
         user: Uuid,
     ) -> Result<Submission, ApiError> {
         if patch == Self::default() {
@@ -638,7 +706,119 @@ impl SubmissionPatch {
             .select(Submission::as_select())
             .first::<Submission>(conn)?;
 
-        let _resub = old_submission.status == SubmissionStatus::Denied;
+        let resub = old_submission.status == SubmissionStatus::Denied;
+
+        let level_id = match patch.level_id {
+            Some(new_level_id) => new_level_id,
+            None => old_submission.level_id,
+        };
+
+        let raw_footage = match patch.raw_url.clone() {
+            Some(raw) => Some(raw),
+            None => old_submission.raw_url
+        };
+
+        // if either of these fields changed, we need revalidate the raw
+        if patch.level_id.is_some() || patch.raw_url.is_some() {
+            let level_exists = aredl_levels::table
+                .filter(aredl_levels::id.eq(level_id))
+                .select((
+                    aredl_levels::legacy,
+                    aredl_levels::position
+                ))
+                .first::<(bool, i32)>(conn)
+                .optional()?;
+
+            match level_exists {
+                None => return Err(ApiError::new(404, "Could not find the new level!")),
+                Some((is_legacy, pos)) => {
+                    if is_legacy == true {
+                        return Err(ApiError::new(
+                            400,
+                            "This level is on the legacy list, and is not accepting records!",
+                        ));
+                    }
+                    if pos < 400 && raw_footage.is_none() {
+                        return Err(ApiError::new(
+                            400,
+                            "This level is top 400 and requires raw footage!"
+                        ))
+                    }
+                }
+            }
+        }
+
+        let existing_submission = aredl_submissions::table
+            .filter(aredl_submissions::level_id.eq(level_id))
+            .filter(aredl_submissions::submitted_by.eq(old_submission.submitted_by))
+            .filter(aredl_submissions::id.ne(id))
+            .select(aredl_submissions::id)
+            .first::<Uuid>(conn)
+            .optional()?;
+
+        if existing_submission.is_some() {
+            return Err(ApiError::new(
+                409,
+                "This user already has a submission for this level!",
+            ));
+        }
+
+        let result = diesel::update(aredl_submissions::table)
+            .filter(aredl_submissions::id.eq(id))
+            .filter(aredl_submissions::submitted_by.eq(user))
+            .filter(aredl_submissions::status.eq(SubmissionStatus::Pending)
+                    .or(aredl_submissions::status.eq(SubmissionStatus::Denied))
+            )
+            .set((
+                patch.clone(),
+                // FIXME: this is very silly
+                if resub {
+                    (
+                        aredl_submissions::status.eq(SubmissionStatus::Pending),
+                        aredl_submissions::reviewer_id.eq::<Option<Uuid>>(None),
+                        aredl_submissions::reviewer_notes.eq::<Option<String>>(None),
+                    )
+                } else {
+                    (
+                        aredl_submissions::status.eq(old_submission.status),
+                        aredl_submissions::reviewer_id.eq(old_submission.reviewer_id),
+                        aredl_submissions::reviewer_notes.eq(old_submission.reviewer_notes),
+                    )
+                },
+            ))
+            .returning(Submission::as_select())
+            .get_result::<Submission>(conn)?;
+        
+        Ok(result)
+    }
+}
+
+impl SubmissionPatchMod {
+    pub fn patch_mod(
+        patch: Self,
+        id: Uuid,
+        conn: &mut PooledConnection<ConnectionManager<PgConnection>>,
+    ) -> Result<Submission, ApiError> {
+        if patch == Self::default() {
+            return Err(ApiError::new(400, "No changes were provided in the patch!"));
+        }
+
+        if let Some(video_url) = patch.video_url.as_ref() {
+            if !is_url(video_url) {
+                return Err(ApiError::new(400, "Your video is not a URL!"));
+            }
+        }
+
+        if let Some(raw_url) = patch.raw_url.as_ref() {
+            if !is_url(raw_url) {
+                return Err(ApiError::new(400, "Your raw footage is not a URL!"));
+            }
+        }
+
+        let old_submission = aredl_submissions::table
+            .filter(aredl_submissions::id.eq(id))
+            .select(Submission::as_select())
+            .first::<Submission>(conn)?;
 
         let level_id = match patch.level_id {
             Some(new_level_id) => new_level_id,
@@ -668,22 +848,14 @@ impl SubmissionPatch {
         }
 
         if let Some(new_level) = patch.level_id {
-            let level_exists = aredl_levels::table
-                .filter(aredl_levels::id.eq(new_level))
-                .select(aredl_levels::legacy)
-                .first::<bool>(conn)
-                .optional()?;
+            let level_exists = select(
+                exists(aredl_levels::table
+                    .filter(aredl_levels::id.eq(new_level))
+                )
+            ).get_result::<bool>(conn)?;
 
-            match level_exists {
-                None => return Err(ApiError::new(404, "Could not find the new level!")),
-                Some(is_legacy) => {
-                    if is_legacy == true {
-                        return Err(ApiError::new(
-                            400,
-                            "This level is on the legacy list, and is not accepting records!",
-                        ));
-                    }
-                }
+            if level_exists == false {
+                return Err(ApiError::new(404, "Could not find the new level!"))
             }
         }
 
@@ -702,33 +874,25 @@ impl SubmissionPatch {
             ));
         }
 
-        let mut query = diesel::update(aredl_submissions::table)
+        let result = diesel::update(aredl_submissions::table)
             .filter(aredl_submissions::id.eq(id))
             .set(patch.clone())
             .returning(Submission::as_select())
-            .into_boxed();
-
-        if !has_auth {
-            // blacklisted fields from non-permission users (lol?)
-            if patch.reviewer_notes.is_some()
-                || patch.level_id.is_some()
-                || patch.submitted_by.is_some()
-                || patch.status.is_some()
-                || patch.reviewer_id.is_some()
-            {
-                return Err(ApiError::new(
-                    403,
-                    "You are not permitted to change some fields in your request!",
-                ));
-            }
-
-            query = query
-                .filter(aredl_submissions::submitted_by.eq(user))
-                .filter(aredl_submissions::status.eq(SubmissionStatus::Pending));
-        }
-
-        let result = query.get_result::<Submission>(conn)?;
+            .get_result::<Submission>(conn)?;
+        
         Ok(result)
+    }
+
+    pub fn downgrade(s: Self) -> SubmissionPatchUser {
+        SubmissionPatchUser {
+            level_id: s.level_id,
+            mobile: s.mobile,
+            ldm_id: s.ldm_id,
+            video_url: s.video_url,
+            raw_url: s.raw_url,
+            mod_menu: s.mod_menu,
+            user_notes: s.user_notes
+        }
     }
 }
 
@@ -823,11 +987,11 @@ impl SubmissionResolved {
         user: Uuid,
     ) -> Result<SubmissionResolved, ApiError> {
         let conn = &mut db.connection()?;
-        let new_data = SubmissionPatch {
-            reviewer_id: Some(user),
-            status: Some(SubmissionStatus::Claimed),
-            ..Default::default()
-        };
+        let new_data = (
+            aredl_submissions::status.eq(SubmissionStatus::Claimed),
+            aredl_submissions::reviewer_id.eq(user)
+        );
+       
         // TODO: maybe this could become one super clean query?
         let highest_priority_id = aredl_submissions_with_priority::table
             .filter(aredl_submissions_with_priority::status.eq(SubmissionStatus::Pending))

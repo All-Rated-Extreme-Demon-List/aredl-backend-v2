@@ -9,7 +9,8 @@ use crate::{
             Submission, 
             SubmissionInsert, 
             SubmissionPage, 
-            SubmissionPatch, 
+            SubmissionPatchUser,
+            SubmissionPatchMod, 
             SubmissionQueryOptions, 
             SubmissionQueue, 
             SubmissionResolved, 
@@ -169,7 +170,7 @@ async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionInsert
     description = "Edit a submission. If you aren't staff, the submission must be submitted by you and in the pending state.",
     tag = "AREDL - Submissions",
     responses(
-        (status = 200, body = SubmissionPatch)
+        (status = 200, body = Submission)
     ),
     security(
         ("access_token" = []),
@@ -180,15 +181,30 @@ async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionInsert
     ),
 )]
 #[patch("/{id}", wrap="UserAuth::load()")]
-async fn patch(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, body: web::Json<SubmissionPatch>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
-    
+async fn patch(
+    db: web::Data<Arc<DbAppState>>, 
+    id: web::Path<Uuid>, 
+    body: web::Json<SubmissionPatchMod>, 
+    authenticated: Authenticated
+) -> Result<HttpResponse, ApiError> {
     let mut conn = db.connection()?;
     let has_auth = authenticated.has_permission(db, Permission::RecordModify)?;
-    
-    let patched = web::block(
-        move || SubmissionPatch::patch(body.into_inner(), id.into_inner(), &mut conn, has_auth, authenticated.user_id)
-    ).await??;
-    Ok(HttpResponse::Ok().json(patched))
+
+    match has_auth {
+        true => {
+            let patched = web::block(
+                move || SubmissionPatchMod::patch_mod(body.into_inner(), id.into_inner(), &mut conn)
+            ).await??;
+            return Ok(HttpResponse::Ok().json(patched))
+        }
+        false => {
+            let user_patch = SubmissionPatchMod::downgrade(body.into_inner());
+            let patched = web::block(
+                move || SubmissionPatchUser::patch(user_patch, id.into_inner(), &mut conn, authenticated.user_id)
+            ).await??;
+            return Ok(HttpResponse::Ok().json(patched))
+        }
+    }
 }
 
 #[utoipa::path(
@@ -255,18 +271,12 @@ async fn claim(db: web::Data<Arc<DbAppState>>, authenticated: Authenticated) -> 
     ),
 )]
 #[post("/{id}/unclaim", wrap="UserAuth::require(Permission::RecordModify)")]
-async fn unclaim(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
-    let mut conn = db.connection()?;
-    let new_data = SubmissionPatch {
-        status: Some(SubmissionStatus::Pending),
-        ..Default::default()
-    };
+async fn unclaim(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
 
-    let new_record = web::block(
-        move || SubmissionPatch::patch(new_data, id.into_inner(), &mut conn, true, authenticated.user_id)
+    let patched = web::block(
+        move || Submission::unclaim(db, id.into_inner())
     ).await??;
-    let resolved = SubmissionResolved::from(new_record, db, None)?;
-    Ok(HttpResponse::Ok().json(resolved))
+    Ok(HttpResponse::Ok().json(patched))
 }
 
 #[utoipa::path(
@@ -358,7 +368,8 @@ async fn under_consideration(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>
             Submission, 
             SubmissionInsert, 
             SubmissionPage, 
-            SubmissionPatch, 
+            SubmissionPatchUser,
+            SubmissionPatchMod, 
             SubmissionQueryOptions, 
             SubmissionQueue, 
             SubmissionResolved, 
