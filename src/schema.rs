@@ -157,6 +157,13 @@ diesel::table! {
 }
 
 diesel::table! {
+    matview_refresh_log (view_name) {
+        view_name -> Text,
+        last_refresh -> Timestamptz,
+    }
+}
+
+diesel::table! {
     merge_logs (id) {
         id -> Uuid,
         primary_user -> Uuid,
@@ -289,6 +296,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     clan_invites,
     clan_members,
     clans,
+    matview_refresh_log,
     merge_logs,
     merge_requests,
     notifications,

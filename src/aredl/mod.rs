@@ -1,13 +1,13 @@
-mod levels;
-mod routes;
 mod changelog;
-mod packtiers;
-mod packs;
-mod leaderboard;
-mod profile;
-mod country;
 mod clan;
-mod submissions;
+mod country;
+pub mod leaderboard;
+mod levels;
+mod packs;
+mod packtiers;
+mod profile;
 mod records;
+mod routes;
+mod submissions;
 
 pub use routes::{init_routes, ApiDoc};

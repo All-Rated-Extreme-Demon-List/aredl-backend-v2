@@ -1,0 +1,1 @@
+DROP TABLE IF EXISTS matview_refresh_log CASCADE;
