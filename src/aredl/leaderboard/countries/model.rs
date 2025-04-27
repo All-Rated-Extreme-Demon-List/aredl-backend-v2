@@ -49,7 +49,7 @@ pub struct CountryLeaderboardEntryResolved {
 #[derive(Serialize, Debug, ToSchema)]
 pub struct CountryLeaderboardPage {
     /// Timestamp of the last refresh of this leaderboard.
-    pub last_refresh: chrono::DateTime<Utc>,
+    pub last_refreshed: chrono::DateTime<Utc>,
     /// List of leaderboard entries.
     pub data: Vec<CountryLeaderboardEntryResolved>,
 }
@@ -120,7 +120,7 @@ impl CountryLeaderboardPage {
             page_query,
             count,
             Self {
-                last_refresh: refresh_log.last_refresh,
+                last_refreshed: refresh_log.last_refresh,
                 data: entries_resolved,
             },
         ))
