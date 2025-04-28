@@ -2,29 +2,32 @@ use crate::{
     aredl::levels::{BaseLevel, ResolvedLevel},
     aredl::records::Record,
     auth::{Authenticated, Permission},
+    custom_schema::aredl_submissions_with_priority,
+    db::DbAppState,
+    error_handler::ApiError,
     page_helper::PageQuery,
+    page_helper::Paginated,
+    roles::Role,
+    schema::{
+        aredl_levels, aredl_records, aredl_submissions, roles, submission_history, user_roles,
+        users,
+    },
     users::{
         me::notifications::{Notification, NotificationType},
         BaseUser,
     },
-    roles::Role,
-    custom_schema::aredl_submissions_with_priority,
-    db::DbAppState,
-    error_handler::ApiError,
-    page_helper::Paginated,
-    schema::{aredl_levels, aredl_records, aredl_submissions, submission_history, users, roles, user_roles},
 };
 use actix_web::web;
 use chrono::NaiveDateTime;
-use diesel::expression_methods::BoolExpressionMethods;
+use diesel::expression_methods::{BoolExpressionMethods, NullableExpressionMethods};
 use diesel::{
+    dsl::exists,
     pg::Pg,
     r2d2::{ConnectionManager, PooledConnection},
+    select,
     sql_types::Bool,
-    BoxableExpression, Connection, ExpressionMethods, IntoSql, OptionalExtension, PgConnection,
-    QueryDsl, RunQueryDsl, SelectableHelper, select,
-    dsl::exists,
-    JoinOnDsl,
+    BoxableExpression, Connection, ExpressionMethods, IntoSql, JoinOnDsl, OptionalExtension,
+    PgConnection, QueryDsl, RunQueryDsl, Selectable, SelectableHelper,
 };
 use diesel_derive_enum::DbEnum;
 use is_url::is_url;
@@ -242,6 +245,11 @@ pub struct RejectionData {
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
+pub struct ResolvedSubmissionPage {
+    data: Vec<SubmissionResolved>,
+}
+
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct SubmissionPage {
     data: Vec<Submission>,
 }
@@ -302,7 +310,7 @@ impl Submission {
                 ));
             }
 
-            // check that this level exists, is not legacy, and 
+            // check that this level exists, is not legacy, and
             // raw footage is provided for ranks 400+
             let level_info = aredl_levels::table
                 .filter(aredl_levels::id.eq(inserted_submission.level_id))
@@ -342,16 +350,14 @@ impl Submission {
                     "You are banned from submitting records.",
                 ));
             }
-            
+
             let roles = user_roles::table
                 .inner_join(roles::table.on(user_roles::role_id.eq(roles::id)))
                 .filter(user_roles::user_id.eq(authenticated.user_id))
                 .select(Role::as_select())
                 .load::<Role>(connection)?;
 
-            let has_role = roles
-                .iter()
-                .any(|role| role.privilege_level == 5);
+            let has_role = roles.iter().any(|role| role.privilege_level == 5);
 
             let submission = diesel::insert_into(aredl_submissions::table)
                 .values((
@@ -366,7 +372,7 @@ impl Submission {
                     aredl_submissions::raw_url.eq(inserted_submission.raw_url),
                     aredl_submissions::mod_menu.eq(inserted_submission.mod_menu),
                     aredl_submissions::user_notes.eq(inserted_submission.user_notes),
-                    aredl_submissions::priority.eq(has_role)
+                    aredl_submissions::priority.eq(has_role),
                 ))
                 .returning(Self::as_select())
                 .get_result(connection)?;
@@ -519,7 +525,7 @@ impl Submission {
         let new_data = (
             aredl_submissions::status.eq(SubmissionStatus::Denied),
             aredl_submissions::reviewer_id.eq(authenticated.user_id),
-            aredl_submissions::reviewer_notes.eq(reason.clone())
+            aredl_submissions::reviewer_notes.eq(reason.clone()),
         );
 
         let new_record = diesel::update(aredl_submissions::table)
@@ -565,7 +571,7 @@ impl Submission {
 
         let new_data = (
             aredl_submissions::status.eq(SubmissionStatus::UnderConsideration),
-            aredl_submissions::reviewer_id.eq(authenticated.user_id)
+            aredl_submissions::reviewer_id.eq(authenticated.user_id),
         );
 
         let new_record = diesel::update(aredl_submissions::table)
@@ -604,13 +610,13 @@ impl Submission {
 
     pub fn unclaim(
         db: web::Data<Arc<DbAppState>>,
-        id: Uuid
+        id: Uuid,
     ) -> Result<SubmissionResolved, ApiError> {
         let connection = &mut db.connection()?;
 
         let new_data = (
             aredl_submissions::status.eq(SubmissionStatus::Pending),
-            aredl_submissions::reviewer_id.eq::<Option<Uuid>>(None)
+            aredl_submissions::reviewer_id.eq::<Option<Uuid>>(None),
         );
 
         let new_record = diesel::update(aredl_submissions::table)
@@ -633,7 +639,7 @@ impl Submission {
         diesel::insert_into(submission_history::table)
             .values(&history)
             .execute(connection)?;
-        
+
         Ok(upgraded)
     }
 
@@ -715,17 +721,14 @@ impl SubmissionPatchUser {
 
         let raw_footage = match patch.raw_url.clone() {
             Some(raw) => Some(raw),
-            None => old_submission.raw_url
+            None => old_submission.raw_url,
         };
 
         // if either of these fields changed, we need revalidate the raw
         if patch.level_id.is_some() || patch.raw_url.is_some() {
             let level_exists = aredl_levels::table
                 .filter(aredl_levels::id.eq(level_id))
-                .select((
-                    aredl_levels::legacy,
-                    aredl_levels::position
-                ))
+                .select((aredl_levels::legacy, aredl_levels::position))
                 .first::<(bool, i32)>(conn)
                 .optional()?;
 
@@ -741,8 +744,8 @@ impl SubmissionPatchUser {
                     if pos < 400 && raw_footage.is_none() {
                         return Err(ApiError::new(
                             400,
-                            "This level is top 400 and requires raw footage!"
-                        ))
+                            "This level is top 400 and requires raw footage!",
+                        ));
                     }
                 }
             }
@@ -766,8 +769,10 @@ impl SubmissionPatchUser {
         let result = diesel::update(aredl_submissions::table)
             .filter(aredl_submissions::id.eq(id))
             .filter(aredl_submissions::submitted_by.eq(user))
-            .filter(aredl_submissions::status.eq(SubmissionStatus::Pending)
-                    .or(aredl_submissions::status.eq(SubmissionStatus::Denied))
+            .filter(
+                aredl_submissions::status
+                    .eq(SubmissionStatus::Pending)
+                    .or(aredl_submissions::status.eq(SubmissionStatus::Denied)),
             )
             .set((
                 patch.clone(),
@@ -788,7 +793,7 @@ impl SubmissionPatchUser {
             ))
             .returning(Submission::as_select())
             .get_result::<Submission>(conn)?;
-        
+
         Ok(result)
     }
 }
@@ -848,14 +853,13 @@ impl SubmissionPatchMod {
         }
 
         if let Some(new_level) = patch.level_id {
-            let level_exists = select(
-                exists(aredl_levels::table
-                    .filter(aredl_levels::id.eq(new_level))
-                )
-            ).get_result::<bool>(conn)?;
+            let level_exists = select(exists(
+                aredl_levels::table.filter(aredl_levels::id.eq(new_level)),
+            ))
+            .get_result::<bool>(conn)?;
 
             if level_exists == false {
-                return Err(ApiError::new(404, "Could not find the new level!"))
+                return Err(ApiError::new(404, "Could not find the new level!"));
             }
         }
 
@@ -879,7 +883,7 @@ impl SubmissionPatchMod {
             .set(patch.clone())
             .returning(Submission::as_select())
             .get_result::<Submission>(conn)?;
-        
+
         Ok(result)
     }
 
@@ -891,7 +895,7 @@ impl SubmissionPatchMod {
             video_url: s.video_url,
             raw_url: s.raw_url,
             mod_menu: s.mod_menu,
-            user_notes: s.user_notes
+            user_notes: s.user_notes,
         }
     }
 }
@@ -989,9 +993,9 @@ impl SubmissionResolved {
         let conn = &mut db.connection()?;
         let new_data = (
             aredl_submissions::status.eq(SubmissionStatus::Claimed),
-            aredl_submissions::reviewer_id.eq(user)
+            aredl_submissions::reviewer_id.eq(user),
         );
-       
+
         // TODO: maybe this could become one super clean query?
         let highest_priority_id = aredl_submissions_with_priority::table
             .filter(aredl_submissions_with_priority::status.eq(SubmissionStatus::Pending))
@@ -1032,14 +1036,30 @@ impl SubmissionQueue {
     }
 }
 
-impl SubmissionPage {
+impl ResolvedSubmissionPage {
     pub fn find_all<const D: i64>(
         db: web::Data<Arc<DbAppState>>,
         page_query: PageQuery<D>,
         options: SubmissionQueryOptions,
     ) -> Result<Paginated<Self>, ApiError> {
         let conn = &mut db.connection()?;
-        let query = aredl_submissions::table;
+
+        let reviewers = alias!(users as reviewers);
+
+        let query = aredl_submissions_with_priority::table
+            .inner_join(
+                aredl_levels::table
+                    .on(aredl_submissions_with_priority::level_id.eq(aredl_levels::id)),
+            )
+            .inner_join(
+                users::table.on(users::id.eq(aredl_submissions_with_priority::submitted_by)),
+            )
+            .left_join(
+                reviewers.on(reviewers
+                    .field(users::id)
+                    .nullable()
+                    .eq(aredl_submissions_with_priority::reviewer_id.nullable())),
+            );
 
         let total_count: i64 = query.count().get_result(conn)?;
 
@@ -1049,40 +1069,75 @@ impl SubmissionPage {
                     Box::new(true.into_sql::<Bool>())
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
-                |status| Box::new(aredl_submissions::status.eq(status)),
+                |status| Box::new(aredl_submissions_with_priority::status.eq(status)),
             ))
             .filter(options.mobile_fiter.map_or_else(
                 || {
                     Box::new(true.into_sql::<Bool>())
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
-                |mobile| Box::new(aredl_submissions::mobile.eq(mobile)),
+                |mobile| Box::new(aredl_submissions_with_priority::mobile.eq(mobile)),
             ))
             .filter(options.level_filter.map_or_else(
                 || {
                     Box::new(true.into_sql::<Bool>())
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
-                |level| Box::new(aredl_submissions::level_id.eq(level)),
+                |level| Box::new(aredl_submissions_with_priority::level_id.eq(level)),
             ))
             .filter(options.submitter_filter.map_or_else(
                 || {
                     Box::new(true.into_sql::<Bool>())
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
-                |submitter| Box::new(aredl_submissions::submitted_by.eq(submitter)),
+                |submitter| Box::new(aredl_submissions_with_priority::submitted_by.eq(submitter)),
             ))
             .filter(options.priority_filter.map_or_else(
                 || {
                     Box::new(true.into_sql::<Bool>())
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
-                |priority| Box::new(aredl_submissions::priority.eq(priority)),
+                |priority| Box::new(aredl_submissions_with_priority::priority.eq(priority)),
             ))
             .limit(page_query.per_page())
             .offset(page_query.offset())
-            .select(Submission::as_select())
-            .load::<Submission>(conn)?;
+            .select((
+                SubmissionWithPriority::as_select(),
+                BaseLevel::as_select(),
+                BaseUser::as_select(),
+                reviewers
+                    .fields(<BaseUser as Selectable<Pg>>::construct_selection())
+                    .nullable(),
+            ))
+            .load::<(
+                SubmissionWithPriority,
+                BaseLevel,
+                BaseUser,
+                Option<BaseUser>,
+            )>(conn)?;
+
+        let submissions = submissions
+            .into_iter()
+            .map(
+                |(submission, level, submitter, reviewer)| SubmissionResolved {
+                    id: submission.id,
+                    level,
+                    submitted_by: submitter,
+                    mobile: submission.mobile,
+                    ldm_id: submission.ldm_id,
+                    video_url: submission.video_url,
+                    raw_url: submission.raw_url,
+                    mod_menu: submission.mod_menu,
+                    status: submission.status,
+                    reviewer,
+                    priority: submission.priority,
+                    reviewer_notes: submission.reviewer_notes,
+                    user_notes: submission.user_notes,
+                    created_at: submission.created_at,
+                    priority_value: submission.priority_value,
+                },
+            )
+            .collect::<Vec<_>>();
 
         Ok(Paginated::<Self>::from_data(
             page_query,
@@ -1090,7 +1145,9 @@ impl SubmissionPage {
             Self { data: submissions },
         ))
     }
+}
 
+impl SubmissionPage {
     pub fn find_own<const D: i64>(
         db: web::Data<Arc<DbAppState>>,
         page_query: PageQuery<D>,

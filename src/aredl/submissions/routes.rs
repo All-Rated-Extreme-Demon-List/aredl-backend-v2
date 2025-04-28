@@ -4,19 +4,9 @@ use uuid::Uuid;
 use utoipa::OpenApi;
 use crate::{
     aredl::{
-        submissions::{
-            RejectionData, 
-            Submission, 
-            SubmissionInsert, 
-            SubmissionPage, 
-            SubmissionPatchUser,
-            SubmissionPatchMod, 
-            SubmissionQueryOptions, 
-            SubmissionQueue, 
-            SubmissionResolved, 
-            SubmissionStatus
-        }, 
-        records::Record
+        records::Record, submissions::{
+            RejectionData, ResolvedSubmissionPage, Submission, SubmissionInsert, SubmissionPage, SubmissionPatchMod, SubmissionPatchUser, SubmissionQueryOptions, SubmissionQueue, SubmissionResolved, SubmissionStatus
+        }
     },
     auth::{Authenticated, Permission, UserAuth}, 
     db::DbAppState, 
@@ -30,7 +20,7 @@ use crate::{
     description = "Get a possibly filtered list of submissions.",
     tag = "AREDL - Submissions",
     responses(
-        (status = 200, body = Paginated<SubmissionPage>)
+        (status = 200, body = Paginated<ResolvedSubmissionPage>)
     ),
     security(
         ("access_token" = []),
@@ -40,7 +30,7 @@ use crate::{
 #[get("", wrap="UserAuth::require(Permission::RecordModify)")]
 async fn find_all(db: web::Data<Arc<DbAppState>>, page_query: web::Query<PageQuery<50>>, options: web::Query<SubmissionQueryOptions>) -> Result<HttpResponse, ApiError> {
     let submissions = web::block(
-        move || SubmissionPage::find_all(db, page_query.into_inner(), options.into_inner())
+        move || ResolvedSubmissionPage::find_all(db, page_query.into_inner(), options.into_inner())
     ).await??;
     Ok(HttpResponse::Ok().json(submissions))
 }
@@ -374,6 +364,7 @@ async fn under_consideration(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>
             SubmissionQueue, 
             SubmissionResolved, 
             SubmissionStatus,
+            ResolvedSubmissionPage,
             Record
         )
     ),

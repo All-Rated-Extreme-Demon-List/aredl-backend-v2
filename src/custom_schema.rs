@@ -188,3 +188,5 @@ diesel::table! {
 diesel::joinable!(aredl_submissions -> aredl_submissions_with_priority (id));
 
 diesel::allow_tables_to_appear_in_same_query!(aredl_submissions, aredl_submissions_with_priority);
+diesel::allow_tables_to_appear_in_same_query!(aredl_levels, aredl_submissions_with_priority);
+diesel::allow_tables_to_appear_in_same_query!(users, aredl_submissions_with_priority);
