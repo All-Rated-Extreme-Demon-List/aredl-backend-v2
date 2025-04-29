@@ -1,21 +1,28 @@
-mod schema;
 mod error_handler;
+mod schema;
 
-use regex::Regex;
-use std::{env, fs};
-use std::collections::{HashMap, HashSet};
-use std::path::Path;
-use diesel::{Connection, ExpressionMethods, TextExpressionMethods, Insertable, NullableExpressionMethods, PgConnection, QueryDsl, RunQueryDsl};
+use crate::error_handler::MigrationError;
+use crate::schema::{
+    aredl_levels, aredl_levels_created, aredl_pack_levels, aredl_pack_tiers, aredl_packs,
+    aredl_position_history, aredl_records, clan_members, clans, permissions, roles, user_roles,
+    users,
+};
 use diesel::internal::derives::multiconnection::chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use diesel::r2d2::ConnectionManager;
+use diesel::{
+    Connection, ExpressionMethods, Insertable, NullableExpressionMethods, PgConnection, QueryDsl,
+    RunQueryDsl, TextExpressionMethods,
+};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use dotenv::dotenv;
-use serde::{Deserialize, Serialize};
-use serde::de::DeserializeOwned;
-use uuid::Uuid;
 use itertools::Itertools;
-use crate::error_handler::MigrationError;
-use crate::schema::{aredl_levels, aredl_levels_created, aredl_pack_levels, aredl_pack_tiers, aredl_packs, aredl_position_history, aredl_records, roles, user_roles, users, permissions, clans, clan_members};
+use regex::Regex;
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
+use std::path::Path;
+use std::{env, fs};
+use uuid::Uuid;
 
 type Pool = diesel::r2d2::Pool<ConnectionManager<PgConnection>>;
 type DbConnection = diesel::r2d2::PooledConnection<ConnectionManager<PgConnection>>;
@@ -23,7 +30,10 @@ type DbConnection = diesel::r2d2::PooledConnection<ConnectionManager<PgConnectio
 pub fn get_secret(var_name: &str) -> String {
     let value = env::var(var_name).expect(&format!("Please set {} in .env", var_name));
     if value.starts_with("/run/secrets/") {
-        fs::read_to_string(value.trim()).expect("Failed to read secret file").trim().to_string()
+        fs::read_to_string(value.trim())
+            .expect("Failed to read secret file")
+            .trim()
+            .to_string()
     } else {
         value
     }
@@ -42,13 +52,13 @@ pub struct Record {
 pub struct Level {
     pub id: i32,
     pub name: String,
-	pub description: Option<String>,
+    pub description: Option<String>,
     pub author: i64,
     pub creators: Vec<i64>,
     pub verifier: i64,
     pub verification: String,
     pub song: Option<i32>,
-    pub tags: Option<Vec<Option<String>>>,   
+    pub tags: Option<Vec<Option<String>>>,
     pub records: Vec<Record>,
 }
 
@@ -86,7 +96,7 @@ pub struct CreateUser {
     pub placeholder: bool,
     pub ban_level: i32,
     pub country: Option<i32>,
-    pub discord_id: Option<String>
+    pub discord_id: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Insertable, Debug)]
@@ -95,12 +105,12 @@ pub struct LevelCreate {
     pub id: Option<Uuid>,
     pub position: i32,
     pub name: String,
-	pub description: Option<String>,
+    pub description: Option<String>,
     pub publisher_id: Uuid,
     pub legacy: bool,
     pub level_id: i32,
     pub two_player: bool,
-	pub tags: Option<Vec<Option<String>>>,
+    pub tags: Option<Vec<Option<String>>>,
     pub song: Option<i32>,
 }
 
@@ -125,7 +135,7 @@ pub struct ChangelogEntry {
     pub to_rank: Option<i32>,
     pub from_rank: Option<i32>,
     pub above: Option<String>,
-    pub below: Option<String>
+    pub below: Option<String>,
 }
 
 #[derive(Insertable, Debug)]
@@ -137,7 +147,7 @@ pub struct ChangelogResolved {
     pub affected_level: Uuid,
     pub level_above: Option<Uuid>,
     pub level_below: Option<Uuid>,
-    pub created_at: NaiveDateTime
+    pub created_at: NaiveDateTime,
 }
 
 #[derive(Insertable)]
@@ -161,17 +171,15 @@ pub struct NewClanMember {
     pub updated_at: NaiveDateTime,
 }
 
-
 pub fn load_json_from_file<T>(path: &Path) -> T
-where T: DeserializeOwned,
+where
+    T: DeserializeOwned,
 {
     let file = fs::File::open(path)
         .expect(format!("Failed to open file {}", path.to_str().unwrap()).as_str());
-    let json: T = serde_json::from_reader(file)
-        .expect("Failed to parse json");
+    let json: T = serde_json::from_reader(file).expect("Failed to parse json");
     json
 }
-
 
 fn main() {
     dotenv().ok();
@@ -188,6 +196,7 @@ fn main() {
     ]);
 
     let permissions_data = vec![
+        ("submission_review", 15),
         ("record_modify", 20),
         ("placeholder_create", 25),
         ("user_modify", 25),
@@ -198,104 +207,110 @@ fn main() {
         ("clan_modify", 70),
         ("user_ban", 85),
         ("direct_merge", 90),
-        ("role_manage", 100)
+        ("role_manage", 100),
     ];
 
-    let db_url = format!("postgres://{}:{}@db:5432/aredl", get_secret("POSTGRES_USER"), get_secret("POSTGRES_PASSWORD"));
+    let db_url = format!(
+        "postgres://{}:{}@db:5432/aredl",
+        get_secret("POSTGRES_USER"),
+        get_secret("POSTGRES_PASSWORD")
+    );
     let manager = ConnectionManager::<PgConnection>::new(db_url);
     let mut db_conn: DbConnection = Pool::builder()
         .test_on_check_out(true)
         .build(manager)
         .expect("Failed to create db pool")
-        .get().unwrap();
+        .get()
+        .unwrap();
 
     println!("Loading data");
     let aredl_path_str = get_secret("AREDL_DATA_PATH");
 
     let aredl_path = Path::new(&aredl_path_str);
 
-    let level_names = load_json_from_file::<Vec<String>>(
-        aredl_path.join("_list.json").as_path());
+    let level_names = load_json_from_file::<Vec<String>>(aredl_path.join("_list.json").as_path());
 
-    let legacy_names = load_json_from_file::<Vec<String>>(
-        aredl_path.join("_legacy.json").as_path());
+    let legacy_names =
+        load_json_from_file::<Vec<String>>(aredl_path.join("_legacy.json").as_path());
 
-    let mut role_data = load_json_from_file::<Vec<RoleList>>(
-        aredl_path.join("_editors.json").as_path());
+    let mut role_data =
+        load_json_from_file::<Vec<RoleList>>(aredl_path.join("_editors.json").as_path());
 
-    let role_data_supporters = load_json_from_file::<Vec<RoleList>>(
-        aredl_path.join("_supporters.json").as_path());
+    let role_data_supporters =
+        load_json_from_file::<Vec<RoleList>>(aredl_path.join("_supporters.json").as_path());
 
-    let pack_data = load_json_from_file::<Vec<Pack>>(
-        aredl_path.join("_packlist.json").as_path());
+    let pack_data = load_json_from_file::<Vec<Pack>>(aredl_path.join("_packlist.json").as_path());
 
-    let pack_tier_data = load_json_from_file::<Vec<PackTier>>(
-        aredl_path.join("_packtiers.json").as_path());
+    let pack_tier_data =
+        load_json_from_file::<Vec<PackTier>>(aredl_path.join("_packtiers.json").as_path());
 
-    let list_init = load_json_from_file::<Vec<String>>(
-        aredl_path.join("_list_init.json").as_path());
+    let list_init =
+        load_json_from_file::<Vec<String>>(aredl_path.join("_list_init.json").as_path());
 
-    let list_legacy_init = load_json_from_file::<Vec<String>>(
-        aredl_path.join("_legacy_init.json").as_path());
+    let list_legacy_init =
+        load_json_from_file::<Vec<String>>(aredl_path.join("_legacy_init.json").as_path());
 
-    let changelog = load_json_from_file::<Vec<ChangelogEntry>>(
-        aredl_path.join("_changelog.json").as_path());
+    let changelog =
+        load_json_from_file::<Vec<ChangelogEntry>>(aredl_path.join("_changelog.json").as_path());
 
-    let country_data = load_json_from_file::<Vec<Country>>(
-        aredl_path.join("_countries.json").as_path());
+    let country_data =
+        load_json_from_file::<Vec<Country>>(aredl_path.join("_countries.json").as_path());
 
-    let name_map = load_json_from_file::<HashMap<i64, String>>(
-        aredl_path.join("_name_map.json").as_path());
+    let name_map =
+        load_json_from_file::<HashMap<i64, String>>(aredl_path.join("_name_map.json").as_path());
 
-    let discord_map = load_json_from_file::<HashMap<i64, String>>(
-        aredl_path.join("_discord_ids.json").as_path());
+    let discord_map =
+        load_json_from_file::<HashMap<i64, String>>(aredl_path.join("_discord_ids.json").as_path());
 
-    let clan_roles: HashMap<i64, i32> = load_json_from_file(
-        aredl_path.join("_clan_roles.json").as_path()
-    );
+    let clan_roles: HashMap<i64, i32> =
+        load_json_from_file(aredl_path.join("_clan_roles.json").as_path());
 
     let user_country_map: HashMap<i64, i32> = country_data
         .into_iter()
-        .flat_map(|country|
-            country.users.into_iter().map(move |user| (user, country.code))
-        )
+        .flat_map(|country| {
+            country
+                .users
+                .into_iter()
+                .map(move |user| (user, country.code))
+        })
         .collect();
 
-        let banned_users = load_json_from_file::<HashMap<String, Vec<i64>>>(
-            aredl_path.join("_leaderboard_banned.json").as_path());
-        
-        let mut ban_lookup: HashMap<i64, i32> = HashMap::new();
-        for (level_str, id_list) in banned_users {
-            let level: i32 = level_str.parse().expect("Ban level should be a valid integer");
-            for id in id_list {
-                ban_lookup
-                    .entry(id)
-                    .and_modify(|existing| *existing = (*existing).max(level))
-                    .or_insert(level);
-            }
+    let banned_users = load_json_from_file::<HashMap<String, Vec<i64>>>(
+        aredl_path.join("_leaderboard_banned.json").as_path(),
+    );
+
+    let mut ban_lookup: HashMap<i64, i32> = HashMap::new();
+    for (level_str, id_list) in banned_users {
+        let level: i32 = level_str
+            .parse()
+            .expect("Ban level should be a valid integer");
+        for id in id_list {
+            ban_lookup
+                .entry(id)
+                .and_modify(|existing| *existing = (*existing).max(level))
+                .or_insert(level);
         }
+    }
 
     role_data.extend(role_data_supporters);
 
     let levels: Vec<(Level, LevelInfo)> = level_names
         .iter()
         .map(|name| (name, false))
-        .chain(
-            legacy_names
-                .iter()
-                .map(|name| (name, true))
-        )
-        .map(|(name, legacy)|
-            (load_json_from_file::<Level>(
-                aredl_path.join(format!("{}.json", name).as_str()).as_path()
-            ),
+        .chain(legacy_names.iter().map(|name| (name, true)))
+        .map(|(name, legacy)| {
+            (
+                load_json_from_file::<Level>(
+                    aredl_path.join(format!("{}.json", name).as_str()).as_path(),
+                ),
                 LevelInfo {
                     legacy,
                     two_player: name.ends_with("2p"),
                     original_name: name.clone(),
-                }
-             )
-        ).collect();
+                },
+            )
+        })
+        .collect();
 
     let level_id_map: HashMap<String, i32> = levels
         .iter()
@@ -307,22 +322,26 @@ fn main() {
     let users: Vec<CreateUser> = levels
         .iter()
         .map(|(level, _)| level.author.clone())
+        .chain(levels.iter().map(|(level, _)| level.verifier.clone()))
+        .chain(levels.iter().flat_map(|(level, _)| level.creators.clone()))
         .chain(
-            levels.iter().map(|(level, _)| level.verifier.clone())
+            levels
+                .iter()
+                .flat_map(|(level, _)| level.records.iter().clone())
+                .map(|record| record.user.clone()),
         )
         .chain(
-            levels.iter().flat_map(|(level, _)| level.creators.clone())
-        )
-        .chain(
-            levels.iter().flat_map(|(level, _)| level.records.iter().clone()).map(|record| record.user.clone())
-        )
-        .chain(
-            role_data.iter().flat_map(|data| data.members.iter().map(|member| member.name.clone()))
+            role_data
+                .iter()
+                .flat_map(|data| data.members.iter().map(|member| member.name.clone())),
         )
         .unique_by(|id| id.clone())
         .map(|id| {
             let country = user_country_map.get(&id).cloned();
-            let username = name_map.get(&id).cloned().expect(format!("Username not found for id: {}", id).as_str());
+            let username = name_map
+                .get(&id)
+                .cloned()
+                .expect(format!("Username not found for id: {}", id).as_str());
             let discord = discord_map.get(&id).cloned();
             CreateUser {
                 id: None,
@@ -344,452 +363,560 @@ fn main() {
         .collect();
 
     println!("Migrating");
-    db_conn.transaction::<_, MigrationError, _>(|conn| {
-        
-        println!("\tLoading current users, levels, clans and packs IDs");
-        let users_table_exists: bool = diesel::select(diesel::dsl::sql::<diesel::sql_types::Bool>("to_regclass('public.users') IS NOT NULL"))
-            .get_result(conn)
-            .unwrap_or(false);
+    db_conn
+        .transaction::<_, MigrationError, _>(|conn| {
+            println!("\tLoading current users, levels, clans and packs IDs");
+            let users_table_exists: bool =
+                diesel::select(diesel::dsl::sql::<diesel::sql_types::Bool>(
+                    "to_regclass('public.users') IS NOT NULL",
+                ))
+                .get_result(conn)
+                .unwrap_or(false);
 
-        let levels_table_exists: bool = diesel::select(diesel::dsl::sql::<diesel::sql_types::Bool>("to_regclass('public.aredl_levels') IS NOT NULL"))
-            .get_result(conn)
-            .unwrap_or(false);
+            let levels_table_exists: bool =
+                diesel::select(diesel::dsl::sql::<diesel::sql_types::Bool>(
+                    "to_regclass('public.aredl_levels') IS NOT NULL",
+                ))
+                .get_result(conn)
+                .unwrap_or(false);
 
-        let clans_table_exists: bool = diesel::select(diesel::dsl::sql::<diesel::sql_types::Bool>("to_regclass('public.clans') IS NOT NULL"))
-            .get_result(conn)
-            .unwrap_or(false);
+            let clans_table_exists: bool =
+                diesel::select(diesel::dsl::sql::<diesel::sql_types::Bool>(
+                    "to_regclass('public.clans') IS NOT NULL",
+                ))
+                .get_result(conn)
+                .unwrap_or(false);
 
-        let packs_table_exists: bool = diesel::select(diesel::dsl::sql::<diesel::sql_types::Bool>("to_regclass('public.aredl_packs') IS NOT NULL"))
-            .get_result(conn)
-            .unwrap_or(false);
+            let packs_table_exists: bool =
+                diesel::select(diesel::dsl::sql::<diesel::sql_types::Bool>(
+                    "to_regclass('public.aredl_packs') IS NOT NULL",
+                ))
+                .get_result(conn)
+                .unwrap_or(false);
 
-        let old_user_ids: HashMap<i64, Uuid> = if users_table_exists {
-            users::table
+            let old_user_ids: HashMap<i64, Uuid> = if users_table_exists {
+                users::table
+                    .filter(users::json_id.is_not_null())
+                    .select((users::json_id.assume_not_null(), users::id))
+                    .load::<(i64, Uuid)>(conn)?
+                    .into_iter()
+                    .collect()
+            } else {
+                HashMap::new()
+            };
+
+            let old_level_ids: HashMap<String, Uuid> = if levels_table_exists {
+                aredl_levels::table
+                    .select((aredl_levels::name, aredl_levels::id))
+                    .load::<(String, Uuid)>(conn)?
+                    .into_iter()
+                    .collect()
+            } else {
+                HashMap::new()
+            };
+
+            let old_clan_ids: HashMap<String, Uuid> = if clans_table_exists {
+                clans::table
+                    .select((clans::tag, clans::id))
+                    .load::<(String, Uuid)>(conn)?
+                    .into_iter()
+                    .collect()
+            } else {
+                HashMap::new()
+            };
+
+            let old_pack_ids: HashMap<String, Uuid> = if packs_table_exists {
+                aredl_packs::table
+                    .select((aredl_packs::name, aredl_packs::id))
+                    .load::<(String, Uuid)>(conn)?
+                    .into_iter()
+                    .collect()
+            } else {
+                HashMap::new()
+            };
+
+            println!("\tResetting db");
+            conn.revert_all_migrations(MIGRATIONS)?;
+            conn.run_pending_migrations(MIGRATIONS)?;
+
+            let users = users
+                .into_iter()
+                .map(|mut user| {
+                    user.id = old_user_ids.get(&user.json_id).map(|id| id.clone());
+                    user
+                })
+                .collect_vec();
+
+            println!("\tInserting users");
+            diesel::insert_into(users::table)
+                .values(&users)
+                .execute(conn)?;
+
+            let user_map: HashMap<i64, Uuid> = users::table
                 .filter(users::json_id.is_not_null())
                 .select((users::json_id.assume_not_null(), users::id))
                 .load::<(i64, Uuid)>(conn)?
                 .into_iter()
-                .collect()
-        } else {
-            HashMap::new()
-        };
+                .collect();
 
-        let old_level_ids: HashMap<String, Uuid> = if levels_table_exists {
-            aredl_levels::table
+            println!("\tLoading levels");
+            let level_insert: Vec<LevelCreate> = levels
+                .iter()
+                .enumerate()
+                .map(|(position, (level_data, level_data_ext))| LevelCreate {
+                    id: old_level_ids.get(&level_data.name).map(|id| id.clone()),
+                    position: (position + 1) as i32,
+                    name: level_data.name.clone(),
+                    description: level_data.description.clone(),
+                    publisher_id: user_map.get(&level_data.author).unwrap().clone(),
+                    legacy: level_data_ext.legacy,
+                    level_id: level_data.id,
+                    two_player: level_data_ext.two_player,
+                    tags: level_data.tags.clone(),
+                    song: level_data.song,
+                })
+                .collect();
+
+            println!("\tInserting levels");
+
+            diesel::sql_query("ALTER TABLE aredl_levels DISABLE TRIGGER aredl_level_place")
+                .execute(conn)?;
+
+            diesel::sql_query("ALTER TABLE aredl_levels DISABLE TRIGGER aredl_level_place_history")
+                .execute(conn)?;
+
+            diesel::insert_into(aredl_levels::table)
+                .values(&level_insert)
+                .execute(conn)?;
+
+            diesel::sql_query("ALTER TABLE aredl_levels ENABLE TRIGGER aredl_level_place")
+                .execute(conn)?;
+
+            diesel::sql_query("ALTER TABLE aredl_levels ENABLE TRIGGER aredl_level_place_history")
+                .execute(conn)?;
+
+            let level_map: HashMap<(i32, bool), Uuid> = aredl_levels::table
                 .select((
-                    aredl_levels::name,
-                    aredl_levels::id
+                    aredl_levels::id,
+                    aredl_levels::level_id,
+                    aredl_levels::two_player,
                 ))
-                .load::<(String, Uuid)>(conn)?
-                .into_iter()
-                .collect()
-        } else {
-            HashMap::new()
-        };
+                .load::<(Uuid, i32, bool)>(conn)?
+                .iter()
+                .map(|(id, level_id, two_player)| ((*level_id, *two_player), *id))
+                .collect();
 
-        let old_clan_ids: HashMap<String, Uuid> = if clans_table_exists {
-            clans::table
-                .select((
-                    clans::tag,
-                    clans::id
-                ))
-                .load::<(String, Uuid)>(conn)?
-                .into_iter()
-                .collect()
-        } else {
-            HashMap::new()
-        };
+            println!("\tInserting pack-tiers");
 
-        let old_pack_ids: HashMap<String, Uuid> = if packs_table_exists {
-            aredl_packs::table
-                .select((
-                    aredl_packs::name,
-                    aredl_packs::id
-                ))
-                .load::<(String, Uuid)>(conn)?
-                .into_iter()
-                .collect()
-        } else {
-            HashMap::new()
-        };
-
-        println!("\tResetting db");
-            conn.revert_all_migrations(MIGRATIONS)?;
-            conn.run_pending_migrations(MIGRATIONS)?;
-
-        let users = users.into_iter()
-            .map(|mut user| {
-                user.id = old_user_ids.get(&user.json_id).map(|id| id.clone());
-                user
-            })
-            .collect_vec();
-
-        println!("\tInserting users");
-        diesel::insert_into(users::table)
-            .values(&users)
-            .execute(conn)?;
-
-        let user_map: HashMap<i64, Uuid> = users::table
-            .filter(users::json_id.is_not_null())
-            .select((
-            users::json_id.assume_not_null(),
-            users::id,
-            )).load::<(i64, Uuid)>(conn)?
-            .into_iter()
-            .collect();
-
-        println!("\tLoading levels");
-        let level_insert: Vec<LevelCreate> = levels.iter()
-            .enumerate()
-            .map(|(position, (level_data, level_data_ext))| LevelCreate {
-                id: old_level_ids.get(&level_data.name).map(|id| id.clone()),
-                position: (position + 1) as i32,
-                name: level_data.name.clone(),
-				description: level_data.description.clone(),
-                publisher_id: user_map.get(&level_data.author).unwrap().clone(),
-                legacy: level_data_ext.legacy,
-                level_id: level_data.id,
-                two_player: level_data_ext.two_player,
-				tags: level_data.tags.clone(),
-                song: level_data.song,
-            })
-            .collect();
-
-        println!("\tInserting levels");
-
-        diesel::sql_query("ALTER TABLE aredl_levels DISABLE TRIGGER aredl_level_place")
-            .execute(conn)?;
-
-        diesel::sql_query("ALTER TABLE aredl_levels DISABLE TRIGGER aredl_level_place_history")
-            .execute(conn)?;
-
-        diesel::insert_into(aredl_levels::table)
-            .values(&level_insert)
-            .execute(conn)?;
-
-        diesel::sql_query("ALTER TABLE aredl_levels ENABLE TRIGGER aredl_level_place")
-            .execute(conn)?;
-
-        diesel::sql_query("ALTER TABLE aredl_levels ENABLE TRIGGER aredl_level_place_history")
-            .execute(conn)?;
-
-        let level_map: HashMap<(i32, bool), Uuid> = aredl_levels::table
-            .select((
-                aredl_levels::id,
-                aredl_levels::level_id,
-                aredl_levels::two_player)
-            ).load::<(Uuid, i32, bool)>(conn)?
-            .iter().map(|(id, level_id, two_player)| ((*level_id, *two_player), *id))
-            .collect();
-
-        println!("\tInserting pack-tiers");
-
-        diesel::insert_into(aredl_pack_tiers::table)
-            .values(
-                pack_tier_data.iter().enumerate().map(|(index, tier)| (
-                    aredl_pack_tiers::name.eq(&tier.name),
-                    aredl_pack_tiers::color.eq(&tier.color),
-                    aredl_pack_tiers::placement.eq(index as i32),
-                    )).collect::<Vec<_>>()
-            ).execute(conn)?;
-
-        let pack_tier_map: HashMap<String, Uuid> = aredl_pack_tiers::table
-            .select((
-                aredl_pack_tiers::name,
-                aredl_pack_tiers::id,
-                ))
-            .load::<(String, Uuid)>(conn)?
-            .iter()
-            .flat_map(|(name, id)| pack_tier_name_map.get(name).unwrap().into_iter().map(|pack| (pack.clone(), id.clone())))
-            .collect();
-
-        println!("\tInserting packs");
-
-        let pack_ids: HashMap<String, Uuid> = pack_data.iter()
-            .map(|pack| {
-                let id = old_pack_ids.get(&pack.name).cloned().unwrap_or_else(Uuid::new_v4);
-                (pack.name.clone(), id)
-            })
-            .collect();
-
-        diesel::insert_into(aredl_packs::table)
-            .values(
-                pack_data.iter().map(|pack| (
-                    aredl_packs::id.eq(pack_ids.get(&pack.name).unwrap()),
-                    aredl_packs::name.eq(&pack.name),
-                    aredl_packs::tier.eq(pack_tier_map.get(&pack.name).unwrap())
-                )).collect::<Vec<_>>()
-            ).execute(conn)?;
-
-        let pack_map: HashMap<String, Uuid> = aredl_packs::table
-            .select((
-                aredl_packs::name,
-                aredl_packs::id)
-            ).load::<(String, Uuid)>(conn)?
-            .iter()
-            .map(|(name, id)| (name.clone(), *id))
-            .collect();
-
-        diesel::insert_into(aredl_pack_levels::table)
-            .values(
-                pack_data.iter().flat_map(|pack|
-                    pack.levels.iter().map(|level_name|(
-                        aredl_pack_levels::level_id.eq(level_map.get(&(*level_id_map.get(level_name).unwrap(), level_name.ends_with("2p"))).unwrap()),
-                        aredl_pack_levels::pack_id.eq(pack_map.get(&pack.name).unwrap())
-                        )
-                    )
-                ).collect::<Vec<_>>()
-            ).execute(conn)?;
-
-        println!("\tInserting changelog");
-        let init_levels = list_init.into_iter().map(|name|
-            (level_map.get(&(*level_id_map.get(&name).unwrap(), name.ends_with("2p"))).unwrap().clone(), false)
-        ).chain(
-            list_legacy_init.into_iter().map(|name|
-                (level_map.get(&(*level_id_map.get(&name).unwrap(), name.ends_with("2p"))).unwrap().clone(), true)
-            )
-        ).collect::<Vec<(Uuid, bool)>>();
-
-        let first_timestamp = changelog.first().map(|entry| entry.date).unwrap_or(1701030687);
-
-        let init_changelog = init_levels.iter().enumerate().map(|(position, (id, legacy))| {
-            let above = if position > 0 {
-                Some(init_levels[position - 1].0)
-            } else {
-                None
-            };
-            let below = if position < init_levels.len() - 1 {
-                Some(init_levels[position + 1].0)
-            } else {
-                None
-            };
-            (id, legacy, above, below);
-            ChangelogResolved {
-                new_position: Some((position + 1) as i32),
-                old_position: None,
-                legacy: Some(legacy.clone()),
-                affected_level: id.clone(),
-                level_above: above,
-                level_below: below,
-                created_at: DateTime::from_timestamp(first_timestamp, 0).unwrap().naive_utc(),
-            }
-        });
-
-        let changelog_data = init_changelog.chain(
-            changelog.into_iter().map(|entry| {
-                let legacy = match entry.action.as_str() {
-                    "tolegacy" => Some(true),
-                    "fromlegacy" => Some(false),
-                    "placed" => Some(false),
-                    _ => None
-                };
-                ChangelogResolved {
-                    new_position: entry.to_rank,
-                    old_position: entry.from_rank,
-                    legacy,
-                    affected_level: level_map.get(&(*level_id_map.get(&entry.name).unwrap(), entry.name.ends_with("2p"))).unwrap().clone(),
-                    level_above: entry.above.map(|name| level_map.get(&(*level_id_map.get(&name).unwrap(), name.ends_with("2p"))).unwrap().clone()),
-                    level_below: entry.below.map(|name| level_map.get(&(*level_id_map.get(&name).unwrap(), name.ends_with("2p"))).unwrap().clone()),
-                    created_at: DateTime::from_timestamp(entry.date, 0).unwrap().naive_utc(),
-                }
-            })
-        ).collect::<Vec<ChangelogResolved>>();
-
-        diesel::insert_into(aredl_position_history::table)
-            .values(changelog_data)
-            .execute(conn)?;
-
-        println!("\tInserting creators");
-        diesel::insert_into(aredl_levels_created::table)
-            .values(
-                levels.iter().flat_map(|(level,level_data_ext)|
-                    level.creators.iter().map(|creator|
-                        (
-                            aredl_levels_created::level_id.eq(
-                                level_map.get(&(level.id, level_data_ext.two_player)).unwrap()
-                            ),
-                            aredl_levels_created::user_id.eq(
-                                user_map.get(creator).unwrap()
+            diesel::insert_into(aredl_pack_tiers::table)
+                .values(
+                    pack_tier_data
+                        .iter()
+                        .enumerate()
+                        .map(|(index, tier)| {
+                            (
+                                aredl_pack_tiers::name.eq(&tier.name),
+                                aredl_pack_tiers::color.eq(&tier.color),
+                                aredl_pack_tiers::placement.eq(index as i32),
                             )
-                        )
-                    )
-                ).collect::<Vec<_>>()
-            ).execute(conn)?;
+                        })
+                        .collect::<Vec<_>>(),
+                )
+                .execute(conn)?;
 
-        println!("\tInserting clans");
+            let pack_tier_map: HashMap<String, Uuid> = aredl_pack_tiers::table
+                .select((aredl_pack_tiers::name, aredl_pack_tiers::id))
+                .load::<(String, Uuid)>(conn)?
+                .iter()
+                .flat_map(|(name, id)| {
+                    pack_tier_name_map
+                        .get(name)
+                        .unwrap()
+                        .into_iter()
+                        .map(|pack| (pack.clone(), id.clone()))
+                })
+                .collect();
 
-        let clan_users: Vec<(Option<i64>, Uuid, String)> = users::table
-            .filter(users::global_name.like("[%]%"))
-            .select((users::json_id, users::id, users::global_name))
-            .load(conn)?;
+            println!("\tInserting packs");
 
-        let new_clan_tags: HashSet<String> = clan_users.iter()
-            .filter_map(|(_, _, original_username)| {
-                clan_regex.captures(&original_username)
-                    .map(|caps| caps.get(1).unwrap().as_str().to_string())
-            })
-            .filter(|tag| !tag.eq_ignore_ascii_case("REDACTED"))
-            .collect();
+            let pack_ids: HashMap<String, Uuid> = pack_data
+                .iter()
+                .map(|pack| {
+                    let id = old_pack_ids
+                        .get(&pack.name)
+                        .cloned()
+                        .unwrap_or_else(Uuid::new_v4);
+                    (pack.name.clone(), id)
+                })
+                .collect();
 
-        let mut new_clan_ids: HashMap<String, Uuid> = HashMap::new();
-        let now = Utc::now().naive_utc();
+            diesel::insert_into(aredl_packs::table)
+                .values(
+                    pack_data
+                        .iter()
+                        .map(|pack| {
+                            (
+                                aredl_packs::id.eq(pack_ids.get(&pack.name).unwrap()),
+                                aredl_packs::name.eq(&pack.name),
+                                aredl_packs::tier.eq(pack_tier_map.get(&pack.name).unwrap()),
+                            )
+                        })
+                        .collect::<Vec<_>>(),
+                )
+                .execute(conn)?;
 
-        let clans_to_insert: Vec<NewClan> = new_clan_tags.into_iter().map(|clan_tag| {
-            let clan_id = old_clan_ids.get(&clan_tag).cloned().unwrap_or_else(Uuid::new_v4);
-            new_clan_ids.insert(clan_tag.clone(), clan_id);
-            NewClan {
-                id: clan_id,
-                global_name: clan_tag.clone(),
-                tag: clan_tag,
-                description: None,
-                created_at: now,
-                updated_at: now,
-            }
-        }).collect();
+            let pack_map: HashMap<String, Uuid> = aredl_packs::table
+                .select((aredl_packs::name, aredl_packs::id))
+                .load::<(String, Uuid)>(conn)?
+                .iter()
+                .map(|(name, id)| (name.clone(), *id))
+                .collect();
 
-        diesel::insert_into(clans::table)
-            .values(&clans_to_insert)
-            .execute(conn)?;
+            diesel::insert_into(aredl_pack_levels::table)
+                .values(
+                    pack_data
+                        .iter()
+                        .flat_map(|pack| {
+                            pack.levels.iter().map(|level_name| {
+                                (
+                                    aredl_pack_levels::level_id.eq(level_map
+                                        .get(&(
+                                            *level_id_map.get(level_name).unwrap(),
+                                            level_name.ends_with("2p"),
+                                        ))
+                                        .unwrap()),
+                                    aredl_pack_levels::pack_id
+                                        .eq(pack_map.get(&pack.name).unwrap()),
+                                )
+                            })
+                        })
+                        .collect::<Vec<_>>(),
+                )
+                .execute(conn)?;
 
-        println!("\tInserting clans members");
-
-        let clan_members: Vec<NewClanMember> = clan_users.into_iter()
-            .filter_map(|(json_id, user_id, original_username)| {
-                if let Some(captures) = clan_regex.captures(&original_username) {
-                    let clan_tag = captures.get(1)
-                        .map(|m| m.as_str().to_string())
-                        .expect("Failed to extract clan tag");
-        
-                    if clan_tag.eq_ignore_ascii_case("REDACTED") {
-                        return None;
-                    }
-                    
-                    let new_username = clan_regex.replace(&original_username, "").trim().to_string();
-                    diesel::update(users::table.filter(users::id.eq(user_id)))
-                        .set(users::global_name.eq(new_username))
-                        .execute(conn)
-                        .expect("Failed to update user name");
-        
-                    let clan_id = new_clan_ids.get(&clan_tag)
-                        .expect("Failed to find clan id")
-                        .clone();
-        
-                    
-                    let role = *clan_roles.get(&json_id.unwrap_or(0)).unwrap_or(&0);
-        
-                    let now = Utc::now().naive_utc();
-                    Some(NewClanMember {
-                        clan_id,
-                        user_id,
-                        role,
-                        created_at: now,
-                        updated_at: now,
-                    })
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        diesel::insert_into(clan_members::table)
-            .values(&clan_members)
-            .execute(conn)?;
-
-        println!("\tInserting roles");
-        diesel::insert_into(roles::table)
-            .values(
-                role_data.iter()
-                    .map(|role_list| *roles_map.get(&role_list.role.as_str()).unwrap())
-                    .map(|(role_name, privilege_level)| (
-                        roles::privilege_level.eq(privilege_level),
-                        roles::role_desc.eq(role_name)
-                    )).collect::<Vec<_>>()
-            ).execute(conn)?;
-
-        let role_map: HashMap<String, i32> = roles::table
-            .select((
-                roles::role_desc,
-                roles::id)
-            ).load::<(String, i32)>(conn)?
-            .into_iter().collect();
-
-        diesel::insert_into(user_roles::table)
-            .values(
-                role_data.iter()
-                    .flat_map(|role_list|
-                        role_list.members.iter().map(|member| (
-                            user_roles::user_id.eq(user_map.get(&member.name).unwrap()),
-                            user_roles::role_id.eq(role_map.get(
-                                roles_map.get(&role_list.role.as_str()).unwrap().0
-                            ).unwrap())
-                            ))
-                    ).collect::<Vec<_>>()
-            ).execute(conn)?;
-
-        println!("\tInserting permissions");
-        diesel::insert_into(permissions::table)
-            .values(
-                permissions_data
-                    .iter()
-                    .map(|(permission, privilege_level)| {
-                        (
-                            permissions::permission.eq(*permission),
-                            permissions::privilege_level.eq(*privilege_level),
-                        )
-                    })
-                    .collect::<Vec<_>>(),
-            ).execute(conn)?;
-
-        println!("\tInserting records");
-
-        let now = Utc::now().naive_utc();
-
-        let records = levels.iter().map(|(level,level_data_ext)|
-            (
-                aredl_records::level_id.eq(level_map.get(&(level.id, level_data_ext.two_player)).unwrap()),
-                aredl_records::submitted_by.eq(user_map.get(&level.verifier).unwrap()),
-                aredl_records::mobile.eq(false),
-                aredl_records::video_url.eq(&level.verification),
-                aredl_records::created_at.eq(now),
-                aredl_records::is_verification.eq(true),
-            )
-        ).chain(
-            levels.iter().flat_map(|(level,level_data_ext)|
-                level.records.iter().enumerate().map(|(index, record)| {
-                    let created_at = now + Duration::seconds((index + 1) as i64);
+            println!("\tInserting changelog");
+            let init_levels = list_init
+                .into_iter()
+                .map(|name| {
                     (
-                        aredl_records::level_id.eq(level_map.get(&(level.id, level_data_ext.two_player)).unwrap()),
-                        aredl_records::submitted_by.eq(user_map.get(&record.user).unwrap()),
-                        aredl_records::mobile.eq(record.mobile.unwrap_or(false)),
-                        aredl_records::video_url.eq(&record.link),
-                        aredl_records::created_at.eq(created_at),
-                        aredl_records::is_verification.eq(false),
+                        level_map
+                            .get(&(*level_id_map.get(&name).unwrap(), name.ends_with("2p")))
+                            .unwrap()
+                            .clone(),
+                        false,
                     )
                 })
-            )
-        ).collect::<Vec<_>>();
+                .chain(list_legacy_init.into_iter().map(|name| {
+                    (
+                        level_map
+                            .get(&(*level_id_map.get(&name).unwrap(), name.ends_with("2p")))
+                            .unwrap()
+                            .clone(),
+                        true,
+                    )
+                }))
+                .collect::<Vec<(Uuid, bool)>>();
 
-        for record_chunk in records.chunks(4000) {
-            diesel::insert_into(aredl_records::table)
-                .values(record_chunk)
+            let first_timestamp = changelog
+                .first()
+                .map(|entry| entry.date)
+                .unwrap_or(1701030687);
+
+            let init_changelog = init_levels
+                .iter()
+                .enumerate()
+                .map(|(position, (id, legacy))| {
+                    let above = if position > 0 {
+                        Some(init_levels[position - 1].0)
+                    } else {
+                        None
+                    };
+                    let below = if position < init_levels.len() - 1 {
+                        Some(init_levels[position + 1].0)
+                    } else {
+                        None
+                    };
+                    (id, legacy, above, below);
+                    ChangelogResolved {
+                        new_position: Some((position + 1) as i32),
+                        old_position: None,
+                        legacy: Some(legacy.clone()),
+                        affected_level: id.clone(),
+                        level_above: above,
+                        level_below: below,
+                        created_at: DateTime::from_timestamp(first_timestamp, 0)
+                            .unwrap()
+                            .naive_utc(),
+                    }
+                });
+
+            let changelog_data = init_changelog
+                .chain(changelog.into_iter().map(|entry| {
+                    let legacy = match entry.action.as_str() {
+                        "tolegacy" => Some(true),
+                        "fromlegacy" => Some(false),
+                        "placed" => Some(false),
+                        _ => None,
+                    };
+                    ChangelogResolved {
+                        new_position: entry.to_rank,
+                        old_position: entry.from_rank,
+                        legacy,
+                        affected_level: level_map
+                            .get(&(
+                                *level_id_map.get(&entry.name).unwrap(),
+                                entry.name.ends_with("2p"),
+                            ))
+                            .unwrap()
+                            .clone(),
+                        level_above: entry.above.map(|name| {
+                            level_map
+                                .get(&(*level_id_map.get(&name).unwrap(), name.ends_with("2p")))
+                                .unwrap()
+                                .clone()
+                        }),
+                        level_below: entry.below.map(|name| {
+                            level_map
+                                .get(&(*level_id_map.get(&name).unwrap(), name.ends_with("2p")))
+                                .unwrap()
+                                .clone()
+                        }),
+                        created_at: DateTime::from_timestamp(entry.date, 0).unwrap().naive_utc(),
+                    }
+                }))
+                .collect::<Vec<ChangelogResolved>>();
+
+            diesel::insert_into(aredl_position_history::table)
+                .values(changelog_data)
                 .execute(conn)?;
-        }
 
-        Ok(())
-    }).expect("Failed to migrate");
+            println!("\tInserting creators");
+            diesel::insert_into(aredl_levels_created::table)
+                .values(
+                    levels
+                        .iter()
+                        .flat_map(|(level, level_data_ext)| {
+                            level.creators.iter().map(|creator| {
+                                (
+                                    aredl_levels_created::level_id.eq(level_map
+                                        .get(&(level.id, level_data_ext.two_player))
+                                        .unwrap()),
+                                    aredl_levels_created::user_id
+                                        .eq(user_map.get(creator).unwrap()),
+                                )
+                            })
+                        })
+                        .collect::<Vec<_>>(),
+                )
+                .execute(conn)?;
+
+            println!("\tInserting clans");
+
+            let clan_users: Vec<(Option<i64>, Uuid, String)> = users::table
+                .filter(users::global_name.like("[%]%"))
+                .select((users::json_id, users::id, users::global_name))
+                .load(conn)?;
+
+            let new_clan_tags: HashSet<String> = clan_users
+                .iter()
+                .filter_map(|(_, _, original_username)| {
+                    clan_regex
+                        .captures(&original_username)
+                        .map(|caps| caps.get(1).unwrap().as_str().to_string())
+                })
+                .filter(|tag| !tag.eq_ignore_ascii_case("REDACTED"))
+                .collect();
+
+            let mut new_clan_ids: HashMap<String, Uuid> = HashMap::new();
+            let now = Utc::now().naive_utc();
+
+            let clans_to_insert: Vec<NewClan> = new_clan_tags
+                .into_iter()
+                .map(|clan_tag| {
+                    let clan_id = old_clan_ids
+                        .get(&clan_tag)
+                        .cloned()
+                        .unwrap_or_else(Uuid::new_v4);
+                    new_clan_ids.insert(clan_tag.clone(), clan_id);
+                    NewClan {
+                        id: clan_id,
+                        global_name: clan_tag.clone(),
+                        tag: clan_tag,
+                        description: None,
+                        created_at: now,
+                        updated_at: now,
+                    }
+                })
+                .collect();
+
+            diesel::insert_into(clans::table)
+                .values(&clans_to_insert)
+                .execute(conn)?;
+
+            println!("\tInserting clans members");
+
+            let clan_members: Vec<NewClanMember> = clan_users
+                .into_iter()
+                .filter_map(|(json_id, user_id, original_username)| {
+                    if let Some(captures) = clan_regex.captures(&original_username) {
+                        let clan_tag = captures
+                            .get(1)
+                            .map(|m| m.as_str().to_string())
+                            .expect("Failed to extract clan tag");
+
+                        if clan_tag.eq_ignore_ascii_case("REDACTED") {
+                            return None;
+                        }
+
+                        let new_username = clan_regex
+                            .replace(&original_username, "")
+                            .trim()
+                            .to_string();
+                        diesel::update(users::table.filter(users::id.eq(user_id)))
+                            .set(users::global_name.eq(new_username))
+                            .execute(conn)
+                            .expect("Failed to update user name");
+
+                        let clan_id = new_clan_ids
+                            .get(&clan_tag)
+                            .expect("Failed to find clan id")
+                            .clone();
+
+                        let role = *clan_roles.get(&json_id.unwrap_or(0)).unwrap_or(&0);
+
+                        let now = Utc::now().naive_utc();
+                        Some(NewClanMember {
+                            clan_id,
+                            user_id,
+                            role,
+                            created_at: now,
+                            updated_at: now,
+                        })
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            diesel::insert_into(clan_members::table)
+                .values(&clan_members)
+                .execute(conn)?;
+
+            println!("\tInserting roles");
+            diesel::insert_into(roles::table)
+                .values(
+                    role_data
+                        .iter()
+                        .map(|role_list| *roles_map.get(&role_list.role.as_str()).unwrap())
+                        .map(|(role_name, privilege_level)| {
+                            (
+                                roles::privilege_level.eq(privilege_level),
+                                roles::role_desc.eq(role_name),
+                            )
+                        })
+                        .collect::<Vec<_>>(),
+                )
+                .execute(conn)?;
+
+            let role_map: HashMap<String, i32> = roles::table
+                .select((roles::role_desc, roles::id))
+                .load::<(String, i32)>(conn)?
+                .into_iter()
+                .collect();
+
+            diesel::insert_into(user_roles::table)
+                .values(
+                    role_data
+                        .iter()
+                        .flat_map(|role_list| {
+                            role_list.members.iter().map(|member| {
+                                (
+                                    user_roles::user_id.eq(user_map.get(&member.name).unwrap()),
+                                    user_roles::role_id.eq(role_map
+                                        .get(roles_map.get(&role_list.role.as_str()).unwrap().0)
+                                        .unwrap()),
+                                )
+                            })
+                        })
+                        .collect::<Vec<_>>(),
+                )
+                .execute(conn)?;
+
+            println!("\tInserting permissions");
+            diesel::insert_into(permissions::table)
+                .values(
+                    permissions_data
+                        .iter()
+                        .map(|(permission, privilege_level)| {
+                            (
+                                permissions::permission.eq(*permission),
+                                permissions::privilege_level.eq(*privilege_level),
+                            )
+                        })
+                        .collect::<Vec<_>>(),
+                )
+                .execute(conn)?;
+
+            println!("\tInserting records");
+
+            let now = Utc::now().naive_utc();
+
+            let records = levels
+                .iter()
+                .map(|(level, level_data_ext)| {
+                    (
+                        aredl_records::level_id.eq(level_map
+                            .get(&(level.id, level_data_ext.two_player))
+                            .unwrap()),
+                        aredl_records::submitted_by.eq(user_map.get(&level.verifier).unwrap()),
+                        aredl_records::mobile.eq(false),
+                        aredl_records::video_url.eq(&level.verification),
+                        aredl_records::created_at.eq(now),
+                        aredl_records::is_verification.eq(true),
+                    )
+                })
+                .chain(levels.iter().flat_map(|(level, level_data_ext)| {
+                    level.records.iter().enumerate().map(|(index, record)| {
+                        let created_at = now + Duration::seconds((index + 1) as i64);
+                        (
+                            aredl_records::level_id.eq(level_map
+                                .get(&(level.id, level_data_ext.two_player))
+                                .unwrap()),
+                            aredl_records::submitted_by.eq(user_map.get(&record.user).unwrap()),
+                            aredl_records::mobile.eq(record.mobile.unwrap_or(false)),
+                            aredl_records::video_url.eq(&record.link),
+                            aredl_records::created_at.eq(created_at),
+                            aredl_records::is_verification.eq(false),
+                        )
+                    })
+                }))
+                .collect::<Vec<_>>();
+
+            for record_chunk in records.chunks(4000) {
+                diesel::insert_into(aredl_records::table)
+                    .values(record_chunk)
+                    .execute(conn)?;
+            }
+
+            Ok(())
+        })
+        .expect("Failed to migrate");
 
     println!("\tUpdating materialized views");
 
     diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_user_leaderboard")
-        .execute(&mut db_conn).expect("Failed to update leaderboard");
+        .execute(&mut db_conn)
+        .expect("Failed to update leaderboard");
 
     diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_country_leaderboard")
-        .execute(&mut db_conn).expect("Failed to update country leaderboard");
+        .execute(&mut db_conn)
+        .expect("Failed to update country leaderboard");
 
     diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_clans_leaderboard")
-        .execute(&mut db_conn).expect("Failed to update clans leaderboard");
+        .execute(&mut db_conn)
+        .expect("Failed to update clans leaderboard");
 
     diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_position_history_full_view")
-        .execute(&mut db_conn).expect("Failed to update position history");
-
+        .execute(&mut db_conn)
+        .expect("Failed to update position history");
 }

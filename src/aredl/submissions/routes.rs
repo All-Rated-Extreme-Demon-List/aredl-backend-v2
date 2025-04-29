@@ -27,7 +27,7 @@ use crate::{
         ("api_key" = []),
     ),
 )]
-#[get("", wrap="UserAuth::require(Permission::RecordModify)")]
+#[get("", wrap="UserAuth::require(Permission::SubmissionReview)")]
 async fn find_all(db: web::Data<Arc<DbAppState>>, page_query: web::Query<PageQuery<50>>, options: web::Query<SubmissionQueryOptions>) -> Result<HttpResponse, ApiError> {
     let submissions = web::block(
         move || ResolvedSubmissionPage::find_all(db, page_query.into_inner(), options.into_inner())
@@ -157,7 +157,7 @@ async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionInsert
 #[utoipa::path(
     patch,
     summary = "[Auth]Edit a submission",
-    description = "Edit a submission. If you aren't staff, the submission must be submitted by you and in the pending state.",
+    description = "Edit a submission. If you aren't staff, the submission must be yours and in the pending/denied state.",
     tag = "AREDL - Submissions",
     responses(
         (status = 200, body = Submission)
@@ -178,7 +178,7 @@ async fn patch(
     authenticated: Authenticated
 ) -> Result<HttpResponse, ApiError> {
     let mut conn = db.connection()?;
-    let has_auth = authenticated.has_permission(db, Permission::RecordModify)?;
+    let has_auth = authenticated.has_permission(db, Permission::SubmissionReview)?;
 
     match has_auth {
         true => {
@@ -200,7 +200,7 @@ async fn patch(
 #[utoipa::path(
     delete,
     summary = "[Auth]Delete a submission",
-    description = "Delete a submission by its ID. If you are staff, the submission must be yours and in the pending state.",
+    description = "Delete a submission by its ID. If you aren't staff, the submission must be yours and in the pending state.",
     tag = "AREDL - Submissions",
     responses(
         (status = 204)
@@ -234,7 +234,7 @@ async fn delete(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticat
         ("api_key" = []),
     ),
 )]
-#[get("/claim", wrap="UserAuth::require(Permission::RecordModify)")]
+#[get("/claim", wrap="UserAuth::require(Permission::SubmissionReview)")]
 async fn claim(db: web::Data<Arc<DbAppState>>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
 
     let patched = web::block(
@@ -260,7 +260,7 @@ async fn claim(db: web::Data<Arc<DbAppState>>, authenticated: Authenticated) -> 
         ("id" = Uuid, description = "The ID of the submission")
     ),
 )]
-#[post("/{id}/unclaim", wrap="UserAuth::require(Permission::RecordModify)")]
+#[post("/{id}/unclaim", wrap="UserAuth::require(Permission::SubmissionReview)")]
 async fn unclaim(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
 
     let patched = web::block(
@@ -286,7 +286,7 @@ async fn unclaim(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<
         ("id" = Uuid, description = "The ID of the submission")
     ),
 )]
-#[post("/{id}/accept", wrap="UserAuth::require(Permission::RecordModify)")]
+#[post("/{id}/accept", wrap="UserAuth::require(Permission::SubmissionReview)")]
 async fn accept(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticated: Authenticated, notes: web::Json<ReviewerNotes>) -> Result<HttpResponse, ApiError> {
     let new_record = web::block(
         move || Submission::accept(db, id.into_inner(), authenticated.user_id, notes.into_inner().notes)
@@ -311,7 +311,7 @@ async fn accept(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticat
         ("id" = Uuid, description = "The ID of the submission")
     ),
 )]
-#[post("/{id}/deny", wrap="UserAuth::require(Permission::RecordModify)")]
+#[post("/{id}/deny", wrap="UserAuth::require(Permission::SubmissionReview)")]
 async fn deny(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticated: Authenticated, body: Option<web::Json<ReviewerNotes>>) -> Result<HttpResponse, ApiError> {
 
     let reason = match body {
@@ -341,7 +341,7 @@ async fn deny(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticated
         ("id" = Uuid, description = "The ID of the submission")
     ),
 )]
-#[post("/{id}/underconsideration", wrap="UserAuth::require(Permission::RecordModify)")]
+#[post("/{id}/underconsideration", wrap="UserAuth::require(Permission::SubmissionReview)")]
 async fn under_consideration(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticated: Authenticated, notes: web::Json<ReviewerNotes>) -> Result<HttpResponse, ApiError> {
     let new_record = web::block(
         move || Submission::under_consideration(db, id.into_inner(), authenticated, notes.into_inner().notes)

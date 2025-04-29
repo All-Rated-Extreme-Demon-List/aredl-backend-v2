@@ -401,7 +401,7 @@ impl Submission {
     ) -> Result<(), ApiError> {
         let mut conn = db.connection()?;
         conn.transaction(|connection| -> Result<(), ApiError> {
-            let has_auth = authenticated.has_permission(db, Permission::RecordModify)?;
+            let has_auth = authenticated.has_permission(db, Permission::SubmissionReview)?;
 
             // Log deletion in submission history
             let history = SubmissionHistory {
@@ -971,8 +971,11 @@ impl SubmissionResolved {
         authenticated: Authenticated,
     ) -> Result<SubmissionResolved, ApiError> {
         let conn = &mut db.connection()?;
-        let has_auth =
-            Authenticated::has_permission(&authenticated, db.clone(), Permission::RecordModify)?;
+        let has_auth = Authenticated::has_permission(
+            &authenticated,
+            db.clone(),
+            Permission::SubmissionReview,
+        )?;
 
         let mut query = aredl_submissions::table
             .filter(aredl_submissions::id.eq(id))
@@ -1205,7 +1208,10 @@ impl SubmissionPage {
 }
 
 impl SubmissionHistory {
-    pub fn by_submission(db: web::Data<Arc<DbAppState>>, submission_id: Uuid) -> Result<Vec<SubmissionHistory>, ApiError> {
+    pub fn by_submission(
+        db: web::Data<Arc<DbAppState>>,
+        submission_id: Uuid,
+    ) -> Result<Vec<SubmissionHistory>, ApiError> {
         let conn = &mut db.connection()?;
 
         let history = submission_history::table
