@@ -5,7 +5,7 @@ use utoipa::OpenApi;
 use crate::{
     aredl::{
         records::Record, submissions::{
-            ResolvedSubmissionPage, ReviewerNotes, Submission, SubmissionInsert, SubmissionPage, SubmissionPatchMod, SubmissionPatchUser, SubmissionQueryOptions, SubmissionQueue, SubmissionResolved, SubmissionStatus
+            ResolvedSubmissionPage, ReviewerNotes, Submission, SubmissionHistory, SubmissionInsert, SubmissionPage, SubmissionPatchMod, SubmissionPatchUser, SubmissionQueryOptions, SubmissionQueue, SubmissionResolved, SubmissionStatus
         }
     },
     auth::{Authenticated, Permission, UserAuth}, 
@@ -349,6 +349,31 @@ async fn under_consideration(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>
     Ok(HttpResponse::Ok().json(new_record))
 }
 
+#[utoipa::path(
+    get,
+    summary = "Get a submission's history",
+    description = "Get the timestamps of each time this submission's status was changed.",
+    tag = "AREDL - Submissions",
+    responses(
+        (status = 200, body = [SubmissionHistory])
+    ),
+    security(
+        ("access_token" = []),
+        ("api_key" = []),
+    ),
+    params(
+        ("id" = Uuid, description = "The ID of the submission")
+    ),
+)]
+#[get("/{id}/history")]
+async fn get_history(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
+    let history = web::block(
+        move || SubmissionHistory::by_submission(db, id.into_inner())
+    ).await??;
+
+    Ok(HttpResponse::Ok().json(history))
+}
+
 #[derive(OpenApi)]
 #[openapi(
     tags(
@@ -367,7 +392,8 @@ async fn under_consideration(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>
             SubmissionResolved, 
             SubmissionStatus,
             ResolvedSubmissionPage,
-            Record
+            Record,
+            SubmissionHistory
         )
     ),
     paths(
@@ -375,6 +401,7 @@ async fn under_consideration(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>
         find_all,
         me,
         get_queue,
+        get_history,
         claim,
         find_one,
         get_queue_position,
@@ -383,7 +410,7 @@ async fn under_consideration(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>
         unclaim,
         accept,
         deny,
-        under_consideration
+        under_consideration,
     )
 )]
 pub struct ApiDoc;
@@ -394,6 +421,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .service(find_all)
             .service(me)
             .service(get_queue)
+            .service(get_history)
             .service(claim)
             .service(find_one)
             .service(get_queue_position)
