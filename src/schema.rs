@@ -231,7 +231,7 @@ diesel::table! {
 
     submission_history (id) {
         id -> Uuid,
-        submission_id -> Nullable<Uuid>,
+        submission_id -> Uuid,
         record_id -> Nullable<Uuid>,
         rejection_reason -> Nullable<Text>,
         status -> SubmissionStatus,

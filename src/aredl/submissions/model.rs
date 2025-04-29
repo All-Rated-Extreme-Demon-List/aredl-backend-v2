@@ -263,11 +263,11 @@ pub struct SubmissionQueryOptions {
     pub priority_filter: Option<bool>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Queryable, Insertable)]
-#[diesel(table_name = submission_history)]
+#[derive(Debug, Serialize, Deserialize, Queryable, Insertable, Selectable, ToSchema)]
+#[diesel(table_name = submission_history, check_for_backend(Pg))]
 pub struct SubmissionHistory {
     pub id: Uuid,
-    pub submission_id: Option<Uuid>,
+    pub submission_id: Uuid,
     pub record_id: Option<Uuid>,
     pub status: SubmissionStatus,
     pub rejection_reason: Option<String>,
@@ -380,7 +380,7 @@ impl Submission {
             // Log submission creation history
             let history = SubmissionHistory {
                 id: Uuid::new_v4(),
-                submission_id: Some(submission.id),
+                submission_id: submission.id,
                 record_id: None,
                 status: SubmissionStatus::Pending,
                 rejection_reason: None,
@@ -407,7 +407,7 @@ impl Submission {
             // Log deletion in submission history
             let history = SubmissionHistory {
                 id: Uuid::new_v4(),
-                submission_id: Some(submission_id),
+                submission_id,
                 record_id: None,
                 status: SubmissionStatus::Denied, // Or SubmissionStatus::Deleted if you add it
                 rejection_reason: Some("Submission deleted".into()),
@@ -483,7 +483,7 @@ impl Submission {
             // Log submission history
             let history = SubmissionHistory {
                 id: Uuid::new_v4(),
-                submission_id: Some(updated.id),
+                submission_id: updated.id,
                 record_id: Some(inserted.id),
                 status: SubmissionStatus::Claimed,
                 rejection_reason: None,
@@ -539,7 +539,7 @@ impl Submission {
         // Log submission history
         let history = SubmissionHistory {
             id: Uuid::new_v4(),
-            submission_id: Some(new_record.id),
+            submission_id: new_record.id,
             record_id: None,
             status: SubmissionStatus::Denied,
             rejection_reason: reason,
@@ -585,7 +585,7 @@ impl Submission {
         // Log submission history
         let history = SubmissionHistory {
             id: Uuid::new_v4(),
-            submission_id: Some(new_record.id),
+            submission_id: new_record.id,
             record_id: None,
             status: SubmissionStatus::UnderConsideration,
             rejection_reason: None,
@@ -630,7 +630,7 @@ impl Submission {
         // Log submission history
         let history = SubmissionHistory {
             id: Uuid::new_v4(),
-            submission_id: Some(new_record.id),
+            submission_id: new_record.id,
             record_id: None,
             status: SubmissionStatus::Pending,
             rejection_reason: None,
@@ -1199,5 +1199,19 @@ impl SubmissionPage {
             total_count,
             Self { data: submissions },
         ))
+    }
+}
+
+impl SubmissionHistory {
+    pub fn by_submission(db: web::Data<Arc<DbAppState>>, submission_id: Uuid) -> Result<Vec<SubmissionHistory>, ApiError> {
+        let conn = &mut db.connection()?;
+
+        let history = submission_history::table
+            .filter(submission_history::submission_id.eq(submission_id))
+            .select(SubmissionHistory::as_select())
+            .order(submission_history::timestamp.desc())
+            .load::<SubmissionHistory>(conn)?;
+
+        Ok(history)
     }
 }
