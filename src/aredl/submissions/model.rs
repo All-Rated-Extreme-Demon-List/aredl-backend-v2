@@ -985,7 +985,9 @@ impl SubmissionResolved {
             query = query.filter(aredl_submissions::submitted_by.eq(authenticated.user_id));
         }
 
-        let submission = query.select(Submission::as_select()).first(conn)?;
+        let submission = query
+            .select(Submission::as_select())
+            .first(conn)?;
 
         let resolved = SubmissionResolved::from(submission, db, None)?;
 
@@ -1150,9 +1152,6 @@ impl ResolvedSubmissionPage {
             Self { data: submissions },
         ))
     }
-}
-
-impl SubmissionPage {
     pub fn find_own<const D: i64>(
         db: web::Data<Arc<DbAppState>>,
         page_query: PageQuery<D>,
@@ -1160,7 +1159,21 @@ impl SubmissionPage {
         authenticated: Authenticated,
     ) -> Result<Paginated<Self>, ApiError> {
         let conn = &mut db.connection()?;
-        let query = aredl_submissions::table;
+        let reviewers = alias!(users as reviewers);
+        let query = aredl_submissions_with_priority::table
+            .inner_join(
+                aredl_levels::table
+                    .on(aredl_submissions_with_priority::level_id.eq(aredl_levels::id)),
+            )
+            .inner_join(
+                users::table.on(users::id.eq(aredl_submissions_with_priority::submitted_by)),
+            )
+            .left_join(
+                reviewers.on(reviewers
+                    .field(users::id)
+                    .nullable()
+                    .eq(aredl_submissions_with_priority::reviewer_id.nullable())),
+            );
 
         let total_count: i64 = query.count().get_result(conn)?;
 
@@ -1170,34 +1183,69 @@ impl SubmissionPage {
                     Box::new(true.into_sql::<Bool>())
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
-                |status| Box::new(aredl_submissions::status.eq(status)),
+                |status| Box::new(aredl_submissions_with_priority::status.eq(status)),
             ))
             .filter(options.mobile_fiter.map_or_else(
                 || {
                     Box::new(true.into_sql::<Bool>())
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
-                |mobile| Box::new(aredl_submissions::mobile.eq(mobile)),
+                |mobile| Box::new(aredl_submissions_with_priority::mobile.eq(mobile)),
             ))
             .filter(options.level_filter.map_or_else(
                 || {
                     Box::new(true.into_sql::<Bool>())
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
-                |level| Box::new(aredl_submissions::level_id.eq(level)),
+                |level| Box::new(aredl_submissions_with_priority::level_id.eq(level)),
             ))
             .filter(options.priority_filter.map_or_else(
                 || {
                     Box::new(true.into_sql::<Bool>())
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
-                |priority| Box::new(aredl_submissions::priority.eq(priority)),
+                |priority| Box::new(aredl_submissions_with_priority::priority.eq(priority)),
             ))
-            .filter(aredl_submissions::submitted_by.eq(authenticated.user_id))
+            .filter(aredl_submissions_with_priority::submitted_by.eq(authenticated.user_id))
             .limit(page_query.per_page())
             .offset(page_query.offset())
-            .select(Submission::as_select())
-            .load::<Submission>(conn)?;
+            .select((
+                SubmissionWithPriority::as_select(),
+                BaseLevel::as_select(),
+                BaseUser::as_select(),
+                reviewers
+                    .fields(<BaseUser as Selectable<Pg>>::construct_selection())
+                    .nullable(),
+            ))
+            .load::<(
+                SubmissionWithPriority,
+                BaseLevel,
+                BaseUser,
+                Option<BaseUser>
+            )>(conn)?;
+
+        let submissions = submissions
+            .into_iter()
+            .map(
+                |(submission, level, submitter, reviewer)| SubmissionResolved {
+                    id: submission.id,
+                    level,
+                    submitted_by: submitter,
+                    mobile: submission.mobile,
+                    ldm_id: submission.ldm_id,
+                    video_url: submission.video_url,
+                    raw_url: submission.raw_url,
+                    mod_menu: submission.mod_menu,
+                    status: submission.status,
+                    reviewer,
+                    priority: submission.priority,
+                    reviewer_notes: submission.reviewer_notes,
+                    user_notes: submission.user_notes,
+                    created_at: submission.created_at,
+                    priority_value: submission.priority_value,
+                },
+            )
+            .collect::<Vec<_>>();
 
         Ok(Paginated::<Self>::from_data(
             page_query,

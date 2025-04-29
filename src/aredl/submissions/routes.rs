@@ -111,7 +111,7 @@ async fn get_queue_position(
 #[get("/@me", wrap="UserAuth::load()")]
 async fn me(db: web::Data<Arc<DbAppState>>, page_query: web::Query<PageQuery<50>>, options: web::Query<SubmissionQueryOptions>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
     let submissions = web::block(
-        move || SubmissionPage::find_own(db, page_query.into_inner(), options.into_inner(), authenticated)
+        move || ResolvedSubmissionPage::find_own(db, page_query.into_inner(), options.into_inner(), authenticated)
     ).await??;
     Ok(HttpResponse::Ok().json(submissions))
 }
