@@ -5,7 +5,7 @@ use utoipa::OpenApi;
 use crate::{
     aredl::{
         records::Record, submissions::{
-            RejectionData, ResolvedSubmissionPage, Submission, SubmissionInsert, SubmissionPage, SubmissionPatchMod, SubmissionPatchUser, SubmissionQueryOptions, SubmissionQueue, SubmissionResolved, SubmissionStatus
+            ResolvedSubmissionPage, ReviewerNotes, Submission, SubmissionInsert, SubmissionPage, SubmissionPatchMod, SubmissionPatchUser, SubmissionQueryOptions, SubmissionQueue, SubmissionResolved, SubmissionStatus
         }
     },
     auth::{Authenticated, Permission, UserAuth}, 
@@ -277,6 +277,7 @@ async fn unclaim(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<
     responses(
         (status = 202, body = Record)
     ),
+    request_body = ReviewerNotes,
     security(
         ("access_token" = []),
         ("api_key" = []),
@@ -286,9 +287,9 @@ async fn unclaim(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<
     ),
 )]
 #[post("/{id}/accept", wrap="UserAuth::require(Permission::RecordModify)")]
-async fn accept(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
+async fn accept(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticated: Authenticated, notes: web::Json<ReviewerNotes>) -> Result<HttpResponse, ApiError> {
     let new_record = web::block(
-        move || Submission::accept(db, id.into_inner(), authenticated.user_id)
+        move || Submission::accept(db, id.into_inner(), authenticated.user_id, notes.into_inner().notes)
     ).await??;
     Ok(HttpResponse::Accepted().json(new_record))
 }
@@ -301,6 +302,7 @@ async fn accept(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticat
     responses(
         (status = 200, body = SubmissionResolved)
     ),
+    request_body = ReviewerNotes,
     security(
         ("access_token" = []),
         ("api_key" = []),
@@ -310,10 +312,10 @@ async fn accept(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticat
     ),
 )]
 #[post("/{id}/deny", wrap="UserAuth::require(Permission::RecordModify)")]
-async fn deny(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticated: Authenticated, body: Option<web::Json<RejectionData>>) -> Result<HttpResponse, ApiError> {
+async fn deny(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticated: Authenticated, body: Option<web::Json<ReviewerNotes>>) -> Result<HttpResponse, ApiError> {
 
     let reason = match body {
-        Some(body) => body.into_inner().reason,
+        Some(body) => body.into_inner().notes,
         None => None
     };
 
@@ -340,9 +342,9 @@ async fn deny(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticated
     ),
 )]
 #[post("/{id}/underconsideration", wrap="UserAuth::require(Permission::RecordModify)")]
-async fn under_consideration(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
+async fn under_consideration(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticated: Authenticated, notes: web::Json<ReviewerNotes>) -> Result<HttpResponse, ApiError> {
     let new_record = web::block(
-        move || Submission::under_consideration(db, id.into_inner(), authenticated)
+        move || Submission::under_consideration(db, id.into_inner(), authenticated, notes.into_inner().notes)
     ).await??;
     Ok(HttpResponse::Ok().json(new_record))
 }
@@ -354,7 +356,7 @@ async fn under_consideration(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>
     ),
     components(
         schemas(
-            RejectionData, 
+            ReviewerNotes, 
             Submission, 
             SubmissionInsert, 
             SubmissionPage, 

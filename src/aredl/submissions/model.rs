@@ -239,9 +239,8 @@ pub struct SubmissionQueue {
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
-pub struct RejectionData {
-    /// The reason for rejecting this record
-    pub reason: Option<String>,
+pub struct ReviewerNotes {
+    pub notes: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -437,6 +436,7 @@ impl Submission {
         db: web::Data<Arc<DbAppState>>,
         id: Uuid,
         reviewer_id: Uuid,
+        notes: Option<String>,
     ) -> Result<Record, ApiError> {
         let conn = &mut db.connection()?;
         conn.transaction(|connection| -> Result<Record, ApiError> {
@@ -460,7 +460,7 @@ impl Submission {
                 aredl_records::reviewer_id.eq(Some(reviewer_id)),
                 aredl_records::mod_menu.eq(updated.mod_menu),
                 aredl_records::user_notes.eq(updated.user_notes),
-                aredl_records::reviewer_notes.eq(updated.reviewer_notes),
+                aredl_records::reviewer_notes.eq(notes),
                 aredl_records::updated_at.eq(chrono::Utc::now().naive_utc()),
             );
 
@@ -518,14 +518,14 @@ impl Submission {
         db: web::Data<Arc<DbAppState>>,
         id: Uuid,
         authenticated: Authenticated,
-        reason: Option<String>,
+        notes: Option<String>,
     ) -> Result<SubmissionResolved, ApiError> {
         let connection = &mut db.connection()?;
 
         let new_data = (
             aredl_submissions::status.eq(SubmissionStatus::Denied),
             aredl_submissions::reviewer_id.eq(authenticated.user_id),
-            aredl_submissions::reviewer_notes.eq(reason.clone()),
+            aredl_submissions::reviewer_notes.eq(notes.clone()),
         );
 
         let new_record = diesel::update(aredl_submissions::table)
@@ -542,7 +542,7 @@ impl Submission {
             submission_id: Some(new_record.id),
             record_id: None,
             status: SubmissionStatus::Denied,
-            rejection_reason: reason,
+            rejection_reason: notes,
             timestamp: chrono::Utc::now().naive_utc(),
         };
         diesel::insert_into(submission_history::table)
@@ -566,12 +566,14 @@ impl Submission {
         db: web::Data<Arc<DbAppState>>,
         id: Uuid,
         authenticated: Authenticated,
+        notes: Option<String>,
     ) -> Result<SubmissionResolved, ApiError> {
         let connection = &mut db.connection()?;
 
         let new_data = (
             aredl_submissions::status.eq(SubmissionStatus::UnderConsideration),
             aredl_submissions::reviewer_id.eq(authenticated.user_id),
+            aredl_submissions::reviewer_notes.eq(notes.clone()),
         );
 
         let new_record = diesel::update(aredl_submissions::table)
