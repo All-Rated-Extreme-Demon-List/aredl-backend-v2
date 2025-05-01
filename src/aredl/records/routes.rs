@@ -171,7 +171,7 @@ async fn find_all_full(
     options: web::Query<RecordsQueryOptions>,
 ) -> Result<HttpResponse, ApiError> {
     let records = web::block(move || {
-        FullRecordResolved::find_all(db, page_query.into_inner(), options.into_inner())
+        FullRecordResolved::find_all(db, page_query.into_inner(), options.into_inner(), false)
     })
     .await??;
     Ok(HttpResponse::Ok().json(records))
@@ -206,7 +206,7 @@ async fn find_me(
         submitter_filter: Some(authenticated.user_id),
     };
     let records = web::block(move || {
-        FullRecordUnresolved::find_all(db, page_query.into_inner(), options, true)
+        FullRecordResolved::find_all(db, page_query.into_inner(), options, true)
     })
     .await??;
     Ok(HttpResponse::Ok().json(records))

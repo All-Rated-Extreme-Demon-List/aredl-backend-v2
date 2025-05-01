@@ -146,6 +146,7 @@ pub struct FullRecordTemplate<LevelT, UserT> {
     #[serde(skip_serializing)]
     pub placement_order: i32,
     /// Internal UUID of the user who reviewed the record.
+    #[serde(rename = "reviewer")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reviewer_id: Option<Uuid>,
     /// Notes set by the reviewer when they accepted the record.
@@ -325,6 +326,7 @@ impl FullRecordResolved {
         db: web::Data<Arc<DbAppState>>,
         page_query: PageQuery<D>,
         options: RecordsQueryOptions,
+        hide_reviewer: bool,
     ) -> Result<Paginated<FullResolvedRecordPage>, ApiError> {
         let conn = &mut db.connection()?;
 
@@ -387,10 +389,16 @@ impl FullRecordResolved {
             ))
             .load::<(FullRecordUnresolved, BaseUser, ExtendedBaseLevel)>(conn)?;
 
-        let records_resolved: Vec<Self> = records
+        let mut records_resolved: Vec<Self> = records
             .into_iter()
             .map(|(record, user, level)| Self::from_data(record, user, level))
             .collect();
+
+        if hide_reviewer {
+            for record in records_resolved.iter_mut() {
+                record.reviewer_id = None;
+            }
+        }
 
         Ok(Paginated::from_data(
             page_query,
