@@ -6,7 +6,7 @@ use crate::{
     schema::submission_history,
 };
 use actix_web::web;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use diesel::{pg::Pg, ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -24,21 +24,35 @@ pub struct SubmissionHistory {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reviewer_id: Option<Uuid>,
     pub user_notes: Option<String>,
-    pub timestamp: NaiveDateTime,
+    pub timestamp: DateTime<Utc>,
+}
+
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct SubmissionHistoryOptions {
+    is_record_id: Option<bool>,
 }
 
 impl SubmissionHistory {
     pub fn by_submission(
         db: web::Data<Arc<DbAppState>>,
-        submission_id: Uuid,
+        id: Uuid,
+        options: SubmissionHistoryOptions,
         authenticated: Authenticated,
     ) -> Result<Vec<SubmissionHistory>, ApiError> {
         let conn = &mut db.connection()?;
-        let mut history = submission_history::table
-            .filter(submission_history::submission_id.eq(submission_id))
+
+        let mut query = submission_history::table
+            .into_boxed::<Pg>()
             .select(SubmissionHistory::as_select())
-            .order(submission_history::timestamp.desc())
-            .load::<SubmissionHistory>(conn)?;
+            .order(submission_history::timestamp.desc());
+
+        if options.is_record_id.unwrap_or(false) {
+            query = query.filter(submission_history::record_id.eq(id));
+        } else {
+            query = query.filter(submission_history::submission_id.eq(id));
+        }
+
+        let mut history = query.load::<SubmissionHistory>(conn)?;
 
         if !authenticated.has_permission(db.clone(), Permission::SubmissionReview)? {
             history.iter_mut().for_each(|h| h.reviewer_id = None);

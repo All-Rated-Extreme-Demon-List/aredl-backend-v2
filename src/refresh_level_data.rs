@@ -1,17 +1,20 @@
+use crate::db::{DbAppState, DbConnection};
+use crate::error_handler::ApiError;
+use crate::get_secret;
+use crate::schema::{aredl_last_gddl_update, aredl_levels};
+use chrono::Utc;
+use cron::Schedule;
+use diesel::dsl::exists;
+use diesel::{
+    select, BoolExpressionMethods, Connection, ExpressionMethods, JoinOnDsl, QueryDsl, QueryResult,
+    RunQueryDsl,
+};
+use serde::Deserialize;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use chrono::Utc;
-use cron::Schedule;
-use diesel::{BoolExpressionMethods, Connection, ExpressionMethods, JoinOnDsl, QueryDsl, QueryResult, RunQueryDsl, select};
-use diesel::dsl::exists;
-use serde::Deserialize;
 use tokio::task;
 use uuid::Uuid;
-use crate::db::{DbAppState, DbConnection};
-use crate::error_handler::ApiError;
-use crate::schema::{aredl_last_gddl_update, aredl_levels};
-use crate::get_secret;
 
 pub async fn start_level_data_refresher(db: Arc<DbAppState>) {
     let schedule = Schedule::from_str(&get_secret("LEVEL_DATA_REFRESH_SCHEDULE")).unwrap();
@@ -57,8 +60,7 @@ pub async fn start_level_data_refresher(db: Arc<DbAppState>) {
         }
     });
 
-    let schedule = Schedule::from_str("@hourly")
-        .expect("Failed to parse schedule");
+    let schedule = Schedule::from_str("@hourly").expect("Failed to parse schedule");
     let schedule = Arc::new(schedule);
 
     task::spawn(async move {
@@ -76,21 +78,23 @@ pub async fn start_level_data_refresher(db: Arc<DbAppState>) {
 
             let mut conn = conn.unwrap();
 
-            let one_day_ago = Utc::now().naive_utc() - chrono::Duration::days(1);
+            let one_day_ago = Utc::now() - chrono::Duration::days(1);
 
             let to_update: QueryResult<Vec<(Uuid, i32, bool)>> = aredl_levels::table
-                .left_join(aredl_last_gddl_update::table
-                    .on(aredl_last_gddl_update::id.eq(aredl_levels::id)))
+                .left_join(
+                    aredl_last_gddl_update::table
+                        .on(aredl_last_gddl_update::id.eq(aredl_levels::id)),
+                )
                 .filter(
-                    aredl_last_gddl_update::updated_at.is_null().or(
-                        aredl_last_gddl_update::updated_at.lt(one_day_ago)
-                    )
+                    aredl_last_gddl_update::updated_at
+                        .is_null()
+                        .or(aredl_last_gddl_update::updated_at.lt(one_day_ago)),
                 )
                 .select((
                     aredl_levels::id,
                     aredl_levels::level_id,
-                    aredl_levels::two_player
-                    ))
+                    aredl_levels::two_player,
+                ))
                 .load::<(Uuid, i32, bool)>(&mut conn);
 
             match to_update {
@@ -99,12 +103,16 @@ pub async fn start_level_data_refresher(db: Arc<DbAppState>) {
                         tokio::time::sleep(Duration::from_secs(5)).await;
                         let result = update_gddl_data(&mut conn, id, level_id, two_player).await;
                         if result.is_err() {
-                            tracing::error!("Failed to request gddl: {}, {}", level_id, result.err().unwrap());
+                            tracing::error!(
+                                "Failed to request gddl: {}, {}",
+                                level_id,
+                                result.err().unwrap()
+                            );
                         } else {
                             //tracing::debug!("Updated gddl data for {}, {}", id, level_id)
                         }
                     }
-                },
+                }
                 Err(e) => {
                     tracing::error!("Failed to load gddl update db: {}", e);
                 }
@@ -124,22 +132,27 @@ struct GDDLResponse {
     #[serde(rename = "Rating")]
     rating: Option<f64>,
     #[serde(rename = "TwoPlayerRating")]
-    two_player_rating: Option<f64>
+    two_player_rating: Option<f64>,
 }
 
-async fn update_gddl_data(conn: &mut DbConnection, id: Uuid, level_id: i32, two_player: bool) -> Result<(), ApiError> {
-    let url = format!(
-        "https://gdladder.com/api/level/{}",
-        level_id
-    );
-    let response = reqwest::get(&url).await
+async fn update_gddl_data(
+    conn: &mut DbConnection,
+    id: Uuid,
+    level_id: i32,
+    two_player: bool,
+) -> Result<(), ApiError> {
+    let url = format!("https://gdladder.com/api/level/{}", level_id);
+    let response = reqwest::get(&url)
+        .await
         .map_err(|e| ApiError::new(400, format!("Failed to request gddl: {}", e).as_str()))?;
-    let data: GDDLResponse = response.json().await
+    let data: GDDLResponse = response
+        .json()
+        .await
         .map_err(|e| ApiError::new(400, format!("Failed to request gddl: {}", e).as_str()))?;
 
     let rating = match (two_player, data.two_player_rating) {
         (false, _) => data.rating,
-        (true, rating) => rating
+        (true, rating) => rating,
     };
 
     diesel::update(aredl_levels::table)
@@ -150,21 +163,25 @@ async fn update_gddl_data(conn: &mut DbConnection, id: Uuid, level_id: i32, two_
     diesel::insert_into(aredl_last_gddl_update::table)
         .values((
             aredl_last_gddl_update::id.eq(id),
-            aredl_last_gddl_update::updated_at.eq(Utc::now().naive_utc())
-            ))
+            aredl_last_gddl_update::updated_at.eq(Utc::now()),
+        ))
         .on_conflict(aredl_last_gddl_update::id)
         .do_update()
-        .set(aredl_last_gddl_update::updated_at.eq(Utc::now().naive_utc()))
+        .set(aredl_last_gddl_update::updated_at.eq(Utc::now()))
         .execute(conn)?;
 
     Ok(())
 }
 
-async fn update_edel_data(conn: &mut DbConnection, api_key: &String, spreadsheet_id: &String) -> Result<(), ApiError> {
-
+async fn update_edel_data(
+    conn: &mut DbConnection,
+    api_key: &String,
+    spreadsheet_id: &String,
+) -> Result<(), ApiError> {
     let ids_result = read_spreadsheet(api_key, spreadsheet_id, "'IDS'!B:D").await?;
 
-    let data: Vec<(i32, f64, bool)> = ids_result.values
+    let data: Vec<(i32, f64, bool)> = ids_result
+        .values
         .into_iter()
         .filter_map(|v| -> Option<(i32, f64, bool)> {
             if v.len() < 3 {
@@ -179,18 +196,18 @@ async fn update_edel_data(conn: &mut DbConnection, api_key: &String, spreadsheet
 
     conn.transaction(|conn| {
         for (id, enjoyment, pending) in data {
-            let exists_2p = select(
-                exists(aredl_levels::table
+            let exists_2p = select(exists(
+                aredl_levels::table
                     .filter(aredl_levels::level_id.eq(id))
-                    .filter(aredl_levels::two_player.eq(true))
-                )
-            ).get_result::<bool>(conn)?;
+                    .filter(aredl_levels::two_player.eq(true)),
+            ))
+            .get_result::<bool>(conn)?;
 
             diesel::update(aredl_levels::table)
                 .set((
                     aredl_levels::edel_enjoyment.eq(enjoyment),
-                    aredl_levels::is_edel_pending.eq(pending)
-                    ))
+                    aredl_levels::is_edel_pending.eq(pending),
+                ))
                 .filter(aredl_levels::level_id.eq(id))
                 .filter(aredl_levels::two_player.eq(exists_2p))
                 .execute(conn)?;
@@ -199,11 +216,15 @@ async fn update_edel_data(conn: &mut DbConnection, api_key: &String, spreadsheet
     })
 }
 
-async fn update_nlw_data(conn: &mut DbConnection, api_key: &String, spreadsheet_id: &String) -> Result<(), ApiError> {
-
+async fn update_nlw_data(
+    conn: &mut DbConnection,
+    api_key: &String,
+    spreadsheet_id: &String,
+) -> Result<(), ApiError> {
     let ids_result = read_spreadsheet(api_key, spreadsheet_id, "'IDS'!C:D").await?;
 
-    let data: Vec<(i32, String)> = ids_result.values
+    let data: Vec<(i32, String)> = ids_result
+        .values
         .into_iter()
         .filter_map(|v| -> Option<(i32, String)> {
             if v.len() < 2 {
@@ -217,17 +238,15 @@ async fn update_nlw_data(conn: &mut DbConnection, api_key: &String, spreadsheet_
 
     conn.transaction(|conn| {
         for (id, tier) in data {
-            let exists_2p = select(
-                exists(aredl_levels::table
+            let exists_2p = select(exists(
+                aredl_levels::table
                     .filter(aredl_levels::level_id.eq(id))
-                    .filter(aredl_levels::two_player.eq(true))
-                )
-            ).get_result::<bool>(conn)?;
+                    .filter(aredl_levels::two_player.eq(true)),
+            ))
+            .get_result::<bool>(conn)?;
 
             diesel::update(aredl_levels::table)
-                .set((
-                    aredl_levels::nlw_tier.eq(tier),
-                ))
+                .set((aredl_levels::nlw_tier.eq(tier),))
                 .filter(aredl_levels::level_id.eq(id))
                 .filter(aredl_levels::two_player.eq(exists_2p))
                 .execute(conn)?;
@@ -241,20 +260,31 @@ struct SheetValues {
     values: Vec<Vec<String>>,
 }
 
-async fn read_spreadsheet(api_key: &String, spreadsheet_id: &String, range: &str) -> Result<SheetValues, ApiError> {
+async fn read_spreadsheet(
+    api_key: &String,
+    spreadsheet_id: &String,
+    range: &str,
+) -> Result<SheetValues, ApiError> {
     let url = format!(
         "https://sheets.googleapis.com/v4/spreadsheets/{}/values/{}?key={}",
         spreadsheet_id, range, api_key
     );
-    let response = reqwest::get(&url)
-        .await
-        .map_err(|e| ApiError::new(400, format!("Failed to request spreadsheet: {}", e).as_str()))?;
+    let response = reqwest::get(&url).await.map_err(|e| {
+        ApiError::new(
+            400,
+            format!("Failed to request spreadsheet: {}", e).as_str(),
+        )
+    })?;
     if !response.status().is_success() {
-        return Err(ApiError::new(400, "Failed to request spreadsheet"))
+        return Err(ApiError::new(400, "Failed to request spreadsheet"));
     }
 
-    let sheet_values: SheetValues = response.json().await
-        .map_err(|e| ApiError::new(400, format!("Failed to request spreadsheet: {}", e).as_str()))?;
+    let sheet_values: SheetValues = response.json().await.map_err(|e| {
+        ApiError::new(
+            400,
+            format!("Failed to request spreadsheet: {}", e).as_str(),
+        )
+    })?;
 
     Ok(sheet_values)
 }

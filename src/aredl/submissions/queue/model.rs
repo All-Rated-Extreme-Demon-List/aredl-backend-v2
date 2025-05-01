@@ -6,7 +6,7 @@ use crate::{
     schema::aredl_submissions,
 };
 use actix_web::web;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl, RunQueryDsl};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -33,7 +33,7 @@ impl Submission {
         let conn = &mut db.connection()?;
 
         // Get the priority and created_at of the target submission
-        let (target_priority, target_created_at): (i64, NaiveDateTime) =
+        let (target_priority, target_created_at): (i64, DateTime<Utc>) =
             aredl_submissions_with_priority::table
                 .filter(aredl_submissions_with_priority::id.eq(submission_id))
                 .filter(aredl_submissions_with_priority::status.eq(SubmissionStatus::Pending))

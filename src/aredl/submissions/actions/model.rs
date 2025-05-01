@@ -54,7 +54,7 @@ impl Submission {
                 aredl_records::mod_menu.eq(updated.mod_menu),
                 aredl_records::user_notes.eq(updated.user_notes),
                 aredl_records::reviewer_notes.eq(notes.clone()),
-                aredl_records::updated_at.eq(chrono::Utc::now().naive_utc()),
+                aredl_records::updated_at.eq(chrono::Utc::now()),
             );
 
             let inserted = if let Some(record_id) = existing_record_id {
@@ -67,7 +67,7 @@ impl Submission {
                     .values((
                         aredl_records::submitted_by.eq(updated.submitted_by),
                         aredl_records::level_id.eq(updated.level_id),
-                        aredl_records::created_at.eq(chrono::Utc::now().naive_utc()),
+                        aredl_records::created_at.eq(chrono::Utc::now()),
                         record_data,
                     ))
                     .returning(Record::as_select())
@@ -83,7 +83,7 @@ impl Submission {
                 reviewer_notes: notes,
                 reviewer_id: Some(reviewer_id),
                 user_notes: None,
-                timestamp: chrono::Utc::now().naive_utc(),
+                timestamp: chrono::Utc::now(),
             };
             diesel::insert_into(submission_history::table)
                 .values(&history)
@@ -118,7 +118,7 @@ impl Submission {
     ) -> Result<SubmissionResolved, ApiError> {
         let connection = &mut db.connection()?;
 
-        let update_timestamp = chrono::Utc::now().naive_utc();
+        let update_timestamp = chrono::Utc::now();
 
         let user_id = authenticated.user_id;
 
@@ -174,7 +174,7 @@ impl Submission {
     ) -> Result<SubmissionResolved, ApiError> {
         let connection = &mut db.connection()?;
 
-        let update_timestamp = chrono::Utc::now().naive_utc();
+        let update_timestamp = chrono::Utc::now();
 
         let user_id = authenticated.user_id;
 
@@ -232,7 +232,7 @@ impl Submission {
         let new_data = (
             aredl_submissions::status.eq(SubmissionStatus::Pending),
             aredl_submissions::reviewer_id.eq::<Option<Uuid>>(None),
-            aredl_submissions::updated_at.eq(chrono::Utc::now().naive_utc()),
+            aredl_submissions::updated_at.eq(chrono::Utc::now()),
         );
 
         let updated_submission = diesel::update(aredl_submissions::table)
@@ -270,7 +270,7 @@ impl SubmissionResolved {
                     .set((
                         aredl_submissions::status.eq(SubmissionStatus::Claimed),
                         aredl_submissions::reviewer_id.eq(authenticated.user_id),
-                        aredl_submissions::updated_at.eq(chrono::Utc::now().naive_utc()),
+                        aredl_submissions::updated_at.eq(chrono::Utc::now()),
                     ))
                     .execute(conn)?;
 

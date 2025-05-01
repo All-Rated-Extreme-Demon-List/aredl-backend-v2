@@ -60,13 +60,12 @@ async fn patch(
     body: web::Json<SubmissionPatchMod>, 
     authenticated: Authenticated
 ) -> Result<HttpResponse, ApiError> {
-    let mut conn = db.connection()?;
     let has_auth = authenticated.has_permission(db.clone(), Permission::SubmissionReview)?;
 
     match has_auth {
         true => {
             let patched = web::block(
-                move || SubmissionPatchMod::patch_mod(body.into_inner(), id.into_inner(), &mut conn)
+                move || SubmissionPatchMod::patch_mod(body.into_inner(), id.into_inner(), db, authenticated)
             ).await??;
             return Ok(HttpResponse::Ok().json(patched))
         }

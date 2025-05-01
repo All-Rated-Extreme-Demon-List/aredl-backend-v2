@@ -3,6 +3,6 @@ CREATE TABLE oauth_requests (
     pkce_verifier VARCHAR NOT NULL,
     nonce VARCHAR NOT NULL,
 	callback VARCHAR,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY(csrf_state)
 );

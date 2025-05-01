@@ -12,5 +12,5 @@ CREATE TABLE submission_history (
     record_id UUID,
     rejection_reason TEXT,
     status submission_status NOT NULL,
-    timestamp TIMESTAMP NOT NULL DEFAULT NOW()
+    timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

@@ -1,13 +1,13 @@
-use std::sync::Arc;
+use crate::auth::app_state::AuthAppState;
+use crate::auth::token::{self, check_token_valid};
+use crate::db::DbAppState;
+use crate::error_handler::ApiError;
+use crate::schema::users;
 use actix_web::{post, web, HttpRequest, HttpResponse};
 use chrono::Utc;
 use diesel::prelude::*;
+use std::sync::Arc;
 use utoipa::OpenApi;
-use crate::db::DbAppState;
-use crate::auth::app_state::AuthAppState;
-use crate::error_handler::ApiError;
-use crate::schema::users;
-use crate::auth::token::{self, check_token_valid};
 
 #[utoipa::path(
     post,
@@ -24,46 +24,43 @@ use crate::auth::token::{self, check_token_valid};
 	)
 )]
 #[post("")]
-pub async fn logout_all(req: HttpRequest, data: web::Data<Arc<AuthAppState>>, db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
-	let token = req
-		.headers()
-		.get(openidconnect::http::header::AUTHORIZATION)
-		.and_then(|h| h.to_str().ok())
-		.map(|h| h.strip_prefix("Bearer ").unwrap_or("").to_string());
+pub async fn logout_all(
+    req: HttpRequest,
+    data: web::Data<Arc<AuthAppState>>,
+    db: web::Data<Arc<DbAppState>>,
+) -> Result<HttpResponse, ApiError> {
+    let token = req
+        .headers()
+        .get(openidconnect::http::header::AUTHORIZATION)
+        .and_then(|h| h.to_str().ok())
+        .map(|h| h.strip_prefix("Bearer ").unwrap_or("").to_string());
 
-	if token.is_none() {
-		return Err(ApiError::new(400, "No token provided"));
-	}
+    if token.is_none() {
+        return Err(ApiError::new(400, "No token provided"));
+    }
 
-	let decoded_token_claims = token::decode_token(
-		token.unwrap(),
-		&data.jwt_decoding_key,
-		&["access", "refresh"]
-	)?;
+    let decoded_token_claims = token::decode_token(
+        token.unwrap(),
+        &data.jwt_decoding_key,
+        &["access", "refresh"],
+    )?;
 
-	let decoded_user_claims = token::decode_user_claims(&decoded_token_claims)?;
-	let mut conn = db.connection()?;
+    let decoded_user_claims = token::decode_user_claims(&decoded_token_claims)?;
+    let mut conn = db.connection()?;
 
-	check_token_valid(&decoded_token_claims, &decoded_user_claims, &mut conn)?;
+    check_token_valid(&decoded_token_claims, &decoded_user_claims, &mut conn)?;
 
     diesel::update(users::table.filter(users::id.eq(decoded_user_claims.user_id)))
-        .set(users::access_valid_after.eq(Utc::now().naive_utc()))
+        .set(users::access_valid_after.eq(Utc::now()))
         .execute(&mut conn)?;
 
     Ok(HttpResponse::Ok().json("Logged out all sessions"))
 }
 
 #[derive(OpenApi)]
-#[openapi(
-	paths(
-		logout_all,
-	)
-)]
+#[openapi(paths(logout_all,))]
 pub struct ApiDoc;
 
 pub fn init_routes(config: &mut web::ServiceConfig) {
-    config.service(
-        web::scope("/auth/logout-all")
-            .service(logout_all)
-    );
+    config.service(web::scope("/auth/logout-all").service(logout_all));
 }

@@ -1,18 +1,21 @@
-use std::sync::Arc;
-use actix_web::web;
-use chrono::NaiveDateTime;
-use diesel::pg::Pg;
-use diesel::{BoxableExpression, ExpressionMethods, PgTextExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper, OptionalExtension};
-use diesel::expression::AsExpression;
-use diesel::sql_types::Bool;
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use utoipa::ToSchema;
 use crate::clans::Clan;
 use crate::db::{DbAppState, DbConnection};
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
-use crate::schema::{users, roles};
+use crate::schema::{roles, users};
+use actix_web::web;
+use chrono::{DateTime, Utc};
+use diesel::expression::AsExpression;
+use diesel::pg::Pg;
+use diesel::sql_types::Bool;
+use diesel::{
+    BoxableExpression, ExpressionMethods, OptionalExtension, PgTextExpressionMethods, QueryDsl,
+    RunQueryDsl, SelectableHelper,
+};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use utoipa::ToSchema;
+use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, Queryable, Selectable, ToSchema)]
 #[diesel(table_name=users, check_for_backend(Pg))]
@@ -37,7 +40,7 @@ pub struct BaseDiscordUser {
     /// Discord ID of the user. Updated on every login.
     pub discord_id: Option<String>,
     /// Discord avatar hash of the user. Updated on every login.
-    pub discord_avatar: Option<String>
+    pub discord_avatar: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Queryable, Selectable, ToSchema)]
@@ -66,9 +69,9 @@ pub struct User {
     /// Discord accent color of the user. Updated on every login.
     pub discord_accent_color: Option<i32>,
     /// Timestamp of when the user was created.
-    pub created_at: NaiveDateTime,
+    pub created_at: DateTime<Utc>,
     /// Last time the user's tokens were invalidated.
-    pub access_valid_after: NaiveDateTime,
+    pub access_valid_after: DateTime<Utc>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Insertable, AsChangeset, ToSchema)]
@@ -97,15 +100,17 @@ pub struct UserUpdateOnLogin {
 #[derive(Serialize, Debug, ToSchema)]
 pub struct UserResolved {
     pub user: User,
-	/// Clan the user is in.
-	pub clan: Option<Clan>,
+    /// Clan the user is in.
+    pub clan: Option<Clan>,
     /// Roles the user has.
     pub roles: Vec<Role>,
     /// Permissions scopes the user has.
     pub scopes: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Queryable, Selectable, Identifiable, PartialEq, Debug, ToSchema)]
+#[derive(
+    Serialize, Deserialize, Queryable, Selectable, Identifiable, PartialEq, Debug, ToSchema,
+)]
 #[diesel(table_name = roles)]
 pub struct Role {
     /// Internal UUID of the role.
@@ -142,17 +147,20 @@ pub struct PlaceholderOptions {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UserListQueryOptions {
     pub name_filter: Option<String>,
-    pub placeholder: Option<bool>
+    pub placeholder: Option<bool>,
 }
 
 #[derive(Serialize, Debug, ToSchema)]
 pub struct UserPage {
     /// List of found users
-    pub data: Vec<User>
+    pub data: Vec<User>,
 }
 
 impl User {
-    pub fn upsert(db: web::Data<Arc<DbAppState>>, user_upsert: UserUpsert) -> Result<Self, ApiError> {
+    pub fn upsert(
+        db: web::Data<Arc<DbAppState>>,
+        user_upsert: UserUpsert,
+    ) -> Result<Self, ApiError> {
         let mut conn = db.connection()?;
 
         let existing_user = users::table
@@ -164,15 +172,13 @@ impl User {
         match existing_user {
             Some(user) => {
                 let updated_user = diesel::update(users::table.filter(users::id.eq(user.id)))
-                    .set(
-                        UserUpdateOnLogin {
-                            username: user_upsert.username.clone(),
-                            discord_id: user_upsert.discord_id.clone(),
-                            discord_avatar: user_upsert.discord_avatar,
-                            discord_banner: user_upsert.discord_banner,
-                            discord_accent_color: user_upsert.discord_accent_color,
-                        }
-                    )
+                    .set(UserUpdateOnLogin {
+                        username: user_upsert.username.clone(),
+                        discord_id: user_upsert.discord_id.clone(),
+                        discord_avatar: user_upsert.discord_avatar,
+                        discord_banner: user_upsert.discord_banner,
+                        discord_accent_color: user_upsert.discord_accent_color,
+                    })
                     .returning(Self::as_select())
                     .get_result::<Self>(&mut conn)?;
                 return Ok(updated_user);
@@ -182,18 +188,16 @@ impl User {
                     .values(&user_upsert)
                     .returning(Self::as_select())
                     .get_result::<Self>(&mut conn)?;
-                return Ok(user)
+                return Ok(user);
             }
         }
-        
     }
 
     pub fn find<const D: i64>(
         conn: &mut DbConnection,
         page_query: PageQuery<D>,
-        options: UserListQueryOptions)
-        -> Result<Paginated<UserPage>, ApiError>
-    {
+        options: UserListQueryOptions,
+    ) -> Result<Paginated<UserPage>, ApiError> {
         let name_filter: Box<dyn BoxableExpression<_, _, SqlType = Bool>> =
             match options.name_filter.clone() {
                 Some(filter) => Box::new(users::global_name.ilike(filter)),
@@ -202,18 +206,17 @@ impl User {
         let placeholder_filter: Box<dyn BoxableExpression<_, _, SqlType = Bool>> =
             match options.placeholder.clone() {
                 Some(placeholder) => Box::new(users::placeholder.eq(placeholder)),
-                None => Box::new(<bool as AsExpression<Bool>>::as_expression(true))
+                None => Box::new(<bool as AsExpression<Bool>>::as_expression(true)),
             };
 
-        let entries =
-            users::table
-                .filter(name_filter)
-                .filter(placeholder_filter)
-                .order(users::username)
-                .limit(page_query.per_page())
-                .offset(page_query.offset())
-                .select(User::as_select())
-                .load::<User>(conn)?;
+        let entries = users::table
+            .filter(name_filter)
+            .filter(placeholder_filter)
+            .order(users::username)
+            .limit(page_query.per_page())
+            .offset(page_query.offset())
+            .select(User::as_select())
+            .load::<User>(conn)?;
 
         let name_filter: Box<dyn BoxableExpression<_, _, SqlType = Bool>> =
             match options.name_filter {
@@ -223,7 +226,7 @@ impl User {
         let placeholder_filter: Box<dyn BoxableExpression<_, _, SqlType = Bool>> =
             match options.placeholder {
                 Some(placeholder) => Box::new(users::placeholder.eq(placeholder)),
-                None => Box::new(<bool as AsExpression<Bool>>::as_expression(true))
+                None => Box::new(<bool as AsExpression<Bool>>::as_expression(true)),
             };
 
         let count = users::table
@@ -232,9 +235,11 @@ impl User {
             .count()
             .get_result(conn)?;
 
-        Ok(Paginated::<UserPage>::from_data(page_query, count, UserPage {
-            data: entries
-        }))
+        Ok(Paginated::<UserPage>::from_data(
+            page_query,
+            count,
+            UserPage { data: entries },
+        ))
     }
 
     pub fn create_placeholder(
@@ -272,11 +277,7 @@ impl User {
         Ok(updated_user)
     }
 
-    pub fn ban(
-        conn: &mut DbConnection,
-        user_id: Uuid,
-        ban_level: i32,
-    ) -> Result<User, ApiError> {
+    pub fn ban(conn: &mut DbConnection, user_id: Uuid, ban_level: i32) -> Result<User, ApiError> {
         let user = diesel::update(users::table.filter(users::id.eq(user_id)))
             .set(users::ban_level.eq(ban_level))
             .returning(Self::as_select())

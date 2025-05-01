@@ -154,7 +154,7 @@ impl Submission {
                 user_notes: submission.user_notes.clone(),
                 reviewer_id: None,
                 reviewer_notes: None,
-                timestamp: chrono::Utc::now().naive_utc(),
+                timestamp: chrono::Utc::now(),
             };
 
             diesel::insert_into(submission_history::table)

@@ -1,3 +1,5 @@
+DROP VIEW IF EXISTS aredl_submissions_with_priority;
+
 ALTER TABLE submission_history
 	RENAME COLUMN reviewer_notes TO rejection_reason;
 
@@ -9,8 +11,6 @@ ALTER TABLE submission_history
 
 ALTER TABLE aredl_submissions
 	DROP COLUMN IF EXISTS updated_at;
-
-DROP VIEW IF EXISTS aredl_submissions_with_priority;
 
 CREATE OR REPLACE VIEW aredl_submissions_with_priority AS
 SELECT 

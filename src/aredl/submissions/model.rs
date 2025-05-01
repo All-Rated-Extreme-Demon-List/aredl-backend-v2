@@ -8,7 +8,7 @@ use crate::{
     users::BaseUser,
 };
 use actix_web::web;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use diesel::{pg::Pg, Connection, ExpressionMethods, RunQueryDsl, Selectable};
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
@@ -70,9 +70,9 @@ pub struct Submission {
     /// Any additional notes left by the submitter.
     pub user_notes: Option<String>,
     /// Timestamp of when the submission was created.
-    pub created_at: NaiveDateTime,
+    pub created_at: DateTime<Utc>,
     /// Timestamp of when the submission was last updated.
-    pub updated_at: NaiveDateTime,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize, Queryable, Insertable, Selectable, Debug, ToSchema)]
@@ -105,9 +105,9 @@ pub struct SubmissionWithPriority {
     /// Any additional notes left by the submitter.
     pub user_notes: Option<String>,
     /// Timestamp of when the submission was created.
-    pub created_at: NaiveDateTime,
+    pub created_at: DateTime<Utc>,
     /// Timestamp of when the submission was last updated.
-    pub updated_at: NaiveDateTime,
+    pub updated_at: DateTime<Utc>,
     /// The priority value of this submission
     pub priority_value: i64,
 }
@@ -142,9 +142,9 @@ pub struct SubmissionResolved {
     /// Any additional notes left by the submitter.
     pub user_notes: Option<String>,
     /// Timestamp of when the submission was created.
-    pub created_at: NaiveDateTime,
+    pub created_at: DateTime<Utc>,
     /// Timestamp of when the submission was last updated.
-    pub updated_at: NaiveDateTime,
+    pub updated_at: DateTime<Utc>,
     ///
     pub priority_value: i64,
 }
@@ -171,7 +171,7 @@ impl Submission {
                 reviewer_notes: None,
                 reviewer_id: None,
                 user_notes: Some("Submission deleted".into()),
-                timestamp: chrono::Utc::now().naive_utc(),
+                timestamp: chrono::Utc::now(),
             };
             diesel::insert_into(submission_history::table)
                 .values(&history)

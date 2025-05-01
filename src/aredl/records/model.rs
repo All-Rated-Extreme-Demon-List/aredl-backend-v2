@@ -5,7 +5,7 @@ use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::{aredl_levels, aredl_records, users};
 use crate::users::BaseUser;
 use actix_web::web;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::query_dsl::JoinOnDsl;
 use diesel::sql_types::Bool;
@@ -48,9 +48,9 @@ pub struct Record {
     /// Notes given by the user when they submitted the record.
     pub user_notes: Option<String>,
     /// Timestamp of when the record was created (first accepted).
-    pub created_at: NaiveDateTime,
+    pub created_at: DateTime<Utc>,
     /// Timestamp of when the record was last updated.
-    pub updated_at: NaiveDateTime,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize, Insertable, Debug, ToSchema)]
@@ -73,9 +73,9 @@ pub struct RecordInsert {
     /// Internal UUID of the user who reviewed the record.
     pub reviewer_id: Option<Uuid>,
     /// Timestamp of when the record was created (first accepted).
-    pub created_at: Option<NaiveDateTime>,
+    pub created_at: Option<DateTime<Utc>>,
     /// Timestamp of when the record was last updated.
-    pub updated_at: Option<NaiveDateTime>,
+    pub updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Serialize, Deserialize, AsChangeset, Debug, ToSchema)]
@@ -96,9 +96,9 @@ pub struct RecordUpdate {
     /// Link to the raw video file of the completion.
     pub raw_url: Option<String>,
     /// Timestamp of when the record was created (first accepted).
-    pub created_at: Option<NaiveDateTime>,
+    pub created_at: Option<DateTime<Utc>>,
     /// Timestamp of when the record was last updated.
-    pub updated_at: Option<NaiveDateTime>,
+    pub updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
@@ -113,7 +113,7 @@ pub struct PublicRecordTemplate<T> {
     /// Video link of the completion.
     pub video_url: String,
     /// Timestamp of when the record was created (first accepted).
-    pub created_at: NaiveDateTime,
+    pub created_at: DateTime<Utc>,
 }
 
 pub type PublicRecordUnresolved = PublicRecordTemplate<Uuid>;
@@ -154,9 +154,9 @@ pub struct FullRecordTemplate<LevelT, UserT> {
     /// Notes given by the user when they submitted the record.
     pub user_notes: Option<String>,
     /// Timestamp of when the record was created (first accepted).
-    pub created_at: NaiveDateTime,
+    pub created_at: DateTime<Utc>,
     /// Timestamp of when the record was last updated.
-    pub updated_at: NaiveDateTime,
+    pub updated_at: DateTime<Utc>,
 }
 
 pub type FullRecordUnresolved = FullRecordTemplate<Uuid, Uuid>;

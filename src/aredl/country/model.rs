@@ -1,15 +1,17 @@
-use chrono::NaiveDateTime;
-use uuid::Uuid;
-use diesel::{ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
-use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
-use diesel::pg::Pg;
+use crate::aredl::levels::ExtendedBaseLevel;
+use crate::custom_schema::{aredl_country_leaderboard, aredl_min_placement_country_records};
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
-use crate::users::BaseUser;
-use crate::aredl::levels::ExtendedBaseLevel;
 use crate::schema::{aredl_levels, users};
-use crate::custom_schema::{aredl_country_leaderboard, aredl_min_placement_country_records};
+use crate::users::BaseUser;
+use chrono::{DateTime, Utc};
+use diesel::pg::Pg;
+use diesel::{
+    ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
+};
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
 #[diesel(table_name=aredl_country_leaderboard)]
@@ -47,9 +49,9 @@ pub struct CountryProfileRecord {
     /// Internal UUID of the user who reviewed the record.
     pub reviewer_id: Option<Uuid>,
     /// Timestamp of when the record was created (first accepted).
-    pub created_at: NaiveDateTime,
+    pub created_at: DateTime<Utc>,
     /// Timestamp of when the record was last updated.
-    pub updated_at: NaiveDateTime,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
@@ -82,10 +84,15 @@ impl CountryProfileResolved {
             .first(conn)
             .optional()?;
 
-        let (verified, records ): (Vec<_>, Vec<_>) = aredl_min_placement_country_records::table
+        let (verified, records): (Vec<_>, Vec<_>) = aredl_min_placement_country_records::table
             .filter(aredl_min_placement_country_records::country.eq(country))
-            .inner_join(users::table.on(users::id.eq(aredl_min_placement_country_records::submitted_by)))
-            .inner_join(aredl_levels::table.on(aredl_levels::id.eq(aredl_min_placement_country_records::level_id)))
+            .inner_join(
+                users::table.on(users::id.eq(aredl_min_placement_country_records::submitted_by)),
+            )
+            .inner_join(
+                aredl_levels::table
+                    .on(aredl_levels::id.eq(aredl_min_placement_country_records::level_id)),
+            )
             .select((
                 CountryProfileRecord::as_select(),
                 BaseUser::as_select(),
@@ -93,9 +100,13 @@ impl CountryProfileResolved {
             ))
             .load::<(CountryProfileRecord, BaseUser, ExtendedBaseLevel)>(conn)?
             .into_iter()
-            .map(|(record, user, level)| CountryProfileRecordResolved { record, user, level })
+            .map(|(record, user, level)| CountryProfileRecordResolved {
+                record,
+                user,
+                level,
+            })
             .partition(|resolved| resolved.record.is_verification);
-        
+
         let published: Vec<CountryProfileLevelResolved> = aredl_levels::table
             .inner_join(users::table.on(users::id.eq(aredl_levels::publisher_id)))
             .filter(users::country.eq(country))
@@ -105,7 +116,13 @@ impl CountryProfileResolved {
             .into_iter()
             .map(|(level, user)| CountryProfileLevelResolved { level, user })
             .collect();
-        
-        Ok(Self { country, rank, records, verified, published })
+
+        Ok(Self {
+            country,
+            rank,
+            records,
+            verified,
+            published,
+        })
     }
 }

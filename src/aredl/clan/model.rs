@@ -1,16 +1,18 @@
-use chrono::NaiveDateTime;
-use uuid::Uuid;
-use diesel::{ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
-use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
-use diesel::pg::Pg;
+use crate::aredl::levels::ExtendedBaseLevel;
+use crate::clans::Clan;
+use crate::custom_schema::{aredl_clans_leaderboard, aredl_min_placement_clans_records};
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
-use crate::users::BaseUser;
-use crate::clans::Clan;
-use crate::aredl::levels::ExtendedBaseLevel;
 use crate::schema::{aredl_levels, clan_members, clans, users};
-use crate::custom_schema::{aredl_clans_leaderboard, aredl_min_placement_clans_records};
+use crate::users::BaseUser;
+use chrono::{DateTime, Utc};
+use diesel::pg::Pg;
+use diesel::{
+    ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
+};
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
 #[diesel(table_name=aredl_clans_leaderboard)]
@@ -48,9 +50,9 @@ pub struct ClanProfileRecord {
     /// Internal UUID of the user who reviewed the record.
     pub reviewer_id: Option<Uuid>,
     /// Timestamp of when the record was created (first accepted).
-    pub created_at: NaiveDateTime,
+    pub created_at: DateTime<Utc>,
     /// Timestamp of when the record was last updated.
-    pub updated_at: NaiveDateTime,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
@@ -77,7 +79,6 @@ pub struct ClanProfileResolved {
 
 impl ClanProfileResolved {
     pub fn find(conn: &mut DbConnection, clan_id: Uuid) -> Result<Self, ApiError> {
-
         let clan = clans::table
             .filter(clans::id.eq(clan_id))
             .select(Clan::as_select())
@@ -91,8 +92,13 @@ impl ClanProfileResolved {
 
         let (verified, records): (Vec<_>, Vec<_>) = aredl_min_placement_clans_records::table
             .filter(aredl_min_placement_clans_records::clan_id.eq(clan_id))
-            .inner_join(users::table.on(users::id.eq(aredl_min_placement_clans_records::submitted_by)))
-            .inner_join(aredl_levels::table.on(aredl_levels::id.eq(aredl_min_placement_clans_records::level_id)))
+            .inner_join(
+                users::table.on(users::id.eq(aredl_min_placement_clans_records::submitted_by)),
+            )
+            .inner_join(
+                aredl_levels::table
+                    .on(aredl_levels::id.eq(aredl_min_placement_clans_records::level_id)),
+            )
             .select((
                 ClanProfileRecord::as_select(),
                 BaseUser::as_select(),
@@ -100,9 +106,13 @@ impl ClanProfileResolved {
             ))
             .load::<(ClanProfileRecord, BaseUser, ExtendedBaseLevel)>(conn)?
             .into_iter()
-            .map(|(record, user, level)| ClanProfileRecordResolved { record, user, level })
+            .map(|(record, user, level)| ClanProfileRecordResolved {
+                record,
+                user,
+                level,
+            })
             .partition(|resolved| resolved.record.is_verification);
-        
+
         let published: Vec<ClanProfileLevelResolved> = aredl_levels::table
             .inner_join(users::table.on(users::id.eq(aredl_levels::publisher_id)))
             .inner_join(clan_members::table.on(clan_members::user_id.eq(users::id)))
@@ -113,7 +123,13 @@ impl ClanProfileResolved {
             .into_iter()
             .map(|(level, user)| ClanProfileLevelResolved { level, user })
             .collect();
-        
-        Ok(Self { clan, rank, records, verified, published })
+
+        Ok(Self {
+            clan,
+            rank,
+            records,
+            verified,
+            published,
+        })
     }
 }

@@ -1,16 +1,16 @@
-use std::sync::Arc;
-use actix_web::web;
-use chrono::NaiveDateTime;
-use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl};
-use diesel::prelude::*;
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use utoipa::ToSchema;
-use crate::error_handler::ApiError;
+use crate::aredl::levels::BaseLevel;
 use crate::custom_schema::aredl_position_history_full_view;
 use crate::db::DbAppState;
+use crate::error_handler::ApiError;
 use crate::schema::aredl_levels;
-use crate::aredl::levels::BaseLevel;
+use actix_web::web;
+use chrono::{DateTime, Utc};
+use diesel::prelude::*;
+use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use utoipa::ToSchema;
+use uuid::Uuid;
 
 #[derive(Clone, Serialize, Deserialize, ToSchema)]
 
@@ -26,7 +26,11 @@ pub enum HistoryEvent {
 
 impl HistoryEvent {
     pub fn from_history(data: &HistoryLevelFull, level_id: Uuid) -> Self {
-        match (level_id == data.cause_id, data.moved, data.pos_diff < Some(0)) {
+        match (
+            level_id == data.cause_id,
+            data.moved,
+            data.pos_diff < Some(0),
+        ) {
             (true, true, true) => Self::MovedUp,
             (true, true, false) => Self::MovedDown,
             (true, false, _) => Self::Placed,
@@ -49,7 +53,7 @@ pub struct HistoryLevelResponse {
     /// Whether the level is now in legacy after the action or not
     pub legacy: bool,
     /// When the action was performed
-    pub action_at: NaiveDateTime,
+    pub action_at: DateTime<Utc>,
     /// The level that caused the change. Might be another level or the level itself
     pub cause: BaseLevel,
 }
@@ -65,7 +69,7 @@ impl HistoryLevelResponse {
             cause: BaseLevel {
                 id: data.cause_id,
                 name: data.cause_name.clone(),
-            }
+            },
         }
     }
 }
@@ -76,7 +80,7 @@ pub struct HistoryLevelFull {
     pub pos_diff: Option<i32>,
     pub moved: bool,
     pub legacy: bool,
-    pub action_at: NaiveDateTime,
+    pub action_at: DateTime<Utc>,
     pub cause_id: Uuid,
     pub cause_name: String,
 }
@@ -85,7 +89,10 @@ impl HistoryLevelFull {
     pub fn find(db: web::Data<Arc<DbAppState>>, id: Uuid) -> Result<Vec<Self>, ApiError> {
         let entries = aredl_position_history_full_view::table
             .filter(aredl_position_history_full_view::affected_level.eq(id))
-            .inner_join(aredl_levels::table.on(aredl_levels::id.eq(aredl_position_history_full_view::cause)))
+            .inner_join(
+                aredl_levels::table
+                    .on(aredl_levels::id.eq(aredl_position_history_full_view::cause)),
+            )
             .order_by(aredl_position_history_full_view::ord.desc())
             .select((
                 aredl_position_history_full_view::position,
@@ -98,7 +105,5 @@ impl HistoryLevelFull {
             ))
             .load::<HistoryLevelFull>(&mut db.connection()?)?;
         Ok(entries)
-
-
     }
 }

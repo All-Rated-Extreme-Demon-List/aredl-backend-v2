@@ -3,8 +3,8 @@ CREATE TABLE merge_requests (
     primary_user uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     secondary_user uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, 
 	is_rejected BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
     PRIMARY KEY(id), 
     UNIQUE (primary_user),
     CHECK (primary_user <> secondary_user)
@@ -17,7 +17,7 @@ CREATE TABLE merge_logs (
     secondary_username VARCHAR NOT NULL,
     secondary_discord_id VARCHAR,
     secondary_global_name VARCHAR NOT NULL, 
-    merged_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    merged_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
     PRIMARY KEY(id)
 );
 

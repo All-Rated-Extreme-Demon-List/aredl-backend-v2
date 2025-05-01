@@ -1,17 +1,22 @@
-use chrono::NaiveDateTime;
-use diesel::{ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use utoipa::ToSchema;
-use crate::clans::Clan;
-use crate::db::DbConnection;
-use crate::error_handler::ApiError;
-use crate::users::{Role, User};
+use crate::aredl::levels::ExtendedBaseLevel;
 use crate::aredl::packs::{BasePack, PackWithTierResolved};
 use crate::aredl::packtiers::BasePackTier;
-use crate::aredl::levels::ExtendedBaseLevel;
-use crate::schema::{aredl_levels, aredl_levels_created, aredl_pack_tiers, aredl_packs, aredl_records, clan_members, clans, roles, user_roles, users};
+use crate::clans::Clan;
 use crate::custom_schema::{aredl_completed_packs, aredl_user_leaderboard};
+use crate::db::DbConnection;
+use crate::error_handler::ApiError;
+use crate::schema::{
+    aredl_levels, aredl_levels_created, aredl_pack_tiers, aredl_packs, aredl_records, clan_members,
+    clans, roles, user_roles, users,
+};
+use crate::users::{Role, User};
+use chrono::{DateTime, Utc};
+use diesel::{
+    ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
+};
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
 #[diesel(table_name=aredl_user_leaderboard)]
@@ -50,7 +55,7 @@ pub struct ProfileRecord {
     /// Video link of the completion.
     pub video_url: String,
     /// Timestamp of when the record was created (first accepted).
-    pub created_at: NaiveDateTime,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
@@ -64,8 +69,8 @@ pub struct ProfileRecordResolved {
 pub struct ProfileResolved {
     #[serde(flatten)]
     pub user: User,
-	/// The clan the user is in.
-	pub clan: Option<Clan>,
+    /// The clan the user is in.
+    pub clan: Option<Clan>,
     /// The roles the user has.
     pub roles: Vec<Role>,
     /// Leaderboard ranks of the user.
@@ -89,12 +94,12 @@ impl ProfileResolved {
             .select(User::as_select())
             .get_result::<User>(conn)?;
 
-		let clan = clans::table
-			.inner_join(clan_members::table.on(clans::id.eq(clan_members::clan_id)))
-			.filter(clan_members::user_id.eq(id))
-			.select(Clan::as_select())
-			.first::<Clan>(conn)
-			.optional()?;
+        let clan = clans::table
+            .inner_join(clan_members::table.on(clans::id.eq(clan_members::clan_id)))
+            .filter(clan_members::user_id.eq(id))
+            .select(Clan::as_select())
+            .first::<Clan>(conn)
+            .optional()?;
 
         let roles = roles::table
             .inner_join(user_roles::table.on(user_roles::role_id.eq(roles::id)))
@@ -116,16 +121,17 @@ impl ProfileResolved {
             .select((ProfileRecord::as_select(), ExtendedBaseLevel::as_select()))
             .load::<(ProfileRecord, ExtendedBaseLevel)>(conn)?
             .into_iter()
-            .map(|(record, level)| ProfileRecordResolved {
-                record, level
-            })
+            .map(|(record, level)| ProfileRecordResolved { record, level })
             .collect::<Vec<_>>();
 
-        let (verified, records) = full_records.into_iter()
+        let (verified, records) = full_records
+            .into_iter()
             .partition(|record| record.record.is_verification);
 
         let created = aredl_levels::table
-            .inner_join(aredl_levels_created::table.on(aredl_levels_created::level_id.eq(aredl_levels::id)))
+            .inner_join(
+                aredl_levels_created::table.on(aredl_levels_created::level_id.eq(aredl_levels::id)),
+            )
             .order(aredl_levels::position.asc())
             .filter(aredl_levels_created::user_id.eq(id))
             .select(ExtendedBaseLevel::as_select())
@@ -138,7 +144,9 @@ impl ProfileResolved {
             .load::<ExtendedBaseLevel>(conn)?;
 
         let packs = aredl_packs::table
-            .inner_join(aredl_completed_packs::table.on(aredl_completed_packs::pack_id.eq(aredl_packs::id)))
+            .inner_join(
+                aredl_completed_packs::table.on(aredl_completed_packs::pack_id.eq(aredl_packs::id)),
+            )
             .inner_join(aredl_pack_tiers::table.on(aredl_pack_tiers::id.eq(aredl_packs::tier)))
             .filter(aredl_completed_packs::user_id.eq(id))
             .order(aredl_pack_tiers::placement.asc())
@@ -148,6 +156,16 @@ impl ProfileResolved {
             .map(|(pack, tier)| PackWithTierResolved { pack, tier })
             .collect::<Vec<_>>();
 
-        Ok(Self { user, clan, roles, rank, packs, records, verified, created, published })
+        Ok(Self {
+            user,
+            clan,
+            roles,
+            rank,
+            packs,
+            records,
+            verified,
+            created,
+            published,
+        })
     }
 }

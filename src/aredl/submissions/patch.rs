@@ -5,7 +5,7 @@ use crate::{
     auth::{Authenticated, Permission},
     db,
     error_handler::ApiError,
-    schema::{aredl_levels, aredl_submissions, users},
+    schema::{aredl_levels, aredl_submissions, submission_history, users},
 };
 use actix_web::web;
 use diesel::expression_methods::BoolExpressionMethods;
@@ -19,6 +19,8 @@ use is_url::is_url;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
+
+use super::history::SubmissionHistory;
 
 #[derive(Serialize, Deserialize, Debug, AsChangeset, Default, ToSchema, Clone, PartialEq)]
 #[diesel(table_name=aredl_submissions, check_for_backend(Pg))]
@@ -180,6 +182,21 @@ impl SubmissionPatchUser {
             .returning(Submission::as_select())
             .get_result::<Submission>(conn)?;
 
+        let history = SubmissionHistory {
+            id: Uuid::new_v4(),
+            submission_id: result.id,
+            record_id: None,
+            status: SubmissionStatus::Pending,
+            user_notes: result.user_notes.clone(),
+            reviewer_id: None,
+            reviewer_notes: None,
+            timestamp: chrono::Utc::now(),
+        };
+
+        diesel::insert_into(submission_history::table)
+            .values(&history)
+            .execute(conn)?;
+
         if !authenticated.has_permission(db, Permission::SubmissionReview)? {
             result.reviewer_id = None;
         }
@@ -192,8 +209,10 @@ impl SubmissionPatchMod {
     pub fn patch_mod(
         patch: Self,
         id: Uuid,
-        conn: &mut PooledConnection<ConnectionManager<PgConnection>>,
+        db: web::Data<Arc<db::DbAppState>>,
+        authenticated: Authenticated,
     ) -> Result<Submission, ApiError> {
+        let conn = &mut db.connection()?;
         if patch == Self::default() {
             return Err(ApiError::new(400, "No changes were provided in the patch!"));
         }
@@ -214,6 +233,15 @@ impl SubmissionPatchMod {
             .filter(aredl_submissions::id.eq(id))
             .select(Submission::as_select())
             .first::<Submission>(conn)?;
+
+        if old_submission.submitted_by == authenticated.user_id {
+            return SubmissionPatchUser::patch(
+                SubmissionPatchMod::downgrade(patch),
+                id,
+                db,
+                authenticated,
+            );
+        }
 
         let level_id = match patch.level_id {
             Some(new_level_id) => new_level_id,

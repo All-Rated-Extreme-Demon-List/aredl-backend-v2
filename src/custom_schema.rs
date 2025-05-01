@@ -12,7 +12,7 @@ diesel::table! {
         position -> Nullable<Int4>,
         moved -> Bool,
         legacy -> Bool,
-        action_at -> Timestamp,
+        action_at -> Timestamptz,
         cause -> Uuid,
         pos_diff -> Nullable<Int4>,
     }
@@ -102,8 +102,8 @@ diesel::table! {
         raw_url -> Nullable<Varchar>,
         is_verification -> Bool,
         reviewer_id -> Nullable<Uuid>,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
         country -> Int4,
         order_pos -> Int4,
     }
@@ -145,8 +145,8 @@ diesel::table! {
         raw_url -> Nullable<Varchar>,
         is_verification -> Bool,
         reviewer_id -> Nullable<Uuid>,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
         clan_id -> Uuid,
         order_pos -> Int4,
     }
@@ -179,8 +179,8 @@ diesel::table! {
         priority_value -> Bigint,
         reviewer_notes -> Nullable<Varchar>,
         user_notes -> Nullable<Varchar>,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
         status -> SubmissionStatus,
         mod_menu -> Nullable<Varchar>,
     }

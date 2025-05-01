@@ -13,7 +13,7 @@ pub mod sql_types {
 diesel::table! {
     aredl_last_gddl_update (id) {
         id -> Uuid,
-        updated_at -> Timestamp,
+        updated_at -> Timestamptz,
     }
 }
 
@@ -77,7 +77,7 @@ diesel::table! {
         affected_level -> Uuid,
         level_above -> Nullable<Uuid>,
         level_below -> Nullable<Uuid>,
-        created_at -> Timestamp,
+        created_at -> Timestamptz,
     }
 }
 
@@ -92,8 +92,8 @@ diesel::table! {
         raw_url -> Nullable<Varchar>,
         placement_order -> Int4,
         reviewer_id -> Nullable<Uuid>,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
         is_verification -> Bool,
         reviewer_notes -> Nullable<Varchar>,
         mod_menu -> Nullable<Varchar>,
@@ -117,10 +117,10 @@ diesel::table! {
         priority -> Bool,
         reviewer_notes -> Nullable<Varchar>,
         user_notes -> Nullable<Varchar>,
-        created_at -> Timestamp,
+        created_at -> Timestamptz,
         status -> SubmissionStatus,
         mod_menu -> Nullable<Varchar>,
-        updated_at -> Timestamp,
+        updated_at -> Timestamptz,
     }
 }
 
@@ -130,8 +130,8 @@ diesel::table! {
         clan_id -> Uuid,
         user_id -> Uuid,
         invited_by -> Uuid,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
     }
 }
 
@@ -141,8 +141,8 @@ diesel::table! {
         clan_id -> Uuid,
         user_id -> Uuid,
         role -> Int4,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
     }
 }
 
@@ -152,8 +152,8 @@ diesel::table! {
         global_name -> Varchar,
         tag -> Varchar,
         description -> Nullable<Text>,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
     }
 }
 
@@ -172,7 +172,7 @@ diesel::table! {
         secondary_username -> Varchar,
         secondary_discord_id -> Nullable<Varchar>,
         secondary_global_name -> Varchar,
-        merged_at -> Timestamp,
+        merged_at -> Timestamptz,
     }
 }
 
@@ -182,8 +182,8 @@ diesel::table! {
         primary_user -> Uuid,
         secondary_user -> Uuid,
         is_rejected -> Bool,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
         is_claimed -> Bool,
     }
 }
@@ -197,7 +197,7 @@ diesel::table! {
         user_id -> Uuid,
         content -> Text,
         notification_type -> NotificationType,
-        created_at -> Timestamp,
+        created_at -> Timestamptz,
     }
 }
 
@@ -207,7 +207,7 @@ diesel::table! {
         pkce_verifier -> Varchar,
         nonce -> Varchar,
         callback -> Nullable<Varchar>,
-        created_at -> Nullable<Timestamp>,
+        created_at -> Nullable<Timestamptz>,
     }
 }
 
@@ -236,7 +236,7 @@ diesel::table! {
         record_id -> Nullable<Uuid>,
         reviewer_notes -> Nullable<Text>,
         status -> SubmissionStatus,
-        timestamp -> Timestamp,
+        timestamp -> Timestamptz,
         user_notes -> Nullable<Text>,
         reviewer_id -> Nullable<Uuid>,
     }
@@ -259,13 +259,13 @@ diesel::table! {
         placeholder -> Bool,
         description -> Nullable<Text>,
         country -> Nullable<Int4>,
-        last_country_update -> Timestamp,
+        last_country_update -> Timestamptz,
         ban_level -> Int4,
         discord_avatar -> Nullable<Varchar>,
         discord_banner -> Nullable<Varchar>,
         discord_accent_color -> Nullable<Int4>,
-        access_valid_after -> Timestamp,
-        created_at -> Timestamp,
+        access_valid_after -> Timestamptz,
+        created_at -> Timestamptz,
     }
 }
 

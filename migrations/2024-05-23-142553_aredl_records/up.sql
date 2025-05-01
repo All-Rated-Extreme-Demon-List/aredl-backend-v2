@@ -8,8 +8,8 @@ CREATE TABLE aredl_records (
     raw_url VARCHAR,
     placement_order int DEFAULT 0 NOT NULL,
     reviewer_id uuid REFERENCES users(id) ON DELETE SET NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
     PRIMARY KEY(id),
     UNIQUE(level_id, submitted_by)
 );
@@ -28,7 +28,7 @@ CREATE TABLE aredl_submissions (
     is_rejected boolean DEFAULT false NOT NULL,
     rejection_reason VARCHAR,
     additional_notes VARCHAR,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
     PRIMARY KEY(id),
     UNIQUE(level_id, submitted_by)
 );

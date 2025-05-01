@@ -7,7 +7,7 @@ use crate::schema::{
     aredl_position_history, aredl_records, clan_members, clans, permissions, roles, user_roles,
     users,
 };
-use diesel::internal::derives::multiconnection::chrono::{DateTime, Duration, NaiveDateTime, Utc};
+use diesel::internal::derives::multiconnection::chrono::{DateTime, Duration, Utc};
 use diesel::r2d2::ConnectionManager;
 use diesel::{
     Connection, ExpressionMethods, Insertable, NullableExpressionMethods, PgConnection, QueryDsl,
@@ -147,7 +147,7 @@ pub struct ChangelogResolved {
     pub affected_level: Uuid,
     pub level_above: Option<Uuid>,
     pub level_below: Option<Uuid>,
-    pub created_at: NaiveDateTime,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Insertable)]
@@ -157,8 +157,8 @@ pub struct NewClan {
     pub global_name: String,
     pub tag: String,
     pub description: Option<String>,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Insertable)]
@@ -167,8 +167,8 @@ pub struct NewClanMember {
     pub clan_id: Uuid,
     pub user_id: Uuid,
     pub role: i32,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 pub fn load_json_from_file<T>(path: &Path) -> T
@@ -644,9 +644,7 @@ fn main() {
                         affected_level: id.clone(),
                         level_above: above,
                         level_below: below,
-                        created_at: DateTime::from_timestamp(first_timestamp, 0)
-                            .unwrap()
-                            .naive_utc(),
+                        created_at: DateTime::from_timestamp(first_timestamp, 0).unwrap(),
                     }
                 });
 
@@ -681,7 +679,7 @@ fn main() {
                                 .unwrap()
                                 .clone()
                         }),
-                        created_at: DateTime::from_timestamp(entry.date, 0).unwrap().naive_utc(),
+                        created_at: DateTime::from_timestamp(entry.date, 0).unwrap(),
                     }
                 }))
                 .collect::<Vec<ChangelogResolved>>();
@@ -728,7 +726,7 @@ fn main() {
                 .collect();
 
             let mut new_clan_ids: HashMap<String, Uuid> = HashMap::new();
-            let now = Utc::now().naive_utc();
+            let now = Utc::now();
 
             let clans_to_insert: Vec<NewClan> = new_clan_tags
                 .into_iter()
@@ -784,7 +782,7 @@ fn main() {
 
                         let role = *clan_roles.get(&json_id.unwrap_or(0)).unwrap_or(&0);
 
-                        let now = Utc::now().naive_utc();
+                        let now = Utc::now();
                         Some(NewClanMember {
                             clan_id,
                             user_id,
@@ -859,7 +857,7 @@ fn main() {
 
             println!("\tInserting records");
 
-            let now = Utc::now().naive_utc();
+            let now = Utc::now();
 
             let records = levels
                 .iter()
