@@ -115,6 +115,7 @@ impl SubmissionResolved {
             reviewer_notes: submission.reviewer_notes,
             user_notes: submission.user_notes,
             created_at: submission.created_at,
+            updated_at: submission.updated_at,
             priority_value: submission.priority_value,
         }
     }
@@ -122,14 +123,21 @@ impl SubmissionResolved {
     pub fn resolve_from_id(
         submission_id: Uuid,
         db: web::Data<Arc<DbAppState>>,
+        authenticated: Authenticated,
     ) -> Result<SubmissionResolved, ApiError> {
         let conn = &mut db.connection()?;
 
-        let resolved = base_resolved_submission_query!()
+        let resolved_raw = base_resolved_submission_query!()
             .filter(aredl_submissions_with_priority::id.eq(submission_id))
             .first::<ResolvedSubmissionRow>(conn)?;
 
-        Ok(Self::from_data(resolved))
+        let mut resolved = Self::from_data(resolved_raw);
+
+        if !authenticated.has_permission(db.clone(), Permission::SubmissionReview)? {
+            resolved.reviewer = None;
+        }
+
+        Ok(resolved)
     }
 
     pub fn find_one(
@@ -138,16 +146,11 @@ impl SubmissionResolved {
         authenticated: Authenticated,
     ) -> Result<SubmissionResolved, ApiError> {
         let conn = &mut db.connection()?;
-        let has_auth = Authenticated::has_permission(
-            &authenticated,
-            db.clone(),
-            Permission::SubmissionReview,
-        )?;
 
         let mut query =
             base_resolved_submission_query!().filter(aredl_submissions_with_priority::id.eq(id));
 
-        if !has_auth {
+        if !authenticated.has_permission(db.clone(), Permission::SubmissionReview)? {
             query = query
                 .filter(aredl_submissions_with_priority::submitted_by.eq(authenticated.user_id));
         }
@@ -163,6 +166,7 @@ impl ResolvedSubmissionPage {
         db: web::Data<Arc<DbAppState>>,
         page_query: PageQuery<D>,
         options: SubmissionQueryOptions,
+        authenticated: Authenticated,
     ) -> Result<Paginated<Self>, ApiError> {
         let conn = &mut db.connection()?;
 
@@ -174,10 +178,14 @@ impl ResolvedSubmissionPage {
             .offset(page_query.offset())
             .load::<ResolvedSubmissionRow>(conn)?;
 
-        let submissions = submissions
+        let mut submissions = submissions
             .into_iter()
             .map(|resolved_row| SubmissionResolved::from_data(resolved_row))
             .collect::<Vec<_>>();
+
+        if !authenticated.has_permission(db, Permission::SubmissionReview)? {
+            submissions.iter_mut().for_each(|s| s.reviewer = None);
+        }
 
         let mut count_query = base_resolved_submission_query!();
         count_query = apply_submissions_filters!(count_query, options);
@@ -201,6 +209,6 @@ impl ResolvedSubmissionPage {
             ..options
         };
 
-        Ok(Self::find_all(db, page_query, options)?)
+        Ok(Self::find_all(db, page_query, options, authenticated)?)
     }
 }

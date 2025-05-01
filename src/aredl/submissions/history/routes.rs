@@ -5,7 +5,8 @@ use utoipa::OpenApi;
 use uuid::Uuid;
 
 use crate::{
-    aredl::submissions::history::SubmissionHistory, db::DbAppState, error_handler::ApiError,
+    aredl::submissions::history::SubmissionHistory, auth::Authenticated, db::DbAppState,
+    error_handler::ApiError,
 };
 
 #[utoipa::path(
@@ -28,9 +29,11 @@ use crate::{
 async fn get_history(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
+    authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let history =
-        web::block(move || SubmissionHistory::by_submission(db, id.into_inner())).await??;
+        web::block(move || SubmissionHistory::by_submission(db, id.into_inner(), authenticated))
+            .await??;
 
     Ok(HttpResponse::Ok().json(history))
 }

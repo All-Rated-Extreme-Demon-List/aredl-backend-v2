@@ -1,8 +1,13 @@
+use std::sync::Arc;
+
 use crate::{
     aredl::submissions::*,
+    auth::{Authenticated, Permission},
+    db,
     error_handler::ApiError,
     schema::{aredl_levels, aredl_submissions, users},
 };
+use actix_web::web;
 use diesel::expression_methods::BoolExpressionMethods;
 use diesel::{
     dsl::exists,
@@ -67,9 +72,11 @@ impl SubmissionPatchUser {
     pub fn patch(
         patch: Self,
         id: Uuid,
-        conn: &mut PooledConnection<ConnectionManager<PgConnection>>,
-        user: Uuid,
+        db: web::Data<Arc<db::DbAppState>>,
+        authenticated: Authenticated,
     ) -> Result<Submission, ApiError> {
+        let conn = &mut db.connection()?;
+        let user = authenticated.user_id;
         if patch == Self::default() {
             return Err(ApiError::new(400, "No changes were provided in the patch!"));
         }
@@ -145,7 +152,7 @@ impl SubmissionPatchUser {
             ));
         }
 
-        let result = diesel::update(aredl_submissions::table)
+        let mut result = diesel::update(aredl_submissions::table)
             .filter(aredl_submissions::id.eq(id))
             .filter(aredl_submissions::submitted_by.eq(user))
             .filter(
@@ -172,6 +179,10 @@ impl SubmissionPatchUser {
             ))
             .returning(Submission::as_select())
             .get_result::<Submission>(conn)?;
+
+        if !authenticated.has_permission(db, Permission::SubmissionReview)? {
+            result.reviewer_id = None;
+        }
 
         Ok(result)
     }

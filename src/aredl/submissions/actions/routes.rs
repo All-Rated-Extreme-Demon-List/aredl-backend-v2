@@ -31,8 +31,7 @@ async fn claim(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let patched =
-        web::block(move || SubmissionResolved::claim_highest_priority(db, authenticated.user_id))
-            .await??;
+        web::block(move || SubmissionResolved::claim_highest_priority(db, authenticated)).await??;
 
     Ok(HttpResponse::Ok().json(patched))
 }
@@ -60,8 +59,10 @@ async fn claim(
 async fn unclaim(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
+    authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let patched = web::block(move || Submission::unclaim(db, id.into_inner())).await??;
+    let patched =
+        web::block(move || Submission::unclaim(db, id.into_inner(), authenticated)).await??;
     Ok(HttpResponse::Ok().json(patched))
 }
 

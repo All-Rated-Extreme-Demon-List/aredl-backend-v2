@@ -180,6 +180,7 @@ diesel::table! {
         reviewer_notes -> Nullable<Varchar>,
         user_notes -> Nullable<Varchar>,
         created_at -> Timestamp,
+        updated_at -> Timestamp,
         status -> SubmissionStatus,
         mod_menu -> Nullable<Varchar>,
     }

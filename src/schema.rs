@@ -120,6 +120,7 @@ diesel::table! {
         created_at -> Timestamp,
         status -> SubmissionStatus,
         mod_menu -> Nullable<Varchar>,
+        updated_at -> Timestamp,
     }
 }
 
@@ -233,9 +234,11 @@ diesel::table! {
         id -> Uuid,
         submission_id -> Uuid,
         record_id -> Nullable<Uuid>,
-        rejection_reason -> Nullable<Text>,
+        reviewer_notes -> Nullable<Text>,
         status -> SubmissionStatus,
         timestamp -> Timestamp,
+        user_notes -> Nullable<Text>,
+        reviewer_id -> Nullable<Uuid>,
     }
 }
 

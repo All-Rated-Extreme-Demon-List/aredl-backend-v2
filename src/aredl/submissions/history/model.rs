@@ -1,5 +1,8 @@
 use crate::{
-    aredl::submissions::SubmissionStatus, db::DbAppState, error_handler::ApiError,
+    aredl::submissions::SubmissionStatus,
+    auth::{Authenticated, Permission},
+    db::DbAppState,
+    error_handler::ApiError,
     schema::submission_history,
 };
 use actix_web::web;
@@ -17,7 +20,10 @@ pub struct SubmissionHistory {
     pub submission_id: Uuid,
     pub record_id: Option<Uuid>,
     pub status: SubmissionStatus,
-    pub rejection_reason: Option<String>,
+    pub reviewer_notes: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reviewer_id: Option<Uuid>,
+    pub user_notes: Option<String>,
     pub timestamp: NaiveDateTime,
 }
 
@@ -25,14 +31,18 @@ impl SubmissionHistory {
     pub fn by_submission(
         db: web::Data<Arc<DbAppState>>,
         submission_id: Uuid,
+        authenticated: Authenticated,
     ) -> Result<Vec<SubmissionHistory>, ApiError> {
         let conn = &mut db.connection()?;
-
-        let history = submission_history::table
+        let mut history = submission_history::table
             .filter(submission_history::submission_id.eq(submission_id))
             .select(SubmissionHistory::as_select())
             .order(submission_history::timestamp.desc())
             .load::<SubmissionHistory>(conn)?;
+
+        if !authenticated.has_permission(db.clone(), Permission::SubmissionReview)? {
+            history.iter_mut().for_each(|h| h.reviewer_id = None);
+        }
 
         Ok(history)
     }

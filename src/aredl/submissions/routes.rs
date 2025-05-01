@@ -61,7 +61,7 @@ async fn patch(
     authenticated: Authenticated
 ) -> Result<HttpResponse, ApiError> {
     let mut conn = db.connection()?;
-    let has_auth = authenticated.has_permission(db, Permission::SubmissionReview)?;
+    let has_auth = authenticated.has_permission(db.clone(), Permission::SubmissionReview)?;
 
     match has_auth {
         true => {
@@ -73,7 +73,7 @@ async fn patch(
         false => {
             let user_patch = SubmissionPatchMod::downgrade(body.into_inner());
             let patched = web::block(
-                move || SubmissionPatchUser::patch(user_patch, id.into_inner(), &mut conn, authenticated.user_id)
+                move || SubmissionPatchUser::patch(user_patch, id.into_inner(), db, authenticated)
             ).await??;
             return Ok(HttpResponse::Ok().json(patched))
         }

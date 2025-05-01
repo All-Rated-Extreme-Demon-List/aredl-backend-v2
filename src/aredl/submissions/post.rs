@@ -151,7 +151,9 @@ impl Submission {
                 submission_id: submission.id,
                 record_id: None,
                 status: SubmissionStatus::Pending,
-                rejection_reason: None,
+                user_notes: submission.user_notes.clone(),
+                reviewer_id: None,
+                reviewer_notes: None,
                 timestamp: chrono::Utc::now().naive_utc(),
             };
 

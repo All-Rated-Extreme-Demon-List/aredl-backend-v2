@@ -33,9 +33,15 @@ async fn find_all(
     db: web::Data<Arc<DbAppState>>,
     page_query: web::Query<PageQuery<50>>,
     options: web::Query<SubmissionQueryOptions>,
+    authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let submissions = web::block(move || {
-        ResolvedSubmissionPage::find_all(db, page_query.into_inner(), options.into_inner())
+        ResolvedSubmissionPage::find_all(
+            db,
+            page_query.into_inner(),
+            options.into_inner(),
+            authenticated,
+        )
     })
     .await??;
     Ok(HttpResponse::Ok().json(submissions))

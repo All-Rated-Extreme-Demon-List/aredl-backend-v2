@@ -71,6 +71,8 @@ pub struct Submission {
     pub user_notes: Option<String>,
     /// Timestamp of when the submission was created.
     pub created_at: NaiveDateTime,
+    /// Timestamp of when the submission was last updated.
+    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Serialize, Deserialize, Queryable, Insertable, Selectable, Debug, ToSchema)]
@@ -104,6 +106,8 @@ pub struct SubmissionWithPriority {
     pub user_notes: Option<String>,
     /// Timestamp of when the submission was created.
     pub created_at: NaiveDateTime,
+    /// Timestamp of when the submission was last updated.
+    pub updated_at: NaiveDateTime,
     /// The priority value of this submission
     pub priority_value: i64,
 }
@@ -112,9 +116,9 @@ pub struct SubmissionWithPriority {
 pub struct SubmissionResolved {
     /// Internal UUID of the submission.
     pub id: Uuid,
-    /// The level this submission is on
+    /// The level this submission is for
     pub level: ExtendedBaseLevel,
-    /// Internal UUID of the submitter.
+    /// User who submitted this completion.
     pub submitted_by: BaseUser,
     /// Whether the record was completed on mobile or not.
     pub mobile: bool,
@@ -128,7 +132,8 @@ pub struct SubmissionResolved {
     pub mod_menu: Option<String>,
     /// The status of this submission
     pub status: SubmissionStatus,
-    /// Internal UUID of the user who reviewed the record.
+    /// User who reviewed the record.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reviewer: Option<BaseUser>,
     /// Whether the record was submitted as a priority record.
     pub priority: bool,
@@ -138,6 +143,8 @@ pub struct SubmissionResolved {
     pub user_notes: Option<String>,
     /// Timestamp of when the submission was created.
     pub created_at: NaiveDateTime,
+    /// Timestamp of when the submission was last updated.
+    pub updated_at: NaiveDateTime,
     ///
     pub priority_value: i64,
 }
@@ -155,15 +162,15 @@ impl Submission {
     ) -> Result<(), ApiError> {
         let mut conn = db.connection()?;
         conn.transaction(|connection| -> Result<(), ApiError> {
-            let has_auth = authenticated.has_permission(db, Permission::SubmissionReview)?;
-
             // Log deletion in submission history
             let history = SubmissionHistory {
                 id: Uuid::new_v4(),
                 submission_id,
                 record_id: None,
                 status: SubmissionStatus::Denied, // Or SubmissionStatus::Deleted if you add it
-                rejection_reason: Some("Submission deleted".into()),
+                reviewer_notes: None,
+                reviewer_id: None,
+                user_notes: Some("Submission deleted".into()),
                 timestamp: chrono::Utc::now().naive_utc(),
             };
             diesel::insert_into(submission_history::table)
@@ -174,7 +181,7 @@ impl Submission {
                 .filter(aredl_submissions::id.eq(submission_id))
                 .into_boxed();
 
-            if !has_auth {
+            if !authenticated.has_permission(db, Permission::SubmissionReview)? {
                 query = query
                     .filter(aredl_submissions::submitted_by.eq(authenticated.user_id))
                     .filter(aredl_submissions::status.eq(SubmissionStatus::Pending));
