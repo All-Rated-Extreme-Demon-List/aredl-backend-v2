@@ -79,7 +79,7 @@ impl Submission {
                 id: Uuid::new_v4(),
                 submission_id: updated.id,
                 record_id: Some(inserted.id),
-                status: SubmissionStatus::Claimed,
+                status: SubmissionStatus::Accepted,
                 reviewer_notes: notes,
                 reviewer_id: Some(reviewer_id),
                 user_notes: None,

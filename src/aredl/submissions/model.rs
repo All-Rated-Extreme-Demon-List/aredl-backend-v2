@@ -26,6 +26,7 @@ pub enum SubmissionStatus {
     Claimed,
     UnderConsideration,
     Denied,
+    Accepted,
 }
 
 #[derive(Serialize, Deserialize)]
