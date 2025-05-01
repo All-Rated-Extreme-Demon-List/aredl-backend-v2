@@ -4,22 +4,20 @@ use crate::{
     db::DbAppState,
     error_handler::ApiError,
     roles::Role,
-    schema::{
-        aredl_levels, aredl_submissions, roles, submission_history, user_roles,
-        users,
-    },
+    schema::{aredl_levels, aredl_submissions, roles, submission_history, user_roles, users},
 };
 use actix_web::web;
 use diesel::{
-    Connection, ExpressionMethods, JoinOnDsl, OptionalExtension, 
-    QueryDsl, RunQueryDsl, SelectableHelper,
+    Connection, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl,
+    SelectableHelper,
 };
+use is_url::is_url;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
-use is_url::is_url;
 
+use super::history::SubmissionHistory;
 
 #[derive(Serialize, Deserialize, Debug, Insertable, ToSchema)]
 #[diesel(table_name=aredl_submissions, check_for_backend(Pg))]

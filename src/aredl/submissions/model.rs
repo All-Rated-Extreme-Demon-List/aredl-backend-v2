@@ -1,24 +1,22 @@
 use crate::{
-    aredl::levels::{BaseLevel, ResolvedLevel},
+    aredl::levels::ExtendedBaseLevel,
+    auth::{Authenticated, Permission},
     custom_schema::aredl_submissions_with_priority,
     db::DbAppState,
     error_handler::ApiError,
-    schema::{
-        aredl_submissions, submission_history, users,
-    },
+    schema::{aredl_submissions, submission_history},
     users::BaseUser,
 };
 use actix_web::web;
 use chrono::NaiveDateTime;
-use diesel::{
-    pg::Pg,
-    ExpressionMethods, QueryDsl, RunQueryDsl, Selectable,
-};
+use diesel::{pg::Pg, Connection, ExpressionMethods, RunQueryDsl, Selectable};
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
+
+use super::history::SubmissionHistory;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq)]
 #[ExistingTypePath = "crate::schema::sql_types::SubmissionStatus"]
@@ -28,7 +26,6 @@ pub enum SubmissionStatus {
     Claimed,
     UnderConsideration,
     Denied,
-    // Accepted (unused)
 }
 
 #[derive(Serialize, Deserialize)]
@@ -116,7 +113,7 @@ pub struct SubmissionResolved {
     /// Internal UUID of the submission.
     pub id: Uuid,
     /// The level this submission is on
-    pub level: BaseLevel,
+    pub level: ExtendedBaseLevel,
     /// Internal UUID of the submitter.
     pub submitted_by: BaseUser,
     /// Whether the record was completed on mobile or not.
@@ -146,82 +143,46 @@ pub struct SubmissionResolved {
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
-pub struct ReviewerNotes {
-    pub notes: Option<String>,
+pub struct SubmissionPage {
+    data: Vec<Submission>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Queryable, Insertable, Selectable, ToSchema)]
-#[diesel(table_name = submission_history, check_for_backend(Pg))]
-pub struct SubmissionHistory {
-    pub id: Uuid,
-    pub submission_id: Uuid,
-    pub record_id: Option<Uuid>,
-    pub status: SubmissionStatus,
-    pub rejection_reason: Option<String>,
-    pub timestamp: NaiveDateTime,
-}
-
-impl SubmissionResolved {
-    pub fn from(
-        submission: Submission,
+impl Submission {
+    pub fn delete(
         db: web::Data<Arc<DbAppState>>,
-        priority: Option<i64>,
-    ) -> Result<SubmissionResolved, ApiError> {
-        let conn = &mut db.connection()?;
-        let level = ResolvedLevel::find(db, submission.level_id)?;
-        let base_level = BaseLevel {
-            id: level.id,
-            name: level.name,
-        };
+        submission_id: Uuid,
+        authenticated: Authenticated,
+    ) -> Result<(), ApiError> {
+        let mut conn = db.connection()?;
+        conn.transaction(|connection| -> Result<(), ApiError> {
+            let has_auth = authenticated.has_permission(db, Permission::SubmissionReview)?;
 
-        let submitter = users::table
-            .filter(users::id.eq(submission.submitted_by))
-            .select((users::username, users::global_name))
-            .first::<(String, String)>(conn)?;
-        let submitted_by = BaseUser {
-            id: submission.submitted_by,
-            username: submitter.0,
-            global_name: submitter.1,
-        };
+            // Log deletion in submission history
+            let history = SubmissionHistory {
+                id: Uuid::new_v4(),
+                submission_id,
+                record_id: None,
+                status: SubmissionStatus::Denied, // Or SubmissionStatus::Deleted if you add it
+                rejection_reason: Some("Submission deleted".into()),
+                timestamp: chrono::Utc::now().naive_utc(),
+            };
+            diesel::insert_into(submission_history::table)
+                .values(&history)
+                .execute(connection)?;
 
-        let reviewer: Option<BaseUser> = match submission.reviewer_id {
-            Some(reviewer_id) => {
-                let reviewer_db = users::table
-                    .filter(users::id.eq(reviewer_id))
-                    .select((users::username, users::global_name))
-                    .first::<(String, String)>(conn)?;
-                Some(BaseUser {
-                    id: reviewer_id,
-                    username: reviewer_db.0,
-                    global_name: reviewer_db.1,
-                })
+            let mut query = diesel::delete(aredl_submissions::table)
+                .filter(aredl_submissions::id.eq(submission_id))
+                .into_boxed();
+
+            if !has_auth {
+                query = query
+                    .filter(aredl_submissions::submitted_by.eq(authenticated.user_id))
+                    .filter(aredl_submissions::status.eq(SubmissionStatus::Pending));
             }
-            None => None,
-        };
 
-        let priority_value = match priority {
-            None => aredl_submissions_with_priority::table
-                .filter(aredl_submissions_with_priority::id.eq(submission.id))
-                .select(aredl_submissions_with_priority::priority_value)
-                .first::<i64>(conn)?,
-            Some(v) => v,
-        };
-        Ok(SubmissionResolved {
-            id: submission.id,
-            level: base_level,
-            submitted_by,
-            mobile: submission.mobile,
-            ldm_id: submission.ldm_id,
-            video_url: submission.video_url,
-            raw_url: submission.raw_url,
-            mod_menu: submission.mod_menu,
-            status: submission.status,
-            reviewer,
-            priority: submission.priority,
-            reviewer_notes: submission.reviewer_notes,
-            user_notes: submission.user_notes,
-            created_at: submission.created_at,
-            priority_value,
-        })
+            query.execute(connection)?;
+            Ok(())
+        })?;
+        Ok(())
     }
 }

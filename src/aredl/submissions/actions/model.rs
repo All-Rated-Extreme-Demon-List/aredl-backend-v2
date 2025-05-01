@@ -1,23 +1,28 @@
 use crate::{
-    aredl::records::Record,
-    aredl::submissions::*,
+    aredl::{
+        records::Record,
+        submissions::{history::SubmissionHistory, *},
+    },
     auth::Authenticated,
+    custom_schema::aredl_submissions_with_priority,
     db::DbAppState,
     error_handler::ApiError,
-    schema::{
-        aredl_levels, aredl_records, aredl_submissions, submission_history,
-    },
-    users::
-        me::notifications::{Notification, NotificationType},
-    custom_schema::aredl_submissions_with_priority
+    schema::{aredl_levels, aredl_records, aredl_submissions, submission_history},
+    users::me::notifications::{Notification, NotificationType},
 };
 use actix_web::web;
 use diesel::{
-    Connection, ExpressionMethods, OptionalExtension,
-    QueryDsl, RunQueryDsl, SelectableHelper,
+    Connection, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
 };
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use utoipa::ToSchema;
 use uuid::Uuid;
+
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct ReviewerNotes {
+    pub notes: Option<String>,
+}
 
 impl Submission {
     pub fn accept(
@@ -86,7 +91,7 @@ impl Submission {
                 .select(aredl_levels::name)
                 .first::<String>(connection)?;
 
-            let content = format!("Your record on {:?} has been accepted!", level_name);
+            let content = format!("Your submissions for {:?} has been accepted!", level_name);
             Notification::create(
                 connection,
                 inserted.submitted_by,
@@ -116,18 +121,19 @@ impl Submission {
             aredl_submissions::reviewer_notes.eq(notes.clone()),
         );
 
-        let new_record = diesel::update(aredl_submissions::table)
+        let updated_submission = diesel::update(aredl_submissions::table)
             .filter(aredl_submissions::id.eq(id))
             .set(new_data)
             .returning(Submission::as_select())
             .get_result::<Submission>(connection)?;
 
-        let upgraded = SubmissionResolved::from(new_record.clone(), db, None)?;
+        let resolved_updated_submission =
+            SubmissionResolved::resolve_from_id(updated_submission.id, db)?;
 
         // Log submission history
         let history = SubmissionHistory {
             id: Uuid::new_v4(),
-            submission_id: new_record.id,
+            submission_id: resolved_updated_submission.id,
             record_id: None,
             status: SubmissionStatus::Denied,
             rejection_reason: notes,
@@ -139,15 +145,15 @@ impl Submission {
 
         let content = format!(
             "Your record on {:?} has been denied...",
-            upgraded.level.name
+            resolved_updated_submission.level.name
         );
         Notification::create(
             connection,
-            upgraded.submitted_by.id,
+            resolved_updated_submission.submitted_by.id,
             content,
             NotificationType::Failure,
         )?;
-        Ok(upgraded)
+        Ok(resolved_updated_submission)
     }
 
     pub fn under_consideration(
@@ -164,18 +170,19 @@ impl Submission {
             aredl_submissions::reviewer_notes.eq(notes.clone()),
         );
 
-        let new_record = diesel::update(aredl_submissions::table)
+        let updated_submission = diesel::update(aredl_submissions::table)
             .filter(aredl_submissions::id.eq(id))
             .set(new_data)
             .returning(Submission::as_select())
             .get_result::<Submission>(connection)?;
 
-        let upgraded = SubmissionResolved::from(new_record.clone(), db, None)?;
+        let resolved_updated_submission =
+            SubmissionResolved::resolve_from_id(updated_submission.id, db)?;
 
         // Log submission history
         let history = SubmissionHistory {
             id: Uuid::new_v4(),
-            submission_id: new_record.id,
+            submission_id: resolved_updated_submission.id,
             record_id: None,
             status: SubmissionStatus::UnderConsideration,
             rejection_reason: None,
@@ -187,15 +194,15 @@ impl Submission {
 
         let content = format!(
             "Your record on {:?} has been placed under consideration.",
-            upgraded.level.name
+            resolved_updated_submission.level.name
         );
         Notification::create(
             connection,
-            upgraded.submitted_by.id,
+            resolved_updated_submission.submitted_by.id,
             content,
             NotificationType::Info,
         )?;
-        Ok(upgraded)
+        Ok(resolved_updated_submission)
     }
 
     pub fn unclaim(
@@ -209,18 +216,18 @@ impl Submission {
             aredl_submissions::reviewer_id.eq::<Option<Uuid>>(None),
         );
 
-        let new_record = diesel::update(aredl_submissions::table)
+        let updated_submission = diesel::update(aredl_submissions::table)
             .filter(aredl_submissions::id.eq(id))
             .set(new_data)
             .returning(Submission::as_select())
             .get_result::<Submission>(connection)?;
 
-        let upgraded = SubmissionResolved::from(new_record.clone(), db, None)?;
-
+        let resolved_updated_submission =
+            SubmissionResolved::resolve_from_id(updated_submission.id, db)?;
         // Log submission history
         let history = SubmissionHistory {
             id: Uuid::new_v4(),
-            submission_id: new_record.id,
+            submission_id: resolved_updated_submission.id,
             record_id: None,
             status: SubmissionStatus::Pending,
             rejection_reason: None,
@@ -230,42 +237,38 @@ impl Submission {
             .values(&history)
             .execute(connection)?;
 
-        Ok(upgraded)
+        Ok(resolved_updated_submission)
     }
 }
 
 impl SubmissionResolved {
-    pub fn find_highest_priority(
+    pub fn claim_highest_priority(
         db: web::Data<Arc<DbAppState>>,
         user: Uuid,
     ) -> Result<SubmissionResolved, ApiError> {
-        let conn = &mut db.connection()?;
-        let new_data = (
-            aredl_submissions::status.eq(SubmissionStatus::Claimed),
-            aredl_submissions::reviewer_id.eq(user),
-        );
+        db.connection()?
+            .transaction(|conn| -> Result<SubmissionResolved, ApiError> {
+                let next_id: Uuid = aredl_submissions_with_priority::table
+                    .filter(aredl_submissions_with_priority::status.eq(SubmissionStatus::Pending))
+                    .for_update()
+                    .skip_locked()
+                    .order((
+                        aredl_submissions_with_priority::priority_value.desc(),
+                        aredl_submissions_with_priority::created_at.asc(),
+                    ))
+                    .select(aredl_submissions_with_priority::id)
+                    .first(conn)?;
 
-        // TODO: maybe this could become one super clean query?
-        let highest_priority_id = aredl_submissions_with_priority::table
-            .filter(aredl_submissions_with_priority::status.eq(SubmissionStatus::Pending))
-            .select((
-                aredl_submissions_with_priority::id,
-                aredl_submissions_with_priority::priority_value,
-            ))
-            .order(aredl_submissions_with_priority::priority_value.desc())
-            .limit(1)
-            .first::<(Uuid, i64)>(conn)?;
+                diesel::update(aredl_submissions::table.filter(aredl_submissions::id.eq(next_id)))
+                    .set((
+                        aredl_submissions::status.eq(SubmissionStatus::Claimed),
+                        aredl_submissions::reviewer_id.eq(user),
+                    ))
+                    .execute(conn)?;
 
-        // we don't really need to return the priority value here
-        let submission = diesel::update(
-            aredl_submissions::table.filter(aredl_submissions::id.eq(highest_priority_id.0)),
-        )
-        .set(new_data)
-        .returning(Submission::as_select())
-        .get_result(conn)?;
+                let resolved = SubmissionResolved::resolve_from_id(next_id, db)?;
 
-        let upgraded = SubmissionResolved::from(submission, db, Some(highest_priority_id.1))?;
-
-        Ok(upgraded)
+                Ok(resolved)
+            })
     }
 }

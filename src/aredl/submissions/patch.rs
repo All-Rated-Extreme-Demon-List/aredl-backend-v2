@@ -1,22 +1,19 @@
 use crate::{
     aredl::submissions::*,
     error_handler::ApiError,
-    schema::{
-        aredl_levels, aredl_submissions, users,
-    },
+    schema::{aredl_levels, aredl_submissions, users},
 };
 use diesel::expression_methods::BoolExpressionMethods;
 use diesel::{
     dsl::exists,
     r2d2::{ConnectionManager, PooledConnection},
-    select, ExpressionMethods, OptionalExtension,
-    PgConnection, QueryDsl, RunQueryDsl, SelectableHelper,
+    select, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl,
+    SelectableHelper,
 };
 use is_url::is_url;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
-
 
 #[derive(Serialize, Deserialize, Debug, AsChangeset, Default, ToSchema, Clone, PartialEq)]
 #[diesel(table_name=aredl_submissions, check_for_backend(Pg))]
@@ -64,20 +61,6 @@ pub struct SubmissionPatchMod {
     pub reviewer_notes: Option<String>,
     /// Any additional notes left by the submitter.
     pub user_notes: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, ToSchema)]
-pub struct SubmissionPage {
-    data: Vec<Submission>,
-}
-
-#[derive(Serialize, Deserialize, ToSchema)]
-pub struct SubmissionQueryOptions {
-    pub status_filter: Option<SubmissionStatus>,
-    pub mobile_fiter: Option<bool>,
-    pub level_filter: Option<Uuid>,
-    pub submitter_filter: Option<Uuid>,
-    pub priority_filter: Option<bool>,
 }
 
 impl SubmissionPatchUser {
