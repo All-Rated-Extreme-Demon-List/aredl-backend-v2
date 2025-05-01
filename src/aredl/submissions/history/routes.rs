@@ -5,7 +5,9 @@ use utoipa::OpenApi;
 use uuid::Uuid;
 
 use crate::{
-    aredl::submissions::history::SubmissionHistory, auth::Authenticated, db::DbAppState,
+    aredl::submissions::history::SubmissionHistory,
+    auth::{Authenticated, UserAuth},
+    db::DbAppState,
     error_handler::ApiError,
 };
 
@@ -25,7 +27,7 @@ use crate::{
         ("id" = Uuid, description = "The ID of the submission")
     ),
 )]
-#[get("{id}/history")]
+#[get("{id}/history", wrap = "UserAuth::load()")]
 async fn get_history(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
