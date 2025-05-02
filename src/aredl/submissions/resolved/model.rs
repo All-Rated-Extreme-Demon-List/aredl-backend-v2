@@ -28,7 +28,7 @@ pub type ResolvedSubmissionRow = (
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct SubmissionQueryOptions {
     pub status_filter: Option<SubmissionStatus>,
-    pub mobile_fiter: Option<bool>,
+    pub mobile_filter: Option<bool>,
     pub level_filter: Option<Uuid>,
     pub submitter_filter: Option<Uuid>,
     pub priority_filter: Option<bool>,
@@ -79,7 +79,7 @@ macro_rules! apply_submissions_filters {
         if let Some(status) = opts.status_filter.clone() {
             new_query = new_query.filter(aredl_submissions_with_priority::status.eq(status));
         }
-        if let Some(mobile) = opts.mobile_fiter.clone() {
+        if let Some(mobile) = opts.mobile_filter.clone() {
             new_query = new_query.filter(aredl_submissions_with_priority::mobile.eq(mobile));
         }
         if let Some(level) = opts.level_filter.clone() {

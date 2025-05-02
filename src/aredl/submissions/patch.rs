@@ -10,9 +10,7 @@ use crate::{
 use actix_web::web;
 use diesel::expression_methods::BoolExpressionMethods;
 use diesel::{
-    dsl::exists,
-    r2d2::{ConnectionManager, PooledConnection},
-    select, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl,
+    dsl::exists, select, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl,
     SelectableHelper,
 };
 use is_url::is_url;

@@ -13,8 +13,8 @@ mod aredl;
 mod auth;
 mod cache_control;
 mod clans;
-mod clean_notifications;
 mod custom_schema;
+mod data_cleaner;
 mod docs;
 mod page_helper;
 mod refresh_leaderboard;
@@ -23,7 +23,6 @@ mod roles;
 mod users;
 
 use crate::cache_control::CacheController;
-use crate::clean_notifications::start_notifications_cleaner;
 use crate::docs::ApiDoc;
 use crate::refresh_leaderboard::start_leaderboard_refresher;
 use crate::refresh_level_data::start_level_data_refresher;
@@ -34,6 +33,7 @@ use actix_web::middleware::NormalizePath;
 use actix_web::Error;
 use actix_web::{web, App, HttpServer};
 use actix_web_prom::PrometheusMetricsBuilder;
+use data_cleaner::start_data_cleaner;
 use dotenv::dotenv;
 use listenfd::ListenFd;
 use std::env;
@@ -95,7 +95,7 @@ async fn main() -> std::io::Result<()> {
 
     start_leaderboard_refresher(db_app_state.clone());
 
-    start_notifications_cleaner(db_app_state.clone());
+    start_data_cleaner(db_app_state.clone());
 
     start_level_data_refresher(db_app_state.clone()).await;
 
