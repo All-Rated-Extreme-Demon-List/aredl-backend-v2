@@ -1,6 +1,10 @@
+use crate::aredl::{
+    changelog, clan, country, leaderboard, levels, packs, packtiers, profile, records, submissions,
+};
 use actix_web::web;
 use utoipa::OpenApi;
-use crate::aredl::{changelog, leaderboard, submissions, levels, packs, packtiers, profile, country, clan, records};
+
+use super::shifts;
 #[derive(OpenApi)]
 #[openapi(
     tags(
@@ -16,7 +20,8 @@ use crate::aredl::{changelog, leaderboard, submissions, levels, packs, packtiers
         (path = "/country", api=country::ApiDoc),
         (path = "/clan", api=clan::ApiDoc),
         (path = "/submissions", api=submissions::ApiDoc),
-        (path = "/records", api=records::ApiDoc)
+        (path = "/records", api=records::ApiDoc),
+        (path = "/shifts", api=shifts::ApiDoc),
     ),
 )]
 
@@ -34,5 +39,6 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .configure(country::init_routes)
             .configure(clan::init_routes)
             .configure(records::init_routes)
+            .configure(shifts::init_routes),
     );
 }

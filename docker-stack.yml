@@ -50,6 +50,7 @@ services:
       LEADERBOARD_REFRESH_SCHEDULE: /run/secrets/leaderboard_refresh_schedule
       LEVEL_DATA_REFRESH_SCHEDULE: /run/secrets/level_data_refresh_schedule
       DATA_CLEANER_SCHEDULE: /run/secrets/data_cleaner_schedule
+      RECURRING_SHIFTS_SCHEDULE: /run/secrets/recurring_shifts_schedule
 
       GOOGLE_API_KEY: /run/secrets/google_api_key
       EDEL_SHEET_ID: /run/secrets/edel_sheet_id
@@ -75,6 +76,7 @@ services:
       - discord_redirect_uri
       - leaderboard_refresh_schedule
       - level_data_refresh_schedule
+      - recurring_shifts_schedule
       - data_cleaner_schedule
       - google_api_key
       - edel_sheet_id
@@ -127,6 +129,8 @@ secrets:
   level_data_refresh_schedule:
     external: true
   data_cleaner_schedule:
+    external: true
+  recurring_shifts_schedule:
     external: true
   google_api_key:
     external: true

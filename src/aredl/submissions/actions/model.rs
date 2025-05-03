@@ -1,18 +1,21 @@
 use crate::{
     aredl::{
         records::Record,
+        shifts::ShiftStatus,
         submissions::{history::SubmissionHistory, *},
     },
     auth::Authenticated,
     custom_schema::aredl_submissions_with_priority,
     db::DbAppState,
     error_handler::ApiError,
-    schema::{aredl_levels, aredl_records, aredl_submissions, submission_history},
+    schema::{aredl_levels, aredl_records, aredl_shifts, aredl_submissions, submission_history},
     users::me::notifications::{Notification, NotificationType},
 };
 use actix_web::web;
+use chrono::Utc;
 use diesel::{
-    Connection, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
+    Connection, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl,
+    SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -25,6 +28,37 @@ pub struct ReviewerNotes {
 }
 
 impl Submission {
+    pub fn increment_user_shift(conn: &mut PgConnection, user_id: Uuid) -> Result<(), ApiError> {
+        let now = Utc::now();
+
+        let running_shift_id = aredl_shifts::table
+            .filter(aredl_shifts::user_id.eq(user_id))
+            .filter(aredl_shifts::status.eq(ShiftStatus::Running))
+            .filter(aredl_shifts::start_at.le(now))
+            .filter(aredl_shifts::end_at.gt(now))
+            .order(aredl_shifts::start_at.asc())
+            .select(aredl_shifts::id)
+            .first::<Uuid>(conn)
+            .optional()?;
+
+        if let Some(shift_id) = running_shift_id {
+            let (completed_count, target_count) =
+                diesel::update(aredl_shifts::table.filter(aredl_shifts::id.eq(shift_id)))
+                    .set((
+                        aredl_shifts::completed_count.eq(aredl_shifts::completed_count + 1),
+                        aredl_shifts::updated_at.eq(now),
+                    ))
+                    .returning((aredl_shifts::completed_count, aredl_shifts::target_count))
+                    .get_result::<(i32, i32)>(conn)?;
+
+            if completed_count >= target_count {
+                diesel::update(aredl_shifts::table.filter(aredl_shifts::id.eq(shift_id)))
+                    .set(aredl_shifts::status.eq(ShiftStatus::Completed))
+                    .execute(conn)?;
+            }
+        }
+        Ok(())
+    }
     pub fn accept(
         db: web::Data<Arc<DbAppState>>,
         id: Uuid,
@@ -94,6 +128,8 @@ impl Submission {
                 .select(aredl_levels::name)
                 .first::<String>(connection)?;
 
+            Self::increment_user_shift(connection, reviewer_id)?;
+
             let content = format!("Your submissions for {:?} has been accepted!", level_name);
             Notification::create(
                 connection,
@@ -153,6 +189,8 @@ impl Submission {
             .values(&history)
             .execute(connection)?;
 
+        Self::increment_user_shift(connection, user_id)?;
+
         let content = format!(
             "Your record on {:?} has been denied...",
             resolved_updated_submission.level.name
@@ -208,6 +246,8 @@ impl Submission {
         diesel::insert_into(submission_history::table)
             .values(&history)
             .execute(connection)?;
+
+        Self::increment_user_shift(connection, user_id)?;
 
         let content = format!(
             "Your record on {:?} has been placed under consideration.",

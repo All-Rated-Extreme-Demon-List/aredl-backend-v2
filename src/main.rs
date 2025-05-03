@@ -14,18 +14,18 @@ mod auth;
 mod cache_control;
 mod clans;
 mod custom_schema;
-mod data_cleaner;
 mod docs;
 mod page_helper;
-mod refresh_leaderboard;
-mod refresh_level_data;
 mod roles;
+mod scheduled;
 mod users;
 
 use crate::cache_control::CacheController;
 use crate::docs::ApiDoc;
-use crate::refresh_leaderboard::start_leaderboard_refresher;
-use crate::refresh_level_data::start_level_data_refresher;
+use crate::scheduled::data_cleaner::start_data_cleaner;
+use crate::scheduled::refresh_leaderboard::start_leaderboard_refresher;
+use crate::scheduled::refresh_level_data::start_level_data_refresher;
+use crate::scheduled::shifts_creator::start_recurrent_shift_creator;
 use actix_cors::Cors;
 use actix_web::body::MessageBody;
 use actix_web::dev::{ServiceRequest, ServiceResponse};
@@ -33,7 +33,7 @@ use actix_web::middleware::NormalizePath;
 use actix_web::Error;
 use actix_web::{web, App, HttpServer};
 use actix_web_prom::PrometheusMetricsBuilder;
-use data_cleaner::start_data_cleaner;
+
 use dotenv::dotenv;
 use listenfd::ListenFd;
 use std::env;
@@ -93,11 +93,13 @@ async fn main() -> std::io::Result<()> {
 
     db_app_state.run_pending_migrations();
 
-    start_leaderboard_refresher(db_app_state.clone());
+    start_leaderboard_refresher(db_app_state.clone()).await;
 
-    start_data_cleaner(db_app_state.clone());
+    start_data_cleaner(db_app_state.clone()).await;
 
     start_level_data_refresher(db_app_state.clone()).await;
+
+    start_recurrent_shift_creator(db_app_state.clone()).await;
 
     let auth_app_state = auth::init_app_state().await;
 

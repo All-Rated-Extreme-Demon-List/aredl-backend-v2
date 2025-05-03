@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::task;
 
-pub fn start_data_cleaner(db: Arc<DbAppState>) {
+pub async fn start_data_cleaner(db: Arc<DbAppState>) {
     let schedule = Schedule::from_str(&get_secret("DATA_CLEANER_SCHEDULE")).unwrap();
     let schedule = Arc::new(schedule);
     let db_clone = db.clone();
@@ -54,6 +54,18 @@ pub fn start_data_cleaner(db: Arc<DbAppState>) {
                     "Failed to clean stale submissions claims: {}",
                     result.err().unwrap()
                 );
+            }
+
+            tracing::info!("Expiring overdue shifts");
+            if let Err(e) = diesel::sql_query(
+                "UPDATE aredl_shifts \
+                 SET status = 'Expired', updated_at = NOW() \
+                 WHERE status = 'Running' \
+                   AND end_at < NOW();",
+            )
+            .execute(&mut conn)
+            {
+                tracing::error!("Failed to expire shifts: {}", e);
             }
 
             let now = Utc::now();

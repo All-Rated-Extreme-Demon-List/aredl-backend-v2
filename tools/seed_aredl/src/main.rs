@@ -207,6 +207,7 @@ fn main() {
         ("clan_modify", 70),
         ("user_ban", 85),
         ("direct_merge", 90),
+        ("shift_manage", 95),
         ("role_manage", 100),
     ];
 

@@ -6,8 +6,16 @@ pub mod sql_types {
     pub struct NotificationType;
 
     #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "shift_status"))]
+    pub struct ShiftStatus;
+
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "submission_status"))]
     pub struct SubmissionStatus;
+
+    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+    #[diesel(postgres_type(name = "weekday"))]
+    pub struct Weekday;
 }
 
 diesel::table! {
@@ -98,6 +106,39 @@ diesel::table! {
         reviewer_notes -> Nullable<Varchar>,
         mod_menu -> Nullable<Varchar>,
         user_notes -> Nullable<Varchar>,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::Weekday;
+
+    aredl_recurrent_shifts (id) {
+        id -> Uuid,
+        user_id -> Uuid,
+        weekday -> Weekday,
+        start_hour -> Int4,
+        duration -> Int4,
+        target_count -> Int4,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::ShiftStatus;
+
+    aredl_shifts (id) {
+        id -> Uuid,
+        user_id -> Uuid,
+        target_count -> Int4,
+        completed_count -> Int4,
+        start_at -> Timestamptz,
+        end_at -> Timestamptz,
+        status -> ShiftStatus,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
     }
 }
 
@@ -277,6 +318,8 @@ diesel::joinable!(aredl_pack_levels -> aredl_levels (level_id));
 diesel::joinable!(aredl_pack_levels -> aredl_packs (pack_id));
 diesel::joinable!(aredl_packs -> aredl_pack_tiers (tier));
 diesel::joinable!(aredl_records -> aredl_levels (level_id));
+diesel::joinable!(aredl_recurrent_shifts -> users (user_id));
+diesel::joinable!(aredl_shifts -> users (user_id));
 diesel::joinable!(aredl_submissions -> aredl_levels (level_id));
 diesel::joinable!(clan_invites -> clans (clan_id));
 diesel::joinable!(clan_members -> clans (clan_id));
@@ -295,6 +338,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     aredl_packs,
     aredl_position_history,
     aredl_records,
+    aredl_recurrent_shifts,
+    aredl_shifts,
     aredl_submissions,
     clan_invites,
     clan_members,

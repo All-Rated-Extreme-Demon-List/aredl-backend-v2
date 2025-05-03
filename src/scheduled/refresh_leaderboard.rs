@@ -12,7 +12,7 @@ use tokio::task;
 
 use crate::aredl::leaderboard::MatviewRefreshLog;
 
-pub fn start_leaderboard_refresher(db: Arc<DbAppState>) {
+pub async fn start_leaderboard_refresher(db: Arc<DbAppState>) {
     let schedule = Schedule::from_str(&get_secret("LEADERBOARD_REFRESH_SCHEDULE")).unwrap();
     let schedule = Arc::new(schedule);
     let db_clone = db.clone();
