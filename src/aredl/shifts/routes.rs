@@ -135,9 +135,9 @@ async fn delete_shift(
     ),
     paths(
         find_all_shifts,
+        find_all_shifts_me,
 		patch_shift,
 		delete_shift,
-
     )
 )]
 pub struct ApiDoc;
@@ -146,6 +146,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
         web::scope("/shifts")
             .configure(recurring::init_routes)
             .service(find_all_shifts)
+            .service(find_all_shifts_me)
             .service(patch_shift)
             .service(delete_shift),
     );
