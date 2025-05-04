@@ -165,6 +165,20 @@ impl Submission {
             aredl_submissions::updated_at.eq(update_timestamp.clone()),
         );
 
+        let current_status = aredl_submissions::table
+            .filter(aredl_submissions::id.eq(id))
+            .select(aredl_submissions::status)
+            .first::<SubmissionStatus>(connection)?;
+
+        if current_status == SubmissionStatus::Denied {
+            return Err(
+                ApiError::new(
+                    409, 
+                    "This submission is already in the denied state!"
+                )
+            )
+        }
+
         let updated_submission = diesel::update(aredl_submissions::table)
             .filter(aredl_submissions::id.eq(id))
             .set(new_data)
@@ -223,6 +237,20 @@ impl Submission {
             aredl_submissions::updated_at.eq(update_timestamp.clone()),
         );
 
+        let current_status = aredl_submissions::table
+            .filter(aredl_submissions::id.eq(id))
+            .select(aredl_submissions::status)
+            .first::<SubmissionStatus>(connection)?;
+
+        if current_status == SubmissionStatus::UnderConsideration {
+            return Err(
+                ApiError::new(
+                    409, 
+                    "This submission is already in the under consideration state!"
+                )
+            )
+        }
+
         let updated_submission = diesel::update(aredl_submissions::table)
             .filter(aredl_submissions::id.eq(id))
             .set(new_data)
@@ -274,6 +302,20 @@ impl Submission {
             aredl_submissions::reviewer_id.eq::<Option<Uuid>>(None),
             aredl_submissions::updated_at.eq(chrono::Utc::now()),
         );
+        
+        let current_status = aredl_submissions::table
+            .filter(aredl_submissions::id.eq(id))
+            .select(aredl_submissions::status)
+            .first::<SubmissionStatus>(connection)?;
+
+        if current_status == SubmissionStatus::Pending {
+            return Err(
+                ApiError::new(
+                    409, 
+                    "This submission is not claimed!"
+                )
+            )
+        }
 
         let updated_submission = diesel::update(aredl_submissions::table)
             .filter(aredl_submissions::id.eq(id))
