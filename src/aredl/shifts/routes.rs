@@ -1,5 +1,7 @@
 use crate::{
-    aredl::shifts::{recurring, Shift, ShiftFilterQuery, ShiftPage, ShiftPatch, ShiftStatus},
+    aredl::shifts::{
+        recurring, ResolvedShift, Shift, ShiftFilterQuery, ShiftPage, ShiftPatch, ShiftStatus,
+    },
     auth::{Authenticated, Permission, UserAuth},
     db::DbAppState,
     error_handler::ApiError,
@@ -128,6 +130,7 @@ async fn delete_shift(
     components(
         schemas(
             Shift,
+            ResolvedShift,
 			ShiftPatch,
 			ShiftPage,
 			ShiftFilterQuery,

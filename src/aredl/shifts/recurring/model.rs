@@ -2,12 +2,13 @@ use crate::{
     aredl::shifts::{ShiftInsert, Weekday},
     db::DbAppState,
     error_handler::ApiError,
-    schema::{aredl_recurrent_shifts, aredl_shifts},
+    schema::{aredl_recurrent_shifts, aredl_shifts, users},
+    users::BaseUser,
 };
 use chrono::{DateTime, Datelike, NaiveDate, TimeZone, Utc};
 use diesel::{
-    AsChangeset, ExpressionMethods, Identifiable, Insertable, PgConnection, QueryDsl, Queryable,
-    RunQueryDsl, SelectableHelper,
+    AsChangeset, ExpressionMethods, Identifiable, Insertable, JoinOnDsl, PgConnection, QueryDsl,
+    Queryable, RunQueryDsl, SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -22,6 +23,26 @@ pub struct RecurringShift {
     pub id: Uuid,
     /// UUID of the user this shift is regularly assigned to.
     pub user_id: Uuid,
+    /// The day of the week this shift is assigned at.
+    pub weekday: Weekday,
+    /// The start time of the shift on the assigned day, in hour compared to UTC
+    pub start_hour: i32,
+    /// How long this shift should last
+    pub duration: i32,
+    /// The target number of submissions to review for this shift.
+    pub target_count: i32,
+    /// The timestamp of when this regular shift was created.
+    pub created_at: DateTime<Utc>,
+    /// The timestamp of when this regular shift was last updated.
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct ResolvedRecurringShift {
+    /// Internal UUID of the regular shift.
+    pub id: Uuid,
+    /// UUID of the user this shift is regularly assigned to.
+    pub user: BaseUser,
     /// The day of the week this shift is assigned at.
     pub weekday: Weekday,
     /// The start time of the shift on the assigned day, in hour compared to UTC
@@ -61,20 +82,43 @@ pub struct RecurringShiftPatch {
     pub duration: Option<i32>,
 }
 
-impl RecurringShift {
+impl ResolvedRecurringShift {
+    pub fn from_data(recurring_shift_row: (RecurringShift, BaseUser)) -> Self {
+        let (recurring_shift, user) = recurring_shift_row;
+        Self {
+            id: recurring_shift.id,
+            user,
+            weekday: recurring_shift.weekday,
+            start_hour: recurring_shift.start_hour,
+            duration: recurring_shift.duration,
+            target_count: recurring_shift.target_count,
+            created_at: recurring_shift.created_at,
+            updated_at: recurring_shift.updated_at,
+        }
+    }
+
     pub fn find_all(db: &DbAppState) -> Result<Vec<Self>, ApiError> {
         let conn = &mut db.connection()?;
 
-        let result = aredl_recurrent_shifts::table
+        let result_rows = aredl_recurrent_shifts::table
+            .inner_join(users::table.on(aredl_recurrent_shifts::user_id.eq(users::id)))
             .order((
                 aredl_recurrent_shifts::weekday.asc(),
                 aredl_recurrent_shifts::start_hour.asc(),
             ))
-            .select(RecurringShift::as_select())
-            .load::<Self>(conn)?;
+            .select((RecurringShift::as_select(), BaseUser::as_select()))
+            .load::<(RecurringShift, BaseUser)>(conn)?;
+
+        let result = result_rows
+            .into_iter()
+            .map(ResolvedRecurringShift::from_data)
+            .collect::<Vec<_>>();
+
         Ok(result)
     }
+}
 
+impl RecurringShift {
     pub fn create(db: &DbAppState, new_shift: RecurringShiftInsert) -> Result<Self, ApiError> {
         let conn = &mut db.connection()?;
         let inserted = diesel::insert_into(aredl_recurrent_shifts::table)

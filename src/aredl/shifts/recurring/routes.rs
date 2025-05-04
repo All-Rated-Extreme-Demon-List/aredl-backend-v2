@@ -1,5 +1,8 @@
 use crate::{
-    aredl::shifts::recurring::{RecurringShift, RecurringShiftInsert, RecurringShiftPatch},
+    aredl::shifts::{
+        recurring::{RecurringShift, RecurringShiftInsert, RecurringShiftPatch},
+        ResolvedRecurringShift,
+    },
     auth::{Permission, UserAuth},
     db::DbAppState,
     error_handler::ApiError,
@@ -15,7 +18,7 @@ use uuid::Uuid;
     description = "Get a possibly filtered list of the currently scheduled recurring shifts.",
     tag = "AREDL - Shifts",
     responses(
-        (status = 200, body = Vec<RecurringShift>)
+        (status = 200, body = Vec<ResolvedRecurringShift>)
     ),
     security(
         ("access_token" = ["ShiftManage"]),
@@ -26,7 +29,7 @@ use uuid::Uuid;
 async fn find_all_recurring_shifts(
     db: web::Data<Arc<DbAppState>>,
 ) -> Result<HttpResponse, ApiError> {
-    let shifts = web::block(move || RecurringShift::find_all(&db)).await??;
+    let shifts = web::block(move || ResolvedRecurringShift::find_all(&db)).await??;
     Ok(HttpResponse::Ok().json(shifts))
 }
 
@@ -105,7 +108,7 @@ async fn delete_recurring_shift(
 
 #[derive(OpenApi)]
 #[openapi(
-    components(schemas(RecurringShift, RecurringShiftPatch,)),
+    components(schemas(ResolvedRecurringShift, RecurringShift, RecurringShiftPatch,)),
     paths(
         find_all_recurring_shifts,
         patch_recurring_shift,

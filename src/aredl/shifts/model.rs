@@ -2,12 +2,13 @@ use crate::{
     db::DbAppState,
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
-    schema::aredl_shifts,
+    schema::{aredl_shifts, users},
+    users::BaseUser,
 };
 use chrono::{DateTime, Utc};
 use diesel::{
     sql_types::Bool, AsChangeset, BoxableExpression, ExpressionMethods, Identifiable, IntoSql,
-    QueryDsl, Queryable, RunQueryDsl,
+    JoinOnDsl, QueryDsl, Queryable, RunQueryDsl, SelectableHelper,
 };
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
@@ -61,6 +62,28 @@ pub struct Shift {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct ResolvedShift {
+    /// Internal UUID of the shift.
+    pub id: Uuid,
+    /// User this shift is assigned to.
+    pub user: BaseUser,
+    /// The target number of submissions to review for this shift.
+    pub target_count: i32,
+    /// The number of submissions that have been reviewed for this shift.
+    pub completed_count: i32,
+    /// The start time of the shift.
+    pub start_at: DateTime<Utc>,
+    /// The end time of the shift.
+    pub end_at: DateTime<Utc>,
+    /// The current status of the shift.
+    pub status: ShiftStatus,
+    /// Timestamp of when the shift was created.
+    pub created_at: DateTime<Utc>,
+    /// Timestamp of when the shift was last updated.
+    pub updated_at: DateTime<Utc>,
+}
+
 #[derive(Deserialize, Debug, ToSchema)]
 pub struct ShiftFilterQuery {
     pub user_id: Option<Uuid>,
@@ -69,7 +92,7 @@ pub struct ShiftFilterQuery {
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct ShiftPage {
-    pub data: Vec<Shift>,
+    pub data: Vec<ResolvedShift>,
 }
 
 #[derive(Deserialize, ToSchema, AsChangeset)]
@@ -107,6 +130,23 @@ impl Shift {
     }
 }
 
+impl ResolvedShift {
+    pub fn from_data(shift_row: (Shift, BaseUser)) -> Self {
+        let (shift, user) = shift_row;
+        Self {
+            id: shift.id,
+            user,
+            target_count: shift.target_count,
+            completed_count: shift.completed_count,
+            start_at: shift.start_at,
+            end_at: shift.end_at,
+            status: shift.status,
+            created_at: shift.created_at,
+            updated_at: shift.updated_at,
+        }
+    }
+}
+
 impl ShiftPage {
     pub fn find_me<const D: i64>(
         db: &DbAppState,
@@ -120,14 +160,27 @@ impl ShiftPage {
             .count()
             .get_result::<i64>(conn)?;
 
-        let data = aredl_shifts::table
+        let shift_rows = aredl_shifts::table
+            .inner_join(users::table.on(aredl_shifts::user_id.eq(users::id)))
             .filter(aredl_shifts::user_id.eq(user_id))
             .order(aredl_shifts::start_at.desc())
             .limit(page_query.per_page())
             .offset(page_query.offset())
-            .load::<Shift>(conn)?;
+            .select((Shift::as_select(), BaseUser::as_select()))
+            .load::<(Shift, BaseUser)>(conn)?;
 
-        Ok(Paginated::from_data(page_query, total, ShiftPage { data }))
+        let resolved_shifts = shift_rows
+            .into_iter()
+            .map(ResolvedShift::from_data)
+            .collect::<Vec<_>>();
+
+        Ok(Paginated::from_data(
+            page_query,
+            total,
+            ShiftPage {
+                data: resolved_shifts,
+            },
+        ))
     }
 
     pub fn find_all<const D: i64>(
@@ -156,7 +209,8 @@ impl ShiftPage {
             .count()
             .get_result::<i64>(conn)?;
 
-        let data = aredl_shifts::table
+        let shift_rows = aredl_shifts::table
+            .inner_join(users::table.on(aredl_shifts::user_id.eq(users::id)))
             .into_boxed()
             .filter(options.user_id.map_or_else(
                 || {
@@ -175,8 +229,20 @@ impl ShiftPage {
             .order(aredl_shifts::start_at.desc())
             .limit(page_query.per_page())
             .offset(page_query.offset())
-            .load::<Shift>(conn)?;
+            .select((Shift::as_select(), BaseUser::as_select()))
+            .load::<(Shift, BaseUser)>(conn)?;
 
-        Ok(Paginated::from_data(page_query, total, ShiftPage { data }))
+        let resolved_shifts = shift_rows
+            .into_iter()
+            .map(ResolvedShift::from_data)
+            .collect::<Vec<_>>();
+
+        Ok(Paginated::from_data(
+            page_query,
+            total,
+            ShiftPage {
+                data: resolved_shifts,
+            },
+        ))
     }
 }
