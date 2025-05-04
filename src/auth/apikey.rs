@@ -70,6 +70,10 @@ pub async fn create_api_key(
     let user_id = decoded_user_claims.user_id;
 
     let lifetime = Duration::minutes(options.lifetime_minutes);
+
+    if lifetime > Duration::days(365) {
+        return Err(ApiError::new(400, "API key lifetime cannot exceed 1 year (525600 minutes)"));
+    }
 	
 
     let (api_key, expires) = token::create_token(
