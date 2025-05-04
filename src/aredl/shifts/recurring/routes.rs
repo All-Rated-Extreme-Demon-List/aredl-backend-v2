@@ -69,7 +69,7 @@ async fn create_new_recurring_shift(
         ("api_key" = ["ShiftManage"]),
     )
 )]
-#[patch("/recurring/{id}", wrap = "UserAuth::require(Permission::ShiftManage)")]
+#[patch("/{id}", wrap = "UserAuth::require(Permission::ShiftManage)")]
 async fn patch_recurring_shift(
     db: web::Data<Arc<DbAppState>>,
     body: web::Json<RecurringShiftPatch>,
@@ -97,7 +97,7 @@ async fn patch_recurring_shift(
         ("api_key" = ["ShiftManage"]),
     )
 )]
-#[delete("/recurring/{id}", wrap = "UserAuth::require(Permission::ShiftManage)")]
+#[delete("/{id}", wrap = "UserAuth::require(Permission::ShiftManage)")]
 async fn delete_recurring_shift(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
