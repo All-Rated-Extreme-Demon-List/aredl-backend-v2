@@ -233,7 +233,7 @@ impl Submission {
         let new_data = (
             aredl_submissions::status.eq(SubmissionStatus::UnderConsideration),
             aredl_submissions::reviewer_id.eq(authenticated.user_id),
-            aredl_submissions::reviewer_notes.eq(notes.clone()),
+            aredl_submissions::reviewer_notes.eq(&notes),
             aredl_submissions::updated_at.eq(update_timestamp.clone()),
         );
 

@@ -164,14 +164,20 @@ async fn under_consideration(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
     authenticated: Authenticated,
-    notes: web::Json<ReviewerNotes>,
+    body: Option<web::Json<ReviewerNotes>>,
 ) -> Result<HttpResponse, ApiError> {
+    
+    let notes = match body {
+        Some(note) => note.into_inner().notes,
+        None => None
+    };
+
     let new_record = web::block(move || {
         Submission::under_consideration(
             db,
             id.into_inner(),
             authenticated,
-            notes.into_inner().notes,
+            notes,
         )
     })
     .await??;
