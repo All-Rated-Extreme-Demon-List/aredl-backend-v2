@@ -98,6 +98,7 @@ pub struct ShiftPage {
 #[derive(Deserialize, ToSchema, AsChangeset)]
 #[diesel(table_name = aredl_shifts)]
 pub struct ShiftPatch {
+    pub user_id: Option<Uuid>,
     pub status: Option<ShiftStatus>,
     pub completed_count: Option<i32>,
 }
