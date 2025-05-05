@@ -5,7 +5,7 @@ use utoipa::OpenApi;
 use uuid::Uuid;
 
 use crate::{
-    aredl::submissions::history::SubmissionHistory,
+    aredl::submissions::history::SubmissionHistoryResolved,
     auth::{Authenticated, UserAuth},
     db::DbAppState,
     error_handler::ApiError,
@@ -19,7 +19,7 @@ use super::SubmissionHistoryOptions;
     description = "Get the timestamps of each time this submission's status was changed.",
     tag = "AREDL - Submissions",
     responses(
-        (status = 200, body = [SubmissionHistory])
+        (status = 200, body = [SubmissionHistoryResolved])
     ),
     security(
         ("access_token" = []),
@@ -37,7 +37,12 @@ async fn get_history(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let history = web::block(move || {
-        SubmissionHistory::by_submission(db, id.into_inner(), options.into_inner(), authenticated)
+        SubmissionHistoryResolved::by_submission_id(
+            db,
+            id.into_inner(),
+            options.into_inner(),
+            authenticated,
+        )
     })
     .await??;
 
@@ -46,7 +51,7 @@ async fn get_history(
 
 #[derive(OpenApi)]
 #[openapi(
-    components(schemas(SubmissionHistory, SubmissionHistoryOptions)),
+    components(schemas(SubmissionHistoryResolved, SubmissionHistoryOptions)),
     paths(get_history)
 )]
 pub struct ApiDoc;
