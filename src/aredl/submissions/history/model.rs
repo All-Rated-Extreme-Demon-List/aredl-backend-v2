@@ -10,7 +10,7 @@ use actix_web::web;
 use chrono::{DateTime, Utc};
 use diesel::{
     pg::Pg, ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl,
-    SelectableHelper,
+    Selectable, SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -49,7 +49,7 @@ pub struct SubmissionHistoryOptions {
 }
 
 impl SubmissionHistoryResolved {
-    pub fn from_data(history_row: (SubmissionHistory, BaseUser)) -> Self {
+    pub fn from_data(history_row: (SubmissionHistory, Option<BaseUser>)) -> Self {
         let (history, user) = history_row;
         Self {
             id: history.id,
@@ -57,7 +57,7 @@ impl SubmissionHistoryResolved {
             record_id: history.record_id,
             status: history.status,
             reviewer_notes: history.reviewer_notes,
-            reviewer: Some(user),
+            reviewer: user,
             user_notes: history.user_notes,
             timestamp: history.timestamp,
         }
@@ -72,9 +72,12 @@ impl SubmissionHistoryResolved {
         let conn = &mut db.connection()?;
 
         let mut query = submission_history::table
-            .inner_join(users::table.on(submission_history::reviewer_id.eq(users::id.nullable())))
+            .left_join(users::table.on(submission_history::reviewer_id.eq(users::id.nullable())))
             .into_boxed::<Pg>()
-            .select((SubmissionHistory::as_select(), BaseUser::as_select()))
+            .select((
+                SubmissionHistory::as_select(),
+                (users::id, users::username, users::global_name).nullable(),
+            ))
             .order(submission_history::timestamp.desc());
 
         if options.is_record_id.unwrap_or(false) {
@@ -83,7 +86,7 @@ impl SubmissionHistoryResolved {
             query = query.filter(submission_history::submission_id.eq(id));
         }
 
-        let history_row = query.load::<(SubmissionHistory, BaseUser)>(conn)?;
+        let history_row = query.load::<(SubmissionHistory, Option<BaseUser>)>(conn)?;
 
         let mut resolved_history = history_row
             .into_iter()
