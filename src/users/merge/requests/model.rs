@@ -155,6 +155,7 @@ impl MergeRequest {
         let changes = (
             &request,
             merge_requests::is_rejected.eq(false),
+            merge_requests::is_claimed.eq(false),
             merge_requests::updated_at.eq(now),
         );
 
