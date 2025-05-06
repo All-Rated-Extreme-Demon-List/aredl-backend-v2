@@ -92,7 +92,7 @@ impl MergeRequestPage {
             .select((
                 MergeRequest::as_select(),
                 BaseUser::as_select(),
-                BaseUser::as_select(),
+                users2.fields(<BaseUser as Selectable<Pg>>::construct_selection()),
             ))
             .order(merge_requests::updated_at.desc())
             .load::<(MergeRequest, BaseUser, BaseUser)>(conn)?;
