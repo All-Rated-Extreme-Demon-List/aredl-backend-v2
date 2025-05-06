@@ -171,12 +171,10 @@ impl Submission {
             .first::<SubmissionStatus>(connection)?;
 
         if current_status == SubmissionStatus::Denied {
-            return Err(
-                ApiError::new(
-                    409, 
-                    "This submission is already in the denied state!"
-                )
-            )
+            return Err(ApiError::new(
+                409,
+                "This submission is already in the denied state!",
+            ));
         }
 
         let updated_submission = diesel::update(aredl_submissions::table)
@@ -205,8 +203,8 @@ impl Submission {
 
         Self::increment_user_shift(connection, user_id)?;
 
-        let content = format!(
-            "Your record on {:?} has been denied...",
+        let content: String = format!(
+            "Your submission for {:?} has been denied.",
             resolved_updated_submission.level.name
         );
         Notification::create(
@@ -243,12 +241,10 @@ impl Submission {
             .first::<SubmissionStatus>(connection)?;
 
         if current_status == SubmissionStatus::UnderConsideration {
-            return Err(
-                ApiError::new(
-                    409, 
-                    "This submission is already in the under consideration state!"
-                )
-            )
+            return Err(ApiError::new(
+                409,
+                "This submission is already in the under consideration state!",
+            ));
         }
 
         let updated_submission = diesel::update(aredl_submissions::table)
@@ -278,7 +274,7 @@ impl Submission {
         Self::increment_user_shift(connection, user_id)?;
 
         let content = format!(
-            "Your record on {:?} has been placed under consideration.",
+            "Your submission for {:?} has been placed under consideration.",
             resolved_updated_submission.level.name
         );
         Notification::create(
@@ -302,19 +298,14 @@ impl Submission {
             aredl_submissions::reviewer_id.eq::<Option<Uuid>>(None),
             aredl_submissions::updated_at.eq(chrono::Utc::now()),
         );
-        
+
         let current_status = aredl_submissions::table
             .filter(aredl_submissions::id.eq(id))
             .select(aredl_submissions::status)
             .first::<SubmissionStatus>(connection)?;
 
         if current_status == SubmissionStatus::Pending {
-            return Err(
-                ApiError::new(
-                    409, 
-                    "This submission is not claimed!"
-                )
-            )
+            return Err(ApiError::new(409, "This submission is not claimed!"));
         }
 
         let updated_submission = diesel::update(aredl_submissions::table)

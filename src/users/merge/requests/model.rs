@@ -11,6 +11,7 @@ use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::{merge_requests, users};
+use crate::users::me::notifications::{Notification, NotificationType};
 use crate::users::merge::merge_users;
 use crate::users::BaseUser;
 
@@ -211,6 +212,14 @@ impl MergeRequest {
             merge_request.primary_user,
             merge_request.secondary_user,
         )?;
+
+        Notification::create(
+            conn,
+            merge_request.primary_user,
+            "Your merge request has been accepted!".to_string(),
+            NotificationType::Success,
+        )?;
+
         diesel::delete(merge_requests::table)
             .filter(merge_requests::id.eq(id))
             .execute(conn)?;
@@ -223,6 +232,13 @@ impl MergeRequest {
             .filter(merge_requests::id.eq(id))
             .returning(Self::as_select())
             .get_result(conn)?;
+
+        Notification::create(
+            conn,
+            result.primary_user,
+            "Your merge request has been rejected.".to_string(),
+            NotificationType::Failure,
+        )?;
         Ok(result)
     }
 }
