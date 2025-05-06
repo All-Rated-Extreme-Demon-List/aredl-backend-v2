@@ -1,20 +1,22 @@
-use std::sync::Arc;
-use actix_web::web;
-use actix_web::{HttpResponse, Result, get, post};
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use utoipa::{OpenApi, ToSchema};
 use crate::auth::Authenticated;
+use crate::auth::{Permission, UserAuth};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
-use crate::auth::{Permission, UserAuth};
-use crate::users::merge::requests::{MergeRequestPage, MergeRequest, MergeRequestUpsert};
+use crate::users::merge::requests::{
+    MergeRequest, MergeRequestPage, MergeRequestUpsert, ResolvedMergeRequest,
+};
+use actix_web::web;
+use actix_web::{get, post, HttpResponse, Result};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use utoipa::{OpenApi, ToSchema};
+use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct MergeRequestOptions {
-	/// The secondary user to merge, whose data will be merged into the authenticated user.
-	pub secondary_user: Uuid,
+    /// The secondary user to merge, whose data will be merged into the authenticated user.
+    pub secondary_user: Uuid,
 }
 
 #[utoipa::path(
@@ -27,16 +29,19 @@ pub struct MergeRequestOptions {
 		("per_page" = Option<i64>, Query, description = "The number of merge requests to fetch per page"),
 	),
     responses(
-        (status = 200, body = Paginated<MergeRequest>)
+        (status = 200, body = Paginated<ResolvedMergeRequest>)
     ),
     security(
         ("access_token" = ["MergeReview"]),
         ("api_key" = ["MergeReview"]),
     )
 )]
-#[get("", wrap="UserAuth::require(Permission::MergeReview)")]
-async fn list(db: web::Data<Arc<DbAppState>>, page_query: web::Query<PageQuery<20>>) -> Result<HttpResponse, ApiError> {
-	let result = web::block(move || {
+#[get("", wrap = "UserAuth::require(Permission::MergeReview)")]
+async fn list(
+    db: web::Data<Arc<DbAppState>>,
+    page_query: web::Query<PageQuery<20>>,
+) -> Result<HttpResponse, ApiError> {
+    let result = web::block(move || {
         let mut conn = db.connection()?;
         MergeRequestPage::find_all(&mut conn, page_query.into_inner())
     })
@@ -57,9 +62,9 @@ async fn list(db: web::Data<Arc<DbAppState>>, page_query: web::Query<PageQuery<2
         ("api_key" = ["MergeReview"]),
     )
 )]
-#[get("/claim", wrap="UserAuth::require(Permission::MergeReview)")]
+#[get("/claim", wrap = "UserAuth::require(Permission::MergeReview)")]
 async fn claim(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
-	let result = web::block(move || {
+    let result = web::block(move || {
         let mut conn = db.connection()?;
         MergeRequest::claim(&mut conn)
     })
@@ -81,11 +86,18 @@ async fn claim(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError>
         ("api_key" = []),
     )
 )]
-#[post("", wrap="UserAuth::load()")]
-async fn create(db: web::Data<Arc<DbAppState>>, options: web::Json<MergeRequestOptions>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
-	let result = web::block(move || {
+#[post("", wrap = "UserAuth::load()")]
+async fn create(
+    db: web::Data<Arc<DbAppState>>,
+    options: web::Json<MergeRequestOptions>,
+    authenticated: Authenticated,
+) -> Result<HttpResponse, ApiError> {
+    let result = web::block(move || {
         let mut conn = db.connection()?;
-		let merge_upsert = MergeRequestUpsert { primary_user: authenticated.user_id, secondary_user: options.secondary_user };
+        let merge_upsert = MergeRequestUpsert {
+            primary_user: authenticated.user_id,
+            secondary_user: options.secondary_user,
+        };
         MergeRequest::upsert(&mut conn, merge_upsert)
     })
     .await??;
@@ -109,9 +121,12 @@ async fn create(db: web::Data<Arc<DbAppState>>, options: web::Json<MergeRequestO
         ("api_key" = ["MergeReview"]),
     )
 )]
-#[post("/{id}/accept", wrap="UserAuth::require(Permission::MergeReview)")]
-async fn accept(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
-	let result = web::block(move || {
+#[post("/{id}/accept", wrap = "UserAuth::require(Permission::MergeReview)")]
+async fn accept(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<Uuid>,
+) -> Result<HttpResponse, ApiError> {
+    let result = web::block(move || {
         let mut conn = db.connection()?;
         MergeRequest::accept(&mut conn, id.into_inner())
     })
@@ -136,9 +151,12 @@ async fn accept(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<H
         ("api_key" = ["MergeReview"]),
     )
 )]
-#[post("/{id}/reject", wrap="UserAuth::require(Permission::MergeReview)")]
-async fn reject(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
-	let result = web::block(move || {
+#[post("/{id}/reject", wrap = "UserAuth::require(Permission::MergeReview)")]
+async fn reject(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<Uuid>,
+) -> Result<HttpResponse, ApiError> {
+    let result = web::block(move || {
         let mut conn = db.connection()?;
         MergeRequest::reject(&mut conn, id.into_inner())
     })
@@ -163,9 +181,12 @@ async fn reject(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<H
         ("api_key" = ["MergeReview"]),
     )
 )]
-#[post("/{id}/unclaim", wrap="UserAuth::require(Permission::MergeReview)")]
-async fn unclaim(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
-	let result = web::block(move || {
+#[post("/{id}/unclaim", wrap = "UserAuth::require(Permission::MergeReview)")]
+async fn unclaim(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<Uuid>,
+) -> Result<HttpResponse, ApiError> {
+    let result = web::block(move || {
         let mut conn = db.connection()?;
         MergeRequest::unclaim(&mut conn, id.into_inner())
     })
@@ -173,23 +194,15 @@ async fn unclaim(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<
     Ok(HttpResponse::Ok().json(result))
 }
 
-
 #[derive(OpenApi)]
 #[openapi(
-    components(
-        schemas(
-            MergeRequest,
-			MergeRequestPage,
-			MergeRequestOptions
-        )
-    ),
-    paths(
-		list,
-        claim,
-		create,
-        accept,
-        reject
-    )
+    components(schemas(
+        ResolvedMergeRequest,
+        MergeRequest,
+        MergeRequestPage,
+        MergeRequestOptions
+    )),
+    paths(list, claim, create, accept, reject)
 )]
 pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
@@ -199,6 +212,6 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .service(claim)
             .service(create)
             .service(accept)
-            .service(reject)
+            .service(reject),
     );
 }

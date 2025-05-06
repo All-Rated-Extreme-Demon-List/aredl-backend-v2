@@ -12,6 +12,7 @@ use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::{merge_requests, users};
 use crate::users::merge::merge_users;
+use crate::users::BaseUser;
 
 #[derive(Serialize, Deserialize, Debug, ToSchema, Insertable, AsChangeset)]
 #[diesel(table_name = merge_requests, check_for_backend(Pg))]
@@ -40,8 +41,40 @@ pub struct MergeRequest {
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct ResolvedMergeRequest {
+    /// Internal UUID of the merge request
+    pub id: Uuid,
+    /// Primary user who made the request
+    pub primary_user: BaseUser,
+    /// Secondary user whose data will be merged
+    pub secondary_user: BaseUser,
+    /// Whether the request was rejected or not (still pending)
+    pub is_rejected: bool,
+    /// Whether the request was claimed and under review or not
+    pub is_claimed: bool,
+    /// Timestamp of when the request was made
+    pub created_at: DateTime<Utc>,
+    /// Timestamp of when the request was last updated
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct MergeRequestPage {
-    pub data: Vec<MergeRequest>,
+    pub data: Vec<ResolvedMergeRequest>,
+}
+
+impl ResolvedMergeRequest {
+    pub fn from_data(row: (MergeRequest, BaseUser, BaseUser)) -> Self {
+        Self {
+            id: row.0.id,
+            primary_user: row.1,
+            secondary_user: row.2,
+            is_rejected: row.0.is_rejected,
+            is_claimed: row.0.is_claimed,
+            created_at: row.0.created_at,
+            updated_at: row.0.updated_at,
+        }
+    }
 }
 
 impl MergeRequestPage {
@@ -49,14 +82,26 @@ impl MergeRequestPage {
         conn: &mut DbConnection,
         page_query: PageQuery<D>,
     ) -> Result<Paginated<Self>, ApiError> {
-        let data = merge_requests::table
-            .select(MergeRequest::as_select())
+        let users2 = alias!(users as users2);
+        let data_rows = merge_requests::table
+            .inner_join(users::table.on(merge_requests::primary_user.eq(users::id)))
+            .inner_join(users2.on(merge_requests::secondary_user.eq(users2.field(users::id))))
             .limit(page_query.per_page())
             .offset(page_query.offset())
+            .select((
+                MergeRequest::as_select(),
+                BaseUser::as_select(),
+                BaseUser::as_select(),
+            ))
             .order(merge_requests::updated_at.desc())
-            .load::<MergeRequest>(conn)?;
+            .load::<(MergeRequest, BaseUser, BaseUser)>(conn)?;
 
         let count: i64 = merge_requests::table.count().get_result::<i64>(conn)?;
+
+        let data = data_rows
+            .into_iter()
+            .map(|row| ResolvedMergeRequest::from_data(row))
+            .collect::<Vec<_>>();
 
         Ok(Paginated::<Self>::from_data(
             page_query,
