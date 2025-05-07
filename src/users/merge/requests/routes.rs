@@ -21,6 +21,35 @@ pub struct MergeRequestOptions {
 
 #[utoipa::path(
     get,
+    summary = "[Staff]Get merge request",
+    description = "Get information about a specific merge request",
+    tag = "Users - Merges",
+    params(
+		("id" = Uuid, Path, description = "Internal UUID of the merge request to find"),
+	),
+    responses(
+        (status = 200, body = ResolvedMergeRequest)
+    ),
+    security(
+        ("access_token" = ["MergeReview"]),
+        ("api_key" = ["MergeReview"]),
+    )
+)]
+#[get("/{id}", wrap = "UserAuth::require(Permission::MergeReview)")]
+async fn find_one(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<Uuid>,
+) -> Result<HttpResponse, ApiError> {
+    let result = web::block(move || {
+        let mut conn = db.connection()?;
+        ResolvedMergeRequest::find_one(&mut conn, id.into_inner())
+    })
+    .await??;
+    Ok(HttpResponse::Ok().json(result))
+}
+
+#[utoipa::path(
+    get,
     summary = "[Staff]Get merge requests",
     description = "Paginated list of pending/denied merge requests",
     tag = "Users - Merges",
@@ -202,13 +231,14 @@ async fn unclaim(
         MergeRequestPage,
         MergeRequestOptions
     )),
-    paths(list, claim, create, accept, reject)
+    paths(list, find_one, claim, create, accept, reject)
 )]
 pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/requests")
             .service(list)
+            .service(find_one)
             .service(claim)
             .service(create)
             .service(accept)

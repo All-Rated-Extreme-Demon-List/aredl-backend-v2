@@ -65,6 +65,22 @@ pub struct MergeRequestPage {
 }
 
 impl ResolvedMergeRequest {
+    pub fn find_one(conn: &mut DbConnection, id: Uuid) -> Result<Self, ApiError> {
+        let users2 = alias!(users as users2);
+        let data_row = merge_requests::table
+            .inner_join(users::table.on(merge_requests::primary_user.eq(users::id)))
+            .inner_join(users2.on(merge_requests::secondary_user.eq(users2.field(users::id))))
+            .filter(merge_requests::id.eq(id))
+            .select((
+                MergeRequest::as_select(),
+                BaseUser::as_select(),
+                users2.fields(<BaseUser as Selectable<Pg>>::construct_selection()),
+            ))
+            .first::<(MergeRequest, BaseUser, BaseUser)>(conn)?;
+
+        Ok(ResolvedMergeRequest::from_data(data_row))
+    }
+
     pub fn from_data(row: (MergeRequest, BaseUser, BaseUser)) -> Self {
         Self {
             id: row.0.id,
