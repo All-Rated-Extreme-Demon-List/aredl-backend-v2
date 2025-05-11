@@ -1,10 +1,10 @@
-use std::sync::Arc;
-use actix_web::{get, HttpResponse, web};
-use utoipa::OpenApi;
 use crate::aredl::changelog::ChangelogPage;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
+use actix_web::{get, web, HttpResponse};
+use std::sync::Arc;
+use utoipa::OpenApi;
 
 #[utoipa::path(
     get,
@@ -20,28 +20,17 @@ use crate::page_helper::{PageQuery, Paginated};
     ),
 )]
 #[get("")]
-async fn list(db: web::Data<Arc<DbAppState>>, page_query: web::Query<PageQuery<20>>) -> Result<HttpResponse, ApiError> {
-    let result = web::block(||
-        ChangelogPage::find(db, page_query.into_inner())
-    ).await??;
+async fn list(
+    db: web::Data<Arc<DbAppState>>,
+    page_query: web::Query<PageQuery<20>>,
+) -> Result<HttpResponse, ApiError> {
+    let result = web::block(|| ChangelogPage::find(db, page_query.into_inner())).await??;
     Ok(HttpResponse::Ok().json(result))
 }
 
 #[derive(OpenApi)]
-#[openapi(
-    components(
-        schemas(
-            ChangelogPage,
-        )
-    ),
-    paths(
-        list
-    )
-)]
+#[openapi(components(schemas(ChangelogPage,)), paths(list))]
 pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
-    config.service(
-        web::scope("/changelog")
-            .service(list)
-    );
+    config.service(web::scope("/changelog").service(list));
 }

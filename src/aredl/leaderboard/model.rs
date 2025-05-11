@@ -1,10 +1,12 @@
 use crate::aredl::levels::BaseLevel;
 use crate::clans::Clan;
-use crate::custom_schema::aredl_user_leaderboard;
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
-use crate::schema::{aredl_levels, clans, matview_refresh_log, users};
+use crate::schema::{
+    aredl::{levels, user_leaderboard},
+    clans, matview_refresh_log, users,
+};
 use crate::users::BaseDiscordUser;
 use chrono::Utc;
 use diesel::expression::expression_types::NotSelectable;
@@ -20,7 +22,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Serialize, Selectable, Queryable, Debug, ToSchema)]
-#[diesel(table_name=aredl_user_leaderboard, check_for_backend(Pg))]
+#[diesel(table_name=user_leaderboard, check_for_backend(Pg))]
 pub struct LeaderboardEntry {
     pub rank: i32,
     pub extremes_rank: i32,
@@ -114,9 +116,9 @@ impl LeaderboardPage {
         let country_filter: Box<dyn BoxableExpression<_, _, SqlType = Nullable<Bool>>> =
             match options.country_filter.clone() {
                 Some(country) => Box::new(
-                    aredl_user_leaderboard::country
+                    user_leaderboard::country
                         .is_not_null()
-                        .and(aredl_user_leaderboard::country.eq(country)),
+                        .and(user_leaderboard::country.eq(country)),
                 ),
                 None => Box::new(<bool as AsExpression<Bool>>::as_expression(true).nullable()),
             };
@@ -124,9 +126,9 @@ impl LeaderboardPage {
         let clan_filter: Box<dyn BoxableExpression<_, _, SqlType = Nullable<Bool>>> =
             match options.clan_filter.clone() {
                 Some(clan_id) => Box::new(
-                    aredl_user_leaderboard::clan_id
+                    user_leaderboard::clan_id
                         .is_not_null()
-                        .and(aredl_user_leaderboard::clan_id.eq(clan_id)),
+                        .and(user_leaderboard::clan_id.eq(clan_id)),
                 ),
                 None => Box::new(<bool as AsExpression<Bool>>::as_expression(true).nullable()),
             };
@@ -142,33 +144,26 @@ impl LeaderboardPage {
 
         let ordering: Box<dyn BoxableExpression<_, _, SqlType = NotSelectable>> =
             match (options.country_filter, order) {
-                (None, LeaderboardOrder::TotalPoints) => {
-                    Box::new(aredl_user_leaderboard::rank.asc())
-                }
+                (None, LeaderboardOrder::TotalPoints) => Box::new(user_leaderboard::rank.asc()),
                 (None, LeaderboardOrder::ExtremeCount) => {
-                    Box::new(aredl_user_leaderboard::extremes_rank.asc())
+                    Box::new(user_leaderboard::extremes_rank.asc())
                 }
-                (None, LeaderboardOrder::RawPoints) => {
-                    Box::new(aredl_user_leaderboard::raw_rank.asc())
-                }
+                (None, LeaderboardOrder::RawPoints) => Box::new(user_leaderboard::raw_rank.asc()),
                 (Some(_), LeaderboardOrder::TotalPoints) => {
-                    Box::new(aredl_user_leaderboard::country_rank.asc())
+                    Box::new(user_leaderboard::country_rank.asc())
                 }
                 (Some(_), LeaderboardOrder::ExtremeCount) => {
-                    Box::new(aredl_user_leaderboard::country_extremes_rank.asc())
+                    Box::new(user_leaderboard::country_extremes_rank.asc())
                 }
                 (Some(_), LeaderboardOrder::RawPoints) => {
-                    Box::new(aredl_user_leaderboard::country_raw_rank.asc())
+                    Box::new(user_leaderboard::country_raw_rank.asc())
                 }
             };
 
-        let query = aredl_user_leaderboard::table
-            .inner_join(users::table.on(users::id.eq(aredl_user_leaderboard::user_id)))
-            .left_join(clans::table.on(aredl_user_leaderboard::clan_id.eq(clans::id.nullable())))
-            .left_join(
-                aredl_levels::table
-                    .on(aredl_user_leaderboard::hardest.eq(aredl_levels::id.nullable())),
-            );
+        let query = user_leaderboard::table
+            .inner_join(users::table.on(users::id.eq(user_leaderboard::user_id)))
+            .left_join(clans::table.on(user_leaderboard::clan_id.eq(clans::id.nullable())))
+            .left_join(levels::table.on(user_leaderboard::hardest.eq(levels::id.nullable())));
 
         let entries = query
             .clone()
@@ -177,7 +172,7 @@ impl LeaderboardPage {
             .filter(name_filter)
             .filter(country_filter)
             .filter(clan_filter)
-            .order((ordering, aredl_user_leaderboard::user_id))
+            .order((ordering, user_leaderboard::user_id))
             .select(selection)
             .load::<(
                 LeaderboardEntry,
@@ -193,7 +188,7 @@ impl LeaderboardPage {
             };
         let country_filter: Box<dyn BoxableExpression<_, _, SqlType = Nullable<Bool>>> =
             match options.country_filter {
-                Some(country) => Box::new(aredl_user_leaderboard::country.eq(country)),
+                Some(country) => Box::new(user_leaderboard::country.eq(country)),
                 None => Box::new(<bool as AsExpression<Bool>>::as_expression(true).nullable()),
             };
 
@@ -223,10 +218,10 @@ impl LeaderboardPage {
             .collect::<Vec<_>>();
 
         let refresh_log: MatviewRefreshLog = matview_refresh_log::table
-            .find("aredl_user_leaderboard")
+            .find("user_leaderboard")
             .first(conn)
             .unwrap_or(MatviewRefreshLog {
-                view_name: "aredl_user_leaderboard".into(),
+                view_name: "user_leaderboard".into(),
                 last_refresh: Utc::now(),
             });
 

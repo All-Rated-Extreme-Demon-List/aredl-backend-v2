@@ -2,7 +2,7 @@ use crate::aredl::levels::ExtendedBaseLevel;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
-use crate::schema::{aredl_levels, aredl_records, users};
+use crate::schema::{aredl::levels, aredl::records, users};
 use crate::users::BaseUser;
 use actix_web::web;
 use chrono::{DateTime, Utc};
@@ -19,7 +19,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
-#[diesel(table_name=aredl_records, check_for_backend(Pg))]
+#[diesel(table_name=records, check_for_backend(Pg))]
 pub struct Record {
     /// Internal UUID of the record.
     pub id: Uuid,
@@ -54,7 +54,7 @@ pub struct Record {
 }
 
 #[derive(Serialize, Deserialize, Insertable, Debug, ToSchema)]
-#[diesel(table_name=aredl_records, check_for_backend(Pg))]
+#[diesel(table_name=records, check_for_backend(Pg))]
 pub struct RecordInsert {
     /// Internal UUID of the user who submitted the record.
     pub submitted_by: Uuid,
@@ -79,7 +79,7 @@ pub struct RecordInsert {
 }
 
 #[derive(Serialize, Deserialize, AsChangeset, Debug, ToSchema)]
-#[diesel(table_name=aredl_records, check_for_backend(Pg))]
+#[diesel(table_name=records, check_for_backend(Pg))]
 pub struct RecordUpdate {
     /// Internal UUID of the user who submitted the record.
     pub submitted_by: Option<Uuid>,
@@ -102,7 +102,7 @@ pub struct RecordUpdate {
 }
 
 #[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
-#[diesel(table_name=aredl_records, check_for_backend(Pg))]
+#[diesel(table_name=records, check_for_backend(Pg))]
 pub struct PublicRecordTemplate<T> {
     /// Internal UUID of the record.
     pub id: Uuid,
@@ -120,7 +120,7 @@ pub type PublicRecordUnresolved = PublicRecordTemplate<Uuid>;
 pub type PublicRecordResolved = PublicRecordTemplate<BaseUser>;
 
 #[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
-#[diesel(table_name=aredl_records, check_for_backend(Pg))]
+#[diesel(table_name=records, check_for_backend(Pg))]
 #[schema(bound = "LevelT: utoipa::ToSchema, UserT: utoipa::ToSchema")]
 pub struct FullRecordTemplate<LevelT, UserT> {
     /// Internal UUID of the record.
@@ -190,7 +190,7 @@ pub struct FullResolvedRecordPage {
 
 impl Record {
     pub fn create(db: web::Data<Arc<DbAppState>>, record: RecordInsert) -> Result<Self, ApiError> {
-        let record = diesel::insert_into(aredl_records::table)
+        let record = diesel::insert_into(records::table)
             .values(record)
             .returning(Record::as_select())
             .get_result::<Self>(&mut db.connection()?)?;
@@ -202,8 +202,8 @@ impl Record {
         record_id: Uuid,
         record: RecordUpdate,
     ) -> Result<Self, ApiError> {
-        let record = diesel::update(aredl_records::table)
-            .filter(aredl_records::id.eq(record_id))
+        let record = diesel::update(records::table)
+            .filter(records::id.eq(record_id))
             .set(record)
             .returning(Record::as_select())
             .get_result::<Self>(&mut db.connection()?)?;
@@ -211,8 +211,8 @@ impl Record {
     }
 
     pub fn delete(db: web::Data<Arc<DbAppState>>, record_id: Uuid) -> Result<Self, ApiError> {
-        let record = diesel::delete(aredl_records::table)
-            .filter(aredl_records::id.eq(record_id))
+        let record = diesel::delete(records::table)
+            .filter(records::id.eq(record_id))
             .returning(Record::as_select())
             .get_result::<Self>(&mut db.connection()?)?;
         Ok(record)
@@ -228,53 +228,53 @@ impl FullRecordUnresolved {
     ) -> Result<Paginated<FullUnresolvedRecordPage>, ApiError> {
         let conn = &mut db.connection()?;
 
-        let total_count: i64 = aredl_records::table
+        let total_count: i64 = records::table
             .filter(options.mobile_filter.map_or_else(
                 || {
                     Box::new(true.into_sql::<Bool>())
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
-                |mobile| Box::new(aredl_records::mobile.eq(mobile)),
+                |mobile| Box::new(records::mobile.eq(mobile)),
             ))
             .filter(options.level_filter.map_or_else(
                 || {
                     Box::new(true.into_sql::<Bool>())
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
-                |level| Box::new(aredl_records::level_id.eq(level)),
+                |level| Box::new(records::level_id.eq(level)),
             ))
             .filter(options.submitter_filter.map_or_else(
                 || {
                     Box::new(true.into_sql::<Bool>())
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
-                |submitter| Box::new(aredl_records::submitted_by.eq(submitter)),
+                |submitter| Box::new(records::submitted_by.eq(submitter)),
             ))
             .count()
             .get_result(conn)?;
 
-        let query = aredl_records::table.into_boxed::<Pg>();
+        let query = records::table.into_boxed::<Pg>();
         let raw_records = query
             .filter(options.mobile_filter.map_or_else(
                 || {
                     Box::new(true.into_sql::<Bool>())
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
-                |mobile| Box::new(aredl_records::mobile.eq(mobile)),
+                |mobile| Box::new(records::mobile.eq(mobile)),
             ))
             .filter(options.level_filter.map_or_else(
                 || {
                     Box::new(true.into_sql::<Bool>())
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
-                |level| Box::new(aredl_records::level_id.eq(level)),
+                |level| Box::new(records::level_id.eq(level)),
             ))
             .filter(options.submitter_filter.map_or_else(
                 || {
                     Box::new(true.into_sql::<Bool>())
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
-                |submitter| Box::new(aredl_records::submitted_by.eq(submitter)),
+                |submitter| Box::new(records::submitted_by.eq(submitter)),
             ))
             .limit(page_query.per_page())
             .offset(page_query.offset())
@@ -309,10 +309,10 @@ impl FullRecordResolved {
     pub fn find(db: web::Data<Arc<DbAppState>>, record_id: Uuid) -> Result<Self, ApiError> {
         let conn = &mut db.connection()?;
         let (record, user, level): (FullRecordTemplate<Uuid, Uuid>, BaseUser, ExtendedBaseLevel) =
-            aredl_records::table
-                .filter(aredl_records::id.eq(record_id))
-                .inner_join(users::table.on(aredl_records::submitted_by.eq(users::id)))
-                .inner_join(aredl_levels::table.on(aredl_records::level_id.eq(aredl_levels::id)))
+            records::table
+                .filter(records::id.eq(record_id))
+                .inner_join(users::table.on(records::submitted_by.eq(users::id)))
+                .inner_join(levels::table.on(records::level_id.eq(levels::id)))
                 .select((
                     FullRecordTemplate::<Uuid, Uuid>::as_select(),
                     BaseUser::as_select(),
@@ -330,56 +330,56 @@ impl FullRecordResolved {
     ) -> Result<Paginated<FullResolvedRecordPage>, ApiError> {
         let conn = &mut db.connection()?;
 
-        let total_count: i64 = aredl_records::table
+        let total_count: i64 = records::table
             .filter(options.mobile_filter.map_or_else(
                 || {
                     Box::new(true.into_sql::<Bool>())
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
-                |mobile| Box::new(aredl_records::mobile.eq(mobile)),
+                |mobile| Box::new(records::mobile.eq(mobile)),
             ))
             .filter(options.level_filter.map_or_else(
                 || {
                     Box::new(true.into_sql::<Bool>())
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
-                |level| Box::new(aredl_records::level_id.eq(level)),
+                |level| Box::new(records::level_id.eq(level)),
             ))
             .filter(options.submitter_filter.map_or_else(
                 || {
                     Box::new(true.into_sql::<Bool>())
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
-                |submitter| Box::new(aredl_records::submitted_by.eq(submitter)),
+                |submitter| Box::new(records::submitted_by.eq(submitter)),
             ))
             .count()
             .get_result(conn)?;
 
-        let query = aredl_records::table.into_boxed::<Pg>();
+        let query = records::table.into_boxed::<Pg>();
         let records = query
             .filter(options.mobile_filter.map_or_else(
                 || {
                     Box::new(true.into_sql::<Bool>())
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
-                |mobile| Box::new(aredl_records::mobile.eq(mobile)),
+                |mobile| Box::new(records::mobile.eq(mobile)),
             ))
             .filter(options.level_filter.map_or_else(
                 || {
                     Box::new(true.into_sql::<Bool>())
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
-                |level| Box::new(aredl_records::level_id.eq(level)),
+                |level| Box::new(records::level_id.eq(level)),
             ))
             .filter(options.submitter_filter.map_or_else(
                 || {
                     Box::new(true.into_sql::<Bool>())
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
-                |submitter| Box::new(aredl_records::submitted_by.eq(submitter)),
+                |submitter| Box::new(records::submitted_by.eq(submitter)),
             ))
-            .inner_join(users::table.on(aredl_records::submitted_by.eq(users::id)))
-            .inner_join(aredl_levels::table.on(aredl_records::level_id.eq(aredl_levels::id)))
+            .inner_join(users::table.on(records::submitted_by.eq(users::id)))
+            .inner_join(levels::table.on(records::level_id.eq(levels::id)))
             .limit(page_query.per_page())
             .offset(page_query.offset())
             .select((

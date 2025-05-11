@@ -1,15 +1,16 @@
-use utoipa::{OpenApi, Modify};
-use utoipa::openapi::{PathItem, Server};
-use utoipa::openapi::path::Operation;
-use utoipa::openapi::security::{ApiKey, ApiKeyValue, HttpBuilder, HttpAuthScheme, SecurityScheme};
-use utoipa::openapi::extensions::Extensions;
+use crate::{aredl, arepl, auth, clans, get_secret, roles, users};
 use serde_json::json;
-use crate::{aredl, auth, clans, get_secret, roles, users};
+use utoipa::openapi::extensions::Extensions;
+use utoipa::openapi::path::Operation;
+use utoipa::openapi::security::{ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityScheme};
+use utoipa::openapi::{PathItem, Server};
+use utoipa::{Modify, OpenApi};
 
 #[derive(OpenApi)]
 #[openapi(
     nest(
         (path = "/aredl", api = aredl::ApiDoc),
+        (path = "/arepl", api = arepl::ApiDoc),
         (path = "/users", api = users::ApiDoc),
         (path = "/auth", api = auth::ApiDoc),
         (path = "/roles", api = roles::ApiDoc),
@@ -111,11 +112,10 @@ impl Modify for ServerAddon {
         };
 
         let mut server: Server = Default::default();
-            server.url = url.to_string();
-            server.description = Some("API Server".to_string());
+        server.url = url.to_string();
+        server.description = Some("API Server".to_string());
 
         openapi.servers = Some(vec![server]);
-
     }
 }
 impl Modify for SecurityAddon {
@@ -123,11 +123,7 @@ impl Modify for SecurityAddon {
         let components = openapi.components.as_mut().unwrap();
         components.add_security_scheme(
             "api_key",
-            SecurityScheme::ApiKey(
-                ApiKey::Header(
-                    ApiKeyValue::new("api-key")
-                )
-            ),
+            SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::new("api-key"))),
         );
         components.add_security_scheme(
             "access_token",
@@ -204,9 +200,7 @@ impl StaffBadgeAddon {
     }
 
     fn add_badge_to_operation(op: &mut Operation, badge: serde_json::Value) {
-        let extensions = op
-            .extensions
-            .get_or_insert_with(|| Extensions::default());
+        let extensions = op.extensions.get_or_insert_with(|| Extensions::default());
         extensions
             .entry("x-badges".to_string())
             .and_modify(|existing| {

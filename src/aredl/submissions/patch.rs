@@ -5,7 +5,10 @@ use crate::{
     auth::{Authenticated, Permission},
     db,
     error_handler::ApiError,
-    schema::{aredl_levels, aredl_submissions, submission_history, users},
+    schema::{
+        aredl::{levels, submission_history, submissions},
+        users,
+    },
 };
 use actix_web::web;
 use diesel::expression_methods::BoolExpressionMethods;
@@ -21,7 +24,7 @@ use uuid::Uuid;
 use super::history::SubmissionHistory;
 
 #[derive(Serialize, Deserialize, Debug, AsChangeset, Default, ToSchema, Clone, PartialEq)]
-#[diesel(table_name=aredl_submissions, check_for_backend(Pg))]
+#[diesel(table_name=submissions, check_for_backend(Pg))]
 pub struct SubmissionPatchUser {
     /// UUID of the level this record is on.)
     pub level_id: Option<Uuid>,
@@ -40,7 +43,7 @@ pub struct SubmissionPatchUser {
 }
 
 #[derive(Serialize, Deserialize, Debug, AsChangeset, Default, ToSchema, Clone, PartialEq)]
-#[diesel(table_name=aredl_submissions, check_for_backend(Pg))]
+#[diesel(table_name=submissions, check_for_backend(Pg))]
 pub struct SubmissionPatchMod {
     /// UUID of the level this record is on.)
     pub level_id: Option<Uuid>,
@@ -93,8 +96,8 @@ impl SubmissionPatchUser {
             }
         }
 
-        let old_submission = aredl_submissions::table
-            .filter(aredl_submissions::id.eq(id))
+        let old_submission = submissions::table
+            .filter(submissions::id.eq(id))
             .select(Submission::as_select())
             .first::<Submission>(conn)?;
 
@@ -112,9 +115,9 @@ impl SubmissionPatchUser {
 
         // if either of these fields changed, we need revalidate the raw
         if patch.level_id.is_some() || patch.raw_url.is_some() {
-            let level_exists = aredl_levels::table
-                .filter(aredl_levels::id.eq(level_id))
-                .select((aredl_levels::legacy, aredl_levels::position))
+            let level_exists = levels::table
+                .filter(levels::id.eq(level_id))
+                .select((levels::legacy, levels::position))
                 .first::<(bool, i32)>(conn)
                 .optional()?;
 
@@ -137,11 +140,11 @@ impl SubmissionPatchUser {
             }
         }
 
-        let existing_submission = aredl_submissions::table
-            .filter(aredl_submissions::level_id.eq(level_id))
-            .filter(aredl_submissions::submitted_by.eq(old_submission.submitted_by))
-            .filter(aredl_submissions::id.ne(id))
-            .select(aredl_submissions::id)
+        let existing_submission = submissions::table
+            .filter(submissions::level_id.eq(level_id))
+            .filter(submissions::submitted_by.eq(old_submission.submitted_by))
+            .filter(submissions::id.ne(id))
+            .select(submissions::id)
             .first::<Uuid>(conn)
             .optional()?;
 
@@ -152,28 +155,28 @@ impl SubmissionPatchUser {
             ));
         }
 
-        let mut result = diesel::update(aredl_submissions::table)
-            .filter(aredl_submissions::id.eq(id))
-            .filter(aredl_submissions::submitted_by.eq(user))
+        let mut result = diesel::update(submissions::table)
+            .filter(submissions::id.eq(id))
+            .filter(submissions::submitted_by.eq(user))
             .filter(
-                aredl_submissions::status
+                submissions::status
                     .eq(SubmissionStatus::Pending)
-                    .or(aredl_submissions::status.eq(SubmissionStatus::Denied)),
+                    .or(submissions::status.eq(SubmissionStatus::Denied)),
             )
             .set((
                 patch.clone(),
                 // FIXME: this is very silly
                 if resub {
                     (
-                        aredl_submissions::status.eq(SubmissionStatus::Pending),
-                        aredl_submissions::reviewer_id.eq::<Option<Uuid>>(None),
-                        aredl_submissions::reviewer_notes.eq::<Option<String>>(None),
+                        submissions::status.eq(SubmissionStatus::Pending),
+                        submissions::reviewer_id.eq::<Option<Uuid>>(None),
+                        submissions::reviewer_notes.eq::<Option<String>>(None),
                     )
                 } else {
                     (
-                        aredl_submissions::status.eq(old_submission.status),
-                        aredl_submissions::reviewer_id.eq(old_submission.reviewer_id),
-                        aredl_submissions::reviewer_notes.eq(old_submission.reviewer_notes),
+                        submissions::status.eq(old_submission.status),
+                        submissions::reviewer_id.eq(old_submission.reviewer_id),
+                        submissions::reviewer_notes.eq(old_submission.reviewer_notes),
                     )
                 },
             ))
@@ -227,8 +230,8 @@ impl SubmissionPatchMod {
             }
         }
 
-        let old_submission = aredl_submissions::table
-            .filter(aredl_submissions::id.eq(id))
+        let old_submission = submissions::table
+            .filter(submissions::id.eq(id))
             .select(Submission::as_select())
             .first::<Submission>(conn)?;
 
@@ -269,21 +272,19 @@ impl SubmissionPatchMod {
         }
 
         if let Some(new_level) = patch.level_id {
-            let level_exists = select(exists(
-                aredl_levels::table.filter(aredl_levels::id.eq(new_level)),
-            ))
-            .get_result::<bool>(conn)?;
+            let level_exists = select(exists(levels::table.filter(levels::id.eq(new_level))))
+                .get_result::<bool>(conn)?;
 
             if level_exists == false {
                 return Err(ApiError::new(404, "Could not find the new level!"));
             }
         }
 
-        let existing_submission = aredl_submissions::table
-            .filter(aredl_submissions::level_id.eq(level_id))
-            .filter(aredl_submissions::submitted_by.eq(submitted_by))
-            .filter(aredl_submissions::id.ne(id))
-            .select(aredl_submissions::id)
+        let existing_submission = submissions::table
+            .filter(submissions::level_id.eq(level_id))
+            .filter(submissions::submitted_by.eq(submitted_by))
+            .filter(submissions::id.ne(id))
+            .select(submissions::id)
             .first::<Uuid>(conn)
             .optional()?;
 
@@ -294,8 +295,8 @@ impl SubmissionPatchMod {
             ));
         }
 
-        let result = diesel::update(aredl_submissions::table)
-            .filter(aredl_submissions::id.eq(id))
+        let result = diesel::update(submissions::table)
+            .filter(submissions::id.eq(id))
             .set(patch.clone())
             .returning(Submission::as_select())
             .get_result::<Submission>(conn)?;

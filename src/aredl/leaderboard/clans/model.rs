@@ -1,11 +1,13 @@
 use crate::aredl::leaderboard::{LeaderboardOrder, MatviewRefreshLog};
 use crate::aredl::levels::BaseLevel;
 use crate::clans::Clan;
-use crate::custom_schema::aredl_clans_leaderboard;
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
-use crate::schema::{aredl_levels, clans, matview_refresh_log};
+use crate::schema::{
+    aredl::{clans_leaderboard, levels},
+    clans, matview_refresh_log,
+};
 use chrono::Utc;
 use diesel::expression::expression_types::NotSelectable;
 use diesel::pg::Pg;
@@ -18,7 +20,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Serialize, Selectable, Queryable, Debug, ToSchema)]
-#[diesel(table_name=aredl_clans_leaderboard, check_for_backend(Pg))]
+#[diesel(table_name=clans_leaderboard, check_for_backend(Pg))]
 pub struct ClansLeaderboardEntry {
     pub rank: i32,
     pub extremes_rank: i32,
@@ -70,25 +72,20 @@ impl ClansLeaderboardPage {
         let selection = (
             ClansLeaderboardEntry::as_select(),
             Clan::as_select(),
-            (aredl_levels::id, aredl_levels::name).nullable(),
+            (levels::id, levels::name).nullable(),
         );
 
         let order = options.order.unwrap_or(LeaderboardOrder::TotalPoints);
 
         let ordering: Box<dyn BoxableExpression<_, _, SqlType = NotSelectable>> = match order {
-            LeaderboardOrder::TotalPoints => Box::new(aredl_clans_leaderboard::rank.asc()),
-            LeaderboardOrder::ExtremeCount => {
-                Box::new(aredl_clans_leaderboard::extremes_rank.asc())
-            }
-            LeaderboardOrder::RawPoints => Box::new(aredl_clans_leaderboard::rank.asc()),
+            LeaderboardOrder::TotalPoints => Box::new(clans_leaderboard::rank.asc()),
+            LeaderboardOrder::ExtremeCount => Box::new(clans_leaderboard::extremes_rank.asc()),
+            LeaderboardOrder::RawPoints => Box::new(clans_leaderboard::rank.asc()),
         };
 
-        let mut query = aredl_clans_leaderboard::table
-            .inner_join(clans::table.on(clans::id.eq(aredl_clans_leaderboard::clan_id)))
-            .left_join(
-                aredl_levels::table
-                    .on(aredl_clans_leaderboard::hardest.eq(aredl_levels::id.nullable())),
-            )
+        let mut query = clans_leaderboard::table
+            .inner_join(clans::table.on(clans::id.eq(clans_leaderboard::clan_id)))
+            .left_join(levels::table.on(clans_leaderboard::hardest.eq(levels::id.nullable())))
             .into_boxed();
 
         if let Some(ref filter) = options.name_filter {
@@ -98,16 +95,13 @@ impl ClansLeaderboardPage {
         let entries = query
             .limit(page_query.per_page())
             .offset(page_query.offset())
-            .order((ordering, aredl_clans_leaderboard::clan_id.asc()))
+            .order((ordering, clans_leaderboard::clan_id.asc()))
             .select(selection)
             .load::<(ClansLeaderboardEntry, Clan, Option<BaseLevel>)>(conn)?;
 
-        let mut count_query = aredl_clans_leaderboard::table
-            .inner_join(clans::table.on(clans::id.eq(aredl_clans_leaderboard::clan_id)))
-            .left_join(
-                aredl_levels::table
-                    .on(aredl_clans_leaderboard::hardest.eq(aredl_levels::id.nullable())),
-            )
+        let mut count_query = clans_leaderboard::table
+            .inner_join(clans::table.on(clans::id.eq(clans_leaderboard::clan_id)))
+            .left_join(levels::table.on(clans_leaderboard::hardest.eq(levels::id.nullable())))
             .into_boxed();
 
         if let Some(ref filter) = options.name_filter {
@@ -130,10 +124,10 @@ impl ClansLeaderboardPage {
             .collect::<Vec<_>>();
 
         let refresh_log: MatviewRefreshLog = matview_refresh_log::table
-            .find("aredl_clans_leaderboard")
+            .find("clans_leaderboard")
             .first(conn)
             .unwrap_or(MatviewRefreshLog {
-                view_name: "aredl_clans_leaderboard".into(),
+                view_name: "clans_leaderboard".into(),
                 last_refresh: Utc::now(),
             });
 

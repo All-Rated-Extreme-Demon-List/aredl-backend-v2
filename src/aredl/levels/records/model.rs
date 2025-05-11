@@ -1,7 +1,7 @@
 use crate::aredl::records::{PublicRecordResolved, PublicRecordUnresolved};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
-use crate::schema::{aredl_records, users};
+use crate::schema::{aredl::records, users};
 use crate::users::BaseUser;
 use actix_web::web;
 use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl, SelectableHelper};
@@ -13,11 +13,11 @@ impl PublicRecordResolved {
         db: web::Data<Arc<DbAppState>>,
         level_id: Uuid,
     ) -> Result<Vec<Self>, ApiError> {
-        let records = aredl_records::table
-            .filter(aredl_records::level_id.eq(level_id))
-            .filter(aredl_records::is_verification.eq(false))
-            .inner_join(users::table.on(aredl_records::submitted_by.eq(users::id)))
-            .order(aredl_records::placement_order.asc())
+        let records = records::table
+            .filter(records::level_id.eq(level_id))
+            .filter(records::is_verification.eq(false))
+            .inner_join(users::table.on(records::submitted_by.eq(users::id)))
+            .order(records::placement_order.asc())
             .select((PublicRecordUnresolved::as_select(), BaseUser::as_select()))
             .load::<(PublicRecordUnresolved, BaseUser)>(&mut db.connection()?)?;
 

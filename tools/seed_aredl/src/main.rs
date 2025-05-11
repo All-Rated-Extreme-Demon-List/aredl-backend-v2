@@ -2,11 +2,11 @@ mod error_handler;
 mod schema;
 
 use crate::error_handler::MigrationError;
-use crate::schema::{
-    aredl_levels, aredl_levels_created, aredl_pack_levels, aredl_pack_tiers, aredl_packs,
-    aredl_position_history, aredl_records, clan_members, clans, permissions, roles, user_roles,
-    users,
-};
+use crate::schema::aredl::levels as aredl_levels;
+use crate::schema::aredl::position_history as aredl_position_history;
+use crate::schema::arepl::levels as arepl_levels;
+use crate::schema::arepl::position_history as arepl_position_history;
+use crate::schema::{aredl, arepl, clan_members, clans, permissions, roles, user_roles, users};
 use diesel::internal::derives::multiconnection::chrono::{DateTime, Duration, Utc};
 use diesel::r2d2::ConnectionManager;
 use diesel::{
@@ -49,6 +49,14 @@ pub struct Record {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct PlatRecord {
+    pub user: i64,
+    pub time: i64,
+    pub link: String,
+    pub mobile: Option<bool>,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Level {
     pub id: i32,
     pub name: String,
@@ -60,6 +68,21 @@ pub struct Level {
     pub song: Option<i32>,
     pub tags: Option<Vec<Option<String>>>,
     pub records: Vec<Record>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PlatLevel {
+    pub id: i32,
+    pub name: String,
+    pub description: Option<String>,
+    pub author: i64,
+    pub creators: Vec<i64>,
+    pub verifier: i64,
+    pub verification: String,
+    pub verificationTime: i64,
+    pub song: Option<i32>,
+    pub tags: Option<Vec<Option<String>>>,
+    pub records: Vec<PlatRecord>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -100,7 +123,7 @@ pub struct CreateUser {
 }
 
 #[derive(Serialize, Deserialize, Insertable, Debug)]
-#[diesel(table_name=aredl_levels)]
+#[diesel(table_name = aredl_levels)]
 pub struct LevelCreate {
     pub id: Option<Uuid>,
     pub position: i32,
@@ -114,6 +137,20 @@ pub struct LevelCreate {
     pub song: Option<i32>,
 }
 
+#[derive(Serialize, Deserialize, Insertable, Debug)]
+#[diesel(table_name = arepl_levels)]
+pub struct PlatLevelCreate {
+    pub id: Option<Uuid>,
+    pub position: i32,
+    pub name: String,
+    pub description: Option<String>,
+    pub publisher_id: Uuid,
+    pub legacy: bool,
+    pub level_id: i32,
+    pub two_player: bool,
+    pub tags: Option<Vec<Option<String>>>,
+    pub song: Option<i32>,
+}
 pub struct LevelInfo {
     pub legacy: bool,
     pub two_player: bool,
@@ -139,8 +176,20 @@ pub struct ChangelogEntry {
 }
 
 #[derive(Insertable, Debug)]
-#[diesel(table_name=aredl_position_history)]
+#[diesel(table_name = aredl_position_history)]
 pub struct ChangelogResolved {
+    pub new_position: Option<i32>,
+    pub old_position: Option<i32>,
+    pub legacy: Option<bool>,
+    pub affected_level: Uuid,
+    pub level_above: Option<Uuid>,
+    pub level_below: Option<Uuid>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Insertable, Debug)]
+#[diesel(table_name = arepl_position_history)]
+pub struct PlatChangelogResolved {
     pub new_position: Option<i32>,
     pub old_position: Option<i32>,
     pub legacy: Option<bool>,
@@ -226,10 +275,14 @@ fn main() {
 
     println!("Loading data");
     let aredl_path_str = get_secret("AREDL_DATA_PATH");
+    let arepl_path_str = get_secret("AREPL_DATA_PATH");
 
     let aredl_path = Path::new(&aredl_path_str);
+    let arepl_path = Path::new(&arepl_path_str);
 
     let level_names = load_json_from_file::<Vec<String>>(aredl_path.join("_list.json").as_path());
+    let plat_level_names =
+        load_json_from_file::<Vec<String>>(arepl_path.join("_list.json").as_path());
 
     let legacy_names =
         load_json_from_file::<Vec<String>>(aredl_path.join("_legacy.json").as_path());
@@ -313,12 +366,32 @@ fn main() {
         })
         .collect();
 
+    let plat_levels: Vec<(PlatLevel, LevelInfo)> = plat_level_names
+        .iter()
+        .map(|name| {
+            (
+                load_json_from_file::<PlatLevel>(
+                    arepl_path.join(format!("{}.json", name).as_str()).as_path(),
+                ),
+                LevelInfo {
+                    legacy: false,
+                    two_player: name.ends_with("2p"),
+                    original_name: name.clone(),
+                },
+            )
+        })
+        .collect();
+
     let level_id_map: HashMap<String, i32> = levels
         .iter()
         .map(|(level, level_ext)| (level_ext.original_name.clone(), level.id))
         .collect();
 
-    println!("\tLevels found: {}", &levels.len());
+    println!(
+        "\tLevels found: {} classic, {} platformers",
+        &levels.len(),
+        &plat_levels.len()
+    );
 
     let users: Vec<CreateUser> = levels
         .iter()
@@ -327,6 +400,19 @@ fn main() {
         .chain(levels.iter().flat_map(|(level, _)| level.creators.clone()))
         .chain(
             levels
+                .iter()
+                .flat_map(|(level, _)| level.records.iter().clone())
+                .map(|record| record.user.clone()),
+        )
+        .chain(plat_levels.iter().map(|(level, _)| level.author.clone()))
+        .chain(plat_levels.iter().map(|(level, _)| level.verifier.clone()))
+        .chain(
+            plat_levels
+                .iter()
+                .flat_map(|(level, _)| level.creators.clone()),
+        )
+        .chain(
+            plat_levels
                 .iter()
                 .flat_map(|(level, _)| level.records.iter().clone())
                 .map(|record| record.user.clone()),
@@ -407,8 +493,8 @@ fn main() {
             };
 
             let old_level_ids: HashMap<String, Uuid> = if levels_table_exists {
-                aredl_levels::table
-                    .select((aredl_levels::name, aredl_levels::id))
+                aredl::levels::table
+                    .select((aredl::levels::name, aredl::levels::id))
                     .load::<(String, Uuid)>(conn)?
                     .into_iter()
                     .collect()
@@ -427,8 +513,8 @@ fn main() {
             };
 
             let old_pack_ids: HashMap<String, Uuid> = if packs_table_exists {
-                aredl_packs::table
-                    .select((aredl_packs::name, aredl_packs::id))
+                aredl::packs::table
+                    .select((aredl::packs::name, aredl::packs::id))
                     .load::<(String, Uuid)>(conn)?
                     .into_iter()
                     .collect()
@@ -478,29 +564,73 @@ fn main() {
                 })
                 .collect();
 
+            let plat_level_insert: Vec<PlatLevelCreate> = plat_levels
+                .iter()
+                .enumerate()
+                .map(|(pos, (level_data, level_data_ext))| PlatLevelCreate {
+                    id: None,
+                    position: (pos + 1) as i32,
+                    name: level_data.name.clone(),
+                    description: level_data.description.clone(),
+                    publisher_id: *user_map.get(&level_data.author).unwrap(),
+                    legacy: level_data_ext.legacy,
+                    level_id: level_data.id,
+                    two_player: level_data_ext.two_player,
+                    tags: level_data.tags.clone(),
+                    song: level_data.song,
+                })
+                .collect();
+
             println!("\tInserting levels");
 
-            diesel::sql_query("ALTER TABLE aredl_levels DISABLE TRIGGER aredl_level_place")
+            diesel::sql_query("ALTER TABLE aredl.levels DISABLE TRIGGER level_place")
                 .execute(conn)?;
 
-            diesel::sql_query("ALTER TABLE aredl_levels DISABLE TRIGGER aredl_level_place_history")
+            diesel::sql_query("ALTER TABLE aredl.levels DISABLE TRIGGER level_place_history")
                 .execute(conn)?;
 
-            diesel::insert_into(aredl_levels::table)
+            diesel::insert_into(aredl::levels::table)
                 .values(&level_insert)
                 .execute(conn)?;
 
-            diesel::sql_query("ALTER TABLE aredl_levels ENABLE TRIGGER aredl_level_place")
+            diesel::sql_query("ALTER TABLE aredl.levels ENABLE TRIGGER level_place")
                 .execute(conn)?;
 
-            diesel::sql_query("ALTER TABLE aredl_levels ENABLE TRIGGER aredl_level_place_history")
+            diesel::sql_query("ALTER TABLE aredl.levels ENABLE TRIGGER level_place_history")
                 .execute(conn)?;
 
-            let level_map: HashMap<(i32, bool), Uuid> = aredl_levels::table
+            let level_map: HashMap<(i32, bool), Uuid> = aredl::levels::table
                 .select((
-                    aredl_levels::id,
-                    aredl_levels::level_id,
-                    aredl_levels::two_player,
+                    aredl::levels::id,
+                    aredl::levels::level_id,
+                    aredl::levels::two_player,
+                ))
+                .load::<(Uuid, i32, bool)>(conn)?
+                .iter()
+                .map(|(id, level_id, two_player)| ((*level_id, *two_player), *id))
+                .collect();
+
+            diesel::sql_query("ALTER TABLE arepl.levels DISABLE TRIGGER level_place")
+                .execute(conn)?;
+            diesel::sql_query("ALTER TABLE arepl.levels DISABLE TRIGGER level_place_history")
+                .execute(conn)?;
+
+            println!("\tInserting platformer levels");
+
+            diesel::insert_into(arepl::levels::table)
+                .values(&plat_level_insert)
+                .execute(conn)?;
+
+            diesel::sql_query("ALTER TABLE arepl.levels ENABLE TRIGGER level_place")
+                .execute(conn)?;
+            diesel::sql_query("ALTER TABLE arepl.levels ENABLE TRIGGER level_place_history")
+                .execute(conn)?;
+
+            let plat_level_map: HashMap<(i32, bool), Uuid> = arepl::levels::table
+                .select((
+                    arepl::levels::id,
+                    arepl::levels::level_id,
+                    arepl::levels::two_player,
                 ))
                 .load::<(Uuid, i32, bool)>(conn)?
                 .iter()
@@ -509,24 +639,24 @@ fn main() {
 
             println!("\tInserting pack-tiers");
 
-            diesel::insert_into(aredl_pack_tiers::table)
+            diesel::insert_into(aredl::pack_tiers::table)
                 .values(
                     pack_tier_data
                         .iter()
                         .enumerate()
                         .map(|(index, tier)| {
                             (
-                                aredl_pack_tiers::name.eq(&tier.name),
-                                aredl_pack_tiers::color.eq(&tier.color),
-                                aredl_pack_tiers::placement.eq(index as i32),
+                                aredl::pack_tiers::name.eq(&tier.name),
+                                aredl::pack_tiers::color.eq(&tier.color),
+                                aredl::pack_tiers::placement.eq(index as i32),
                             )
                         })
                         .collect::<Vec<_>>(),
                 )
                 .execute(conn)?;
 
-            let pack_tier_map: HashMap<String, Uuid> = aredl_pack_tiers::table
-                .select((aredl_pack_tiers::name, aredl_pack_tiers::id))
+            let pack_tier_map: HashMap<String, Uuid> = aredl::pack_tiers::table
+                .select((aredl::pack_tiers::name, aredl::pack_tiers::id))
                 .load::<(String, Uuid)>(conn)?
                 .iter()
                 .flat_map(|(name, id)| {
@@ -551,42 +681,42 @@ fn main() {
                 })
                 .collect();
 
-            diesel::insert_into(aredl_packs::table)
+            diesel::insert_into(aredl::packs::table)
                 .values(
                     pack_data
                         .iter()
                         .map(|pack| {
                             (
-                                aredl_packs::id.eq(pack_ids.get(&pack.name).unwrap()),
-                                aredl_packs::name.eq(&pack.name),
-                                aredl_packs::tier.eq(pack_tier_map.get(&pack.name).unwrap()),
+                                aredl::packs::id.eq(pack_ids.get(&pack.name).unwrap()),
+                                aredl::packs::name.eq(&pack.name),
+                                aredl::packs::tier.eq(pack_tier_map.get(&pack.name).unwrap()),
                             )
                         })
                         .collect::<Vec<_>>(),
                 )
                 .execute(conn)?;
 
-            let pack_map: HashMap<String, Uuid> = aredl_packs::table
-                .select((aredl_packs::name, aredl_packs::id))
+            let pack_map: HashMap<String, Uuid> = aredl::packs::table
+                .select((aredl::packs::name, aredl::packs::id))
                 .load::<(String, Uuid)>(conn)?
                 .iter()
                 .map(|(name, id)| (name.clone(), *id))
                 .collect();
 
-            diesel::insert_into(aredl_pack_levels::table)
+            diesel::insert_into(aredl::pack_levels::table)
                 .values(
                     pack_data
                         .iter()
                         .flat_map(|pack| {
                             pack.levels.iter().map(|level_name| {
                                 (
-                                    aredl_pack_levels::level_id.eq(level_map
+                                    aredl::pack_levels::level_id.eq(level_map
                                         .get(&(
                                             *level_id_map.get(level_name).unwrap(),
                                             level_name.ends_with("2p"),
                                         ))
                                         .unwrap()),
-                                    aredl_pack_levels::pack_id
+                                    aredl::pack_levels::pack_id
                                         .eq(pack_map.get(&pack.name).unwrap()),
                                 )
                             })
@@ -685,22 +815,78 @@ fn main() {
                 }))
                 .collect::<Vec<ChangelogResolved>>();
 
-            diesel::insert_into(aredl_position_history::table)
+            diesel::insert_into(aredl::position_history::table)
                 .values(changelog_data)
                 .execute(conn)?;
 
+            println!("\tInserting platformer changelog");
+            let init_plat_levels: Vec<(Uuid, bool)> = plat_levels
+                .iter()
+                .map(|(level_data, level_data_ext)| {
+                    let id = *plat_level_map
+                        .get(&(level_data.id, level_data_ext.two_player))
+                        .expect("missing plat_level_map entry");
+                    (id, level_data_ext.legacy)
+                })
+                .collect();
+
+            let first_timestamp = Utc::now().timestamp();
+            let init_plat_changelog: Vec<PlatChangelogResolved> = init_plat_levels
+                .iter()
+                .enumerate()
+                .map(|(idx, (id, legacy))| {
+                    let above = init_plat_levels
+                        .get(idx.wrapping_sub(1))
+                        .map(|&(prev_id, _)| prev_id);
+                    let below = init_plat_levels.get(idx + 1).map(|&(next_id, _)| next_id);
+                    PlatChangelogResolved {
+                        new_position: Some((idx + 1) as i32),
+                        old_position: None,
+                        legacy: Some(*legacy),
+                        affected_level: *id,
+                        level_above: above,
+                        level_below: below,
+                        created_at: DateTime::from_timestamp(first_timestamp, 0).unwrap(),
+                    }
+                })
+                .collect();
+
+            diesel::insert_into(arepl::position_history::table)
+                .values(&init_plat_changelog)
+                .execute(conn)?;
+
             println!("\tInserting creators");
-            diesel::insert_into(aredl_levels_created::table)
+            diesel::insert_into(aredl::levels_created::table)
                 .values(
                     levels
                         .iter()
                         .flat_map(|(level, level_data_ext)| {
                             level.creators.iter().map(|creator| {
                                 (
-                                    aredl_levels_created::level_id.eq(level_map
+                                    aredl::levels_created::level_id.eq(level_map
                                         .get(&(level.id, level_data_ext.two_player))
                                         .unwrap()),
-                                    aredl_levels_created::user_id
+                                    aredl::levels_created::user_id
+                                        .eq(user_map.get(creator).unwrap()),
+                                )
+                            })
+                        })
+                        .collect::<Vec<_>>(),
+                )
+                .execute(conn)?;
+
+            println!("\tInserting platformer creators");
+            diesel::insert_into(arepl::levels_created::table)
+                .values(
+                    plat_levels
+                        .iter()
+                        .flat_map(|(level, level_data_ext)| {
+                            level.creators.iter().map(|creator| {
+                                (
+                                    arepl::levels_created::level_id.eq(plat_level_map
+                                        .get(&(level.id, level_data_ext.two_player))
+                                        .unwrap()),
+                                    arepl::levels_created::user_id
                                         .eq(user_map.get(creator).unwrap()),
                                 )
                             })
@@ -864,35 +1050,78 @@ fn main() {
                 .iter()
                 .map(|(level, level_data_ext)| {
                     (
-                        aredl_records::level_id.eq(level_map
+                        aredl::records::level_id.eq(level_map
                             .get(&(level.id, level_data_ext.two_player))
                             .unwrap()),
-                        aredl_records::submitted_by.eq(user_map.get(&level.verifier).unwrap()),
-                        aredl_records::mobile.eq(false),
-                        aredl_records::video_url.eq(&level.verification),
-                        aredl_records::created_at.eq(now),
-                        aredl_records::is_verification.eq(true),
+                        aredl::records::submitted_by.eq(user_map.get(&level.verifier).unwrap()),
+                        aredl::records::mobile.eq(false),
+                        aredl::records::video_url.eq(&level.verification),
+                        aredl::records::created_at.eq(now),
+                        aredl::records::is_verification.eq(true),
                     )
                 })
                 .chain(levels.iter().flat_map(|(level, level_data_ext)| {
                     level.records.iter().enumerate().map(|(index, record)| {
                         let created_at = now + Duration::seconds((index + 1) as i64);
                         (
-                            aredl_records::level_id.eq(level_map
+                            aredl::records::level_id.eq(level_map
                                 .get(&(level.id, level_data_ext.two_player))
                                 .unwrap()),
-                            aredl_records::submitted_by.eq(user_map.get(&record.user).unwrap()),
-                            aredl_records::mobile.eq(record.mobile.unwrap_or(false)),
-                            aredl_records::video_url.eq(&record.link),
-                            aredl_records::created_at.eq(created_at),
-                            aredl_records::is_verification.eq(false),
+                            aredl::records::submitted_by.eq(user_map.get(&record.user).unwrap()),
+                            aredl::records::mobile.eq(record.mobile.unwrap_or(false)),
+                            aredl::records::video_url.eq(&record.link),
+                            aredl::records::created_at.eq(created_at),
+                            aredl::records::is_verification.eq(false),
                         )
                     })
                 }))
                 .collect::<Vec<_>>();
 
             for record_chunk in records.chunks(4000) {
-                diesel::insert_into(aredl_records::table)
+                diesel::insert_into(aredl::records::table)
+                    .values(record_chunk)
+                    .execute(conn)?;
+            }
+
+            println!("\tInserting platformer records");
+
+            let now = Utc::now();
+
+            let plat_records = plat_levels
+                .iter()
+                .map(|(level, level_data_ext)| {
+                    (
+                        arepl::records::level_id.eq(plat_level_map
+                            .get(&(level.id, level_data_ext.two_player))
+                            .unwrap()),
+                        arepl::records::submitted_by.eq(user_map.get(&level.verifier).unwrap()),
+                        arepl::records::mobile.eq(false),
+                        arepl::records::video_url.eq(&level.verification),
+                        arepl::records::completion_time.eq(level.verificationTime),
+                        arepl::records::created_at.eq(now),
+                        arepl::records::is_verification.eq(true),
+                    )
+                })
+                .chain(plat_levels.iter().flat_map(|(level, level_data_ext)| {
+                    level.records.iter().enumerate().map(|(index, record)| {
+                        let created_at = now + Duration::seconds((index + 1) as i64);
+                        (
+                            arepl::records::level_id.eq(level_map
+                                .get(&(level.id, level_data_ext.two_player))
+                                .unwrap()),
+                            arepl::records::submitted_by.eq(user_map.get(&record.user).unwrap()),
+                            arepl::records::mobile.eq(record.mobile.unwrap_or(false)),
+                            arepl::records::video_url.eq(&record.link),
+                            arepl::records::completion_time.eq(record.time),
+                            arepl::records::created_at.eq(created_at),
+                            arepl::records::is_verification.eq(false),
+                        )
+                    })
+                }))
+                .collect::<Vec<_>>();
+
+            for record_chunk in plat_records.chunks(4000) {
+                diesel::insert_into(arepl::records::table)
                     .values(record_chunk)
                     .execute(conn)?;
             }
@@ -903,19 +1132,35 @@ fn main() {
 
     println!("\tUpdating materialized views");
 
-    diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_user_leaderboard")
+    diesel::sql_query("REFRESH MATERIALIZED VIEW aredl.user_leaderboard")
         .execute(&mut db_conn)
         .expect("Failed to update leaderboard");
 
-    diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_country_leaderboard")
+    diesel::sql_query("REFRESH MATERIALIZED VIEW aredl.country_leaderboard")
         .execute(&mut db_conn)
         .expect("Failed to update country leaderboard");
 
-    diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_clans_leaderboard")
+    diesel::sql_query("REFRESH MATERIALIZED VIEW aredl.clans_leaderboard")
         .execute(&mut db_conn)
         .expect("Failed to update clans leaderboard");
 
-    diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_position_history_full_view")
+    diesel::sql_query("REFRESH MATERIALIZED VIEW aredl.position_history_full_view")
         .execute(&mut db_conn)
         .expect("Failed to update position history");
+
+    diesel::sql_query("REFRESH MATERIALIZED VIEW arepl.user_leaderboard")
+        .execute(&mut db_conn)
+        .expect("Failed to update platformer leaderboard");
+
+    diesel::sql_query("REFRESH MATERIALIZED VIEW arepl.country_leaderboard")
+        .execute(&mut db_conn)
+        .expect("Failed to update platformer country leaderboard");
+
+    diesel::sql_query("REFRESH MATERIALIZED VIEW arepl.clans_leaderboard")
+        .execute(&mut db_conn)
+        .expect("Failed to update platformer clans leaderboard");
+
+    diesel::sql_query("REFRESH MATERIALIZED VIEW arepl.position_history_full_view")
+        .execute(&mut db_conn)
+        .expect("Failed to update platformer position history");
 }

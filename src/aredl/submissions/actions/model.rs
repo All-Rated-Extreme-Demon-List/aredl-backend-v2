@@ -5,10 +5,11 @@ use crate::{
         submissions::{history::SubmissionHistory, *},
     },
     auth::Authenticated,
-    custom_schema::aredl_submissions_with_priority,
     db::DbAppState,
     error_handler::ApiError,
-    schema::{aredl_levels, aredl_records, aredl_shifts, aredl_submissions, submission_history},
+    schema::aredl::{
+        levels, records, shifts, submission_history, submissions, submissions_with_priority,
+    },
     users::me::notifications::{Notification, NotificationType},
 };
 use actix_web::web;
@@ -31,29 +32,29 @@ impl Submission {
     pub fn increment_user_shift(conn: &mut PgConnection, user_id: Uuid) -> Result<(), ApiError> {
         let now = Utc::now();
 
-        let running_shift_id = aredl_shifts::table
-            .filter(aredl_shifts::user_id.eq(user_id))
-            .filter(aredl_shifts::status.eq(ShiftStatus::Running))
-            .filter(aredl_shifts::start_at.le(now))
-            .filter(aredl_shifts::end_at.gt(now))
-            .order(aredl_shifts::start_at.asc())
-            .select(aredl_shifts::id)
+        let running_shift_id = shifts::table
+            .filter(shifts::user_id.eq(user_id))
+            .filter(shifts::status.eq(ShiftStatus::Running))
+            .filter(shifts::start_at.le(now))
+            .filter(shifts::end_at.gt(now))
+            .order(shifts::start_at.asc())
+            .select(shifts::id)
             .first::<Uuid>(conn)
             .optional()?;
 
         if let Some(shift_id) = running_shift_id {
             let (completed_count, target_count) =
-                diesel::update(aredl_shifts::table.filter(aredl_shifts::id.eq(shift_id)))
+                diesel::update(shifts::table.filter(shifts::id.eq(shift_id)))
                     .set((
-                        aredl_shifts::completed_count.eq(aredl_shifts::completed_count + 1),
-                        aredl_shifts::updated_at.eq(now),
+                        shifts::completed_count.eq(shifts::completed_count + 1),
+                        shifts::updated_at.eq(now),
                     ))
-                    .returning((aredl_shifts::completed_count, aredl_shifts::target_count))
+                    .returning((shifts::completed_count, shifts::target_count))
                     .get_result::<(i32, i32)>(conn)?;
 
             if completed_count >= target_count {
-                diesel::update(aredl_shifts::table.filter(aredl_shifts::id.eq(shift_id)))
-                    .set(aredl_shifts::status.eq(ShiftStatus::Completed))
+                diesel::update(shifts::table.filter(shifts::id.eq(shift_id)))
+                    .set(shifts::status.eq(ShiftStatus::Completed))
                     .execute(conn)?;
             }
         }
@@ -67,41 +68,41 @@ impl Submission {
     ) -> Result<Record, ApiError> {
         let conn = &mut db.connection()?;
         conn.transaction(|connection| -> Result<Record, ApiError> {
-            let updated = aredl_submissions::table
-                .filter(aredl_submissions::id.eq(id))
+            let updated = submissions::table
+                .filter(submissions::id.eq(id))
                 .select(Submission::as_select())
                 .first::<Submission>(connection)?;
 
-            let existing_record_id = aredl_records::table
-                .filter(aredl_records::submitted_by.eq(updated.submitted_by))
-                .filter(aredl_records::level_id.eq(updated.level_id))
-                .select(aredl_records::id)
+            let existing_record_id = records::table
+                .filter(records::submitted_by.eq(updated.submitted_by))
+                .filter(records::level_id.eq(updated.level_id))
+                .select(records::id)
                 .first::<Uuid>(connection)
                 .optional()?;
 
             let record_data = (
-                aredl_records::mobile.eq(updated.mobile),
-                aredl_records::ldm_id.eq(updated.ldm_id),
-                aredl_records::video_url.eq(updated.video_url),
-                aredl_records::raw_url.eq(updated.raw_url),
-                aredl_records::reviewer_id.eq(Some(reviewer_id)),
-                aredl_records::mod_menu.eq(updated.mod_menu),
-                aredl_records::user_notes.eq(updated.user_notes),
-                aredl_records::reviewer_notes.eq(notes.clone()),
-                aredl_records::updated_at.eq(chrono::Utc::now()),
+                records::mobile.eq(updated.mobile),
+                records::ldm_id.eq(updated.ldm_id),
+                records::video_url.eq(updated.video_url),
+                records::raw_url.eq(updated.raw_url),
+                records::reviewer_id.eq(Some(reviewer_id)),
+                records::mod_menu.eq(updated.mod_menu),
+                records::user_notes.eq(updated.user_notes),
+                records::reviewer_notes.eq(notes.clone()),
+                records::updated_at.eq(chrono::Utc::now()),
             );
 
             let inserted = if let Some(record_id) = existing_record_id {
-                diesel::update(aredl_records::table.filter(aredl_records::id.eq(record_id)))
+                diesel::update(records::table.filter(records::id.eq(record_id)))
                     .set(record_data)
                     .returning(Record::as_select())
                     .get_result::<Record>(connection)?
             } else {
-                diesel::insert_into(aredl_records::table)
+                diesel::insert_into(records::table)
                     .values((
-                        aredl_records::submitted_by.eq(updated.submitted_by),
-                        aredl_records::level_id.eq(updated.level_id),
-                        aredl_records::created_at.eq(chrono::Utc::now()),
+                        records::submitted_by.eq(updated.submitted_by),
+                        records::level_id.eq(updated.level_id),
+                        records::created_at.eq(chrono::Utc::now()),
                         record_data,
                     ))
                     .returning(Record::as_select())
@@ -123,9 +124,9 @@ impl Submission {
                 .values(&history)
                 .execute(connection)?;
 
-            let level_name = aredl_levels::table
-                .filter(aredl_levels::id.eq(updated.level_id))
-                .select(aredl_levels::name)
+            let level_name = levels::table
+                .filter(levels::id.eq(updated.level_id))
+                .select(levels::name)
                 .first::<String>(connection)?;
 
             Self::increment_user_shift(connection, reviewer_id)?;
@@ -138,8 +139,8 @@ impl Submission {
                 NotificationType::Success,
             )?;
 
-            diesel::delete(aredl_submissions::table)
-                .filter(aredl_submissions::id.eq(id))
+            diesel::delete(submissions::table)
+                .filter(submissions::id.eq(id))
                 .execute(connection)?;
 
             Ok(inserted)
@@ -159,15 +160,15 @@ impl Submission {
         let user_id = authenticated.user_id;
 
         let new_data = (
-            aredl_submissions::status.eq(SubmissionStatus::Denied),
-            aredl_submissions::reviewer_id.eq(authenticated.user_id),
-            aredl_submissions::reviewer_notes.eq(notes.clone()),
-            aredl_submissions::updated_at.eq(update_timestamp.clone()),
+            submissions::status.eq(SubmissionStatus::Denied),
+            submissions::reviewer_id.eq(authenticated.user_id),
+            submissions::reviewer_notes.eq(notes.clone()),
+            submissions::updated_at.eq(update_timestamp.clone()),
         );
 
-        let current_status = aredl_submissions::table
-            .filter(aredl_submissions::id.eq(id))
-            .select(aredl_submissions::status)
+        let current_status = submissions::table
+            .filter(submissions::id.eq(id))
+            .select(submissions::status)
             .first::<SubmissionStatus>(connection)?;
 
         if current_status == SubmissionStatus::Denied {
@@ -177,8 +178,8 @@ impl Submission {
             ));
         }
 
-        let updated_submission = diesel::update(aredl_submissions::table)
-            .filter(aredl_submissions::id.eq(id))
+        let updated_submission = diesel::update(submissions::table)
+            .filter(submissions::id.eq(id))
             .set(new_data)
             .returning(Submission::as_select())
             .get_result::<Submission>(connection)?;
@@ -229,15 +230,15 @@ impl Submission {
         let user_id = authenticated.user_id;
 
         let new_data = (
-            aredl_submissions::status.eq(SubmissionStatus::UnderConsideration),
-            aredl_submissions::reviewer_id.eq(authenticated.user_id),
-            aredl_submissions::reviewer_notes.eq(&notes),
-            aredl_submissions::updated_at.eq(update_timestamp.clone()),
+            submissions::status.eq(SubmissionStatus::UnderConsideration),
+            submissions::reviewer_id.eq(authenticated.user_id),
+            submissions::reviewer_notes.eq(&notes),
+            submissions::updated_at.eq(update_timestamp.clone()),
         );
 
-        let current_status = aredl_submissions::table
-            .filter(aredl_submissions::id.eq(id))
-            .select(aredl_submissions::status)
+        let current_status = submissions::table
+            .filter(submissions::id.eq(id))
+            .select(submissions::status)
             .first::<SubmissionStatus>(connection)?;
 
         if current_status == SubmissionStatus::UnderConsideration {
@@ -247,8 +248,8 @@ impl Submission {
             ));
         }
 
-        let updated_submission = diesel::update(aredl_submissions::table)
-            .filter(aredl_submissions::id.eq(id))
+        let updated_submission = diesel::update(submissions::table)
+            .filter(submissions::id.eq(id))
             .set(new_data)
             .returning(Submission::as_select())
             .get_result::<Submission>(connection)?;
@@ -294,22 +295,22 @@ impl Submission {
         let connection = &mut db.connection()?;
 
         let new_data = (
-            aredl_submissions::status.eq(SubmissionStatus::Pending),
-            aredl_submissions::reviewer_id.eq::<Option<Uuid>>(None),
-            aredl_submissions::updated_at.eq(chrono::Utc::now()),
+            submissions::status.eq(SubmissionStatus::Pending),
+            submissions::reviewer_id.eq::<Option<Uuid>>(None),
+            submissions::updated_at.eq(chrono::Utc::now()),
         );
 
-        let current_status = aredl_submissions::table
-            .filter(aredl_submissions::id.eq(id))
-            .select(aredl_submissions::status)
+        let current_status = submissions::table
+            .filter(submissions::id.eq(id))
+            .select(submissions::status)
             .first::<SubmissionStatus>(connection)?;
 
         if current_status == SubmissionStatus::Pending {
             return Err(ApiError::new(409, "This submission is not claimed!"));
         }
 
-        let updated_submission = diesel::update(aredl_submissions::table)
-            .filter(aredl_submissions::id.eq(id))
+        let updated_submission = diesel::update(submissions::table)
+            .filter(submissions::id.eq(id))
             .set(new_data)
             .returning(Submission::as_select())
             .get_result::<Submission>(connection)?;
@@ -328,22 +329,22 @@ impl SubmissionResolved {
     ) -> Result<SubmissionResolved, ApiError> {
         db.connection()?
             .transaction(|conn| -> Result<SubmissionResolved, ApiError> {
-                let next_id: Uuid = aredl_submissions_with_priority::table
-                    .filter(aredl_submissions_with_priority::status.eq(SubmissionStatus::Pending))
+                let next_id: Uuid = submissions_with_priority::table
+                    .filter(submissions_with_priority::status.eq(SubmissionStatus::Pending))
                     .for_update()
                     .skip_locked()
                     .order((
-                        aredl_submissions_with_priority::priority_value.desc(),
-                        aredl_submissions_with_priority::created_at.asc(),
+                        submissions_with_priority::priority_value.desc(),
+                        submissions_with_priority::created_at.asc(),
                     ))
-                    .select(aredl_submissions_with_priority::id)
+                    .select(submissions_with_priority::id)
                     .first(conn)?;
 
-                diesel::update(aredl_submissions::table.filter(aredl_submissions::id.eq(next_id)))
+                diesel::update(submissions::table.filter(submissions::id.eq(next_id)))
                     .set((
-                        aredl_submissions::status.eq(SubmissionStatus::Claimed),
-                        aredl_submissions::reviewer_id.eq(authenticated.user_id),
-                        aredl_submissions::updated_at.eq(chrono::Utc::now()),
+                        submissions::status.eq(SubmissionStatus::Claimed),
+                        submissions::reviewer_id.eq(authenticated.user_id),
+                        submissions::updated_at.eq(chrono::Utc::now()),
                     ))
                     .execute(conn)?;
 

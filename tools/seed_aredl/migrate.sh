@@ -21,6 +21,7 @@ else
 fi
 
 export AREDL_DATA_PATH="${AREDL_DATA_PARENT}/data"
+export AREPL_DATA_PATH="${AREDL_DATA_PARENT}/plat_data"
 
 echo "Running migration..."
 exec seed_aredl

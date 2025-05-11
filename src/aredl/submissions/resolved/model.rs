@@ -1,11 +1,13 @@
 use crate::{
     aredl::{levels::ExtendedBaseLevel, submissions::*},
     auth::{Authenticated, Permission},
-    custom_schema::aredl_submissions_with_priority,
     db::DbAppState,
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
-    schema::{aredl_levels, users},
+    schema::{
+        aredl::{levels, submissions_with_priority},
+        users,
+    },
     users::BaseUser,
 };
 use actix_web::web;
@@ -40,23 +42,18 @@ pub struct ResolvedSubmissionPage {
 }
 
 #[macro_export]
-macro_rules! base_resolved_submission_query {
+macro_rules! aredl_base_resolved_submission_query {
     () => {{
         let reviewers = alias!(users as reviewers);
 
-        aredl_submissions_with_priority::table
-            .inner_join(
-                aredl_levels::table
-                    .on(aredl_submissions_with_priority::level_id.eq(aredl_levels::id)),
-            )
-            .inner_join(
-                users::table.on(users::id.eq(aredl_submissions_with_priority::submitted_by)),
-            )
+        submissions_with_priority::table
+            .inner_join(levels::table.on(submissions_with_priority::level_id.eq(levels::id)))
+            .inner_join(users::table.on(users::id.eq(submissions_with_priority::submitted_by)))
             .left_join(
                 reviewers.on(reviewers
                     .field(users::id)
                     .nullable()
-                    .eq(aredl_submissions_with_priority::reviewer_id.nullable())),
+                    .eq(submissions_with_priority::reviewer_id.nullable())),
             )
             .select((
                 SubmissionWithPriority::as_select(),
@@ -71,26 +68,25 @@ macro_rules! base_resolved_submission_query {
 }
 
 #[macro_export]
-macro_rules! apply_submissions_filters {
+macro_rules! aredl_apply_submissions_filters {
     ($query:expr, $opts:expr) => {{
         let opts = &$opts;
         let mut new_query = $query;
 
         if let Some(status) = opts.status_filter.clone() {
-            new_query = new_query.filter(aredl_submissions_with_priority::status.eq(status));
+            new_query = new_query.filter(submissions_with_priority::status.eq(status));
         }
         if let Some(mobile) = opts.mobile_filter.clone() {
-            new_query = new_query.filter(aredl_submissions_with_priority::mobile.eq(mobile));
+            new_query = new_query.filter(submissions_with_priority::mobile.eq(mobile));
         }
         if let Some(level) = opts.level_filter.clone() {
-            new_query = new_query.filter(aredl_submissions_with_priority::level_id.eq(level));
+            new_query = new_query.filter(submissions_with_priority::level_id.eq(level));
         }
         if let Some(submitter) = opts.submitter_filter.clone() {
-            new_query =
-                new_query.filter(aredl_submissions_with_priority::submitted_by.eq(submitter));
+            new_query = new_query.filter(submissions_with_priority::submitted_by.eq(submitter));
         }
         if let Some(priority) = opts.priority_filter.clone() {
-            new_query = new_query.filter(aredl_submissions_with_priority::priority.eq(priority));
+            new_query = new_query.filter(submissions_with_priority::priority.eq(priority));
         }
 
         new_query
@@ -127,8 +123,8 @@ impl SubmissionResolved {
     ) -> Result<SubmissionResolved, ApiError> {
         let conn = &mut db.connection()?;
 
-        let resolved_raw = base_resolved_submission_query!()
-            .filter(aredl_submissions_with_priority::id.eq(submission_id))
+        let resolved_raw = aredl_base_resolved_submission_query!()
+            .filter(submissions_with_priority::id.eq(submission_id))
             .first::<ResolvedSubmissionRow>(conn)?;
 
         let mut resolved = Self::from_data(resolved_raw);
@@ -148,11 +144,10 @@ impl SubmissionResolved {
         let conn = &mut db.connection()?;
 
         let mut query =
-            base_resolved_submission_query!().filter(aredl_submissions_with_priority::id.eq(id));
+            aredl_base_resolved_submission_query!().filter(submissions_with_priority::id.eq(id));
 
         if !authenticated.has_permission(db.clone(), Permission::SubmissionReview)? {
-            query = query
-                .filter(aredl_submissions_with_priority::submitted_by.eq(authenticated.user_id));
+            query = query.filter(submissions_with_priority::submitted_by.eq(authenticated.user_id));
         }
 
         let resolved = query.first::<ResolvedSubmissionRow>(conn)?;
@@ -170,8 +165,8 @@ impl ResolvedSubmissionPage {
     ) -> Result<Paginated<Self>, ApiError> {
         let conn = &mut db.connection()?;
 
-        let mut query = base_resolved_submission_query!();
-        query = apply_submissions_filters!(query, options);
+        let mut query = aredl_base_resolved_submission_query!();
+        query = aredl_apply_submissions_filters!(query, options);
 
         let submissions = query
             .limit(page_query.per_page())
@@ -187,8 +182,8 @@ impl ResolvedSubmissionPage {
             submissions.iter_mut().for_each(|s| s.reviewer = None);
         }
 
-        let mut count_query = base_resolved_submission_query!();
-        count_query = apply_submissions_filters!(count_query, options);
+        let mut count_query = aredl_base_resolved_submission_query!();
+        count_query = aredl_apply_submissions_filters!(count_query, options);
         let total_count: i64 = count_query.count().get_result(conn)?;
 
         Ok(Paginated::<Self>::from_data(

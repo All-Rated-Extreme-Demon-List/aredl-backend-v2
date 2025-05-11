@@ -10,10 +10,10 @@ mod schema;
 mod test_utils;
 
 mod aredl;
+mod arepl;
 mod auth;
 mod cache_control;
 mod clans;
-mod custom_schema;
 mod docs;
 mod page_helper;
 mod roles;
@@ -144,6 +144,7 @@ async fn main() -> std::io::Result<()> {
                     .wrap(TracingLogger::<AppRootSpanBuilder>::new())
                     .wrap(cors)
                     .configure(aredl::init_routes)
+                    .configure(arepl::init_routes)
                     .configure(auth::init_routes)
                     .configure(users::init_routes)
                     .configure(roles::init_routes)

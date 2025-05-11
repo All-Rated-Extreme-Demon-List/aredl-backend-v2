@@ -2,12 +2,13 @@ use crate::aredl::levels::ExtendedBaseLevel;
 use crate::aredl::packs::{BasePack, PackWithTierResolved};
 use crate::aredl::packtiers::BasePackTier;
 use crate::clans::Clan;
-use crate::custom_schema::{aredl_completed_packs, aredl_user_leaderboard};
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::{
-    aredl_levels, aredl_levels_created, aredl_pack_tiers, aredl_packs, aredl_records, clan_members,
-    clans, roles, user_roles, users,
+    aredl::{
+        completed_packs, levels, levels_created, pack_tiers, packs, records, user_leaderboard,
+    },
+    clan_members, clans, roles, user_roles, users,
 };
 use crate::users::{Role, User};
 use chrono::{DateTime, Utc};
@@ -19,7 +20,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
-#[diesel(table_name=aredl_user_leaderboard)]
+#[diesel(table_name=user_leaderboard)]
 pub struct Rank {
     /// Rank of the user in the global leaderboard, sorted by total points (including packs).
     pub rank: i32,
@@ -42,7 +43,7 @@ pub struct Rank {
 }
 
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema, QueryableByName)]
-#[diesel(table_name=aredl_records)]
+#[diesel(table_name=records)]
 pub struct ProfileRecord {
     /// Internal UUID of the record.
     pub id: Uuid,
@@ -108,16 +109,16 @@ impl ProfileResolved {
             .select(Role::as_select())
             .load::<Role>(conn)?;
 
-        let rank = aredl_user_leaderboard::table
-            .filter(aredl_user_leaderboard::user_id.eq(id))
+        let rank = user_leaderboard::table
+            .filter(user_leaderboard::user_id.eq(id))
             .select(Rank::as_select())
             .first(conn)
             .optional()?;
 
-        let full_records = aredl_records::table
-            .filter(aredl_records::submitted_by.eq(id))
-            .inner_join(aredl_levels::table.on(aredl_levels::id.eq(aredl_records::level_id)))
-            .order(aredl_levels::position.asc())
+        let full_records = records::table
+            .filter(records::submitted_by.eq(id))
+            .inner_join(levels::table.on(levels::id.eq(records::level_id)))
+            .order(levels::position.asc())
             .select((ProfileRecord::as_select(), ExtendedBaseLevel::as_select()))
             .load::<(ProfileRecord, ExtendedBaseLevel)>(conn)?
             .into_iter()
@@ -128,28 +129,24 @@ impl ProfileResolved {
             .into_iter()
             .partition(|record| record.record.is_verification);
 
-        let created = aredl_levels::table
-            .inner_join(
-                aredl_levels_created::table.on(aredl_levels_created::level_id.eq(aredl_levels::id)),
-            )
-            .order(aredl_levels::position.asc())
-            .filter(aredl_levels_created::user_id.eq(id))
+        let created = levels::table
+            .inner_join(levels_created::table.on(levels_created::level_id.eq(levels::id)))
+            .order(levels::position.asc())
+            .filter(levels_created::user_id.eq(id))
             .select(ExtendedBaseLevel::as_select())
             .load::<ExtendedBaseLevel>(conn)?;
 
-        let published = aredl_levels::table
-            .filter(aredl_levels::publisher_id.eq(id))
-            .order(aredl_levels::position.asc())
+        let published = levels::table
+            .filter(levels::publisher_id.eq(id))
+            .order(levels::position.asc())
             .select(ExtendedBaseLevel::as_select())
             .load::<ExtendedBaseLevel>(conn)?;
 
-        let packs = aredl_packs::table
-            .inner_join(
-                aredl_completed_packs::table.on(aredl_completed_packs::pack_id.eq(aredl_packs::id)),
-            )
-            .inner_join(aredl_pack_tiers::table.on(aredl_pack_tiers::id.eq(aredl_packs::tier)))
-            .filter(aredl_completed_packs::user_id.eq(id))
-            .order(aredl_pack_tiers::placement.asc())
+        let packs = packs::table
+            .inner_join(completed_packs::table.on(completed_packs::pack_id.eq(packs::id)))
+            .inner_join(pack_tiers::table.on(pack_tiers::id.eq(packs::tier)))
+            .filter(completed_packs::user_id.eq(id))
+            .order(pack_tiers::placement.asc())
             .select((BasePack::as_select(), BasePackTier::as_select()))
             .load::<(BasePack, BasePackTier)>(conn)?
             .into_iter()

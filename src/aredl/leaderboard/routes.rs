@@ -1,11 +1,11 @@
-use std::sync::Arc;
-use actix_web::{get, HttpResponse, web};
-use utoipa::OpenApi;
-use crate::aredl::leaderboard::{LeaderboardPage, LeaderboardQueryOptions, LeaderboardOrder};
+use crate::aredl::leaderboard::{clans, countries};
+use crate::aredl::leaderboard::{LeaderboardOrder, LeaderboardPage, LeaderboardQueryOptions};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
-use crate::aredl::leaderboard::{countries, clans};
+use actix_web::{get, web, HttpResponse};
+use std::sync::Arc;
+use utoipa::OpenApi;
 
 #[utoipa::path(
     get,
@@ -27,12 +27,13 @@ use crate::aredl::leaderboard::{countries, clans};
 async fn list(
     db: web::Data<Arc<DbAppState>>,
     page_query: web::Query<PageQuery<100>>,
-    options: web::Query<LeaderboardQueryOptions>
+    options: web::Query<LeaderboardQueryOptions>,
 ) -> Result<HttpResponse, ApiError> {
     let result = web::block(move || {
         let mut conn = db.connection()?;
         LeaderboardPage::find(&mut conn, page_query.into_inner(), options.into_inner())
-    }).await??;
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(result))
 }
 
@@ -58,6 +59,6 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
         web::scope("/leaderboard")
             .configure(countries::init_routes)
             .configure(clans::init_routes)
-            .service(list)
+            .service(list),
     );
 }

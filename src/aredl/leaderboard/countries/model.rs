@@ -1,10 +1,12 @@
 use crate::aredl::leaderboard::{LeaderboardOrder, MatviewRefreshLog};
 use crate::aredl::levels::BaseLevel;
-use crate::custom_schema::aredl_country_leaderboard;
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
-use crate::schema::{aredl_levels, matview_refresh_log};
+use crate::schema::{
+    aredl::{country_leaderboard, levels},
+    matview_refresh_log,
+};
 use chrono::Utc;
 use diesel::expression::expression_types::NotSelectable;
 use diesel::pg::Pg;
@@ -17,7 +19,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Serialize, Selectable, Queryable, Debug, ToSchema)]
-#[diesel(table_name=aredl_country_leaderboard, check_for_backend(Pg))]
+#[diesel(table_name=country_leaderboard, check_for_backend(Pg))]
 pub struct CountryLeaderboardEntry {
     pub rank: i32,
     pub extremes_rank: i32,
@@ -67,29 +69,25 @@ impl CountryLeaderboardPage {
     ) -> Result<Paginated<Self>, ApiError> {
         let selection = (
             CountryLeaderboardEntry::as_select(),
-            (aredl_levels::id, aredl_levels::name).nullable(),
+            (levels::id, levels::name).nullable(),
         );
 
         let order = options.order.unwrap_or(LeaderboardOrder::TotalPoints);
 
         let ordering: Box<dyn BoxableExpression<_, _, SqlType = NotSelectable>> = match order {
-            LeaderboardOrder::TotalPoints => Box::new(aredl_country_leaderboard::rank.asc()),
-            LeaderboardOrder::ExtremeCount => {
-                Box::new(aredl_country_leaderboard::extremes_rank.asc())
-            }
-            LeaderboardOrder::RawPoints => Box::new(aredl_country_leaderboard::rank.asc()),
+            LeaderboardOrder::TotalPoints => Box::new(country_leaderboard::rank.asc()),
+            LeaderboardOrder::ExtremeCount => Box::new(country_leaderboard::extremes_rank.asc()),
+            LeaderboardOrder::RawPoints => Box::new(country_leaderboard::rank.asc()),
         };
 
-        let query = aredl_country_leaderboard::table.left_join(
-            aredl_levels::table
-                .on(aredl_country_leaderboard::hardest.eq(aredl_levels::id.nullable())),
-        );
+        let query = country_leaderboard::table
+            .left_join(levels::table.on(country_leaderboard::hardest.eq(levels::id.nullable())));
 
         let entries = query
             .clone()
             .limit(page_query.per_page())
             .offset(page_query.offset())
-            .order((ordering, aredl_country_leaderboard::country.asc()))
+            .order((ordering, country_leaderboard::country.asc()))
             .select(selection)
             .load::<(CountryLeaderboardEntry, Option<BaseLevel>)>(conn)?;
 
@@ -109,10 +107,10 @@ impl CountryLeaderboardPage {
             .collect::<Vec<_>>();
 
         let refresh_log: MatviewRefreshLog = matview_refresh_log::table
-            .find("aredl_country_leaderboard")
+            .find("country_leaderboard")
             .first(conn)
             .unwrap_or(MatviewRefreshLog {
-                view_name: "aredl_country_leaderboard".into(),
+                view_name: "country_leaderboard".into(),
                 last_refresh: Utc::now(),
             });
 

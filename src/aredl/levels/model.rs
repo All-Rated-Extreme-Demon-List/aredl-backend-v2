@@ -1,7 +1,8 @@
 use crate::aredl::records::{PublicRecordResolved, PublicRecordUnresolved};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
-use crate::schema::{aredl_levels, aredl_records, users};
+use crate::schema::aredl::{levels, records};
+use crate::schema::users;
 use crate::users::BaseUser;
 use actix_web::web;
 use diesel::prelude::*;
@@ -12,7 +13,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Clone, Queryable, Selectable, Debug, ToSchema)]
-#[diesel(table_name=aredl_levels)]
+#[diesel(table_name=levels)]
 pub struct BaseLevel {
     /// Internal level UUID
     pub id: Uuid,
@@ -21,7 +22,7 @@ pub struct BaseLevel {
 }
 
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
-#[diesel(table_name=aredl_levels)]
+#[diesel(table_name=levels)]
 pub struct ExtendedBaseLevel {
     /// Internal level UUID
     pub id: Uuid,
@@ -40,7 +41,7 @@ pub struct ExtendedBaseLevel {
 }
 
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
-#[diesel(table_name=aredl_levels)]
+#[diesel(table_name=levels)]
 pub struct Level {
     /// Internal level UUID
     pub id: Uuid,
@@ -75,7 +76,7 @@ pub struct Level {
 }
 
 #[derive(Serialize, Deserialize, Insertable, ToSchema, Debug)]
-#[diesel(table_name=aredl_levels)]
+#[diesel(table_name=levels)]
 pub struct LevelPlace {
     /// The 1-indexed position of the level on the list.
     pub position: i32,
@@ -98,7 +99,7 @@ pub struct LevelPlace {
 }
 
 #[derive(Serialize, Deserialize, AsChangeset, ToSchema)]
-#[diesel(table_name=aredl_levels)]
+#[diesel(table_name=levels)]
 pub struct LevelUpdate {
     /// The 1-indexed position of the level on the list.
     pub position: Option<i32>,
@@ -157,15 +158,15 @@ pub struct ResolvedLevel {
 
 impl Level {
     pub fn find_all(db: web::Data<Arc<DbAppState>>) -> Result<Vec<Self>, ApiError> {
-        let levels = aredl_levels::table
+        let levels = levels::table
             .select(Level::as_select())
-            .order(aredl_levels::position)
+            .order(levels::position)
             .load::<Self>(&mut db.connection()?)?;
         Ok(levels)
     }
 
     pub fn create(db: web::Data<Arc<DbAppState>>, level: LevelPlace) -> Result<Self, ApiError> {
-        let level = diesel::insert_into(aredl_levels::table)
+        let level = diesel::insert_into(levels::table)
             .values(level)
             .returning(Self::as_select())
             .get_result(&mut db.connection()?)?;
@@ -177,9 +178,9 @@ impl Level {
         id: Uuid,
         level: LevelUpdate,
     ) -> Result<Self, ApiError> {
-        let level = diesel::update(aredl_levels::table)
+        let level = diesel::update(levels::table)
             .set(level)
-            .filter(aredl_levels::id.eq(id))
+            .filter(levels::id.eq(id))
             .returning(Self::as_select())
             .get_result(&mut db.connection()?)?;
         Ok(level)
@@ -188,17 +189,17 @@ impl Level {
 
 impl ResolvedLevel {
     pub fn find(db: web::Data<Arc<DbAppState>>, id: Uuid) -> Result<Self, ApiError> {
-        let (level, publisher) = aredl_levels::table
-            .filter(aredl_levels::id.eq(id))
-            .inner_join(users::table.on(aredl_levels::publisher_id.eq(users::id)))
+        let (level, publisher) = levels::table
+            .filter(levels::id.eq(id))
+            .inner_join(users::table.on(levels::publisher_id.eq(users::id)))
             .select((Level::as_select(), BaseUser::as_select()))
             .first::<(Level, BaseUser)>(&mut db.connection()?)?;
 
-        let verifications_rows = aredl_records::table
-            .filter(aredl_records::level_id.eq(id))
-            .filter(aredl_records::is_verification.eq(true))
-            .order(aredl_records::placement_order.asc())
-            .inner_join(users::table.on(aredl_records::submitted_by.eq(users::id)))
+        let verifications_rows = records::table
+            .filter(records::level_id.eq(id))
+            .filter(records::is_verification.eq(true))
+            .order(records::placement_order.asc())
+            .inner_join(users::table.on(records::submitted_by.eq(users::id)))
             .select((PublicRecordUnresolved::as_select(), BaseUser::as_select()))
             .load::<(PublicRecordUnresolved, BaseUser)>(&mut db.connection()?)?;
 

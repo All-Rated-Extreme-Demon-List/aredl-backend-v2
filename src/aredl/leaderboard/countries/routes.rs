@@ -1,11 +1,13 @@
-use std::sync::Arc;
-use actix_web::{get, HttpResponse, web};
-use utoipa::OpenApi;
-use crate::aredl::leaderboard::countries::{CountryLeaderboardPage, CountryLeaderboardQueryOptions};
+use crate::aredl::leaderboard::countries::{
+    CountryLeaderboardPage, CountryLeaderboardQueryOptions,
+};
 use crate::aredl::leaderboard::LeaderboardOrder;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
+use actix_web::{get, web, HttpResponse};
+use std::sync::Arc;
+use utoipa::OpenApi;
 
 #[utoipa::path(
     get,
@@ -25,30 +27,19 @@ use crate::page_helper::{PageQuery, Paginated};
 async fn list(
     db: web::Data<Arc<DbAppState>>,
     page_query: web::Query<PageQuery<100>>,
-    options: web::Query<CountryLeaderboardQueryOptions>
+    options: web::Query<CountryLeaderboardQueryOptions>,
 ) -> Result<HttpResponse, ApiError> {
     let result = web::block(move || {
         let mut conn = db.connection()?;
         CountryLeaderboardPage::find(&mut conn, page_query.into_inner(), options.into_inner())
-    }).await??;
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(result))
 }
 
 #[derive(OpenApi)]
-#[openapi(
-    components(
-        schemas(
-            CountryLeaderboardPage
-        )
-    ),
-    paths(
-        list
-    )
-)]
+#[openapi(components(schemas(CountryLeaderboardPage)), paths(list))]
 pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
-    config.service(
-        web::scope("/countries")
-            .service(list)
-    );
+    config.service(web::scope("/countries").service(list));
 }

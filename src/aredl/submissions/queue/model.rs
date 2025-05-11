@@ -1,9 +1,8 @@
 use crate::{
     aredl::submissions::{Submission, SubmissionStatus},
-    custom_schema::aredl_submissions_with_priority,
     db::DbAppState,
     error_handler::ApiError,
-    schema::aredl_submissions,
+    schema::aredl::{submissions, submissions_with_priority},
 };
 use actix_web::web;
 use chrono::{DateTime, Utc};
@@ -34,32 +33,32 @@ impl Submission {
 
         // Get the priority and created_at of the target submission
         let (target_priority, target_created_at): (i64, DateTime<Utc>) =
-            aredl_submissions_with_priority::table
-                .filter(aredl_submissions_with_priority::id.eq(submission_id))
-                .filter(aredl_submissions_with_priority::status.eq(SubmissionStatus::Pending))
+            submissions_with_priority::table
+                .filter(submissions_with_priority::id.eq(submission_id))
+                .filter(submissions_with_priority::status.eq(SubmissionStatus::Pending))
                 .select((
-                    aredl_submissions_with_priority::priority_value,
-                    aredl_submissions_with_priority::created_at,
+                    submissions_with_priority::priority_value,
+                    submissions_with_priority::created_at,
                 ))
                 .first(conn)?;
 
         // Count how many pending submissions come before this one
-        let position = aredl_submissions_with_priority::table
-            .filter(aredl_submissions_with_priority::status.eq(SubmissionStatus::Pending))
+        let position = submissions_with_priority::table
+            .filter(submissions_with_priority::status.eq(SubmissionStatus::Pending))
             .filter(
-                aredl_submissions_with_priority::priority_value
+                submissions_with_priority::priority_value
                     .gt(target_priority)
-                    .or(aredl_submissions_with_priority::priority_value
+                    .or(submissions_with_priority::priority_value
                         .eq(target_priority)
-                        .and(aredl_submissions_with_priority::created_at.lt(target_created_at))),
+                        .and(submissions_with_priority::created_at.lt(target_created_at))),
             )
             .count()
             .get_result::<i64>(conn)?
             + 1;
 
         // Total number of pending submissions
-        let total = aredl_submissions_with_priority::table
-            .filter(aredl_submissions_with_priority::status.eq(SubmissionStatus::Pending))
+        let total = submissions_with_priority::table
+            .filter(submissions_with_priority::status.eq(SubmissionStatus::Pending))
             .count()
             .get_result::<i64>(conn)?;
 
@@ -71,8 +70,8 @@ impl SubmissionQueue {
     pub fn get_queue(db: web::Data<Arc<DbAppState>>) -> Result<Self, ApiError> {
         let conn = &mut db.connection()?;
 
-        let levels = aredl_submissions::table
-            .filter(aredl_submissions::status.eq(SubmissionStatus::Pending))
+        let levels = submissions::table
+            .filter(submissions::status.eq(SubmissionStatus::Pending))
             .count()
             .get_result::<i64>(conn)? as i32;
 

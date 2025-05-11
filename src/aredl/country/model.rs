@@ -1,8 +1,10 @@
 use crate::aredl::levels::ExtendedBaseLevel;
-use crate::custom_schema::{aredl_country_leaderboard, aredl_min_placement_country_records};
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
-use crate::schema::{aredl_levels, users};
+use crate::schema::{
+    aredl::{country_leaderboard, levels, min_placement_country_records},
+    users,
+};
 use crate::users::BaseUser;
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
@@ -14,7 +16,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
-#[diesel(table_name=aredl_country_leaderboard)]
+#[diesel(table_name=country_leaderboard)]
 pub struct Rank {
     pub rank: i32,
     pub extremes_rank: i32,
@@ -30,7 +32,7 @@ pub struct CountryProfileLevelResolved {
 }
 
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
-#[diesel(table_name=aredl_min_placement_country_records, check_for_backend(Pg))]
+#[diesel(table_name=min_placement_country_records, check_for_backend(Pg))]
 pub struct CountryProfileRecord {
     /// Internal UUID of the record.
     pub id: Uuid,
@@ -78,21 +80,16 @@ pub struct CountryProfileResolved {
 
 impl CountryProfileResolved {
     pub fn find(conn: &mut DbConnection, country: i32) -> Result<Self, ApiError> {
-        let rank = aredl_country_leaderboard::table
-            .filter(aredl_country_leaderboard::country.eq(country))
+        let rank = country_leaderboard::table
+            .filter(country_leaderboard::country.eq(country))
             .select(Rank::as_select())
             .first(conn)
             .optional()?;
 
-        let (verified, records): (Vec<_>, Vec<_>) = aredl_min_placement_country_records::table
-            .filter(aredl_min_placement_country_records::country.eq(country))
-            .inner_join(
-                users::table.on(users::id.eq(aredl_min_placement_country_records::submitted_by)),
-            )
-            .inner_join(
-                aredl_levels::table
-                    .on(aredl_levels::id.eq(aredl_min_placement_country_records::level_id)),
-            )
+        let (verified, records): (Vec<_>, Vec<_>) = min_placement_country_records::table
+            .filter(min_placement_country_records::country.eq(country))
+            .inner_join(users::table.on(users::id.eq(min_placement_country_records::submitted_by)))
+            .inner_join(levels::table.on(levels::id.eq(min_placement_country_records::level_id)))
             .select((
                 CountryProfileRecord::as_select(),
                 BaseUser::as_select(),
@@ -107,10 +104,10 @@ impl CountryProfileResolved {
             })
             .partition(|resolved| resolved.record.is_verification);
 
-        let published: Vec<CountryProfileLevelResolved> = aredl_levels::table
-            .inner_join(users::table.on(users::id.eq(aredl_levels::publisher_id)))
+        let published: Vec<CountryProfileLevelResolved> = levels::table
+            .inner_join(users::table.on(users::id.eq(levels::publisher_id)))
             .filter(users::country.eq(country))
-            .order_by(aredl_levels::position.asc())
+            .order_by(levels::position.asc())
             .select((ExtendedBaseLevel::as_select(), BaseUser::as_select()))
             .load(conn)?
             .into_iter()

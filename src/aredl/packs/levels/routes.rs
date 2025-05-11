@@ -1,11 +1,11 @@
-use std::sync::Arc;
-use actix_web::{delete, HttpResponse, patch, post, web};
-use uuid::Uuid;
-use utoipa::OpenApi;
 use crate::aredl::levels::BaseLevel;
+use crate::auth::{Permission, UserAuth};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
-use crate::auth::{UserAuth, Permission};
+use actix_web::{delete, patch, post, web, HttpResponse};
+use std::sync::Arc;
+use utoipa::OpenApi;
+use uuid::Uuid;
 
 #[utoipa::path(
     post,
@@ -25,11 +25,14 @@ use crate::auth::{UserAuth, Permission};
     ),
 
 )]
-#[post("", wrap="UserAuth::require(Permission::PackModify)")]
-async fn set(db: web::Data<Arc<DbAppState>>, pack_id: web::Path<Uuid>, levels: web::Json<Vec<Uuid>>) -> Result<HttpResponse, ApiError> {
-    let levels = web::block(
-        move || BaseLevel::pack_set_all(db, *pack_id, levels.into_inner())
-    ).await??;
+#[post("", wrap = "UserAuth::require(Permission::PackModify)")]
+async fn set(
+    db: web::Data<Arc<DbAppState>>,
+    pack_id: web::Path<Uuid>,
+    levels: web::Json<Vec<Uuid>>,
+) -> Result<HttpResponse, ApiError> {
+    let levels =
+        web::block(move || BaseLevel::pack_set_all(db, *pack_id, levels.into_inner())).await??;
     Ok(HttpResponse::Ok().json(levels))
 }
 
@@ -51,11 +54,14 @@ async fn set(db: web::Data<Arc<DbAppState>>, pack_id: web::Path<Uuid>, levels: w
     ),
 
 )]
-#[patch("", wrap="UserAuth::require(Permission::PackModify)")]
-async fn add(db: web::Data<Arc<DbAppState>>, pack_id: web::Path<Uuid>, levels: web::Json<Vec<Uuid>>) -> Result<HttpResponse, ApiError> {
-    let levels = web::block(
-        move || BaseLevel::pack_add_all(db, *pack_id, levels.into_inner())
-    ).await??;
+#[patch("", wrap = "UserAuth::require(Permission::PackModify)")]
+async fn add(
+    db: web::Data<Arc<DbAppState>>,
+    pack_id: web::Path<Uuid>,
+    levels: web::Json<Vec<Uuid>>,
+) -> Result<HttpResponse, ApiError> {
+    let levels =
+        web::block(move || BaseLevel::pack_add_all(db, *pack_id, levels.into_inner())).await??;
     Ok(HttpResponse::Ok().json(levels))
 }
 
@@ -77,22 +83,19 @@ async fn add(db: web::Data<Arc<DbAppState>>, pack_id: web::Path<Uuid>, levels: w
     ),
 
 )]
-#[delete("", wrap="UserAuth::require(Permission::PackModify)")]
-async fn delete(db: web::Data<Arc<DbAppState>>, pack_id: web::Path<Uuid>, levels: web::Json<Vec<Uuid>>) -> Result<HttpResponse, ApiError> {
-    let levels = web::block(
-        move || BaseLevel::pack_delete_all(db, *pack_id, levels.into_inner())
-    ).await??;
+#[delete("", wrap = "UserAuth::require(Permission::PackModify)")]
+async fn delete(
+    db: web::Data<Arc<DbAppState>>,
+    pack_id: web::Path<Uuid>,
+    levels: web::Json<Vec<Uuid>>,
+) -> Result<HttpResponse, ApiError> {
+    let levels =
+        web::block(move || BaseLevel::pack_delete_all(db, *pack_id, levels.into_inner())).await??;
     Ok(HttpResponse::Ok().json(levels))
 }
 
 #[derive(OpenApi)]
-#[openapi(
-    paths(
-        add,
-        set,
-        delete
-    ),
-)]
+#[openapi(paths(add, set, delete))]
 pub struct ApiDoc;
 
 pub fn init_routes(config: &mut web::ServiceConfig) {
@@ -100,6 +103,6 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
         web::scope("/{pack_id}/levels")
             .service(add)
             .service(set)
-            .service(delete)
+            .service(delete),
     );
 }

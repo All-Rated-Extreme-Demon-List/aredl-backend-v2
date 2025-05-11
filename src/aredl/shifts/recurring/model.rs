@@ -2,7 +2,10 @@ use crate::{
     aredl::shifts::{ShiftInsert, Weekday},
     db::DbAppState,
     error_handler::ApiError,
-    schema::{aredl_recurrent_shifts, aredl_shifts, users},
+    schema::{
+        aredl::{recurrent_shifts, shifts},
+        users,
+    },
     users::BaseUser,
 };
 use chrono::{DateTime, Datelike, NaiveDate, TimeZone, Utc};
@@ -17,7 +20,7 @@ use uuid::Uuid;
 #[derive(
     Serialize, Deserialize, Selectable, Debug, Clone, Queryable, Identifiable, AsChangeset, ToSchema,
 )]
-#[diesel(table_name = aredl_recurrent_shifts)]
+#[diesel(table_name = recurrent_shifts)]
 pub struct RecurringShift {
     /// Internal UUID of the regular shift.
     pub id: Uuid,
@@ -58,7 +61,7 @@ pub struct ResolvedRecurringShift {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Insertable, ToSchema)]
-#[diesel(table_name = aredl_recurrent_shifts)]
+#[diesel(table_name = recurrent_shifts)]
 pub struct RecurringShiftInsert {
     /// UUID of the user to assign a regular shift to.
     pub user_id: Uuid,
@@ -73,7 +76,7 @@ pub struct RecurringShiftInsert {
 }
 
 #[derive(Deserialize, ToSchema, AsChangeset)]
-#[diesel(table_name = aredl_recurrent_shifts)]
+#[diesel(table_name = recurrent_shifts)]
 pub struct RecurringShiftPatch {
     pub user_id: Option<Uuid>,
     pub weekday: Option<Weekday>,
@@ -100,11 +103,11 @@ impl ResolvedRecurringShift {
     pub fn find_all(db: &DbAppState) -> Result<Vec<Self>, ApiError> {
         let conn = &mut db.connection()?;
 
-        let result_rows = aredl_recurrent_shifts::table
-            .inner_join(users::table.on(aredl_recurrent_shifts::user_id.eq(users::id)))
+        let result_rows = recurrent_shifts::table
+            .inner_join(users::table.on(recurrent_shifts::user_id.eq(users::id)))
             .order((
-                aredl_recurrent_shifts::weekday.asc(),
-                aredl_recurrent_shifts::start_hour.asc(),
+                recurrent_shifts::weekday.asc(),
+                recurrent_shifts::start_hour.asc(),
             ))
             .select((RecurringShift::as_select(), BaseUser::as_select()))
             .load::<(RecurringShift, BaseUser)>(conn)?;
@@ -121,7 +124,7 @@ impl ResolvedRecurringShift {
 impl RecurringShift {
     pub fn create(db: &DbAppState, new_shift: RecurringShiftInsert) -> Result<Self, ApiError> {
         let conn = &mut db.connection()?;
-        let inserted = diesel::insert_into(aredl_recurrent_shifts::table)
+        let inserted = diesel::insert_into(recurrent_shifts::table)
             .values(&new_shift)
             .get_result(conn)?;
         Ok(inserted)
@@ -130,19 +133,17 @@ impl RecurringShift {
     pub fn patch(db: &DbAppState, id: Uuid, patch: RecurringShiftPatch) -> Result<Self, ApiError> {
         let conn = &mut db.connection()?;
 
-        let updated =
-            diesel::update(aredl_recurrent_shifts::table.filter(aredl_recurrent_shifts::id.eq(id)))
-                .set(&patch)
-                .get_result::<RecurringShift>(conn)?;
+        let updated = diesel::update(recurrent_shifts::table.filter(recurrent_shifts::id.eq(id)))
+            .set(&patch)
+            .get_result::<RecurringShift>(conn)?;
         Ok(updated)
     }
 
     pub fn delete(db: &DbAppState, id: Uuid) -> Result<Self, ApiError> {
         let conn = &mut db.connection()?;
 
-        let deleted =
-            diesel::delete(aredl_recurrent_shifts::table.filter(aredl_recurrent_shifts::id.eq(id)))
-                .get_result::<RecurringShift>(conn)?;
+        let deleted = diesel::delete(recurrent_shifts::table.filter(recurrent_shifts::id.eq(id)))
+            .get_result::<RecurringShift>(conn)?;
         Ok(deleted)
     }
 
@@ -158,8 +159,8 @@ impl RecurringShift {
             _ => unreachable!(),
         };
 
-        let templates: Vec<RecurringShift> = aredl_recurrent_shifts::table
-            .filter(aredl_recurrent_shifts::weekday.eq(today))
+        let templates: Vec<RecurringShift> = recurrent_shifts::table
+            .filter(recurrent_shifts::weekday.eq(today))
             .load(conn)?;
 
         for template in templates {
@@ -170,9 +171,9 @@ impl RecurringShift {
 
             let end_at = start_at + chrono::Duration::hours(template.duration as i64);
 
-            let exists: i64 = aredl_shifts::table
-                .filter(aredl_shifts::user_id.eq(template.user_id))
-                .filter(aredl_shifts::start_at.eq(start_at))
+            let exists: i64 = shifts::table
+                .filter(shifts::user_id.eq(template.user_id))
+                .filter(shifts::start_at.eq(start_at))
                 .count()
                 .get_result(conn)?;
 
@@ -183,7 +184,7 @@ impl RecurringShift {
                     start_at,
                     end_at,
                 };
-                diesel::insert_into(aredl_shifts::table)
+                diesel::insert_into(shifts::table)
                     .values(&new)
                     .execute(conn)?;
             }

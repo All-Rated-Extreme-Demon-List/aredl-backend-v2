@@ -1,12 +1,12 @@
-use std::sync::Arc;
-use actix_web::{delete, get, HttpResponse, patch, post, web};
-use uuid::Uuid;
-use utoipa::OpenApi;
-use crate::users::BaseUser;
 use crate::aredl::levels::id_resolver::resolve_level_id;
+use crate::auth::{Permission, UserAuth};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
-use crate::auth::{UserAuth, Permission};
+use crate::users::BaseUser;
+use actix_web::{delete, get, patch, post, web, HttpResponse};
+use std::sync::Arc;
+use utoipa::OpenApi;
+use uuid::Uuid;
 
 #[utoipa::path(
     get,
@@ -21,11 +21,12 @@ use crate::auth::{UserAuth, Permission};
     ),
 )]
 #[get("")]
-async fn find_all(db: web::Data<Arc<DbAppState>>, level_id: web::Path<String>) -> Result<HttpResponse, ApiError> {
+async fn find_all(
+    db: web::Data<Arc<DbAppState>>,
+    level_id: web::Path<String>,
+) -> Result<HttpResponse, ApiError> {
     let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
-    let creators = web::block(
-        move || BaseUser::find_all_creators(db, level_id)
-    ).await??;
+    let creators = web::block(move || BaseUser::aredl_find_all_creators(db, level_id)).await??;
     Ok(HttpResponse::Ok().json(creators))
 }
 
@@ -45,12 +46,16 @@ async fn find_all(db: web::Data<Arc<DbAppState>>, level_id: web::Path<String>) -
         ("api_key" = ["LevelModify"]),
     )
 )]
-#[post("", wrap="UserAuth::require(Permission::LevelModify)")]
-async fn set(db: web::Data<Arc<DbAppState>>, level_id: web::Path<String>, creators: web::Json<Vec<Uuid>>) -> Result<HttpResponse, ApiError> {
+#[post("", wrap = "UserAuth::require(Permission::LevelModify)")]
+async fn set(
+    db: web::Data<Arc<DbAppState>>,
+    level_id: web::Path<String>,
+    creators: web::Json<Vec<Uuid>>,
+) -> Result<HttpResponse, ApiError> {
     let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
-    let creators = web::block(
-        move || BaseUser::set_all_creators(db, level_id, creators.into_inner())
-    ).await??;
+    let creators =
+        web::block(move || BaseUser::aredl_set_all_creators(db, level_id, creators.into_inner()))
+            .await??;
     Ok(HttpResponse::Ok().json(creators))
 }
 
@@ -70,12 +75,16 @@ async fn set(db: web::Data<Arc<DbAppState>>, level_id: web::Path<String>, creato
         ("api_key" = ["LevelModify"]),
     )
 )]
-#[patch("", wrap="UserAuth::require(Permission::LevelModify)")]
-async fn add(db: web::Data<Arc<DbAppState>>, level_id: web::Path<String>, creators: web::Json<Vec<Uuid>>) -> Result<HttpResponse, ApiError> {
+#[patch("", wrap = "UserAuth::require(Permission::LevelModify)")]
+async fn add(
+    db: web::Data<Arc<DbAppState>>,
+    level_id: web::Path<String>,
+    creators: web::Json<Vec<Uuid>>,
+) -> Result<HttpResponse, ApiError> {
     let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
-    let creators = web::block(
-        move || BaseUser::add_all_creators(db, level_id, creators.into_inner())
-    ).await??;
+    let creators =
+        web::block(move || BaseUser::aredl_add_all_creators(db, level_id, creators.into_inner()))
+            .await??;
     Ok(HttpResponse::Ok().json(creators))
 }
 
@@ -95,12 +104,17 @@ async fn add(db: web::Data<Arc<DbAppState>>, level_id: web::Path<String>, creato
         ("api_key" = ["LevelModify"]),
     )
 )]
-#[delete("", wrap="UserAuth::require(Permission::LevelModify)")]
-async fn delete(db: web::Data<Arc<DbAppState>>, level_id: web::Path<String>, creators: web::Json<Vec<Uuid>>) -> Result<HttpResponse, ApiError> {
+#[delete("", wrap = "UserAuth::require(Permission::LevelModify)")]
+async fn delete(
+    db: web::Data<Arc<DbAppState>>,
+    level_id: web::Path<String>,
+    creators: web::Json<Vec<Uuid>>,
+) -> Result<HttpResponse, ApiError> {
     let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
-    let creators = web::block(
-        move || BaseUser::delete_all_creators(db, level_id, creators.into_inner())
-    ).await??;
+    let creators = web::block(move || {
+        BaseUser::aredl_delete_all_creators(db, level_id, creators.into_inner())
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(creators))
 }
 
@@ -124,6 +138,6 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .service(find_all)
             .service(add)
             .service(set)
-            .service(delete)
+            .service(delete),
     );
 }

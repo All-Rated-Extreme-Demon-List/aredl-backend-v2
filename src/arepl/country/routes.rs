@@ -1,0 +1,39 @@
+use crate::arepl::country::CountryProfileResolved;
+use crate::db::DbAppState;
+use crate::error_handler::ApiError;
+use actix_web::{get, web, HttpResponse};
+use std::sync::Arc;
+use utoipa::OpenApi;
+
+#[utoipa::path(
+    get,
+    summary = "Country",
+    description = "Get a country's AREDL platformer profile",
+    tag = "AREDL (P)",
+    params(
+        ("id" = i32, description = "The country to lookup the data for")
+    ),
+    responses(
+        (status = 200, body = CountryProfileResolved)
+    ),
+)]
+#[get("/{id}")]
+async fn find(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<i32>,
+) -> Result<HttpResponse, ApiError> {
+    let profile = web::block(move || {
+        let mut conn = db.connection()?;
+        CountryProfileResolved::find(&mut conn, id.into_inner())
+    })
+    .await??;
+    Ok(HttpResponse::Ok().json(profile))
+}
+
+#[derive(OpenApi)]
+#[openapi(components(schemas(CountryProfileResolved)), paths(find))]
+pub struct ApiDoc;
+
+pub fn init_routes(config: &mut web::ServiceConfig) {
+    config.service(web::scope("country").service(find));
+}

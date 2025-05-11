@@ -42,7 +42,7 @@ pub async fn start_data_cleaner(db: Arc<DbAppState>) {
             tracing::info!("Cleaning stale submissions claims");
 
             let result = diesel::sql_query(
-                "UPDATE aredl_submissions \
+                "UPDATE aredl.submissions \
                  SET status = 'Pending' \
                  WHERE status = 'Claimed' \
                    AND updated_at < NOW() - INTERVAL '120 minutes';",
@@ -51,21 +51,47 @@ pub async fn start_data_cleaner(db: Arc<DbAppState>) {
 
             if result.is_err() {
                 tracing::error!(
-                    "Failed to clean stale submissions claims: {}",
+                    "Failed to clean stale submissions claims for AREDL: {}",
+                    result.err().unwrap()
+                );
+            }
+
+            let result = diesel::sql_query(
+                "UPDATE arepl.submissions \
+                 SET status = 'Pending' \
+                 WHERE status = 'Claimed' \
+                   AND updated_at < NOW() - INTERVAL '120 minutes';",
+            )
+            .execute(&mut conn);
+
+            if result.is_err() {
+                tracing::error!(
+                    "Failed to clean stale submissions claims for AREPL: {}",
                     result.err().unwrap()
                 );
             }
 
             tracing::info!("Expiring overdue shifts");
             if let Err(e) = diesel::sql_query(
-                "UPDATE aredl_shifts \
+                "UPDATE aredl.shifts \
                  SET status = 'Expired', updated_at = NOW() \
                  WHERE status = 'Running' \
                    AND end_at < NOW();",
             )
             .execute(&mut conn)
             {
-                tracing::error!("Failed to expire shifts: {}", e);
+                tracing::error!("Failed to expire shifts for AREDL: {}", e);
+            }
+
+            if let Err(e) = diesel::sql_query(
+                "UPDATE arepl.shifts \
+                 SET status = 'Expired', updated_at = NOW() \
+                 WHERE status = 'Running' \
+                   AND end_at < NOW();",
+            )
+            .execute(&mut conn)
+            {
+                tracing::error!("Failed to expire shifts for AREPL: {}", e);
             }
 
             let now = Utc::now();

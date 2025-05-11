@@ -1,8 +1,8 @@
 use crate::aredl::levels::BaseLevel;
-use crate::custom_schema::aredl_position_history_full_view;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
-use crate::schema::aredl_levels;
+use crate::schema::aredl::levels;
+use crate::schema::aredl::position_history_full_view;
 use actix_web::web;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
@@ -87,21 +87,18 @@ pub struct HistoryLevelFull {
 
 impl HistoryLevelFull {
     pub fn find(db: web::Data<Arc<DbAppState>>, id: Uuid) -> Result<Vec<Self>, ApiError> {
-        let entries = aredl_position_history_full_view::table
-            .filter(aredl_position_history_full_view::affected_level.eq(id))
-            .inner_join(
-                aredl_levels::table
-                    .on(aredl_levels::id.eq(aredl_position_history_full_view::cause)),
-            )
-            .order_by(aredl_position_history_full_view::ord.desc())
+        let entries = position_history_full_view::table
+            .filter(position_history_full_view::affected_level.eq(id))
+            .inner_join(levels::table.on(levels::id.eq(position_history_full_view::cause)))
+            .order_by(position_history_full_view::ord.desc())
             .select((
-                aredl_position_history_full_view::position,
-                aredl_position_history_full_view::pos_diff,
-                aredl_position_history_full_view::moved,
-                aredl_position_history_full_view::legacy,
-                aredl_position_history_full_view::action_at,
-                aredl_position_history_full_view::cause,
-                aredl_levels::name,
+                position_history_full_view::position,
+                position_history_full_view::pos_diff,
+                position_history_full_view::moved,
+                position_history_full_view::legacy,
+                position_history_full_view::action_at,
+                position_history_full_view::cause,
+                levels::name,
             ))
             .load::<HistoryLevelFull>(&mut db.connection()?)?;
         Ok(entries)

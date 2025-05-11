@@ -2,7 +2,7 @@ use crate::{
     db::DbAppState,
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
-    schema::{aredl_shifts, users},
+    schema::{aredl::shifts, users},
     users::BaseUser,
 };
 use chrono::{DateTime, Utc};
@@ -16,7 +16,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq)]
-#[ExistingTypePath = "crate::schema::sql_types::ShiftStatus"]
+#[ExistingTypePath = "crate::schema::aredl::sql_types::ShiftStatus"]
 #[DbValueStyle = "PascalCase"]
 pub enum ShiftStatus {
     Running,
@@ -25,7 +25,7 @@ pub enum ShiftStatus {
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq)]
-#[ExistingTypePath = "crate::schema::sql_types::Weekday"]
+#[ExistingTypePath = "crate::schema::aredl::sql_types::Weekday"]
 #[DbValueStyle = "PascalCase"]
 pub enum Weekday {
     Monday,
@@ -40,7 +40,7 @@ pub enum Weekday {
 #[derive(
     Serialize, Deserialize, Debug, Selectable, Clone, Queryable, Identifiable, AsChangeset, ToSchema,
 )]
-#[diesel(table_name = aredl_shifts)]
+#[diesel(table_name = shifts)]
 pub struct Shift {
     /// Internal UUID of the shift.
     pub id: Uuid,
@@ -96,7 +96,7 @@ pub struct ShiftPage {
 }
 
 #[derive(Deserialize, ToSchema, AsChangeset)]
-#[diesel(table_name = aredl_shifts)]
+#[diesel(table_name = shifts)]
 pub struct ShiftPatch {
     pub user_id: Option<Uuid>,
     pub status: Option<ShiftStatus>,
@@ -104,7 +104,7 @@ pub struct ShiftPatch {
 }
 
 #[derive(Insertable)]
-#[diesel(table_name = aredl_shifts)]
+#[diesel(table_name = shifts)]
 pub struct ShiftInsert {
     pub user_id: Uuid,
     pub target_count: i32,
@@ -116,7 +116,7 @@ impl Shift {
     pub fn patch(db: &DbAppState, id: Uuid, patch: ShiftPatch) -> Result<Self, ApiError> {
         let conn = &mut db.connection()?;
 
-        let updated = diesel::update(aredl_shifts::table.filter(aredl_shifts::id.eq(id)))
+        let updated = diesel::update(shifts::table.filter(shifts::id.eq(id)))
             .set(&patch)
             .get_result::<Shift>(conn)?;
         Ok(updated)
@@ -125,8 +125,8 @@ impl Shift {
     pub fn delete(db: &DbAppState, id: Uuid) -> Result<Self, ApiError> {
         let conn = &mut db.connection()?;
 
-        let deleted = diesel::delete(aredl_shifts::table.filter(aredl_shifts::id.eq(id)))
-            .get_result::<Shift>(conn)?;
+        let deleted =
+            diesel::delete(shifts::table.filter(shifts::id.eq(id))).get_result::<Shift>(conn)?;
         Ok(deleted)
     }
 }
@@ -156,15 +156,15 @@ impl ShiftPage {
     ) -> Result<Paginated<ShiftPage>, ApiError> {
         let conn = &mut db.connection()?;
 
-        let total = aredl_shifts::table
-            .filter(aredl_shifts::user_id.eq(user_id))
+        let total = shifts::table
+            .filter(shifts::user_id.eq(user_id))
             .count()
             .get_result::<i64>(conn)?;
 
-        let shift_rows = aredl_shifts::table
-            .inner_join(users::table.on(aredl_shifts::user_id.eq(users::id)))
-            .filter(aredl_shifts::user_id.eq(user_id))
-            .order(aredl_shifts::start_at.desc())
+        let shift_rows = shifts::table
+            .inner_join(users::table.on(shifts::user_id.eq(users::id)))
+            .filter(shifts::user_id.eq(user_id))
+            .order(shifts::start_at.desc())
             .limit(page_query.per_page())
             .offset(page_query.offset())
             .select((Shift::as_select(), BaseUser::as_select()))
@@ -191,43 +191,43 @@ impl ShiftPage {
     ) -> Result<Paginated<ShiftPage>, ApiError> {
         let conn = &mut db.connection()?;
 
-        let total = aredl_shifts::table
+        let total = shifts::table
             .into_boxed()
             .filter(options.user_id.map_or_else(
                 || {
                     Box::new(true.into_sql::<Bool>())
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
-                |user_id| Box::new(aredl_shifts::user_id.eq(user_id)),
+                |user_id| Box::new(shifts::user_id.eq(user_id)),
             ))
             .filter(options.status.clone().map_or_else(
                 || {
                     Box::new(true.into_sql::<Bool>())
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
-                |status| Box::new(aredl_shifts::status.eq(status)),
+                |status| Box::new(shifts::status.eq(status)),
             ))
             .count()
             .get_result::<i64>(conn)?;
 
-        let shift_rows = aredl_shifts::table
-            .inner_join(users::table.on(aredl_shifts::user_id.eq(users::id)))
+        let shift_rows = shifts::table
+            .inner_join(users::table.on(shifts::user_id.eq(users::id)))
             .into_boxed()
             .filter(options.user_id.map_or_else(
                 || {
                     Box::new(true.into_sql::<Bool>())
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
-                |user_id| Box::new(aredl_shifts::user_id.eq(user_id)),
+                |user_id| Box::new(shifts::user_id.eq(user_id)),
             ))
             .filter(options.status.map_or_else(
                 || {
                     Box::new(true.into_sql::<Bool>())
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
-                |status| Box::new(aredl_shifts::status.eq(status)),
+                |status| Box::new(shifts::status.eq(status)),
             ))
-            .order(aredl_shifts::start_at.desc())
+            .order(shifts::start_at.desc())
             .limit(page_query.per_page())
             .offset(page_query.offset())
             .select((Shift::as_select(), BaseUser::as_select()))

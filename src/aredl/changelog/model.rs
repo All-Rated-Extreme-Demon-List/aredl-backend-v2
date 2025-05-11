@@ -2,7 +2,7 @@ use crate::aredl::levels::BaseLevel;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
-use crate::schema::{aredl_levels, aredl_position_history};
+use crate::schema::aredl::{levels, position_history};
 use actix_web::web;
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
@@ -15,7 +15,7 @@ use std::sync::Arc;
 use utoipa::ToSchema;
 
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug)]
-#[diesel(table_name=aredl_position_history, check_for_backend(Pg))]
+#[diesel(table_name=position_history, check_for_backend(Pg))]
 pub struct ChangelogEntryData {
     /// New position of the level after the action.
     pub new_position: Option<i32>,
@@ -114,9 +114,9 @@ impl ChangelogPage {
         page_query: PageQuery<D>,
     ) -> Result<Paginated<Self>, ApiError> {
         let (level_affected, level_above, level_below) = diesel::alias!(
-            aredl_levels as level_affected,
-            aredl_levels as level_above,
-            aredl_levels as level_below,
+            levels as level_affected,
+            levels as level_above,
+            levels as level_below,
         );
 
         let records: Vec<(
@@ -124,30 +124,27 @@ impl ChangelogPage {
             BaseLevel,
             Option<BaseLevel>,
             Option<BaseLevel>,
-        )> = aredl_position_history::table
-            .order(aredl_position_history::i.desc())
+        )> = position_history::table
+            .order(position_history::i.desc())
             .limit(page_query.per_page())
             .offset(page_query.offset())
-            .inner_join(level_affected.on(
-                aredl_position_history::affected_level.eq(level_affected.field(aredl_levels::id)),
-            ))
-            .left_join(
-                level_above.on(aredl_position_history::level_above
-                    .eq(level_above.field(aredl_levels::id).nullable())),
+            .inner_join(
+                level_affected
+                    .on(position_history::affected_level.eq(level_affected.field(levels::id))),
             )
             .left_join(
-                level_below.on(aredl_position_history::level_below
-                    .eq(level_below.field(aredl_levels::id).nullable())),
+                level_above
+                    .on(position_history::level_above.eq(level_above.field(levels::id).nullable())),
+            )
+            .left_join(
+                level_below
+                    .on(position_history::level_below.eq(level_below.field(levels::id).nullable())),
             )
             .select((
                 ChangelogEntryData::as_select(),
-                level_affected.fields((aredl_levels::id, aredl_levels::name)),
-                level_above
-                    .fields((aredl_levels::id, aredl_levels::name))
-                    .nullable(),
-                level_below
-                    .fields((aredl_levels::id, aredl_levels::name))
-                    .nullable(),
+                level_affected.fields((levels::id, levels::name)),
+                level_above.fields((levels::id, levels::name)).nullable(),
+                level_below.fields((levels::id, levels::name)).nullable(),
             ))
             .load::<(
                 ChangelogEntryData,
@@ -170,7 +167,7 @@ impl ChangelogPage {
             })
             .collect::<Vec<_>>();
 
-        let count: i64 = aredl_position_history::table
+        let count: i64 = position_history::table
             .count()
             .get_result(&mut db.connection()?)?;
 

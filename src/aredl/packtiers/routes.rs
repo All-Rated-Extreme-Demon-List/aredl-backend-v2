@@ -1,13 +1,13 @@
-use std::sync::Arc;
-use actix_web::{delete, get, HttpResponse, patch, post, web};
-use uuid::Uuid;
-use utoipa::OpenApi;
 use crate::aredl::packtiers::PackTierResolved;
 use crate::aredl::packtiers::{PackTier, PackTierCreate, PackTierUpdate};
-use crate::auth::{UserAuth, Authenticated, Permission};
-use crate::error_handler::ApiError;
+use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::cache_control::CacheController;
 use crate::db::DbAppState;
+use crate::error_handler::ApiError;
+use actix_web::{delete, get, patch, post, web, HttpResponse};
+use std::sync::Arc;
+use utoipa::OpenApi;
+use uuid::Uuid;
 
 #[utoipa::path(
     get,
@@ -23,11 +23,18 @@ use crate::db::DbAppState;
         ("api_key" = []),
     )
 )]
-#[get("", wrap="UserAuth::load()", wrap="CacheController::public_cache()")]
-async fn find_all(db: web::Data<Arc<DbAppState>>, authenticated: Option<Authenticated>) -> Result<HttpResponse, ApiError> {
-    let tiers = web::block(
-        || PackTierResolved::find_all(db, authenticated.map(|user| user.user_id))
-    ).await??;
+#[get(
+    "",
+    wrap = "UserAuth::load()",
+    wrap = "CacheController::public_cache()"
+)]
+async fn find_all(
+    db: web::Data<Arc<DbAppState>>,
+    authenticated: Option<Authenticated>,
+) -> Result<HttpResponse, ApiError> {
+    let tiers =
+        web::block(|| PackTierResolved::find_all(db, authenticated.map(|user| user.user_id)))
+            .await??;
     Ok(HttpResponse::Ok().json(tiers))
 }
 
@@ -45,11 +52,12 @@ async fn find_all(db: web::Data<Arc<DbAppState>>, authenticated: Option<Authenti
         ("api_key" = ["PackTierModify"]),
     )
 )]
-#[post("", wrap="UserAuth::require(Permission::PackTierModify)")]
-async fn create(db: web::Data<Arc<DbAppState>>, tier: web::Json<PackTierCreate>) -> Result<HttpResponse, ApiError> {
-    let tier = web::block(
-        || PackTier::create(db, tier.into_inner())
-    ).await??;
+#[post("", wrap = "UserAuth::require(Permission::PackTierModify)")]
+async fn create(
+    db: web::Data<Arc<DbAppState>>,
+    tier: web::Json<PackTierCreate>,
+) -> Result<HttpResponse, ApiError> {
+    let tier = web::block(|| PackTier::create(db, tier.into_inner())).await??;
     Ok(HttpResponse::Ok().json(tier))
 }
 #[utoipa::path(
@@ -69,11 +77,13 @@ async fn create(db: web::Data<Arc<DbAppState>>, tier: web::Json<PackTierCreate>)
         ("api_key" = ["PackTierModify"]),
     )
 )]
-#[patch("/{id}", wrap="UserAuth::require(Permission::PackTierModify)")]
-async fn update(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, tier: web::Json<PackTierUpdate>) -> Result<HttpResponse, ApiError> {
-    let tier = web::block(
-        || PackTier::update(db, id.into_inner(), tier.into_inner())
-    ).await??;
+#[patch("/{id}", wrap = "UserAuth::require(Permission::PackTierModify)")]
+async fn update(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<Uuid>,
+    tier: web::Json<PackTierUpdate>,
+) -> Result<HttpResponse, ApiError> {
+    let tier = web::block(|| PackTier::update(db, id.into_inner(), tier.into_inner())).await??;
     Ok(HttpResponse::Ok().json(tier))
 }
 
@@ -93,11 +103,12 @@ async fn update(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, tier: web::
         ("api_key" = ["PackTierModify"]),
     )
 )]
-#[delete("/{id}", wrap="UserAuth::require(Permission::PackTierModify)")]
-async fn delete(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
-    let tier = web::block(
-        || PackTier::delete(db, id.into_inner())
-    ).await??;
+#[delete("/{id}", wrap = "UserAuth::require(Permission::PackTierModify)")]
+async fn delete(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<Uuid>,
+) -> Result<HttpResponse, ApiError> {
+    let tier = web::block(|| PackTier::delete(db, id.into_inner())).await??;
     Ok(HttpResponse::Ok().json(tier))
 }
 
@@ -129,6 +140,6 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .service(find_all)
             .service(create)
             .service(update)
-            .service(delete)
+            .service(delete),
     );
 }

@@ -1,10 +1,9 @@
 use crate::{
     aredl::levels::ExtendedBaseLevel,
     auth::{Authenticated, Permission},
-    custom_schema::aredl_submissions_with_priority,
     db::DbAppState,
     error_handler::ApiError,
-    schema::{aredl_submissions, submission_history},
+    schema::aredl::{submission_history, submissions, submissions_with_priority},
     users::BaseUser,
 };
 use actix_web::web;
@@ -19,7 +18,7 @@ use uuid::Uuid;
 use super::history::SubmissionHistory;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq)]
-#[ExistingTypePath = "crate::schema::sql_types::SubmissionStatus"]
+#[ExistingTypePath = "crate::schema::aredl::sql_types::SubmissionStatus"]
 #[DbValueStyle = "PascalCase"]
 pub enum SubmissionStatus {
     Pending,
@@ -42,7 +41,7 @@ pub struct BaseSubmission {
 }
 
 #[derive(Serialize, Deserialize, Queryable, Insertable, Selectable, Debug, ToSchema, Clone)]
-#[diesel(table_name = aredl_submissions, check_for_backend(Pg))]
+#[diesel(table_name = submissions, check_for_backend(Pg))]
 pub struct Submission {
     /// Internal UUID of the submission.
     pub id: Uuid,
@@ -77,7 +76,7 @@ pub struct Submission {
 }
 
 #[derive(Serialize, Deserialize, Queryable, Insertable, Selectable, Debug, ToSchema)]
-#[diesel(table_name = aredl_submissions_with_priority, check_for_backend(Pg))]
+#[diesel(table_name = submissions_with_priority, check_for_backend(Pg))]
 pub struct SubmissionWithPriority {
     /// Internal UUID of the submission.
     pub id: Uuid,
@@ -178,14 +177,14 @@ impl Submission {
                 .values(&history)
                 .execute(connection)?;
 
-            let mut query = diesel::delete(aredl_submissions::table)
-                .filter(aredl_submissions::id.eq(submission_id))
+            let mut query = diesel::delete(submissions::table)
+                .filter(submissions::id.eq(submission_id))
                 .into_boxed();
 
             if !authenticated.has_permission(db, Permission::SubmissionReview)? {
                 query = query
-                    .filter(aredl_submissions::submitted_by.eq(authenticated.user_id))
-                    .filter(aredl_submissions::status.eq(SubmissionStatus::Pending));
+                    .filter(submissions::submitted_by.eq(authenticated.user_id))
+                    .filter(submissions::status.eq(SubmissionStatus::Pending));
             }
 
             query.execute(connection)?;

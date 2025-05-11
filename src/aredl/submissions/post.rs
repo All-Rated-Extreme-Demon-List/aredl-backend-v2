@@ -4,7 +4,10 @@ use crate::{
     db::DbAppState,
     error_handler::ApiError,
     roles::Role,
-    schema::{aredl_levels, aredl_submissions, roles, submission_history, user_roles, users},
+    schema::{
+        aredl::{levels, submission_history, submissions},
+        roles, user_roles, users,
+    },
 };
 use actix_web::web;
 use diesel::{
@@ -20,7 +23,7 @@ use uuid::Uuid;
 use super::history::SubmissionHistory;
 
 #[derive(Serialize, Deserialize, Debug, Insertable, ToSchema)]
-#[diesel(table_name=aredl_submissions, check_for_backend(Pg))]
+#[diesel(table_name=submissions, check_for_backend(Pg))]
 // this struct does not contain the player's ID, which is computed to
 // be the logged in user. thus, this struct cannot be and is not inserted directly
 // to insert that property into the database!
@@ -64,10 +67,10 @@ impl Submission {
             // a bunch of validation yay
 
             // check if any submissions exist already
-            let exists_submission = aredl_submissions::table
-                .filter(aredl_submissions::submitted_by.eq(authenticated.user_id))
-                .filter(aredl_submissions::level_id.eq(inserted_submission.level_id))
-                .select(aredl_submissions::id)
+            let exists_submission = submissions::table
+                .filter(submissions::submitted_by.eq(authenticated.user_id))
+                .filter(submissions::level_id.eq(inserted_submission.level_id))
+                .select(submissions::id)
                 .first::<Uuid>(connection)
                 .optional()?;
 
@@ -80,9 +83,9 @@ impl Submission {
 
             // check that this level exists, is not legacy, and
             // raw footage is provided for ranks 400+
-            let level_info = aredl_levels::table
-                .filter(aredl_levels::id.eq(inserted_submission.level_id))
-                .select((aredl_levels::legacy, aredl_levels::position))
+            let level_info = levels::table
+                .filter(levels::id.eq(inserted_submission.level_id))
+                .select((levels::legacy, levels::position))
                 .first::<(bool, i32)>(connection)
                 .optional()?;
 
@@ -127,20 +130,20 @@ impl Submission {
 
             let has_role = roles.iter().any(|role| role.privilege_level == 5);
 
-            let submission = diesel::insert_into(aredl_submissions::table)
+            let submission = diesel::insert_into(submissions::table)
                 .values((
-                    aredl_submissions::submitted_by.eq(authenticated.user_id),
-                    aredl_submissions::level_id.eq(inserted_submission.level_id),
+                    submissions::submitted_by.eq(authenticated.user_id),
+                    submissions::level_id.eq(inserted_submission.level_id),
                     inserted_submission.mobile.map_or_else(
-                        || aredl_submissions::mobile.eq(false),
-                        |mobile| aredl_submissions::mobile.eq(mobile),
+                        || submissions::mobile.eq(false),
+                        |mobile| submissions::mobile.eq(mobile),
                     ),
-                    aredl_submissions::ldm_id.eq(inserted_submission.ldm_id),
-                    aredl_submissions::video_url.eq(inserted_submission.video_url),
-                    aredl_submissions::raw_url.eq(inserted_submission.raw_url),
-                    aredl_submissions::mod_menu.eq(inserted_submission.mod_menu),
-                    aredl_submissions::user_notes.eq(inserted_submission.user_notes),
-                    aredl_submissions::priority.eq(has_role),
+                    submissions::ldm_id.eq(inserted_submission.ldm_id),
+                    submissions::video_url.eq(inserted_submission.video_url),
+                    submissions::raw_url.eq(inserted_submission.raw_url),
+                    submissions::mod_menu.eq(inserted_submission.mod_menu),
+                    submissions::user_notes.eq(inserted_submission.user_notes),
+                    submissions::priority.eq(has_role),
                 ))
                 .returning(Self::as_select())
                 .get_result(connection)?;

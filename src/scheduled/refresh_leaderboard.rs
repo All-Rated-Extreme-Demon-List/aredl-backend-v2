@@ -17,6 +17,13 @@ pub async fn start_leaderboard_refresher(db: Arc<DbAppState>) {
     let schedule = Arc::new(schedule);
     let db_clone = db.clone();
 
+    let schemas = ["aredl", "arepl"];
+    let views = [
+        "user_leaderboard",
+        "country_leaderboard",
+        "clans_leaderboard",
+    ];
+
     task::spawn(async move {
         loop {
             tokio::time::sleep(Duration::from_secs(10)).await;
@@ -32,88 +39,36 @@ pub async fn start_leaderboard_refresher(db: Arc<DbAppState>) {
 
             let mut conn = conn_result.unwrap();
 
-            let result = diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_user_leaderboard")
-                .execute(&mut conn);
+            for &schema in &schemas {
+                for &view in &views {
+                    let full_name = format!("{}.{}", schema, view);
+                    let sql = format!("REFRESH MATERIALIZED VIEW {}", full_name);
+                    match diesel::sql_query(&sql).execute(&mut conn) {
+                        Ok(_) => {
+                            tracing::info!("Refreshed {}", full_name)
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to refresh {}: {}", full_name, e)
+                        }
+                    }
 
-            let now = Utc::now();
-            let new_stamp = MatviewRefreshLog {
-                view_name: "aredl_user_leaderboard".to_string(),
-                last_refresh: now,
-            };
-
-            diesel::insert_into(matview_refresh_log::table)
-                .values(&new_stamp)
-                .on_conflict(matview_refresh_log::view_name)
-                .do_update()
-                .set(
-                    matview_refresh_log::last_refresh
-                        .eq(excluded(matview_refresh_log::last_refresh)),
-                )
-                .execute(&mut conn)
-                .map_err(|e| tracing::error!("Failed to upsert refresh log: {}", e))
-                .ok();
-
-            if result.is_err() {
-                tracing::error!(
-                    "Failed to refresh user leaderboard {}",
-                    result.err().unwrap()
-                )
-            }
-
-            let result = diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_country_leaderboard")
-                .execute(&mut conn);
-
-            let now = Utc::now();
-            let new_stamp = MatviewRefreshLog {
-                view_name: "aredl_country_leaderboard".to_string(),
-                last_refresh: now,
-            };
-
-            diesel::insert_into(matview_refresh_log::table)
-                .values(&new_stamp)
-                .on_conflict(matview_refresh_log::view_name)
-                .do_update()
-                .set(
-                    matview_refresh_log::last_refresh
-                        .eq(excluded(matview_refresh_log::last_refresh)),
-                )
-                .execute(&mut conn)
-                .map_err(|e| tracing::error!("Failed to upsert refresh log: {}", e))
-                .ok();
-
-            if result.is_err() {
-                tracing::error!(
-                    "Failed to refresh country leaderboard {}",
-                    result.err().unwrap()
-                )
-            }
-
-            let result = diesel::sql_query("REFRESH MATERIALIZED VIEW aredl_clans_leaderboard")
-                .execute(&mut conn);
-
-            let now = Utc::now();
-            let new_stamp = MatviewRefreshLog {
-                view_name: "aredl_clans_leaderboard".to_string(),
-                last_refresh: now,
-            };
-
-            diesel::insert_into(matview_refresh_log::table)
-                .values(&new_stamp)
-                .on_conflict(matview_refresh_log::view_name)
-                .do_update()
-                .set(
-                    matview_refresh_log::last_refresh
-                        .eq(excluded(matview_refresh_log::last_refresh)),
-                )
-                .execute(&mut conn)
-                .map_err(|e| tracing::error!("Failed to upsert refresh log: {}", e))
-                .ok();
-
-            if result.is_err() {
-                tracing::error!(
-                    "Failed to refresh clans leaderboard {}",
-                    result.err().unwrap()
-                )
+                    let new_timestamp = MatviewRefreshLog {
+                        view_name: full_name.clone(),
+                        last_refresh: Utc::now(),
+                    };
+                    if let Err(e) = diesel::insert_into(matview_refresh_log::table)
+                        .values(&new_timestamp)
+                        .on_conflict(matview_refresh_log::view_name)
+                        .do_update()
+                        .set(
+                            matview_refresh_log::last_refresh
+                                .eq(excluded(matview_refresh_log::last_refresh)),
+                        )
+                        .execute(&mut conn)
+                    {
+                        tracing::error!("Couldn't log refresh for {}: {}", full_name, e);
+                    }
+                }
             }
 
             let now = Utc::now();

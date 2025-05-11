@@ -1,13 +1,13 @@
 use crate::db::{DbAppState, DbConnection};
 use crate::error_handler::ApiError;
 use crate::get_secret;
-use crate::schema::{aredl_last_gddl_update, aredl_levels};
+use crate::schema::aredl;
+use crate::schema::arepl;
 use chrono::Utc;
 use cron::Schedule;
 use diesel::dsl::exists;
 use diesel::{
-    select, BoolExpressionMethods, Connection, ExpressionMethods, JoinOnDsl, QueryDsl, QueryResult,
-    RunQueryDsl,
+    select, BoolExpressionMethods, Connection, ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl,
 };
 use serde::Deserialize;
 use std::str::FromStr;
@@ -80,41 +80,53 @@ pub async fn start_level_data_refresher(db: Arc<DbAppState>) {
 
             let one_day_ago = Utc::now() - chrono::Duration::days(1);
 
-            let to_update: QueryResult<Vec<(Uuid, i32, bool)>> = aredl_levels::table
+            if let Ok(list) = aredl::levels::table
                 .left_join(
-                    aredl_last_gddl_update::table
-                        .on(aredl_last_gddl_update::id.eq(aredl_levels::id)),
+                    aredl::last_gddl_update::table
+                        .on(aredl::last_gddl_update::id.eq(aredl::levels::id)),
                 )
                 .filter(
-                    aredl_last_gddl_update::updated_at
+                    aredl::last_gddl_update::updated_at
                         .is_null()
-                        .or(aredl_last_gddl_update::updated_at.lt(one_day_ago)),
+                        .or(aredl::last_gddl_update::updated_at.lt(one_day_ago)),
                 )
                 .select((
-                    aredl_levels::id,
-                    aredl_levels::level_id,
-                    aredl_levels::two_player,
+                    aredl::levels::id,
+                    aredl::levels::level_id,
+                    aredl::levels::two_player,
                 ))
-                .load::<(Uuid, i32, bool)>(&mut conn);
-
-            match to_update {
-                Ok(to_update) => {
-                    for (id, level_id, two_player) in to_update {
-                        tokio::time::sleep(Duration::from_secs(5)).await;
-                        let result = update_gddl_data(&mut conn, id, level_id, two_player).await;
-                        if result.is_err() {
-                            tracing::error!(
-                                "Failed to request gddl: {}, {}",
-                                level_id,
-                                result.err().unwrap()
-                            );
-                        } else {
-                            //tracing::debug!("Updated gddl data for {}, {}", id, level_id)
-                        }
+                .load::<(Uuid, i32, bool)>(&mut conn)
+            {
+                for (id, level_id, two_p) in list {
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    if let Err(e) = aredl_update_gddl_data(&mut conn, id, level_id, two_p).await {
+                        tracing::error!("AREDL GDDL {} failed: {}", level_id, e);
                     }
                 }
-                Err(e) => {
-                    tracing::error!("Failed to load gddl update db: {}", e);
+            }
+
+            if let Ok(list) = arepl::levels::table
+                .left_join(
+                    arepl::last_gddl_update::table
+                        .on(arepl::last_gddl_update::id.eq(arepl::levels::id)),
+                )
+                .filter(
+                    arepl::last_gddl_update::updated_at
+                        .is_null()
+                        .or(arepl::last_gddl_update::updated_at.lt(one_day_ago)),
+                )
+                .select((
+                    arepl::levels::id,
+                    arepl::levels::level_id,
+                    arepl::levels::two_player,
+                ))
+                .load::<(Uuid, i32, bool)>(&mut conn)
+            {
+                for (id, level_id, two_p) in list {
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    if let Err(e) = arepl_update_gddl_data(&mut conn, id, level_id, two_p).await {
+                        tracing::error!("AREPL GDDL {} failed: {}", level_id, e);
+                    }
                 }
             }
 
@@ -135,7 +147,7 @@ struct GDDLResponse {
     two_player_rating: Option<f64>,
 }
 
-async fn update_gddl_data(
+async fn aredl_update_gddl_data(
     conn: &mut DbConnection,
     id: Uuid,
     level_id: i32,
@@ -155,19 +167,57 @@ async fn update_gddl_data(
         (true, rating) => rating,
     };
 
-    diesel::update(aredl_levels::table)
-        .filter(aredl_levels::id.eq(id))
-        .set(aredl_levels::gddl_tier.eq(rating))
+    diesel::update(aredl::levels::table)
+        .filter(aredl::levels::id.eq(id))
+        .set(aredl::levels::gddl_tier.eq(rating))
         .execute(conn)?;
 
-    diesel::insert_into(aredl_last_gddl_update::table)
+    diesel::insert_into(aredl::last_gddl_update::table)
         .values((
-            aredl_last_gddl_update::id.eq(id),
-            aredl_last_gddl_update::updated_at.eq(Utc::now()),
+            aredl::last_gddl_update::id.eq(id),
+            aredl::last_gddl_update::updated_at.eq(Utc::now()),
         ))
-        .on_conflict(aredl_last_gddl_update::id)
+        .on_conflict(aredl::last_gddl_update::id)
         .do_update()
-        .set(aredl_last_gddl_update::updated_at.eq(Utc::now()))
+        .set(aredl::last_gddl_update::updated_at.eq(Utc::now()))
+        .execute(conn)?;
+
+    Ok(())
+}
+
+async fn arepl_update_gddl_data(
+    conn: &mut DbConnection,
+    id: Uuid,
+    level_id: i32,
+    two_player: bool,
+) -> Result<(), ApiError> {
+    let url = format!("https://gdladder.com/api/level/{}", level_id);
+    let response = reqwest::get(&url)
+        .await
+        .map_err(|e| ApiError::new(400, format!("Failed to request gddl: {}", e).as_str()))?;
+    let data: GDDLResponse = response
+        .json()
+        .await
+        .map_err(|e| ApiError::new(400, format!("Failed to request gddl: {}", e).as_str()))?;
+
+    let rating = match (two_player, data.two_player_rating) {
+        (false, _) => data.rating,
+        (true, rating) => rating,
+    };
+
+    diesel::update(arepl::levels::table)
+        .filter(arepl::levels::id.eq(id))
+        .set(arepl::levels::gddl_tier.eq(rating))
+        .execute(conn)?;
+
+    diesel::insert_into(arepl::last_gddl_update::table)
+        .values((
+            arepl::last_gddl_update::id.eq(id),
+            arepl::last_gddl_update::updated_at.eq(Utc::now()),
+        ))
+        .on_conflict(arepl::last_gddl_update::id)
+        .do_update()
+        .set(arepl::last_gddl_update::updated_at.eq(Utc::now()))
         .execute(conn)?;
 
     Ok(())
@@ -195,21 +245,35 @@ async fn update_edel_data(
         .collect();
 
     conn.transaction(|conn| {
-        for (id, enjoyment, pending) in data {
-            let exists_2p = select(exists(
-                aredl_levels::table
-                    .filter(aredl_levels::level_id.eq(id))
-                    .filter(aredl_levels::two_player.eq(true)),
+        for (level_id, enjoyment, pending) in &data {
+            let aredl_2p: bool = select(exists(
+                aredl::levels::table
+                    .filter(aredl::levels::level_id.eq(*level_id))
+                    .filter(aredl::levels::two_player.eq(true)),
             ))
-            .get_result::<bool>(conn)?;
-
-            diesel::update(aredl_levels::table)
+            .get_result(conn)?;
+            diesel::update(aredl::levels::table)
                 .set((
-                    aredl_levels::edel_enjoyment.eq(enjoyment),
-                    aredl_levels::is_edel_pending.eq(pending),
+                    aredl::levels::edel_enjoyment.eq(*enjoyment),
+                    aredl::levels::is_edel_pending.eq(*pending),
                 ))
-                .filter(aredl_levels::level_id.eq(id))
-                .filter(aredl_levels::two_player.eq(exists_2p))
+                .filter(aredl::levels::level_id.eq(*level_id))
+                .filter(aredl::levels::two_player.eq(aredl_2p))
+                .execute(conn)?;
+
+            let arepl_2p: bool = select(exists(
+                arepl::levels::table
+                    .filter(arepl::levels::level_id.eq(*level_id))
+                    .filter(arepl::levels::two_player.eq(true)),
+            ))
+            .get_result(conn)?;
+            diesel::update(arepl::levels::table)
+                .set((
+                    arepl::levels::edel_enjoyment.eq(*enjoyment),
+                    arepl::levels::is_edel_pending.eq(*pending),
+                ))
+                .filter(arepl::levels::level_id.eq(*level_id))
+                .filter(arepl::levels::two_player.eq(arepl_2p))
                 .execute(conn)?;
         }
         Ok(())
@@ -237,18 +301,29 @@ async fn update_nlw_data(
         .collect();
 
     conn.transaction(|conn| {
-        for (id, tier) in data {
-            let exists_2p = select(exists(
-                aredl_levels::table
-                    .filter(aredl_levels::level_id.eq(id))
-                    .filter(aredl_levels::two_player.eq(true)),
+        for (level_id, tier) in &data {
+            let aredl_2p: bool = select(exists(
+                aredl::levels::table
+                    .filter(aredl::levels::level_id.eq(*level_id))
+                    .filter(aredl::levels::two_player.eq(true)),
             ))
-            .get_result::<bool>(conn)?;
+            .get_result(conn)?;
+            diesel::update(aredl::levels::table)
+                .set(aredl::levels::nlw_tier.eq(tier))
+                .filter(aredl::levels::level_id.eq(*level_id))
+                .filter(aredl::levels::two_player.eq(aredl_2p))
+                .execute(conn)?;
 
-            diesel::update(aredl_levels::table)
-                .set((aredl_levels::nlw_tier.eq(tier),))
-                .filter(aredl_levels::level_id.eq(id))
-                .filter(aredl_levels::two_player.eq(exists_2p))
+            let arepl_2p: bool = select(exists(
+                arepl::levels::table
+                    .filter(arepl::levels::level_id.eq(*level_id))
+                    .filter(arepl::levels::two_player.eq(true)),
+            ))
+            .get_result(conn)?;
+            diesel::update(arepl::levels::table)
+                .set(arepl::levels::nlw_tier.eq(tier))
+                .filter(arepl::levels::level_id.eq(*level_id))
+                .filter(arepl::levels::two_player.eq(arepl_2p))
                 .execute(conn)?;
         }
         Ok(())

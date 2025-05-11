@@ -1,11 +1,11 @@
-use std::sync::Arc;
-use actix_web::{delete, HttpResponse, patch, post, web};
-use uuid::Uuid;
-use utoipa::OpenApi;
-use crate::aredl::packs::{Pack, PackCreate, PackUpdate, levels};
-use crate::auth::{UserAuth, Permission};
+use crate::aredl::packs::{levels, Pack, PackCreate, PackUpdate};
+use crate::auth::{Permission, UserAuth};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
+use actix_web::{delete, patch, post, web, HttpResponse};
+use std::sync::Arc;
+use utoipa::OpenApi;
+use uuid::Uuid;
 
 #[utoipa::path(
     post,
@@ -21,11 +21,12 @@ use crate::error_handler::ApiError;
         ("api_key" = ["PackModify"]),
     ),
 )]
-#[post("", wrap="UserAuth::require(Permission::PackModify)")]
-async fn create(db: web::Data<Arc<DbAppState>>, pack: web::Json<PackCreate>) -> Result<HttpResponse, ApiError> {
-    let pack = web::block(
-        || Pack::create(db, pack.into_inner())
-    ).await??;
+#[post("", wrap = "UserAuth::require(Permission::PackModify)")]
+async fn create(
+    db: web::Data<Arc<DbAppState>>,
+    pack: web::Json<PackCreate>,
+) -> Result<HttpResponse, ApiError> {
+    let pack = web::block(|| Pack::create(db, pack.into_inner())).await??;
     Ok(HttpResponse::Ok().json(pack))
 }
 
@@ -46,11 +47,13 @@ async fn create(db: web::Data<Arc<DbAppState>>, pack: web::Json<PackCreate>) -> 
         ("api_key" = ["PackModify"]),
     ),
 )]
-#[patch("/{id}", wrap="UserAuth::require(Permission::PackModify)")]
-async fn update(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, pack: web::Json<PackUpdate>) -> Result<HttpResponse, ApiError> {
-    let pack = web::block(
-        || Pack::update(db, id.into_inner(), pack.into_inner())
-    ).await??;
+#[patch("/{id}", wrap = "UserAuth::require(Permission::PackModify)")]
+async fn update(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<Uuid>,
+    pack: web::Json<PackUpdate>,
+) -> Result<HttpResponse, ApiError> {
+    let pack = web::block(|| Pack::update(db, id.into_inner(), pack.into_inner())).await??;
     Ok(HttpResponse::Ok().json(pack))
 }
 
@@ -70,11 +73,12 @@ async fn update(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, pack: web::
         ("api_key" = ["PackModify"]),
     ),
 )]
-#[delete("/{id}", wrap="UserAuth::require(Permission::PackModify)")]
-async fn delete(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>) -> Result<HttpResponse, ApiError> {
-    let pack = web::block(
-        || Pack::delete(db, id.into_inner())
-    ).await??;
+#[delete("/{id}", wrap = "UserAuth::require(Permission::PackModify)")]
+async fn delete(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<Uuid>,
+) -> Result<HttpResponse, ApiError> {
+    let pack = web::block(|| Pack::delete(db, id.into_inner())).await??;
     Ok(HttpResponse::Ok().json(pack))
 }
 
@@ -107,6 +111,6 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .service(create)
             .service(update)
             .service(delete)
-            .configure(levels::init_routes)
+            .configure(levels::init_routes),
     );
 }

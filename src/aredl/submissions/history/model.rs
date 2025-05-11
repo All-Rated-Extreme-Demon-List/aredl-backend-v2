@@ -3,7 +3,7 @@ use crate::{
     auth::{Authenticated, Permission},
     db::DbAppState,
     error_handler::ApiError,
-    schema::{submission_history, users},
+    schema::{aredl::submission_history, users},
     users::BaseUser,
 };
 use actix_web::web;

@@ -1,0 +1,249 @@
+use crate::arepl::records::model::{RecordInsert, RecordUpdate};
+use crate::arepl::records::{
+    FullRecordResolved, FullRecordUnresolved, FullRecordUnresolvedDto, FullResolvedRecordPage,
+    FullUnresolvedRecordPage, Record, RecordsQueryOptions,
+};
+use crate::auth::{Authenticated, Permission, UserAuth};
+use crate::db::DbAppState;
+use crate::error_handler::ApiError;
+use crate::page_helper::{PageQuery, Paginated};
+use actix_web::{delete, get, patch, post, web, HttpResponse};
+use std::sync::Arc;
+use utoipa::OpenApi;
+use uuid::Uuid;
+
+#[utoipa::path(
+    get,
+    summary = "[Staff]Get record",
+    description = "Fetch details of a specific record",
+    tag = "AREDL (P) - Records",
+    responses(
+        (status = 200, body = FullRecordResolved),
+    ),
+    security(
+        ("access_token" = ["RecordModify"]),
+        ("api_key" = ["RecordModify"]),
+    )
+)]
+#[get("/{id}", wrap = "UserAuth::require(Permission::RecordModify)")]
+async fn find(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<Uuid>,
+) -> Result<HttpResponse, ApiError> {
+    let record = web::block(move || FullRecordResolved::find(db, id.into_inner())).await??;
+    Ok(HttpResponse::Ok().json(record))
+}
+
+#[utoipa::path(
+    post,
+    summary = "[Staff]Create record",
+    description = "Create a new record",
+    tag = "AREDL (P) - Records",
+    request_body = RecordInsert,
+    responses(
+        (status = 200, body = Record)
+    ),
+    security(
+        ("access_token" = ["RecordModify"]),
+        ("api_key" = ["RecordModify"]),
+    )
+)]
+#[post("", wrap = "UserAuth::require(Permission::RecordModify)")]
+async fn create(
+    db: web::Data<Arc<DbAppState>>,
+    record: web::Json<RecordInsert>,
+) -> Result<HttpResponse, ApiError> {
+    let record = web::block(move || Record::create(db, record.into_inner())).await??;
+    Ok(HttpResponse::Ok().json(record))
+}
+
+#[utoipa::path(
+    patch,
+    summary = "[Staff]Edit record",
+    description = "Edit a specific record",
+    tag = "AREDL (P) - Records",
+    request_body = RecordUpdate,
+    params(
+        ("id" = Uuid, description = "Internal record UUID")
+    ),
+    responses(
+        (status = 200, body = Record)
+    ),
+    security(
+        ("access_token" = ["RecordModify"]),
+        ("api_key" = ["RecordModify"]),
+    )
+)]
+#[patch("/{id}", wrap = "UserAuth::require(Permission::RecordModify)")]
+async fn update(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<Uuid>,
+    record: web::Json<RecordUpdate>,
+) -> Result<HttpResponse, ApiError> {
+    let id = id.into_inner();
+    let record = web::block(move || Record::update(db, id, record.into_inner())).await??;
+    Ok(HttpResponse::Ok().json(record))
+}
+
+#[utoipa::path(
+    delete,
+    summary = "[Staff]Delete record",
+    description = "Remove a specific record from this level",
+    tag = "AREDL (P) - Records",
+    params(
+        ("id" = Uuid, description = "Internal record UUID")
+    ),
+    responses(
+        (status = 200)
+    ),
+    security(
+        ("access_token" = ["RecordModify"]),
+        ("api_key" = ["RecordModify"]),
+    )
+)]
+#[delete("/{id}", wrap = "UserAuth::require(Permission::RecordModify)")]
+async fn delete(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<Uuid>,
+) -> Result<HttpResponse, ApiError> {
+    let id = id.into_inner();
+    let record = web::block(move || Record::delete(db, id)).await??;
+    Ok(HttpResponse::Ok().json(record))
+}
+
+#[utoipa::path(
+    get,
+    summary = "[Staff]List records",
+    description = "List a possibly filtered list of all records, unresolved",
+    tag = "AREDL (P) - Records",
+    params(
+        ("page" = Option<i64>, Query, description = "The page of the list to fetch"),
+        ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page"),
+        ("level_filter" = Option<Uuid>, Query, description = "The level internal UUID to filter by"),
+        ("mobile_filter" = Option<bool>, Query, description = "Whether to show only/hide mobile records"),
+        ("submitter_filter" = Option<Uuid>, Query, description = "The submitter user internal UUID to filter by"),
+    ),
+    responses(
+        (status = 200, body = Paginated<FullUnresolvedRecordPage>)
+    ),
+    security(
+        ("access_token" = ["RecordModify"]),
+        ("api_key" = ["RecordModify"]),
+    )
+)]
+#[get("", wrap = "UserAuth::require(Permission::RecordModify)")]
+async fn find_all(
+    db: web::Data<Arc<DbAppState>>,
+    page_query: web::Query<PageQuery<100>>,
+    options: web::Query<RecordsQueryOptions>,
+) -> Result<HttpResponse, ApiError> {
+    let records = web::block(move || {
+        FullRecordUnresolved::find_all(db, page_query.into_inner(), options.into_inner(), false)
+    })
+    .await??;
+    Ok(HttpResponse::Ok().json(records))
+}
+
+#[utoipa::path(
+    get,
+    summary = "[Staff]List full records",
+    description = "List a possibly filtered list of all records, with resolved levels and users data",
+    tag = "AREDL (P) - Records",
+    params(
+        ("page" = Option<i64>, Query, description = "The page of the list to fetch"),
+        ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page"),
+        ("level_filter" = Option<Uuid>, Query, description = "The level internal UUID to filter by"),
+        ("mobile_filter" = Option<bool>, Query, description = "Whether to show only/hide mobile records"),
+        ("submitter_filter" = Option<Uuid>, Query, description = "The submitter user internal UUID to filter by"),
+    ),
+    responses(
+        (status = 200, body = Paginated<FullResolvedRecordPage>)
+    ),
+    security(
+        ("access_token" = ["RecordModify"]),
+        ("api_key" = ["RecordModify"]),
+    )
+)]
+#[get("/full", wrap = "UserAuth::require(Permission::RecordModify)")]
+async fn find_all_full(
+    db: web::Data<Arc<DbAppState>>,
+    page_query: web::Query<PageQuery<100>>,
+    options: web::Query<RecordsQueryOptions>,
+) -> Result<HttpResponse, ApiError> {
+    let records = web::block(move || {
+        FullRecordResolved::find_all(db, page_query.into_inner(), options.into_inner(), false)
+    })
+    .await??;
+    Ok(HttpResponse::Ok().json(records))
+}
+
+#[utoipa::path(
+    get,
+    summary = "[Auth]List my records",
+    description = "List all of the authenticated user's records",
+    tag = "AREDL (P) - Records",
+    responses(
+        (status = 200, body = [FullRecordUnresolvedDto])
+    ),
+    params(
+        ("page" = Option<i64>, Query, description = "The page of the list to fetch"),
+        ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page"),
+    ),
+    security(
+        ("access_token" = [""]),
+        ("api_key" = [""]),
+    )
+)]
+#[get("/@me", wrap = "UserAuth::load()")]
+async fn find_me(
+    db: web::Data<Arc<DbAppState>>,
+    page_query: web::Query<PageQuery<100>>,
+    authenticated: Authenticated,
+) -> Result<HttpResponse, ApiError> {
+    let options = RecordsQueryOptions {
+        level_filter: None,
+        mobile_filter: None,
+        submitter_filter: Some(authenticated.user_id),
+    };
+    let records = web::block(move || {
+        FullRecordResolved::find_all(db, page_query.into_inner(), options, true)
+    })
+    .await??;
+    Ok(HttpResponse::Ok().json(records))
+}
+
+#[derive(OpenApi)]
+#[openapi(
+    tags(
+        (name = "AREDL (P) - Records", description = "Endpoints for fetching and managing platformer records")
+    ),
+    components(
+        schemas(
+            Record,
+            RecordUpdate,
+            FullRecordResolved,
+            FullRecordUnresolvedDto
+        )
+    ),
+    paths(
+        create,
+        update,
+        delete,
+        find_all,
+        find_all_full,
+        find_me,
+    )
+)]
+pub struct ApiDoc;
+
+pub fn init_routes(config: &mut web::ServiceConfig) {
+    config.service(
+        web::scope("/records")
+            .service(create)
+            .service(update)
+            .service(delete)
+            .service(find_all)
+            .service(find_all_full)
+            .service(find_me),
+    );
+}

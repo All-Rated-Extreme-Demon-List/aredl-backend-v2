@@ -1,12 +1,14 @@
-use std::sync::Arc;
-use actix_web::{get, post, patch, HttpResponse, web};
-use tracing_actix_web::RootSpan;
-use utoipa::OpenApi;
-use crate::auth::{UserAuth, Permission};
-use crate::aredl::levels::{history, packs, Level, LevelPlace, LevelUpdate, ResolvedLevel, records, creators};
 use crate::aredl::levels::id_resolver::resolve_level_id;
+use crate::aredl::levels::{
+    creators, history, packs, records, Level, LevelPlace, LevelUpdate, ResolvedLevel,
+};
+use crate::auth::{Permission, UserAuth};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
+use actix_web::{get, patch, post, web, HttpResponse};
+use std::sync::Arc;
+use tracing_actix_web::RootSpan;
+use utoipa::OpenApi;
 
 #[utoipa::path(
     get,
@@ -19,9 +21,7 @@ use crate::error_handler::ApiError;
 )]
 #[get("")]
 async fn list(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
-    let levels = web::block(
-        || Level::find_all(db)
-    ).await??;
+    let levels = web::block(|| Level::find_all(db)).await??;
     Ok(HttpResponse::Ok().json(levels))
 }
 
@@ -38,12 +38,14 @@ async fn list(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> 
         ("api_key" = ["LevelModify"]),
     )
 )]
-#[post("", wrap="UserAuth::require(Permission::LevelModify)")]
-async fn create(db: web::Data<Arc<DbAppState>>, level: web::Json<LevelPlace>, root_span: RootSpan) -> Result<HttpResponse, ApiError> {
+#[post("", wrap = "UserAuth::require(Permission::LevelModify)")]
+async fn create(
+    db: web::Data<Arc<DbAppState>>,
+    level: web::Json<LevelPlace>,
+    root_span: RootSpan,
+) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&level));
-    let level = web::block(
-        || Level::create(db, level.into_inner())
-    ).await??;
+    let level = web::block(|| Level::create(db, level.into_inner())).await??;
     Ok(HttpResponse::Ok().json(level))
 }
 
@@ -63,12 +65,14 @@ async fn create(db: web::Data<Arc<DbAppState>>, level: web::Json<LevelPlace>, ro
         ("api_key" = ["LevelModify"]),
     )
 )]
-#[patch("/{level_id}", wrap="UserAuth::require(Permission::LevelModify)")]
-async fn update(db: web::Data<Arc<DbAppState>>, level_id: web::Path<String>,level: web::Json<LevelUpdate>) -> Result<HttpResponse, ApiError> {
+#[patch("/{level_id}", wrap = "UserAuth::require(Permission::LevelModify)")]
+async fn update(
+    db: web::Data<Arc<DbAppState>>,
+    level_id: web::Path<String>,
+    level: web::Json<LevelUpdate>,
+) -> Result<HttpResponse, ApiError> {
     let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
-    let level = web::block(
-        move || Level::update(db, level_id, level.into_inner())
-    ).await??;
+    let level = web::block(move || Level::update(db, level_id, level.into_inner())).await??;
     Ok(HttpResponse::Ok().json(level))
 }
 
@@ -85,11 +89,12 @@ async fn update(db: web::Data<Arc<DbAppState>>, level_id: web::Path<String>,leve
     ),
 )]
 #[get("/{level_id}")]
-async fn find(db: web::Data<Arc<DbAppState>>, level_id: web::Path<String>) -> Result<HttpResponse, ApiError> {
+async fn find(
+    db: web::Data<Arc<DbAppState>>,
+    level_id: web::Path<String>,
+) -> Result<HttpResponse, ApiError> {
     let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
-    let level = web::block(
-        move || ResolvedLevel::find(db, level_id)
-    ).await??;
+    let level = web::block(move || ResolvedLevel::find(db, level_id)).await??;
     Ok(HttpResponse::Ok().json(level))
 }
 
@@ -127,6 +132,6 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .configure(history::init_routes)
             .configure(packs::init_routes)
             .configure(records::init_routes)
-            .configure(creators::init_routes)
+            .configure(creators::init_routes),
     );
 }
