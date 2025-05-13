@@ -12,6 +12,8 @@ use std::sync::Arc;
 use utoipa::OpenApi;
 use uuid::Uuid;
 
+use super::pemonlist;
+
 #[utoipa::path(
     get,
     summary = "[Staff]Get record",
@@ -217,6 +219,9 @@ async fn find_me(
     tags(
         (name = "AREDL (P) - Records", description = "Endpoints for fetching and managing platformer records")
     ),
+    nest(
+        (path = "/pemonlist", api=pemonlist::ApiDoc)
+    ),
     components(
         schemas(
             Record,
@@ -239,6 +244,7 @@ pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/records")
+            .configure(pemonlist::init_routes)
             .service(create)
             .service(update)
             .service(delete)
