@@ -55,7 +55,6 @@ macro_rules! arepl_base_resolved_submission_query {
                     .nullable()
                     .eq(submissions_with_priority::reviewer_id.nullable())),
             )
-            .order_by(submissions_with_priority::completion_time.asc())
             .select((
                 SubmissionWithPriority::as_select(),
                 ExtendedBaseLevel::as_select(),
@@ -171,6 +170,7 @@ impl ResolvedSubmissionPage {
         query = arepl_apply_submissions_filters!(query, options);
 
         let submissions = query
+            .order_by(submissions_with_priority::completion_time.asc())
             .limit(page_query.per_page())
             .offset(page_query.offset())
             .load::<ResolvedSubmissionRow>(conn)?;
