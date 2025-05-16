@@ -1,5 +1,5 @@
 use crate::{
-    aredl::submissions::*,
+    aredl::submissions::{*, history::SubmissionHistory},
     auth::Authenticated,
     db::DbAppState,
     error_handler::ApiError,
@@ -19,8 +19,6 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
-
-use super::history::SubmissionHistory;
 
 #[derive(Serialize, Deserialize, Debug, Insertable, ToSchema)]
 #[diesel(table_name=submissions, check_for_backend(Pg))]

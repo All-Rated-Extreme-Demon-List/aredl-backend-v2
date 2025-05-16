@@ -56,7 +56,7 @@ CREATE TABLE aredl.records (LIKE aredl_records INCLUDING ALL);
 CREATE TABLE aredl.shifts (LIKE aredl_shifts INCLUDING ALL);
 CREATE TABLE aredl.recurrent_shifts (LIKE aredl_recurrent_shifts INCLUDING ALL);
 CREATE TABLE aredl.submissions (LIKE aredl_submissions INCLUDING ALL);
-CREATE TABLE aredl.submission_history (LIKE submission_history INCLUDING ALL);
+CREATE TABLE aredl.submission_history (LIKE public.submission_history INCLUDING ALL);
 
 CREATE SEQUENCE aredl.position_history_i_seq
   OWNED BY aredl.position_history.i;
@@ -73,7 +73,7 @@ DROP TABLE IF EXISTS aredl_pack_tiers;
 DROP TABLE IF EXISTS aredl_position_history;
 DROP TABLE IF EXISTS aredl_recurrent_shifts;
 DROP TABLE IF EXISTS aredl_shifts;
-DROP TABLE IF EXISTS submission_history;
+DROP TABLE IF EXISTS public.submission_history;
 DROP TABLE IF EXISTS aredl_submissions;
 DROP TABLE IF EXISTS aredl_records;
 DROP TABLE IF EXISTS aredl_levels_created;
