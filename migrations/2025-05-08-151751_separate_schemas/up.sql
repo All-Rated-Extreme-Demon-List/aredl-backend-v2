@@ -103,7 +103,17 @@ $$ LANGUAGE plpgsql;
 
 CREATE FUNCTION aredl.level_place() RETURNS TRIGGER AS
 $$
+DECLARE
+    other_levels_count int;
 BEGIN
+    SELECT COUNT(*) - 1
+    INTO other_levels_count
+    FROM aredl.levels;
+
+    IF other_levels_count <= 0 THEN
+        RETURN null;
+    END IF;
+
     UPDATE aredl.levels
     SET position = position + 1
     WHERE position >= NEW.position AND id <> NEW.id;
@@ -123,7 +133,16 @@ $$
 DECLARE
   	above uuid;
   	below uuid;
+    other_levels_count int;
 BEGIN
+    SELECT COUNT(*) - 1
+    INTO other_levels_count
+    FROM aredl.levels;
+
+    IF other_levels_count <= 0 THEN
+        RETURN null;
+    END IF;
+
     above := (SELECT id FROM aredl.levels WHERE position = NEW.position - 1);
     below := (SELECT id FROM aredl.levels WHERE position = NEW.position + 1);
 
@@ -196,7 +215,16 @@ $$
 DECLARE
 	lowestPos INT;
 	highestPos INT;
+    other_levels_count int;
 BEGIN
+    SELECT COUNT(*) - 1
+    INTO other_levels_count
+    FROM aredl.levels;
+
+    IF other_levels_count <= 0 THEN
+        RETURN new;
+    END IF;
+    
 	IF NEW.legacy THEN
 		highestPos := aredl.max_list_pos_legacy() + 1;
 		lowestPos := aredl.max_list_pos() + 1;
@@ -222,7 +250,15 @@ $$
 DECLARE
 	lowestPos INT;
 	highestPos INT;
+    other_levels_count int;
 BEGIN
+    SELECT COUNT(*) - 1
+    INTO other_levels_count
+    FROM aredl.levels;
+
+    IF other_levels_count <= 0 THEN
+        RETURN new;
+    END IF;
 	IF NEW.legacy THEN
 		IF NEW.legacy <> OLD.legacy THEN
             lowestPos := aredl.max_list_pos();

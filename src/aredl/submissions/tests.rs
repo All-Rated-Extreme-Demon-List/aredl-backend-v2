@@ -1,20 +1,24 @@
 #[cfg(test)]
-use actix_web::test;
-#[cfg(test)]
-use serde_json::json;
-#[cfg(test)]
-use crate::{auth::{create_test_token, Permission}, schema::{roles, user_roles}};
-#[cfg(test)]
 use crate::test_utils::*;
 #[cfg(test)]
+use crate::{
+    auth::{create_test_token, Permission},
+    schema::{roles, user_roles},
+};
+#[cfg(test)]
+use actix_web::test;
+#[cfg(test)]
 use diesel::{ExpressionMethods, RunQueryDsl};
+#[cfg(test)]
+use serde_json::json;
 
 #[actix_web::test]
 async fn create_submission() {
-	let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth) = init_test_app().await;
 
-	let (user_id, _) = create_test_user(&mut conn, None).await;
-	let token = create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let level_id = create_test_level(&mut conn).await;
 
     let submission_data = json!({
@@ -24,22 +28,23 @@ async fn create_submission() {
     });
 
     let req = test::TestRequest::post()
-		.uri("/aredl/submissions")
-		.insert_header(("Authorization", format!("Bearer {}", token)))
-		.set_json(&submission_data)
-		.to_request();
+        .uri("/aredl/submissions")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&submission_data)
+        .to_request();
 
-	let resp = test::call_service(&app, req).await;
-	assert!(resp.status().is_success(), "status is {}", resp.status());
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
 }
 
 #[actix_web::test]
 async fn submission_without_raw() {
-	let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth) = init_test_app().await;
 
-	let (user_id, _) = create_test_user(&mut conn, None).await;
-	let token = create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-	let level_id = create_test_level(&mut conn).await;
+    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let level_id = create_test_level(&mut conn).await;
 
     let submission_data = json!({
         "level_id": level_id,
@@ -47,184 +52,236 @@ async fn submission_without_raw() {
     });
 
     let req = test::TestRequest::post()
-		.uri("/aredl/submissions")
-		.insert_header(("Authorization", format!("Bearer {}", token)))
-		.set_json(&submission_data)
-		.to_request();
+        .uri("/aredl/submissions")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&submission_data)
+        .to_request();
 
-	let resp = test::call_service(&app, req).await;
-	assert!(resp.status().is_client_error(), "status is {}", resp.status());
+    let resp = test::call_service(&app, req).await;
+    assert!(
+        resp.status().is_client_error(),
+        "status is {}",
+        resp.status()
+    );
 }
 
 #[actix_web::test]
 async fn submission_malformed_url() {
-	let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth) = init_test_app().await;
 
-	let (user_id, _) = create_test_user(&mut conn, None).await;
-	let token = create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-	let level_id = create_test_level(&mut conn).await;
+    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let level_id = create_test_level(&mut conn).await;
 
-	// video_url
+    // video_url
     let submission_data = json!({
         "level_id": level_id,
         "video_url": "slkdfjskdlf",
-		"raw_url": "https://raw.com"
+        "raw_url": "https://raw.com"
     });
 
     let req = test::TestRequest::post()
-		.uri("/aredl/submissions")
-		.insert_header(("Authorization", format!("Bearer {}", token)))
-		.set_json(&submission_data)
-		.to_request();
+        .uri("/aredl/submissions")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&submission_data)
+        .to_request();
 
-	let resp = test::call_service(&app, req).await;
-	
-	// raw_url
-	let submission_data = json!({
+    let resp = test::call_service(&app, req).await;
+
+    // raw_url
+    let submission_data = json!({
         "level_id": level_id,
         "video_url": "https://video.com",
-		"raw_url": "isldjfsdkf"
+        "raw_url": "isldjfsdkf"
     });
 
     let req = test::TestRequest::post()
-		.uri("/aredl/submissions")
-		.insert_header(("Authorization", format!("Bearer {}", token)))
-		.set_json(&submission_data)
-		.to_request();
+        .uri("/aredl/submissions")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&submission_data)
+        .to_request();
 
-	let resp2 = test::call_service(&app, req).await;
+    let resp2 = test::call_service(&app, req).await;
 
-	assert!(resp.status().is_client_error(), "response 1 status is {}", resp.status());
-	assert!(resp2.status().is_client_error(), "response 2 status is {}", resp2.status());
+    assert!(
+        resp.status().is_client_error(),
+        "response 1 status is {}",
+        resp.status()
+    );
+    assert!(
+        resp2.status().is_client_error(),
+        "response 2 status is {}",
+        resp2.status()
+    );
 }
 
 #[actix_web::test]
 async fn submission_edit_no_perms() {
-	let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth) = init_test_app().await;
 
-	let (user_id_1, _) = create_test_user(&mut conn, None).await;
-	let token_1 = create_test_token(user_id_1, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let (user_id_1, _) = create_test_user(&mut conn, None).await;
+    let token_1 =
+        create_test_token(user_id_1, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-	let (user_id_2, _) = create_test_user(&mut conn, None).await;
-	let token_2 = create_test_token(user_id_2, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let (user_id_2, _) = create_test_user(&mut conn, None).await;
+    let token_2 =
+        create_test_token(user_id_2, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-	let (user_id_mod, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
-	let token_mod = create_test_token(user_id_mod, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let (user_id_mod, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
+    let token_mod =
+        create_test_token(user_id_mod, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-	let level_id = create_test_level(&mut conn).await;
+    let level_id = create_test_level(&mut conn).await;
 
     let submission_data = json!({
         "level_id": level_id,
         "video_url": "https://video.com",
-		"raw_url": "https://raw.com"
+        "raw_url": "https://raw.com"
     });
 
     let submission_req = test::TestRequest::post()
-		.uri("/aredl/submissions")
-		.insert_header(("Authorization", format!("Bearer {}", token_1)))
-		.set_json(&submission_data)
-		.to_request();
+        .uri("/aredl/submissions")
+        .insert_header(("Authorization", format!("Bearer {}", token_1)))
+        .set_json(&submission_data)
+        .to_request();
 
-	let resp = test::call_service(&app, submission_req).await;
-	assert!(resp.status().is_success(), "initial submission request status is {}", resp.status());
+    let resp = test::call_service(&app, submission_req).await;
+    assert!(
+        resp.status().is_success(),
+        "initial submission request status is {}",
+        resp.status()
+    );
 
-	let resp_body = test::read_body(resp).await;
-	let submission: serde_json::Value = serde_json::from_slice(&resp_body).expect("Failed to parse response body");
-	let submission_id = submission["id"].as_str().expect("Submission ID not found");
+    let resp_body = test::read_body(resp).await;
+    let submission: serde_json::Value =
+        serde_json::from_slice(&resp_body).expect("Failed to parse response body");
+    let submission_id = submission["id"].as_str().expect("Submission ID not found");
 
-	let submission_edit_json = json!({
-		"video_url": "https://new_video.com"
-	});
+    let submission_edit_json = json!({
+        "video_url": "https://new_video.com"
+    });
 
-	// edit own submission
-	let edit_req_own = test::TestRequest::patch()
-		.uri(&format!("/aredl/submissions/{}", submission_id).to_string())
-		.insert_header(("Authorization", format!("Bearer {}", token_1)))
-		.set_json(&submission_edit_json)
-		.to_request();
+    // edit own submission
+    let edit_req_own = test::TestRequest::patch()
+        .uri(&format!("/aredl/submissions/{}", submission_id).to_string())
+        .insert_header(("Authorization", format!("Bearer {}", token_1)))
+        .set_json(&submission_edit_json)
+        .to_request();
 
-	let resp_edit_own = test::call_service(&app, edit_req_own).await;
-	assert!(resp_edit_own.status().is_success(), "status is {}", resp_edit_own.status());
+    let resp_edit_own = test::call_service(&app, edit_req_own).await;
+    assert!(
+        resp_edit_own.status().is_success(),
+        "status is {}",
+        resp_edit_own.status()
+    );
 
-	// edit other submission
-	let edit_req_other = test::TestRequest::patch()
-		.uri(&format!("/aredl/submissions/{}", submission_id).to_string())
-		.insert_header(("Authorization", format!("Bearer {}", token_2)))
-		.set_json(&submission_edit_json)
-		.to_request();
+    // edit other submission
+    let edit_req_other = test::TestRequest::patch()
+        .uri(&format!("/aredl/submissions/{}", submission_id).to_string())
+        .insert_header(("Authorization", format!("Bearer {}", token_2)))
+        .set_json(&submission_edit_json)
+        .to_request();
 
-	let resp_edit_other = test::call_service(&app, edit_req_other).await;
-	assert!(resp_edit_other.status().is_client_error(), "status is {}", resp_edit_other.status());
+    let resp_edit_other = test::call_service(&app, edit_req_other).await;
+    assert!(
+        resp_edit_other.status().is_client_error(),
+        "status is {}",
+        resp_edit_other.status()
+    );
 
-	// edit other submission as mod
-	let edit_req_mod = test::TestRequest::patch()
-		.uri(&format!("/aredl/submissions/{}", submission_id).to_string())
-		.insert_header(("Authorization", format!("Bearer {}", token_mod)))
-		.set_json(&submission_edit_json)
-		.to_request();
+    // edit other submission as mod
+    let edit_req_mod = test::TestRequest::patch()
+        .uri(&format!("/aredl/submissions/{}", submission_id).to_string())
+        .insert_header(("Authorization", format!("Bearer {}", token_mod)))
+        .set_json(&submission_edit_json)
+        .to_request();
 
-	let resp_edit_mod = test::call_service(&app, edit_req_mod).await;
-	assert!(resp_edit_mod.status().is_success(), "status is {}", resp_edit_mod.status());
+    let resp_edit_mod = test::call_service(&app, edit_req_mod).await;
+    assert!(
+        resp_edit_mod.status().is_success(),
+        "status is {}",
+        resp_edit_mod.status()
+    );
 }
 
 #[actix_web::test]
 async fn submission_aredlplus_boost() {
-	let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth) = init_test_app().await;
 
-	let (user_id, _) = create_test_user(&mut conn, None).await;
-	let (user_id_2, _) = create_test_user(&mut conn, None).await;
+    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let (user_id_2, _) = create_test_user(&mut conn, None).await;
 
-	let role_id: i32 = diesel::insert_into(roles::table)
-		.values((
-			roles::privilege_level.eq(5),
-			roles::role_desc.eq(format!("Test Role - AREDL+")),
-		))
-		.returning(roles::id)
-		.get_result(&mut conn)
-		.expect("Failed to create test role");
+    let role_id: i32 = diesel::insert_into(roles::table)
+        .values((
+            roles::privilege_level.eq(5),
+            roles::role_desc.eq(format!("Test Role - AREDL+")),
+        ))
+        .returning(roles::id)
+        .get_result(&mut conn)
+        .expect("Failed to create test role");
 
-	diesel::insert_into(user_roles::table)
-		.values((
-			user_roles::role_id.eq(role_id),
-			user_roles::user_id.eq(user_id),
-		))
-		.execute(&mut conn)
-		.expect("Failed to assign role to user");
-	
+    diesel::insert_into(user_roles::table)
+        .values((
+            user_roles::role_id.eq(role_id),
+            user_roles::user_id.eq(user_id),
+        ))
+        .execute(&mut conn)
+        .expect("Failed to assign role to user");
 
-	let token = create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-	let token2 = create_test_token(user_id_2, &auth.jwt_encoding_key).expect("Failed to generate token");
-	let level_id = create_test_level(&mut conn).await;
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let token2 =
+        create_test_token(user_id_2, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let level_id = create_test_level(&mut conn).await;
 
-	// video_url
+    // video_url
     let submission_data = json!({
         "level_id": level_id,
         "video_url": "https://video.com",
-		"raw_url": "https://raw.com"
+        "raw_url": "https://raw.com"
     });
 
     let req = test::TestRequest::post()
-		.uri("/aredl/submissions")
-		.insert_header(("Authorization", format!("Bearer {}", token)))
-		.set_json(&submission_data)
-		.to_request();
+        .uri("/aredl/submissions")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&submission_data)
+        .to_request();
 
-	let resp = test::call_service(&app, req).await;
-	assert!(resp.status().is_success(), "First submission failed: status {}", resp.status());
-	let resp_body = test::read_body(resp).await;
-	let submission1: serde_json::Value = serde_json::from_slice(&resp_body).expect("Failed to parse response body");
+    let resp = test::call_service(&app, req).await;
+    assert!(
+        resp.status().is_success(),
+        "First submission failed: status {}",
+        resp.status()
+    );
+    let resp_body = test::read_body(resp).await;
+    let submission1: serde_json::Value =
+        serde_json::from_slice(&resp_body).expect("Failed to parse response body");
 
-	let req = test::TestRequest::post()
-		.uri("/aredl/submissions")
-		.insert_header(("Authorization", format!("Bearer {}", token2)))
-		.set_json(&submission_data)
-		.to_request();
+    let req = test::TestRequest::post()
+        .uri("/aredl/submissions")
+        .insert_header(("Authorization", format!("Bearer {}", token2)))
+        .set_json(&submission_data)
+        .to_request();
 
-	let resp = test::call_service(&app, req).await;
-	assert!(resp.status().is_success(), "Second submission failed: {}", resp.status());
-	let resp_body = test::read_body(resp).await;
-	let submission2: serde_json::Value = serde_json::from_slice(&resp_body).expect("Failed to parse response body");
+    let resp = test::call_service(&app, req).await;
+    assert!(
+        resp.status().is_success(),
+        "Second submission failed: {}",
+        resp.status()
+    );
+    let resp_body = test::read_body(resp).await;
+    let submission2: serde_json::Value =
+        serde_json::from_slice(&resp_body).expect("Failed to parse response body");
 
-	assert_eq!(submission1["priority"].as_bool().unwrap(), true, "Priority field for user 1 is not true as expected");
-	assert_eq!(submission2["priority"].as_bool().unwrap(), false, "Priority field for user 2 is not false as expected");
+    assert_eq!(
+        submission1["priority"].as_bool().unwrap(),
+        true,
+        "Priority field for user 1 is not true as expected"
+    );
+    assert_eq!(
+        submission2["priority"].as_bool().unwrap(),
+        false,
+        "Priority field for user 2 is not false as expected"
+    );
 }

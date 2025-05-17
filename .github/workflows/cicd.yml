@@ -8,6 +8,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_TEST_THREADS: 1
   TEST_DATABASE_URL: postgres://postgres:password@localhost:5432/aredl_test
   JWT_SECRET: ${{ secrets.JWT_SECRET }}
   DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
@@ -45,7 +46,7 @@ jobs:
         components: llvm-tools-preview
 
     - name: Cache cargo for main
-      uses: Swatinem/rust-cache@v1
+      uses: Swatinem/rust-cache
 
     - name: Run unit tests
       uses: actions-rs/cargo@v1
