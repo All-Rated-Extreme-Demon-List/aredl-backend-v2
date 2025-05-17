@@ -3,11 +3,10 @@ name: Backend CI/CD
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_TEST_THREADS: 1
   TEST_DATABASE_URL: postgres://postgres:password@localhost:5432/aredl_test
   JWT_SECRET: ${{ secrets.JWT_SECRET }}
   DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
@@ -17,7 +16,6 @@ env:
 
 jobs:
   test:
-
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -45,13 +43,15 @@ jobs:
         components: llvm-tools-preview
 
     - name: Cache cargo for main
-      uses: Swatinem/rust-cache@v1
+      uses: Swatinem/rust-cache@v2
 
     - name: Run unit tests
       uses: actions-rs/cargo@v1
       with:
         command: test
+
   build-api:
+    if: github.ref == 'refs/heads/main'
     needs: test
     runs-on: ubuntu-latest
     permissions:
@@ -92,6 +92,7 @@ jobs:
             cache-to: type=registry,ref=ghcr.io/${{ env.OWNER_LC  }}/aredl_backend_api:buildcache,mode=max
   
   build-migrate:
+    if: github.ref == 'refs/heads/main'
     needs: test
     runs-on: ubuntu-latest
     permissions:
@@ -129,6 +130,7 @@ jobs:
             cache-from: type=registry,ref=ghcr.io/${{ env.OWNER_LC  }}/migrate:buildcache
             cache-to: type=registry,ref=ghcr.io/${{ env.OWNER_LC  }}/migrate:buildcache,mode=max
   deploy:
+    if: github.ref == 'refs/heads/main'
     needs: [test, build-api, build-migrate]
     runs-on: ubuntu-latest
     steps:
