@@ -3,8 +3,6 @@ name: Backend CI/CD
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
 
 env:
   CARGO_TERM_COLOR: always
@@ -18,7 +16,6 @@ env:
 
 jobs:
   test:
-
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -46,13 +43,15 @@ jobs:
         components: llvm-tools-preview
 
     - name: Cache cargo for main
-      uses: Swatinem/rust-cache
+      uses: Swatinem/rust-cache@v2
 
     - name: Run unit tests
       uses: actions-rs/cargo@v1
       with:
         command: test
+
   build-api:
+    if: github.ref == 'refs/heads/main'
     needs: test
     runs-on: ubuntu-latest
     permissions:
@@ -93,6 +92,7 @@ jobs:
             cache-to: type=registry,ref=ghcr.io/${{ env.OWNER_LC  }}/aredl_backend_api:buildcache,mode=max
   
   build-migrate:
+    if: github.ref == 'refs/heads/main'
     needs: test
     runs-on: ubuntu-latest
     permissions:
@@ -130,6 +130,7 @@ jobs:
             cache-from: type=registry,ref=ghcr.io/${{ env.OWNER_LC  }}/migrate:buildcache
             cache-to: type=registry,ref=ghcr.io/${{ env.OWNER_LC  }}/migrate:buildcache,mode=max
   deploy:
+    if: github.ref == 'refs/heads/main'
     needs: [test, build-api, build-migrate]
     runs-on: ubuntu-latest
     steps:
