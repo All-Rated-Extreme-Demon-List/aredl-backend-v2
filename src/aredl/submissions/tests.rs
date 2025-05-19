@@ -3,7 +3,7 @@ use crate::test_utils::*;
 #[cfg(test)]
 use crate::{
     auth::{create_test_token, Permission},
-    schema::{roles, user_roles},
+    schema::{roles, user_roles, users},
 };
 #[cfg(test)]
 use actix_web::test;
@@ -284,4 +284,49 @@ async fn submission_aredlplus_boost() {
         false,
         "Priority field for user 2 is not false as expected"
     );
+}
+
+#[actix_web::test]
+async fn submission_banned_player() {
+    let (app, mut conn, auth) = init_test_app().await;
+
+    let (not_banned, _) = create_test_user(&mut conn, None).await;
+    let not_banned_token =
+        create_test_token(not_banned, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let level_id = create_test_level(&mut conn).await;
+
+    let (banned, _) = create_test_user(&mut conn, None).await;
+
+    diesel::update(users::table)
+        .filter(users::id.eq(banned))
+        .set(users::ban_level.eq(2))
+        .execute(&mut conn)
+        .expect("Failed to ban user!");
+
+    let banned_token =
+        create_test_token(banned, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    let submission_data = json!({
+        "level_id": level_id,
+        "video_url": "https://video.com",
+        "raw_url": "https://raw.com"
+    });
+
+    let req_1 = test::TestRequest::post()
+        .uri("/aredl/submissions")
+        .insert_header(("Authorization", format!("Bearer {}", not_banned_token)))
+        .set_json(&submission_data)
+        .to_request();
+
+    let resp_1 = test::call_service(&app, req_1).await;
+    assert!(resp_1.status().is_success(), "status of req 1 is {}", resp_1.status());
+
+    let req_2 = test::TestRequest::post()
+        .uri("/aredl/submissions")
+        .insert_header(("Authorization", format!("Bearer {}", banned_token)))
+        .set_json(&submission_data)
+        .to_request();
+
+    let resp_2 = test::call_service(&app, req_2).await;
+    assert!(resp_2.status().is_client_error(), "status of req 2 is {}", resp_2.status())
 }
