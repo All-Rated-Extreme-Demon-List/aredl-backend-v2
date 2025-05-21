@@ -129,7 +129,7 @@ impl ProfileResolved {
             .into_iter()
             .partition(|record| record.record.is_verification);
 
-        let created = levels::table
+        let mut created = levels::table
             .inner_join(levels_created::table.on(levels_created::level_id.eq(levels::id)))
             .order(levels::position.asc())
             .filter(levels_created::user_id.eq(id))
@@ -141,6 +141,17 @@ impl ProfileResolved {
             .order(levels::position.asc())
             .select(ExtendedBaseLevel::as_select())
             .load::<ExtendedBaseLevel>(conn)?;
+
+        let published_without_creators_list: Vec<ExtendedBaseLevel> = levels::table
+            .left_outer_join(levels_created::table.on(levels_created::level_id.eq(levels::id)))
+            .filter(levels::publisher_id.eq(id))
+            .filter(levels_created::level_id.is_null())
+            .order(levels::position.asc())
+            .select(ExtendedBaseLevel::as_select())
+            .load(conn)?;
+
+        created.extend(published_without_creators_list);
+        created.sort_by_key(|lvl| lvl.position);
 
         let packs = packs::table
             .inner_join(completed_packs::table.on(completed_packs::pack_id.eq(packs::id)))
