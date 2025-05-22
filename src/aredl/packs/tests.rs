@@ -114,7 +114,7 @@ async fn add_level_to_pack() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body = get_response_body(resp).await;
+    let body: serde_json::Value = test::read_body_json(resp).await;
     
     let added_level = body[0].as_object().unwrap()["id"].as_str().unwrap().to_string();
     assert_eq!(added_level, level.to_string())
@@ -137,7 +137,7 @@ async fn set_pack_levels() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body = get_response_body(resp).await;
+    let body: serde_json::Value = test::read_body_json(resp).await;
     
     let added_level = body[0].as_object().unwrap()["id"].as_str().unwrap().to_string();
     assert_eq!(added_level, level.to_string())
@@ -160,7 +160,7 @@ async fn remove_level_from_pack() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body = get_response_body(resp).await;
+    let body: serde_json::Value = test::read_body_json(resp).await;
     
     assert_eq!(body.as_array().unwrap().len(), 0)
 }

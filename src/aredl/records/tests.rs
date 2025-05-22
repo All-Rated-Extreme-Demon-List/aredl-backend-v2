@@ -56,7 +56,7 @@ async fn create_record() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body = get_response_body(resp).await;
+    let body: serde_json::Value = test::read_body_json(resp).await;
     
     assert_eq!(body["submitted_by"].as_str().unwrap(), user_id.to_string().as_str(), "Names do not match!")
 }
@@ -104,7 +104,7 @@ async fn get_own_record() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body = get_response_body(resp).await;
+    let body: serde_json::Value = test::read_body_json(resp).await;
     println!("{:?}", body);
     assert_ne!(body["data"].as_array().unwrap().len(), 0, "Did not return any data!");
     // lmao

@@ -2,7 +2,7 @@ use crate::auth::{init_app_state, AuthAppState, Permission};
 use crate::db::{DbAppState, DbConnection};
 use crate::schema::permissions;
 use crate::schema::{aredl::levels, roles, user_roles, users};
-use actix_web::{test, web::Data, App, dev::ServiceResponse};
+use actix_web::{test, web::Data, App};
 use diesel::r2d2::{self, ConnectionManager};
 use diesel::{ExpressionMethods, PgConnection, QueryDsl, RunQueryDsl};
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness};
@@ -172,10 +172,4 @@ pub async fn create_test_level(conn: &mut DbConnection) -> Uuid {
         .expect("Failed to create test level");
 
     level_uuid
-}
-
-#[cfg(test)]
-pub async fn get_response_body(res: ServiceResponse) -> serde_json::Value {
-    let bytes = test::read_body(res).await;
-    serde_json::from_slice::<serde_json::Value>(&bytes).expect("Failed to parse body")
 }

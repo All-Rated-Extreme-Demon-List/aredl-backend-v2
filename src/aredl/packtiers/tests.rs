@@ -30,7 +30,7 @@ async fn create_pack_tier() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body = get_response_body(resp).await;
+    let body: serde_json::Value = test::read_body_json(resp).await;
     
     assert_eq!(body["name"].as_str().unwrap(), "Test Tier", "Names do not match!")
 }
@@ -59,7 +59,7 @@ async fn update_pack_tier() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body = get_response_body(resp).await;
+    let body: serde_json::Value = test::read_body_json(resp).await;
 
     assert_eq!(body["name"].as_str().unwrap(), "Updated Tier Name", "Names do not match!")
 }
