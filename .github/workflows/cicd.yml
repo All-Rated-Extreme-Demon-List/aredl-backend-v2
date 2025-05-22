@@ -50,6 +50,27 @@ jobs:
       with:
         command: test
 
+    - name: Install cargo-tarpaulin
+      run: |
+        cargo install cargo-tarpaulin --version 0.32.7
+
+    - name: Generate coverage report
+      run: |
+          cargo tarpaulin \
+          --workspace \
+          --out Lcov \
+          --timeout 120 \
+          --ignore-tests \
+          --exclude-files "tools/*" "src/schema/*"
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        files: lcov.info
+        fail_ci_if_error: false
+        flags: unittests
+        token: ${{ secrets.CODECOV_TOKEN }}
+
   build-api:
     if: github.ref == 'refs/heads/main'
     needs: test
