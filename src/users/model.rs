@@ -70,7 +70,8 @@ pub struct User {
     pub discord_accent_color: Option<i32>,
     /// Timestamp of when the user was created.
     pub created_at: DateTime<Utc>,
-    /// Last time the user's tokens were invalidated.
+    // Last time the user's tokens were invalidated.
+    #[serde(skip_serializing)]
     pub access_valid_after: DateTime<Utc>,
 }
 
