@@ -10,8 +10,8 @@ use diesel::pg::Pg;
 use diesel::query_dsl::JoinOnDsl;
 use diesel::sql_types::Bool;
 use diesel::{
-    BoxableExpression, ExpressionMethods, Insertable, IntoSql, QueryDsl, RunQueryDsl,
-    SelectableHelper,
+    BoxableExpression, ExpressionMethods, Insertable, IntoSql, NullableExpressionMethods, QueryDsl,
+    RunQueryDsl, Selectable, SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -158,7 +158,7 @@ pub struct FullRecordTemplate<LevelT, UserT> {
     /// Internal UUID of the user who reviewed the record.
     #[serde(rename = "reviewer")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub reviewer_id: Option<Uuid>,
+    pub reviewer_id: Option<UserT>,
     /// Notes set by the reviewer when they accepted the record.
     pub reviewer_notes: Option<String>,
     /// Notes given by the user when they submitted the record.
@@ -318,19 +318,36 @@ impl FullRecordUnresolved {
 impl FullRecordResolved {
     pub fn find(db: web::Data<Arc<DbAppState>>, record_id: Uuid) -> Result<Self, ApiError> {
         let conn = &mut db.connection()?;
-        let (record, user, level): (FullRecordTemplate<Uuid, Uuid>, BaseUser, ExtendedBaseLevel) =
-            records::table
-                .filter(records::id.eq(record_id))
-                .inner_join(users::table.on(records::submitted_by.eq(users::id)))
-                .inner_join(levels::table.on(records::level_id.eq(levels::id)))
-                .order_by(records::completion_time.asc())
-                .select((
-                    FullRecordTemplate::<Uuid, Uuid>::as_select(),
-                    BaseUser::as_select(),
-                    ExtendedBaseLevel::as_select(),
-                ))
-                .first(conn)?;
-        Ok(Self::from_data(record, user, level))
+
+        let reviewers = alias!(users as reviewers);
+
+        let (record, user, level, reviewer): (
+            FullRecordTemplate<Uuid, Uuid>,
+            BaseUser,
+            ExtendedBaseLevel,
+            Option<BaseUser>,
+        ) = records::table
+            .filter(records::id.eq(record_id))
+            .inner_join(users::table.on(records::submitted_by.eq(users::id)))
+            .inner_join(levels::table.on(records::level_id.eq(levels::id)))
+            .order_by(records::completion_time.asc())
+            .left_join(
+                reviewers.on(reviewers
+                    .field(users::id)
+                    .nullable()
+                    .eq(records::reviewer_id.nullable())),
+            )
+            .select((
+                FullRecordTemplate::<Uuid, Uuid>::as_select(),
+                BaseUser::as_select(),
+                ExtendedBaseLevel::as_select(),
+                reviewers
+                    .fields(<BaseUser as Selectable<Pg>>::construct_selection())
+                    .nullable(),
+            ))
+            .first(conn)?;
+
+        Ok(Self::from_data(record, user, level, reviewer))
     }
 
     pub fn find_all<const D: i64>(
@@ -340,6 +357,8 @@ impl FullRecordResolved {
         hide_reviewer: bool,
     ) -> Result<Paginated<FullResolvedRecordPage>, ApiError> {
         let conn = &mut db.connection()?;
+
+        let reviewers = alias!(users as reviewers);
 
         let total_count: i64 = records::table
             .filter(options.mobile_filter.map_or_else(
@@ -391,6 +410,12 @@ impl FullRecordResolved {
             ))
             .inner_join(users::table.on(records::submitted_by.eq(users::id)))
             .inner_join(levels::table.on(records::level_id.eq(levels::id)))
+            .left_join(
+                reviewers.on(reviewers
+                    .field(users::id)
+                    .nullable()
+                    .eq(records::reviewer_id.nullable())),
+            )
             .order_by(records::completion_time.asc())
             .limit(page_query.per_page())
             .offset(page_query.offset())
@@ -398,12 +423,20 @@ impl FullRecordResolved {
                 FullRecordUnresolved::as_select(),
                 BaseUser::as_select(),
                 ExtendedBaseLevel::as_select(),
+                reviewers
+                    .fields(<BaseUser as Selectable<Pg>>::construct_selection())
+                    .nullable(),
             ))
-            .load::<(FullRecordUnresolved, BaseUser, ExtendedBaseLevel)>(conn)?;
+            .load::<(
+                FullRecordUnresolved,
+                BaseUser,
+                ExtendedBaseLevel,
+                Option<BaseUser>,
+            )>(conn)?;
 
         let mut records_resolved: Vec<Self> = records
             .into_iter()
-            .map(|(record, user, level)| Self::from_data(record, user, level))
+            .map(|(record, user, level, reviewer)| Self::from_data(record, user, level, reviewer))
             .collect();
 
         if hide_reviewer {
@@ -421,7 +454,12 @@ impl FullRecordResolved {
         ))
     }
 
-    fn from_data(record: FullRecordUnresolved, user: BaseUser, level: ExtendedBaseLevel) -> Self {
+    fn from_data(
+        record: FullRecordUnresolved,
+        user: BaseUser,
+        level: ExtendedBaseLevel,
+        reviewer: Option<BaseUser>,
+    ) -> Self {
         Self {
             id: record.id,
             submitted_by: user,
@@ -433,7 +471,7 @@ impl FullRecordResolved {
             completion_time: record.completion_time,
             is_verification: record.is_verification,
             placement_order: record.placement_order,
-            reviewer_id: record.reviewer_id,
+            reviewer_id: reviewer,
             reviewer_notes: record.reviewer_notes,
             user_notes: record.user_notes,
             mod_menu: record.mod_menu,
