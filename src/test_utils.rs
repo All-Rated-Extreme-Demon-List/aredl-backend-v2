@@ -2,16 +2,70 @@ use crate::auth::{init_app_state, AuthAppState, Permission};
 use crate::db::{DbAppState, DbConnection};
 use crate::schema::permissions;
 use crate::schema::{aredl::levels, roles, user_roles, users};
+use actix_http::Request;
+
+use actix_web::{
+    body::BoxBody,
+    dev::{Service, ServiceRequest, ServiceResponse, Transform},
+    Error,
+};
 use actix_web::{test, web::Data, App};
 use diesel::r2d2::{self, ConnectionManager};
 use diesel::{ExpressionMethods, PgConnection, QueryDsl, RunQueryDsl};
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness};
+use futures_util::future::{ready, LocalBoxFuture, Ready};
 use rand::{self, Rng};
 use std::sync::{Arc, Once};
-use uuid::Uuid;
 
+use uuid::Uuid;
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 static INIT: Once = Once::new();
+
+pub struct BoxResponse;
+impl<S, B> Transform<S, ServiceRequest> for BoxResponse
+where
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    B: actix_web::body::MessageBody + 'static,
+{
+    type Response = ServiceResponse<BoxBody>;
+    type Error = Error;
+    type Transform = BoxResponseMiddleware<S>;
+    type InitError = ();
+    type Future = Ready<Result<Self::Transform, Self::InitError>>;
+
+    fn new_transform(&self, service: S) -> Self::Future {
+        ready(Ok(BoxResponseMiddleware { service }))
+    }
+}
+
+pub struct BoxResponseMiddleware<S> {
+    service: S,
+}
+
+impl<S, B> Service<ServiceRequest> for BoxResponseMiddleware<S>
+where
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    B: actix_web::body::MessageBody + 'static,
+{
+    type Response = ServiceResponse<BoxBody>;
+    type Error = Error;
+    type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
+
+    fn poll_ready(
+        &self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        self.service.poll_ready(cx)
+    }
+
+    fn call(&self, req: ServiceRequest) -> Self::Future {
+        let fut = self.service.call(req);
+        Box::pin(async move {
+            let res = fut.await?;
+            Ok(res.map_into_boxed_body())
+        })
+    }
+}
 
 pub fn init_test_db_state() -> Arc<DbAppState> {
     let test_db_url = std::env::var("TEST_DATABASE_URL")
@@ -73,14 +127,15 @@ pub fn init_test_db_state() -> Arc<DbAppState> {
 
 #[cfg(test)]
 pub async fn init_test_app() -> (
-    impl actix_web::dev::Service<
-        actix_http::Request,
-        Response = actix_web::dev::ServiceResponse,
-        Error = actix_web::Error,
-    >,
+    impl Service<Request, Response = ServiceResponse<BoxBody>, Error = Error>,
     DbConnection,
     Arc<AuthAppState>,
 ) {
+    use actix_web::middleware::NormalizePath;
+    use tracing_actix_web::TracingLogger;
+
+    use crate::AppRootSpanBuilder;
+
     dotenv::dotenv().ok();
 
     let auth_app_state = init_app_state().await;
@@ -92,6 +147,9 @@ pub async fn init_test_app() -> (
         App::new()
             .app_data(Data::new(db_app_state))
             .app_data(Data::new(auth_app_state.clone()))
+            .wrap(NormalizePath::trim())
+            .wrap(TracingLogger::<AppRootSpanBuilder>::new())
+            .wrap(BoxResponse)
             .configure(crate::users::init_routes)
             .configure(crate::aredl::init_routes),
     )
