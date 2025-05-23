@@ -45,61 +45,22 @@ jobs:
     - name: Cache cargo for main
       uses: Swatinem/rust-cache@v2
 
-    - name: Run unit tests
-      uses: actions-rs/cargo@v1
+    - name: Generate coverage report
+      run: |
+          cargo tarpaulin \
+          --workspace \
+          --out Lcov \
+          --timeout 120 \
+          --ignore-tests \
+          --exclude-files "tools/*" "src/schema/*"
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
       with:
-        command: test
-
-  generate-code-coverage:
-    needs: test
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres
-        env:
-          POSTGRES_PASSWORD: password
-          POSTGRES_DB: aredl_test
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Installing rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-          components: llvm-tools-preview
-
-      - name: Cache cargo for main
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install cargo-tarpaulin
-        run: |
-          cargo install cargo-tarpaulin --version 0.32.7
-
-      - name: Generate coverage report
-        run: |
-            cargo tarpaulin \
-            --workspace \
-            --out Lcov \
-            --timeout 120 \
-            --ignore-tests \
-            --exclude-files "tools/*" "src/schema/*"
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
-        with:
-          files: lcov.info
-          fail_ci_if_error: false
-          flags: unittests
-          token: ${{ secrets.CODECOV_TOKEN }}
+        files: lcov.info
+        fail_ci_if_error: false
+        flags: unittests
+        token: ${{ secrets.CODECOV_TOKEN }}
 
   build-api:
     if: github.ref == 'refs/heads/main'

@@ -14,6 +14,7 @@ use serde_json::json;
 
 #[actix_web::test]
 async fn create_submission() {
+    panic!("Testing cicd unittest failure");
     let (app, mut conn, auth) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&mut conn, None).await;
