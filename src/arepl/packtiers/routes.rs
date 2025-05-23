@@ -6,6 +6,7 @@ use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
+use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
 use uuid::Uuid;
 
@@ -56,7 +57,9 @@ async fn find_all(
 async fn create(
     db: web::Data<Arc<DbAppState>>,
     tier: web::Json<PackTierCreate>,
+    root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&tier));
     let tier = web::block(|| PackTier::create(db, tier.into_inner())).await??;
     Ok(HttpResponse::Ok().json(tier))
 }
@@ -82,7 +85,9 @@ async fn update(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
     tier: web::Json<PackTierUpdate>,
+    root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&tier));
     let tier = web::block(|| PackTier::update(db, id.into_inner(), tier.into_inner())).await??;
     Ok(HttpResponse::Ok().json(tier))
 }

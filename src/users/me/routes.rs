@@ -1,11 +1,12 @@
-use std::sync::Arc;
-use actix_web::{get, patch, HttpResponse, web};
-use utoipa::OpenApi;
-use crate::auth::{UserAuth, Authenticated};
+use crate::auth::{Authenticated, UserAuth};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
-use crate::users::{User, UserResolved};
 use crate::users::me::{clan, notifications, UserMeUpdate};
+use crate::users::{User, UserResolved};
+use actix_web::{get, patch, web, HttpResponse};
+use std::sync::Arc;
+use tracing_actix_web::RootSpan;
+use utoipa::OpenApi;
 
 #[utoipa::path(
     get,
@@ -20,14 +21,16 @@ use crate::users::me::{clan, notifications, UserMeUpdate};
         ("api_key" = []),
     )
 )]
-#[get("", wrap="UserAuth::load()")]
-async fn find(db: web::Data<Arc<DbAppState>>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
-    let user = web::block(
-        move || {
-            let conn = &mut db.connection()?;
-            User::find_me(conn, authenticated.user_id)
-        }
-    ).await??;
+#[get("", wrap = "UserAuth::load()")]
+async fn find(
+    db: web::Data<Arc<DbAppState>>,
+    authenticated: Authenticated,
+) -> Result<HttpResponse, ApiError> {
+    let user = web::block(move || {
+        let conn = &mut db.connection()?;
+        User::find_me(conn, authenticated.user_id)
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(user))
 }
 
@@ -46,13 +49,18 @@ async fn find(db: web::Data<Arc<DbAppState>>, authenticated: Authenticated) -> R
     )
 )]
 #[patch("", wrap = "UserAuth::load()")]
-async fn update(db: web::Data<Arc<DbAppState>>, authenticated: Authenticated, user: web::Json<UserMeUpdate>) -> Result<HttpResponse, ApiError> {
-    let user = web::block(
-        move || {
-            let conn = &mut db.connection()?;
-            User::update_me(conn, authenticated.user_id, user.into_inner())
-        }
-    ).await??;
+async fn update(
+    db: web::Data<Arc<DbAppState>>,
+    authenticated: Authenticated,
+    user: web::Json<UserMeUpdate>,
+    root_span: RootSpan,
+) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&user));
+    let user = web::block(move || {
+        let conn = &mut db.connection()?;
+        User::update_me(conn, authenticated.user_id, user.into_inner())
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(user))
 }
 
@@ -79,8 +87,8 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/@me")
             .configure(clan::init_routes)
-			.configure(notifications::init_routes)
+            .configure(notifications::init_routes)
             .service(find)
-            .service(update)
+            .service(update),
     );
 }

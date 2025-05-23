@@ -4,6 +4,7 @@ use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use actix_web::{delete, patch, post, web, HttpResponse};
 use std::sync::Arc;
+use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
 use uuid::Uuid;
 
@@ -30,7 +31,9 @@ async fn set(
     db: web::Data<Arc<DbAppState>>,
     pack_id: web::Path<Uuid>,
     levels: web::Json<Vec<Uuid>>,
+    root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&levels));
     let levels =
         web::block(move || BaseLevel::pack_set_all(db, *pack_id, levels.into_inner())).await??;
     Ok(HttpResponse::Ok().json(levels))
@@ -59,7 +62,9 @@ async fn add(
     db: web::Data<Arc<DbAppState>>,
     pack_id: web::Path<Uuid>,
     levels: web::Json<Vec<Uuid>>,
+    root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&levels));
     let levels =
         web::block(move || BaseLevel::pack_add_all(db, *pack_id, levels.into_inner())).await??;
     Ok(HttpResponse::Ok().json(levels))
@@ -88,7 +93,9 @@ async fn delete(
     db: web::Data<Arc<DbAppState>>,
     pack_id: web::Path<Uuid>,
     levels: web::Json<Vec<Uuid>>,
+    root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&levels));
     let levels =
         web::block(move || BaseLevel::pack_delete_all(db, *pack_id, levels.into_inner())).await??;
     Ok(HttpResponse::Ok().json(levels))

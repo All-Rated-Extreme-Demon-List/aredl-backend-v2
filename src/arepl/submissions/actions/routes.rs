@@ -9,6 +9,7 @@ use crate::{
 };
 use actix_web::{get, post, web, HttpResponse};
 use std::sync::Arc;
+use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
 use uuid::Uuid;
 
@@ -92,7 +93,9 @@ async fn accept(
     id: web::Path<Uuid>,
     authenticated: Authenticated,
     notes: web::Json<ReviewerNotes>,
+    root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&notes));
     let new_record = web::block(move || {
         Submission::accept(
             db,
@@ -128,7 +131,9 @@ async fn deny(
     id: web::Path<Uuid>,
     authenticated: Authenticated,
     body: Option<web::Json<ReviewerNotes>>,
+    root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&body));
     let reason = match body {
         Some(body) => body.into_inner().notes,
         None => None,
@@ -165,7 +170,9 @@ async fn under_consideration(
     id: web::Path<Uuid>,
     authenticated: Authenticated,
     body: Option<web::Json<ReviewerNotes>>,
+    root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&body));
     let notes = match body {
         Some(note) => note.into_inner().notes,
         None => None,

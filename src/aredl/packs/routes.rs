@@ -4,6 +4,7 @@ use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use actix_web::{delete, patch, post, web, HttpResponse};
 use std::sync::Arc;
+use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
 use uuid::Uuid;
 
@@ -25,7 +26,9 @@ use uuid::Uuid;
 async fn create(
     db: web::Data<Arc<DbAppState>>,
     pack: web::Json<PackCreate>,
+    root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&pack));
     let pack = web::block(|| Pack::create(db, pack.into_inner())).await??;
     Ok(HttpResponse::Ok().json(pack))
 }
@@ -52,7 +55,9 @@ async fn update(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
     pack: web::Json<PackUpdate>,
+    root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&pack));
     let pack = web::block(|| Pack::update(db, id.into_inner(), pack.into_inner())).await??;
     Ok(HttpResponse::Ok().json(pack))
 }

@@ -9,6 +9,7 @@ use crate::{
 };
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
+use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
 use uuid::Uuid;
 
@@ -50,7 +51,9 @@ async fn find_all_recurring_shifts(
 async fn create_new_recurring_shift(
     db: web::Data<Arc<DbAppState>>,
     body: web::Json<RecurringShiftInsert>,
+    root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&body));
     let shift = web::block(move || RecurringShift::create(&db, body.into_inner())).await??;
     Ok(HttpResponse::Ok().json(shift))
 }
@@ -74,7 +77,9 @@ async fn patch_recurring_shift(
     db: web::Data<Arc<DbAppState>>,
     body: web::Json<RecurringShiftPatch>,
     id: web::Path<Uuid>,
+    root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&body));
     let updated =
         web::block(move || RecurringShift::patch(&db, id.into_inner(), body.into_inner()))
             .await??;

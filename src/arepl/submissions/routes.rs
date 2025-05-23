@@ -1,4 +1,5 @@
 use actix_web::{delete, patch, post, web, HttpResponse};
+use tracing_actix_web::RootSpan;
 use std::sync::Arc;
 use uuid::Uuid;
 use utoipa::OpenApi;
@@ -30,7 +31,8 @@ use super::{history, queue, resolved};
     )
 )]
 #[post("", wrap="UserAuth::load()")]
-async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionInsert>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
+async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionInsert>, authenticated: Authenticated, root_span: RootSpan) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&body));
     let created = web::block(
         move || Submission::create(db, body.into_inner(), authenticated)
     ).await??;
@@ -58,8 +60,10 @@ async fn patch(
     db: web::Data<Arc<DbAppState>>, 
     id: web::Path<Uuid>, 
     body: web::Json<SubmissionPatchMod>, 
-    authenticated: Authenticated
+    authenticated: Authenticated,
+    root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&body));
     let has_auth = authenticated.has_permission(db.clone(), Permission::SubmissionReview)?;
 
     match has_auth {

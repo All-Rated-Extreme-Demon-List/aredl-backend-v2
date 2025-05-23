@@ -98,7 +98,7 @@ pub struct LevelPlace {
     pub description: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, AsChangeset, ToSchema)]
+#[derive(Serialize, Deserialize, AsChangeset, ToSchema, Debug)]
 #[diesel(table_name=levels)]
 pub struct LevelUpdate {
     /// The 1-indexed position of the level on the list.

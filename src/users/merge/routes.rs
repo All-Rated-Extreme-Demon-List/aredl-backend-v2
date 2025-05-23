@@ -1,24 +1,25 @@
-use std::sync::Arc;
-use actix_web::web;
-use actix_web::{HttpResponse, Result, get, post};
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use utoipa::{OpenApi, ToSchema};
+use crate::auth::{Permission, UserAuth};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
-use crate::auth::{Permission, UserAuth};
-use crate::users::merge::MergeLogPage;
-use crate::users::User;
-use crate::users::merge::{merge_users, MergeLog};
 use crate::users::merge::requests;
+use crate::users::merge::MergeLogPage;
+use crate::users::merge::{merge_users, MergeLog};
+use crate::users::User;
+use actix_web::web;
+use actix_web::{get, post, HttpResponse, Result};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tracing_actix_web::RootSpan;
+use utoipa::{OpenApi, ToSchema};
+use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct DirectMergeOptions {
     /// The primary user to merge into, whose data will be kept.
     pub primary_user: Uuid,
-	/// The secondary user to merge, whose data will be merged into the other one.
-	pub secondary_user: Uuid,
+    /// The secondary user to merge, whose data will be merged into the other one.
+    pub secondary_user: Uuid,
 }
 
 #[utoipa::path(
@@ -36,9 +37,14 @@ pub struct DirectMergeOptions {
         ("api_key" = ["DirectMerge"]),
     )
 )]
-#[post("", wrap="UserAuth::require(Permission::DirectMerge)")]
-async fn direct_merge(db: web::Data<Arc<DbAppState>>, options: web::Json<DirectMergeOptions> ) -> Result<HttpResponse, ApiError> {
-	let result = web::block(move || {
+#[post("", wrap = "UserAuth::require(Permission::DirectMerge)")]
+async fn direct_merge(
+    db: web::Data<Arc<DbAppState>>,
+    options: web::Json<DirectMergeOptions>,
+    root_span: RootSpan,
+) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&options));
+    let result = web::block(move || {
         let mut conn = db.connection()?;
         merge_users(&mut conn, options.primary_user, options.secondary_user)
     })
@@ -64,9 +70,12 @@ async fn direct_merge(db: web::Data<Arc<DbAppState>>, options: web::Json<DirectM
         ("api_key" = ["MergeReview"]),
     )
 )]
-#[get("/logs", wrap="UserAuth::require(Permission::MergeReview)")]
-async fn list_logs(db: web::Data<Arc<DbAppState>>, page_query: web::Query<PageQuery<20>>) -> Result<HttpResponse, ApiError> {
-	let result = web::block(move || {
+#[get("/logs", wrap = "UserAuth::require(Permission::MergeReview)")]
+async fn list_logs(
+    db: web::Data<Arc<DbAppState>>,
+    page_query: web::Query<PageQuery<20>>,
+) -> Result<HttpResponse, ApiError> {
+    let result = web::block(move || {
         let mut conn = db.connection()?;
         MergeLogPage::find_all(&mut conn, page_query.into_inner())
     })
@@ -96,6 +105,6 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
         web::scope("/merge")
             .configure(requests::init_routes)
             .service(list_logs)
-            .service(direct_merge)
+            .service(direct_merge),
     );
 }

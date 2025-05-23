@@ -5,6 +5,7 @@ use crate::error_handler::ApiError;
 use crate::users::BaseUser;
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
+use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
 use uuid::Uuid;
 
@@ -51,7 +52,9 @@ async fn set(
     db: web::Data<Arc<DbAppState>>,
     level_id: web::Path<String>,
     creators: web::Json<Vec<Uuid>>,
+    root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&creators));
     let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
     let creators =
         web::block(move || BaseUser::arepl_set_all_creators(db, level_id, creators.into_inner()))
@@ -80,7 +83,9 @@ async fn add(
     db: web::Data<Arc<DbAppState>>,
     level_id: web::Path<String>,
     creators: web::Json<Vec<Uuid>>,
+    root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&creators));
     let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
     let creators =
         web::block(move || BaseUser::arepl_add_all_creators(db, level_id, creators.into_inner()))
@@ -109,7 +114,9 @@ async fn delete(
     db: web::Data<Arc<DbAppState>>,
     level_id: web::Path<String>,
     creators: web::Json<Vec<Uuid>>,
+    root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&creators));
     let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
     let creators = web::block(move || {
         BaseUser::arepl_delete_all_creators(db, level_id, creators.into_inner())

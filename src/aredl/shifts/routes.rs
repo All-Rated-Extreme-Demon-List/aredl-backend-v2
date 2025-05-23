@@ -9,6 +9,7 @@ use crate::{
 };
 use actix_web::{delete, get, patch, web, HttpResponse};
 use std::sync::Arc;
+use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
 use uuid::Uuid;
 
@@ -91,7 +92,9 @@ async fn patch_shift(
     db: web::Data<Arc<DbAppState>>,
     body: web::Json<ShiftPatch>,
     id: web::Path<Uuid>,
+    root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&body));
     let updated =
         web::block(move || Shift::patch(&db, id.into_inner(), body.into_inner())).await??;
     Ok(HttpResponse::Created().json(updated))

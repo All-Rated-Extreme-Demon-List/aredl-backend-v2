@@ -95,7 +95,7 @@ pub struct ShiftPage {
     pub data: Vec<ResolvedShift>,
 }
 
-#[derive(Deserialize, ToSchema, AsChangeset)]
+#[derive(Deserialize, ToSchema, AsChangeset, Debug)]
 #[diesel(table_name = shifts)]
 pub struct ShiftPatch {
     pub user_id: Option<Uuid>,

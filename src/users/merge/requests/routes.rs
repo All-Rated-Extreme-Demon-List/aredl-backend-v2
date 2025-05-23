@@ -10,6 +10,7 @@ use actix_web::web;
 use actix_web::{get, post, HttpResponse, Result};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tracing_actix_web::RootSpan;
 use utoipa::{OpenApi, ToSchema};
 use uuid::Uuid;
 
@@ -120,7 +121,9 @@ async fn create(
     db: web::Data<Arc<DbAppState>>,
     options: web::Json<MergeRequestOptions>,
     authenticated: Authenticated,
+    root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&options));
     let result = web::block(move || {
         let mut conn = db.connection()?;
         let merge_upsert = MergeRequestUpsert {

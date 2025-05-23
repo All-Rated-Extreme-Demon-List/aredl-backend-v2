@@ -70,7 +70,9 @@ async fn update(
     db: web::Data<Arc<DbAppState>>,
     level_id: web::Path<String>,
     level: web::Json<LevelUpdate>,
+    root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&level));
     let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
     let level = web::block(move || Level::update(db, level_id, level.into_inner())).await??;
     Ok(HttpResponse::Ok().json(level))

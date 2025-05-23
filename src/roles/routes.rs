@@ -1,11 +1,11 @@
-use std::sync::Arc;
-use actix_web::{get, delete, HttpResponse, patch, post, web};
-use utoipa::OpenApi;
-use crate::roles::{Role, RoleCreate, RoleUpdate, users};
-use crate::auth::{UserAuth, Permission};
+use crate::auth::{Permission, UserAuth};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
-
+use crate::roles::{users, Role, RoleCreate, RoleUpdate};
+use actix_web::{delete, get, patch, post, web, HttpResponse};
+use std::sync::Arc;
+use tracing_actix_web::RootSpan;
+use utoipa::OpenApi;
 
 #[utoipa::path(
 	get,
@@ -18,10 +18,8 @@ use crate::error_handler::ApiError;
 )]
 #[get("")]
 async fn find_all(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
-	let roles = web::block(
-		|| Role::find_all(db)
-	).await??;
-	Ok(HttpResponse::Ok().json(roles))
+    let roles = web::block(|| Role::find_all(db)).await??;
+    Ok(HttpResponse::Ok().json(roles))
 }
 
 #[utoipa::path(
@@ -38,11 +36,14 @@ async fn find_all(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiErr
         ("api_key" = ["RoleManage"]),
     ),
 )]
-#[post("", wrap="UserAuth::require(Permission::RoleManage)")]
-async fn create(db: web::Data<Arc<DbAppState>>, role: web::Json<RoleCreate>) -> Result<HttpResponse, ApiError> {
-    let role = web::block(
-        || Role::create(db, role.into_inner())
-    ).await??;
+#[post("", wrap = "UserAuth::require(Permission::RoleManage)")]
+async fn create(
+    db: web::Data<Arc<DbAppState>>,
+    role: web::Json<RoleCreate>,
+    root_span: RootSpan,
+) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&role));
+    let role = web::block(|| Role::create(db, role.into_inner())).await??;
     Ok(HttpResponse::Ok().json(role))
 }
 
@@ -63,11 +64,15 @@ async fn create(db: web::Data<Arc<DbAppState>>, role: web::Json<RoleCreate>) -> 
         ("api_key" = ["RoleManage"]),
     ),
 )]
-#[patch("/{id}", wrap="UserAuth::require(Permission::RoleManage)")]
-async fn update(db: web::Data<Arc<DbAppState>>, id: web::Path<i32>, role: web::Json<RoleUpdate>) -> Result<HttpResponse, ApiError> {
-    let role = web::block(
-        || Role::update(db, id.into_inner(), role.into_inner())
-    ).await??;
+#[patch("/{id}", wrap = "UserAuth::require(Permission::RoleManage)")]
+async fn update(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<i32>,
+    role: web::Json<RoleUpdate>,
+    root_span: RootSpan,
+) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&role));
+    let role = web::block(|| Role::update(db, id.into_inner(), role.into_inner())).await??;
     Ok(HttpResponse::Ok().json(role))
 }
 
@@ -87,11 +92,12 @@ async fn update(db: web::Data<Arc<DbAppState>>, id: web::Path<i32>, role: web::J
         ("api_key" = ["RoleManage"]),
     ),
 )]
-#[delete("/{id}", wrap="UserAuth::require(Permission::RoleManage)")]
-async fn delete(db: web::Data<Arc<DbAppState>>, id: web::Path<i32>) -> Result<HttpResponse, ApiError> {
-    let role = web::block(
-        || Role::delete(db, id.into_inner())
-    ).await??;
+#[delete("/{id}", wrap = "UserAuth::require(Permission::RoleManage)")]
+async fn delete(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<i32>,
+) -> Result<HttpResponse, ApiError> {
+    let role = web::block(|| Role::delete(db, id.into_inner())).await??;
     Ok(HttpResponse::Ok().json(role))
 }
 
@@ -122,10 +128,10 @@ pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("roles")
-			.service(find_all)
+            .service(find_all)
             .service(create)
             .service(update)
             .service(delete)
-            .configure(users::init_routes)
+            .configure(users::init_routes),
     );
 }

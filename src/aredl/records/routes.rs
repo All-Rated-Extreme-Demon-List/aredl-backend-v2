@@ -9,6 +9,7 @@ use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
+use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
 use uuid::Uuid;
 
@@ -52,7 +53,9 @@ async fn find(
 async fn create(
     db: web::Data<Arc<DbAppState>>,
     record: web::Json<RecordInsert>,
+    root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&record));
     let record = web::block(move || Record::create(db, record.into_inner())).await??;
     Ok(HttpResponse::Ok().json(record))
 }
@@ -79,7 +82,9 @@ async fn update(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
     record: web::Json<RecordUpdate>,
+    root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&record));
     let id = id.into_inner();
     let record = web::block(move || Record::update(db, id, record.into_inner())).await??;
     Ok(HttpResponse::Ok().json(record))

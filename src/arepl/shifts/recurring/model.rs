@@ -75,7 +75,7 @@ pub struct RecurringShiftInsert {
     pub target_count: i32,
 }
 
-#[derive(Deserialize, ToSchema, AsChangeset)]
+#[derive(Deserialize, ToSchema, AsChangeset, Debug)]
 #[diesel(table_name = recurrent_shifts)]
 pub struct RecurringShiftPatch {
     pub user_id: Option<Uuid>,

@@ -1,12 +1,16 @@
-use std::sync::Arc;
-use uuid::Uuid;
-use actix_web::{get, patch, post, web, HttpResponse};
-use utoipa::OpenApi;
-use crate::auth::{UserAuth, Permission, Authenticated, check_higher_privilege};
+use crate::auth::{check_higher_privilege, Authenticated, Permission, UserAuth};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
-use crate::users::{me, names, merge, PlaceholderOptions, User, UserPage, UserUpdate, UserBanUpdate, UserListQueryOptions};
+use crate::users::{
+    me, merge, names, PlaceholderOptions, User, UserBanUpdate, UserListQueryOptions, UserPage,
+    UserUpdate,
+};
+use actix_web::{get, patch, post, web, HttpResponse};
+use std::sync::Arc;
+use tracing_actix_web::RootSpan;
+use utoipa::OpenApi;
+use uuid::Uuid;
 
 #[utoipa::path(
     get,
@@ -27,12 +31,13 @@ use crate::users::{me, names, merge, PlaceholderOptions, User, UserPage, UserUpd
 async fn list(
     db: web::Data<Arc<DbAppState>>,
     page_query: web::Query<PageQuery<100>>,
-    options: web::Query<UserListQueryOptions>
+    options: web::Query<UserListQueryOptions>,
 ) -> Result<HttpResponse, ApiError> {
     let result = web::block(move || {
         let mut conn = db.connection()?;
         User::find(&mut conn, page_query.into_inner(), options.into_inner())
-    }).await??;
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(result))
 }
 
@@ -49,15 +54,21 @@ async fn list(
         ("access_token" = ["PlaceholderCreate"]),
     )
 )]
-#[post("placeholders", wrap="UserAuth::require(Permission::PlaceholderCreate)")]
+#[post(
+    "placeholders",
+    wrap = "UserAuth::require(Permission::PlaceholderCreate)"
+)]
 async fn create_placeholder(
     db: web::Data<Arc<DbAppState>>,
     options: web::Json<PlaceholderOptions>,
+    root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&options));
     let result = web::block(move || {
         let mut conn = db.connection()?;
         User::create_placeholder(&mut conn, options.into_inner())
-    }).await??;
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(result))
 }
 
@@ -79,12 +90,20 @@ async fn create_placeholder(
     )
 )]
 #[patch("/{id}", wrap = "UserAuth::require(Permission::UserModify)")]
-async fn update(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, user: web::Json<UserUpdate>, authenticated: Authenticated, ) -> Result<HttpResponse, ApiError> {
+async fn update(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<Uuid>,
+    user: web::Json<UserUpdate>,
+    authenticated: Authenticated,
+    root_span: RootSpan,
+) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&user));
     let result = web::block(move || {
         check_higher_privilege(db.clone(), authenticated.user_id, id.clone())?;
         let mut conn = db.connection()?;
         User::update(&mut conn, id.into_inner(), user.into_inner())
-    }).await??;
+    })
+    .await??;
 
     Ok(HttpResponse::Ok().json(result))
 }
@@ -115,12 +134,20 @@ async fn update(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, user: web::
     )
 )]
 #[patch("/{id}/ban", wrap = "UserAuth::require(Permission::UserBan)")]
-async fn ban(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, user: web::Json<UserBanUpdate>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
+async fn ban(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<Uuid>,
+    user: web::Json<UserBanUpdate>,
+    authenticated: Authenticated,
+    root_span: RootSpan,
+) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", &tracing::field::debug(&user));
     let result = web::block(move || {
         check_higher_privilege(db.clone(), authenticated.user_id, id.clone())?;
         let mut conn = db.connection()?;
         User::ban(&mut conn, id.into_inner(), user.into_inner().ban_level)
-    }).await??;
+    })
+    .await??;
 
     Ok(HttpResponse::Ok().json(result))
 }
@@ -157,6 +184,6 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .service(list)
             .service(create_placeholder)
             .service(update)
-            .service(ban)
+            .service(ban),
     );
 }
