@@ -10,6 +10,28 @@ use actix_web::test;
 use serde_json::json;
 
 #[actix_web::test]
+async fn create_level() {
+    let (app, mut conn, auth) = init_test_app().await;
+    let (user_id, _) = create_test_user(&mut conn, Some(Permission::LevelModify)).await;
+    let token = create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let level_data = json!({
+        "name": "Test Level",
+        "position": 1,
+        "level_id": 123456,
+        "publisher_id": user_id.to_string(),
+        "legacy": false,
+        "two_player": false
+    });
+    let req = test::TestRequest::post()
+        .uri("/aredl/levels")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&level_data)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+}
+
+#[actix_web::test]
 async fn list_levels() {
     let (app, _, _) = init_test_app().await;
     let req = test::TestRequest::get().uri("/aredl/levels").to_request();
