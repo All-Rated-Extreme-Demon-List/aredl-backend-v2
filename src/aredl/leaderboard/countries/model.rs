@@ -107,10 +107,10 @@ impl CountryLeaderboardPage {
             .collect::<Vec<_>>();
 
         let refresh_log: MatviewRefreshLog = matview_refresh_log::table
-            .find("country_leaderboard")
+            .find("aredl.country_leaderboard")
             .first(conn)
             .unwrap_or(MatviewRefreshLog {
-                view_name: "country_leaderboard".into(),
+                view_name: "aredl.country_leaderboard".into(),
                 last_refresh: Utc::now(),
             });
 

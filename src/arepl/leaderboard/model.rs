@@ -218,10 +218,10 @@ impl LeaderboardPage {
             .collect::<Vec<_>>();
 
         let refresh_log: MatviewRefreshLog = matview_refresh_log::table
-            .find("user_leaderboard")
+            .find("arepl.user_leaderboard")
             .first(conn)
             .unwrap_or(MatviewRefreshLog {
-                view_name: "user_leaderboard".into(),
+                view_name: "arepl.user_leaderboard".into(),
                 last_refresh: Utc::now(),
             });
 

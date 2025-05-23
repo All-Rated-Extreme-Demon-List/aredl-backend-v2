@@ -124,10 +124,10 @@ impl ClansLeaderboardPage {
             .collect::<Vec<_>>();
 
         let refresh_log: MatviewRefreshLog = matview_refresh_log::table
-            .find("clans_leaderboard")
+            .find("arepl.clans_leaderboard")
             .first(conn)
             .unwrap_or(MatviewRefreshLog {
-                view_name: "clans_leaderboard".into(),
+                view_name: "arepl.clans_leaderboard".into(),
                 last_refresh: Utc::now(),
             });
 
