@@ -17,6 +17,15 @@ use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+#[derive(Queryable, Selectable, Debug)]
+#[diesel(table_name = users)]
+pub struct BaseUserWithBanLevel {
+    pub id: Uuid,
+    pub username: String,
+    pub global_name: String,
+    pub ban_level: i32,
+}
+
 #[derive(Debug, Serialize, Deserialize, Queryable, Selectable, ToSchema)]
 #[diesel(table_name=users, check_for_backend(Pg))]
 pub struct BaseUser {
@@ -155,6 +164,20 @@ pub struct UserListQueryOptions {
 pub struct UserPage {
     /// List of found users
     pub data: Vec<User>,
+}
+
+impl BaseUser {
+    pub fn from_base_user_with_ban_level(user: BaseUserWithBanLevel) -> Self {
+        BaseUser {
+            id: user.id,
+            username: if user.ban_level == 3 {
+                "REDACTED".to_string()
+            } else {
+                user.username
+            },
+            global_name: "REDACTED".to_string(),
+        }
+    }
 }
 
 impl User {

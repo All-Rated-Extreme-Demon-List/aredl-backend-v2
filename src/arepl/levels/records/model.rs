@@ -17,6 +17,7 @@ impl PublicRecordResolved {
             .filter(records::level_id.eq(level_id))
             .filter(records::is_verification.eq(false))
             .inner_join(users::table.on(records::submitted_by.eq(users::id)))
+            .filter(users::ban_level.le(1))
             .order(records::completion_time.asc())
             .select((PublicRecordUnresolved::as_select(), BaseUser::as_select()))
             .load::<(PublicRecordUnresolved, BaseUser)>(&mut db.connection()?)?;

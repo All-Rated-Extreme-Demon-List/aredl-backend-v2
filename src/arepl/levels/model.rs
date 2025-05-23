@@ -3,7 +3,7 @@ use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::schema::arepl::{levels, records};
 use crate::schema::users;
-use crate::users::BaseUser;
+use crate::users::{BaseUser, BaseUserWithBanLevel};
 use actix_web::web;
 use diesel::prelude::*;
 use diesel::{ExpressionMethods, RunQueryDsl};
@@ -192,23 +192,35 @@ impl ResolvedLevel {
         let (level, publisher) = levels::table
             .filter(levels::id.eq(id))
             .inner_join(users::table.on(levels::publisher_id.eq(users::id)))
-            .select((Level::as_select(), BaseUser::as_select()))
-            .first::<(Level, BaseUser)>(&mut db.connection()?)?;
+            .select((Level::as_select(), BaseUserWithBanLevel::as_select()))
+            .first::<(Level, BaseUserWithBanLevel)>(&mut db.connection()?)?;
 
         let verifications_rows = records::table
             .filter(records::level_id.eq(id))
             .filter(records::is_verification.eq(true))
             .order(records::placement_order.asc())
             .inner_join(users::table.on(records::submitted_by.eq(users::id)))
-            .select((PublicRecordUnresolved::as_select(), BaseUser::as_select()))
-            .load::<(PublicRecordUnresolved, BaseUser)>(&mut db.connection()?)?;
+            .select((
+                PublicRecordUnresolved::as_select(),
+                BaseUserWithBanLevel::as_select(),
+            ))
+            .load::<(PublicRecordUnresolved, BaseUserWithBanLevel)>(&mut db.connection()?)?;
 
         let verifications = verifications_rows
             .into_iter()
-            .map(|(record, user)| PublicRecordResolved::from_data(record, user))
+            .map(|(record, user)| {
+                PublicRecordResolved::from_data(
+                    record,
+                    BaseUser::from_base_user_with_ban_level(user),
+                )
+            })
             .collect::<Vec<_>>();
 
-        let resolved_level = Self::from_data(level, publisher, verifications);
+        let resolved_level = Self::from_data(
+            level,
+            BaseUser::from_base_user_with_ban_level(publisher),
+            verifications,
+        );
         Ok(resolved_level)
     }
 

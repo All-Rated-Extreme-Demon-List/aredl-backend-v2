@@ -2,7 +2,7 @@ use crate::db::{DbAppState, DbConnection};
 use crate::error_handler::ApiError;
 use crate::schema::arepl::levels_created;
 use crate::schema::users;
-use crate::users::BaseUser;
+use crate::users::{BaseUser, BaseUserWithBanLevel};
 use actix_web::web;
 use diesel::{
     delete, insert_into, Connection, ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl,
@@ -19,8 +19,12 @@ impl BaseUser {
         let creators = levels_created::table
             .filter(levels_created::level_id.eq(level_id))
             .inner_join(users::table.on(levels_created::user_id.eq(users::id)))
-            .select(BaseUser::as_select())
-            .load::<BaseUser>(&mut db.connection()?)?;
+            .select(BaseUserWithBanLevel::as_select())
+            .load::<BaseUserWithBanLevel>(&mut db.connection()?)?;
+        let creators = creators
+            .into_iter()
+            .map(|creator| BaseUser::from_base_user_with_ban_level(creator))
+            .collect();
         Ok(creators)
     }
 
