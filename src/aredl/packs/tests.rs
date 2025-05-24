@@ -7,8 +7,8 @@ use crate::{
     schema::aredl::{packs, pack_tiers},
 };
 #[cfg(test)]
-use actix_web::test;
-use actix_web::test::read_body_json;
+use actix_web::test::{self, read_body_json};
+#[cfg(test)]
 use diesel::RunQueryDsl;
 #[cfg(test)]
 use serde_json::json;
