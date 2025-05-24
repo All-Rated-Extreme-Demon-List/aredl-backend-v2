@@ -24,8 +24,10 @@ use uuid::Uuid;
 #[diesel(table_name=submissions, check_for_backend(Pg))]
 // this struct does not contain the player's ID, which is computed to
 // be the logged in user. thus, this struct cannot be and is not inserted directly
-// to insert that property into the database!
 // into the query. if a new property is added here, remember to update Submission::create()
+// to insert that property into the database!
+
+// TODO: rework this probably
 pub struct SubmissionInsert {
     /// UUID of the level this record is on.
     pub level_id: Uuid,
