@@ -88,7 +88,6 @@ async fn main() -> std::io::Result<()> {
     tracing::info!("Initializing...");
 
     let (notify_tx, _notify_rx) = broadcast::channel::<WebsocketNotification>(100);
-    let notify_data = web::Data::new(notify_tx.clone());
 
     let prometheus = PrometheusMetricsBuilder::new("api")
         .endpoint("/metrics")
@@ -145,7 +144,7 @@ async fn main() -> std::io::Result<()> {
                 web::scope("/api")
                     .app_data(web::Data::new(auth_app_state.clone()))
                     .app_data(web::Data::new(db_app_state.clone()))
-                    .app_data(notify_data.clone())
+                    .app_data(web::Data::new(notify_tx.clone()))
                     .wrap(CacheController::default_no_store())
                     .wrap(NormalizePath::trim())
                     .wrap(TracingLogger::<AppRootSpanBuilder>::new())

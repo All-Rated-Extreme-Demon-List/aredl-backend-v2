@@ -133,13 +133,16 @@ pub async fn init_test_app() -> (
     Arc<AuthAppState>,
 ) {
     use actix_web::middleware::NormalizePath;
+    use tokio::sync::broadcast;
     use tracing_actix_web::TracingLogger;
 
-    use crate::AppRootSpanBuilder;
+    use crate::{notifications::WebsocketNotification, AppRootSpanBuilder};
 
     dotenv::dotenv().ok();
 
     let auth_app_state = init_app_state().await;
+
+    let (notify_tx, _notify_rx) = broadcast::channel::<WebsocketNotification>(100);
 
     let db_app_state = init_test_db_state();
     let conn = db_app_state.connection().unwrap();
@@ -148,6 +151,7 @@ pub async fn init_test_app() -> (
         App::new()
             .app_data(Data::new(db_app_state))
             .app_data(Data::new(auth_app_state.clone()))
+            .app_data(Data::new(notify_tx.clone()))
             .wrap(NormalizePath::trim())
             .wrap(TracingLogger::<AppRootSpanBuilder>::new())
             .wrap(BoxResponse)
