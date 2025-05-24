@@ -15,6 +15,7 @@ mod auth;
 mod cache_control;
 mod clans;
 mod docs;
+mod notifications;
 mod page_helper;
 mod roles;
 mod scheduled;
@@ -36,8 +37,10 @@ use actix_web_prom::PrometheusMetricsBuilder;
 
 use dotenv::dotenv;
 use listenfd::ListenFd;
+use notifications::WebsocketNotification;
 use std::env;
 use std::fs;
+use tokio::sync::broadcast;
 use tracing::Span;
 use tracing_actix_web::{root_span, DefaultRootSpanBuilder, RootSpanBuilder, TracingLogger};
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -83,6 +86,9 @@ async fn main() -> std::io::Result<()> {
     }
 
     tracing::info!("Initializing...");
+
+    let (notify_tx, _notify_rx) = broadcast::channel::<WebsocketNotification>(100);
+    let notify_data = web::Data::new(notify_tx.clone());
 
     let prometheus = PrometheusMetricsBuilder::new("api")
         .endpoint("/metrics")
@@ -139,6 +145,7 @@ async fn main() -> std::io::Result<()> {
                 web::scope("/api")
                     .app_data(web::Data::new(auth_app_state.clone()))
                     .app_data(web::Data::new(db_app_state.clone()))
+                    .app_data(notify_data.clone())
                     .wrap(CacheController::default_no_store())
                     .wrap(NormalizePath::trim())
                     .wrap(TracingLogger::<AppRootSpanBuilder>::new())
@@ -148,7 +155,8 @@ async fn main() -> std::io::Result<()> {
                     .configure(auth::init_routes)
                     .configure(users::init_routes)
                     .configure(roles::init_routes)
-                    .configure(clans::init_routes),
+                    .configure(clans::init_routes)
+                    .configure(notifications::init_routes),
             )
             .service(
                 RapiDoc::with_openapi("/openapi.json", ApiDoc::openapi())

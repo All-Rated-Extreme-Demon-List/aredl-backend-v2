@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 actix-web = "4.5"
+actix-ws = "0.3"
 actix-rt = "2.9"
 actix-cors = "0.7"
 actix-http = "3.7"

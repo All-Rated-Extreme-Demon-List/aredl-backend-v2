@@ -6,9 +6,11 @@ use crate::{
     auth::{Authenticated, Permission, UserAuth},
     db::DbAppState,
     error_handler::ApiError,
+    notifications::WebsocketNotification,
 };
 use actix_web::{get, post, web, HttpResponse};
 use std::sync::Arc;
+use tokio::sync::broadcast;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
 use uuid::Uuid;
@@ -94,6 +96,7 @@ async fn accept(
     authenticated: Authenticated,
     notes: web::Json<ReviewerNotes>,
     root_span: RootSpan,
+    notify_tx: web::Data<broadcast::Sender<WebsocketNotification>>,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&notes));
     let new_record = web::block(move || {
@@ -105,6 +108,12 @@ async fn accept(
         )
     })
     .await??;
+    let notification: WebsocketNotification = WebsocketNotification {
+        notification_type: "SUBMISSION_ACCEPTED".into(),
+        data: serde_json::to_value(&new_record).expect("Failed to serialize record"),
+    };
+    let _ = notify_tx.send(notification);
+
     Ok(HttpResponse::Accepted().json(new_record))
 }
 
@@ -130,18 +139,21 @@ async fn deny(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
     authenticated: Authenticated,
-    body: Option<web::Json<ReviewerNotes>>,
+    notes: web::Json<ReviewerNotes>,
     root_span: RootSpan,
+    notify_tx: web::Data<broadcast::Sender<WebsocketNotification>>,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&body));
-    let reason = match body {
-        Some(body) => body.into_inner().notes,
-        None => None,
-    };
+    root_span.record("body", &tracing::field::debug(&notes));
 
-    let new_record =
-        web::block(move || Submission::reject(db, id.into_inner(), authenticated, reason))
-            .await??;
+    let new_record = web::block(move || {
+        Submission::reject(db, id.into_inner(), authenticated, notes.into_inner().notes)
+    })
+    .await??;
+    let notification = WebsocketNotification {
+        notification_type: "SUBMISSION_DENIED".into(),
+        data: serde_json::to_value(&new_record).expect("Failed to serialize record"),
+    };
+    let _ = notify_tx.send(notification);
     Ok(HttpResponse::Ok().json(new_record))
 }
 
@@ -169,17 +181,18 @@ async fn under_consideration(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
     authenticated: Authenticated,
-    body: Option<web::Json<ReviewerNotes>>,
+    notes: web::Json<ReviewerNotes>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&body));
-    let notes = match body {
-        Some(note) => note.into_inner().notes,
-        None => None,
-    };
+    root_span.record("body", &tracing::field::debug(&notes));
 
     let new_record = web::block(move || {
-        Submission::under_consideration(db, id.into_inner(), authenticated, notes)
+        Submission::under_consideration(
+            db,
+            id.into_inner(),
+            authenticated,
+            notes.into_inner().notes,
+        )
     })
     .await??;
     Ok(HttpResponse::Ok().json(new_record))

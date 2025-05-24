@@ -20,6 +20,7 @@ use diesel::{
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -138,7 +139,6 @@ impl Submission {
                 content,
                 NotificationType::Success,
             )?;
-
             diesel::delete(submissions::table)
                 .filter(submissions::id.eq(id))
                 .execute(connection)?;
