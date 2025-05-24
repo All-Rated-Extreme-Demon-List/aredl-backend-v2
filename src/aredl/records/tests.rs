@@ -16,6 +16,7 @@ use serde_json::json;
 #[cfg(test)]
 use uuid::Uuid;
 
+#[cfg(test)]
 async fn create_test_record(conn: &mut DbConnection, submitter: Uuid) -> Record {
     let level = create_test_level(conn).await;
     let record = diesel::insert_into(records::table)
@@ -30,7 +31,6 @@ async fn create_test_record(conn: &mut DbConnection, submitter: Uuid) -> Record 
         .expect("Failed to create record!");
 
     record
-
 }
 
 #[actix_web::test]
@@ -66,12 +66,18 @@ async fn get_record_list() {
     let (app, mut conn, auth) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
     let token = create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    create_test_record(&mut conn, user_id).await;
     let req = test::TestRequest::get()
         .uri("/aredl/records")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
+    let body: serde_json::Value = test::read_body_json(resp).await;
+
+    let length = body["data"].as_array().unwrap().len();
+
+    assert_ne!(length, 0, "No records were returned!");
 }
 
 #[actix_web::test]
@@ -90,25 +96,45 @@ async fn update_record() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert_eq!(
+        body["video_url"].as_str().unwrap(), 
+        update_data["video_url"].as_str().unwrap(), 
+        "Videos do not match!"
+    )
 }
 
 #[actix_web::test]
 async fn get_own_record() {
     let (app, mut conn, auth) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
+    let (user_id_2, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
     let token = create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     create_test_record(&mut conn, user_id).await;
+    create_test_record(&mut conn, user_id_2).await;
     let req = test::TestRequest::get()
         .uri("/aredl/records/@me")
+        // should return user 1's records only
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let body: serde_json::Value = test::read_body_json(resp).await;
-    println!("{:?}", body);
     assert_ne!(body["data"].as_array().unwrap().len(), 0, "Did not return any data!");
-    // lmao
-    assert_eq!(body["data"].as_array().unwrap()[0].as_object().unwrap()["submitted_by"].as_object().unwrap()["id"].as_str().unwrap(), user_id.to_string().as_str(), "Submitters do not match!")
+    assert_ne!(body["data"].as_array().unwrap().len(), 2, "Returned both users' records!");
+    let submitter_id = body["data"]
+        .as_array()
+        .unwrap()[0]
+        .as_object()
+        .unwrap()
+        ["submitted_by"]
+        .as_object()
+        .unwrap()
+        ["id"]
+        .as_str()
+        .unwrap();
+
+    assert_eq!(submitter_id, user_id.to_string().as_str(), "Submitters do not match!")
 }
 
 #[actix_web::test]

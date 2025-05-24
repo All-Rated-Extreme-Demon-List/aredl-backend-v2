@@ -8,6 +8,7 @@ use crate::{
 };
 #[cfg(test)]
 use actix_web::test;
+use actix_web::test::read_body_json;
 use diesel::RunQueryDsl;
 #[cfg(test)]
 use serde_json::json;
@@ -16,6 +17,7 @@ use diesel::ExpressionMethods;
 #[cfg(test)]
 use uuid::Uuid;
 
+#[cfg(test)]
 pub async fn create_test_pack_tier(conn: &mut DbConnection) -> Uuid {
     let tier_id = Uuid::new_v4();
     diesel::insert_into(pack_tiers::table)
@@ -31,6 +33,7 @@ pub async fn create_test_pack_tier(conn: &mut DbConnection) -> Uuid {
 
 }
 
+#[cfg(test)]
 pub async fn create_test_pack(conn: &mut DbConnection) -> Uuid {
     let tier_id = create_test_pack_tier(conn).await;
     let pack_id = Uuid::new_v4();
@@ -63,6 +66,9 @@ async fn create_pack() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
+
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(pack_data["name"].as_str().unwrap(), body["name"].as_str().unwrap(), "Names do not match!")
 }
 
 #[actix_web::test]
@@ -81,6 +87,9 @@ async fn update_pack() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
+
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(update_data["name"].as_str().unwrap(), body["name"].as_str().unwrap(), "Names do not match!")
 }
 
 #[actix_web::test]

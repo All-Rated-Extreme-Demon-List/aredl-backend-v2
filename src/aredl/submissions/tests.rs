@@ -35,6 +35,8 @@ async fn create_submission() {
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert_eq!(body["submitted_by"].as_str().unwrap().to_string(), user_id.to_string(), "Submitters do not match!")
 }
 
 #[actix_web::test]
@@ -211,6 +213,7 @@ async fn submission_aredlplus_boost() {
 
     let (user_id, _) = create_test_user(&mut conn, None).await;
     let (user_id_2, _) = create_test_user(&mut conn, None).await;
+    let (user_id_mod, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
 
     let role_id: i32 = diesel::insert_into(roles::table)
         .values((
@@ -224,7 +227,7 @@ async fn submission_aredlplus_boost() {
     diesel::insert_into(user_roles::table)
         .values((
             user_roles::role_id.eq(role_id),
-            user_roles::user_id.eq(user_id),
+            user_roles::user_id.eq(user_id_2),
         ))
         .execute(&mut conn)
         .expect("Failed to assign role to user");
@@ -233,6 +236,8 @@ async fn submission_aredlplus_boost() {
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let token2 =
         create_test_token(user_id_2, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let token_mod =
+        create_test_token(user_id_mod, &auth.jwt_encoding_key).expect("Failed to generate token");
     let level_id = create_test_level(&mut conn).await;
 
     // video_url
@@ -276,14 +281,28 @@ async fn submission_aredlplus_boost() {
 
     assert_eq!(
         submission1["priority"].as_bool().unwrap(),
-        true,
-        "Priority field for user 1 is not true as expected"
+        false,
+        "Priority field for user 1 is not false as expected"
     );
     assert_eq!(
         submission2["priority"].as_bool().unwrap(),
-        false,
-        "Priority field for user 2 is not false as expected"
+        true,
+        "Priority field for user 2 is not true as expected"
     );
+
+    let claim_req = test::TestRequest::get()
+        .uri("/aredl/submissions/claim")
+        .insert_header(("Authorization", format!("Bearer {}", token_mod)))
+        .to_request();
+
+    let claim_resp = test::call_service(&app, claim_req).await;
+    assert!(
+        claim_resp.status().is_success(),
+        "Claim request failed: {}",
+        claim_resp.status()
+    );
+    let body: serde_json::Value = test::read_body_json(claim_resp).await;
+    assert_eq!(body["id"], submission2["id"])
 }
 
 #[actix_web::test]
