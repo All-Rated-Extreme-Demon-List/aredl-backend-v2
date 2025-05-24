@@ -67,5 +67,5 @@ async fn notifications_websocket(
 pub struct ApiDoc;
 
 pub fn init_routes(config: &mut web::ServiceConfig) {
-    config.service(notifications_websocket);
+    config.service(web::scope("/notifications").service(notifications_websocket));
 }
