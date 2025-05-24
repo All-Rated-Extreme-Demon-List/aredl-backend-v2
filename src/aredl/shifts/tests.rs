@@ -57,12 +57,25 @@ async fn get_my_shifts() {
     let (app, mut conn, auth) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
     let token = create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    create_test_shift(&mut conn, user_id, false).await;
     let req = test::TestRequest::get()
         .uri("/aredl/shifts/@me")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert!(
+        body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(
+            |x| x["user"].as_object().unwrap()
+                ["id"].as_str().unwrap().to_string() ==
+                user_id.to_string()
+        )
+    )
 }
 
 #[actix_web::test]
