@@ -175,7 +175,11 @@ impl BaseUser {
             } else {
                 user.username
             },
-            global_name: "REDACTED".to_string(),
+            global_name: if user.ban_level == 3 {
+                "REDACTED".to_string()
+            } else {
+                user.global_name
+            },
         }
     }
 }
