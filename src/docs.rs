@@ -79,6 +79,8 @@ struct MainApiDoc;
         Each permission then requires the user's privilege level to be **higher or equal** to a certain level, as defined below:    \n\n\
             | Permission | Required Level |    \n\
             |--- |--- |    \n\
+            | **Plus** | 5 |    \n\
+            | **SubmissionReview** | 15 |    \n\
             | **RecordModify** | 20 |    \n\
             | **UserModify** | 25 |    \n\
             | **PlaceholderCreate** | 25 |    \n\
@@ -89,6 +91,7 @@ struct MainApiDoc;
             | **ClanModify** | 70 |    \n\
             | **UserBan** | 85 |    \n\
             | **DirectMerge** | 90 |    \n\
+            | **ShiftManage** | 95 |    \n\
             | **RoleManage** | 100 |    \n\n\
         ",
     ),
