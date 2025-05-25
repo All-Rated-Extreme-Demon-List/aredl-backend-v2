@@ -1,23 +1,28 @@
 use std::sync::Arc;
 
-use actix_web::{get, HttpResponse, HttpRequest, web};
-use chrono::{DateTime, Duration, Utc, TimeZone};
-use diesel::prelude::*;
-use openidconnect::{AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce, OAuth2TokenResponse, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope};
-use openidconnect::core::{CoreAuthenticationFlow, CoreClient, CoreIdTokenVerifier, CoreProviderMetadata};
-use openidconnect::reqwest::async_http_client;
-use serde::{Deserialize, Serialize};
 use actix_web::http::header;
+use actix_web::{get, web, HttpRequest, HttpResponse};
+use chrono::{DateTime, Duration, TimeZone, Utc};
+use diesel::prelude::*;
+use openidconnect::core::{
+    CoreAuthenticationFlow, CoreClient, CoreIdTokenVerifier, CoreProviderMetadata,
+};
+use openidconnect::reqwest::async_http_client;
+use openidconnect::{
+    AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce, OAuth2TokenResponse,
+    PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope,
+};
+use serde::{Deserialize, Serialize};
 use utoipa::{OpenApi, ToSchema};
 
 use crate::auth::app_state::AuthAppState;
-use crate::auth::token::{self, check_token_valid};
 use crate::auth::token::UserClaims;
+use crate::auth::token::{self, check_token_valid};
 use crate::db::{DbAppState, DbConnection};
 use crate::error_handler::ApiError;
 use crate::get_secret;
-use crate::schema::{oauth_requests, roles, user_roles, permissions};
-use crate::users::{User, UserUpsert, Role};
+use crate::schema::{oauth_requests, permissions, roles, user_roles};
+use crate::users::{Role, User, UserUpsert};
 
 #[derive(Deserialize)]
 struct OAuthCallbackQuery {
@@ -31,7 +36,7 @@ struct OAuthRequestData {
     pub csrf_state: String,
     pub pkce_verifier: String,
     pub nonce: String,
-	pub callback: Option<String>,
+    pub callback: Option<String>,
 }
 
 impl OAuthRequestData {
@@ -94,11 +99,12 @@ struct AuthResponse {
     /// Timestamp of when the refresh token expires.
     pub refresh_expires: DateTime<Utc>,
     /// The user data of the authenticated user.
+    #[serde(flatten)]
     pub user: User,
     /// The permissions scopes the user has access to.
     pub scopes: Vec<String>,
     /// The roles the user has.
-    pub roles: Vec<Role>
+    pub roles: Vec<Role>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -114,7 +120,7 @@ struct AuthRefreshResponse {
 }
 #[derive(Debug, Serialize, Deserialize)]
 struct AuthOptions {
-	pub callback: Option<String>,
+    pub callback: Option<String>,
 }
 
 #[utoipa::path(
@@ -127,29 +133,39 @@ struct AuthOptions {
     ),
 )]
 #[get("")]
-async fn discord_auth(data: web::Data<Arc<AuthAppState>>, db: web::Data<Arc<DbAppState>>, options: web::Query<AuthOptions>) -> Result<HttpResponse, ApiError> {
+async fn discord_auth(
+    data: web::Data<Arc<AuthAppState>>,
+    db: web::Data<Arc<DbAppState>>,
+    options: web::Query<AuthOptions>,
+) -> Result<HttpResponse, ApiError> {
     let client = &data.discord_client;
     let mut conn = db.connection()?;
 
     let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
 
-    let (authorize_url, csrf_state, nonce) = client.authorize_url(
-        CoreAuthenticationFlow::AuthorizationCode,
-        CsrfToken::new_random,
-        Nonce::new_random,
-    )
+    let (authorize_url, csrf_state, nonce) = client
+        .authorize_url(
+            CoreAuthenticationFlow::AuthorizationCode,
+            CsrfToken::new_random,
+            Nonce::new_random,
+        )
         .add_scope(Scope::new("identify".to_string()))
         .set_pkce_challenge(pkce_challenge.clone())
         .url();
 
-    OAuthRequestData::create(&mut conn, OAuthRequestData {
-        csrf_state: csrf_state.secret().clone(),
-        pkce_verifier: pkce_verifier.secret().to_string(),
-        nonce: nonce.secret().to_string(),
-		callback: options.callback.clone(),
-    })?;
+    OAuthRequestData::create(
+        &mut conn,
+        OAuthRequestData {
+            csrf_state: csrf_state.secret().clone(),
+            pkce_verifier: pkce_verifier.secret().to_string(),
+            nonce: nonce.secret().to_string(),
+            callback: options.callback.clone(),
+        },
+    )?;
 
-    Ok(HttpResponse::Found().append_header((header::LOCATION, authorize_url.to_string())).finish())
+    Ok(HttpResponse::Found()
+        .append_header((header::LOCATION, authorize_url.to_string()))
+        .finish())
 }
 
 #[utoipa::path(
@@ -162,7 +178,11 @@ async fn discord_auth(data: web::Data<Arc<AuthAppState>>, db: web::Data<Arc<DbAp
     ),
 )]
 #[get("/callback")]
-async fn discord_callback(db: web::Data<Arc<DbAppState>>, query: web::Query<OAuthCallbackQuery>, data: web::Data<Arc<AuthAppState>>) -> Result<HttpResponse, ApiError> {
+async fn discord_callback(
+    db: web::Data<Arc<DbAppState>>,
+    query: web::Query<OAuthCallbackQuery>,
+    data: web::Data<Arc<AuthAppState>>,
+) -> Result<HttpResponse, ApiError> {
     let client = &data.discord_client;
 
     let mut conn = db.connection()?;
@@ -171,18 +191,22 @@ async fn discord_callback(db: web::Data<Arc<DbAppState>>, query: web::Query<OAut
         let data = OAuthRequestData::find(&mut conn, state.as_str())?;
         OAuthRequestData::delete(&mut conn, state.as_str())?;
         Ok::<OAuthRequestData, ApiError>(data)
-    }).await??;
+    })
+    .await??;
 
     let token_response = client
         .exchange_code(query.code.clone())
         .set_pkce_verifier(PkceCodeVerifier::new(request_data.pkce_verifier))
-        .request_async(async_http_client).await
+        .request_async(async_http_client)
+        .await
         .map_err(|_| ApiError::new(401, "Failed to request token!"))?;
 
     let nonce: Nonce = Nonce::new(request_data.nonce);
     let id_token_verifier: CoreIdTokenVerifier = client.id_token_verifier();
     match token_response.extra_fields().id_token() {
-        Some(id_token) => id_token.claims(&id_token_verifier, &nonce).map_err(|_| ApiError::new(401, "Failed to verify ID token!")),
+        Some(id_token) => id_token
+            .claims(&id_token_verifier, &nonce)
+            .map_err(|_| ApiError::new(401, "Failed to verify ID token!")),
         None => Err(ApiError::new(500, "No id token provided!")),
     }?;
 
@@ -191,9 +215,11 @@ async fn discord_callback(db: web::Data<Arc<DbAppState>>, query: web::Query<OAut
     let discord_user_data = reqwest::Client::new()
         .get("https://discord.com/api/users/@me")
         .bearer_auth(access_token.secret())
-        .send().await
+        .send()
+        .await
         .map_err(|_| ApiError::new(500, "Failed to request discord data"))?
-        .json::<DiscordUser>().await
+        .json::<DiscordUser>()
+        .await
         .map_err(|_| ApiError::new(500, "Failed to load discord data"))?;
 
     let mut conn = db.connection()?;
@@ -201,7 +227,6 @@ async fn discord_callback(db: web::Data<Arc<DbAppState>>, query: web::Query<OAut
     let user = web::block(|| User::upsert(db, UserUpsert::from(discord_user_data))).await??;
 
     if let Some(callback) = request_data.callback {
-
         let (token, _expires) = token::create_token(
             UserClaims {
                 user_id: user.id,
@@ -257,13 +282,25 @@ async fn discord_callback(db: web::Data<Arc<DbAppState>>, query: web::Query<OAut
     let scopes = all_permissions
         .into_iter()
         .filter_map(|(permission, privilege_level)| {
-            if user_privilege_level >= privilege_level { Some(permission) } else { None }
+            if user_privilege_level >= privilege_level {
+                Some(permission)
+            } else {
+                None
+            }
         })
         .collect::<Vec<String>>();
 
-    let auth_response = AuthResponse { access_token, access_expires, refresh_token, refresh_expires, user, roles, scopes };
-	
-	Ok(HttpResponse::Ok().json(auth_response))
+    let auth_response = AuthResponse {
+        access_token,
+        access_expires,
+        refresh_token,
+        refresh_expires,
+        user,
+        roles,
+        scopes,
+    };
+
+    Ok(HttpResponse::Ok().json(auth_response))
 }
 #[utoipa::path(
     get,
@@ -278,7 +315,11 @@ async fn discord_callback(db: web::Data<Arc<DbAppState>>, query: web::Query<OAut
     )
 )]
 #[get("/refresh")]
-async fn discord_refresh(data: web::Data<Arc<AuthAppState>>, db: web::Data<Arc<DbAppState>>, req: HttpRequest) -> Result<HttpResponse, ApiError> {
+async fn discord_refresh(
+    data: web::Data<Arc<AuthAppState>>,
+    db: web::Data<Arc<DbAppState>>,
+    req: HttpRequest,
+) -> Result<HttpResponse, ApiError> {
     let refresh_token = req
         .headers()
         .get(openidconnect::http::header::AUTHORIZATION)
@@ -292,7 +333,7 @@ async fn discord_refresh(data: web::Data<Arc<AuthAppState>>, db: web::Data<Arc<D
     let decoded_token_claims = token::decode_token(
         refresh_token.unwrap(),
         &data.jwt_decoding_key,
-        &["refresh", "initial"]
+        &["refresh", "initial"],
     )?;
 
     let decoded_user_claims = token::decode_user_claims(&decoded_token_claims)?;
@@ -318,9 +359,10 @@ async fn discord_refresh(data: web::Data<Arc<AuthAppState>>, db: web::Data<Arc<D
     });
 
     let now = Utc::now();
-    let refresh_exp = Utc.timestamp_opt(decoded_token_claims.exp as i64, 0).single().ok_or_else(|| {
-        ApiError::new(500, "Failed to parse expiration timestamp")
-    })?;
+    let refresh_exp = Utc
+        .timestamp_opt(decoded_token_claims.exp as i64, 0)
+        .single()
+        .ok_or_else(|| ApiError::new(500, "Failed to parse expiration timestamp"))?;
 
     if refresh_exp - now < Duration::days(2) {
         let (new_refresh_token, refresh_expires) = token::create_token(
@@ -341,41 +383,28 @@ async fn discord_refresh(data: web::Data<Arc<AuthAppState>>, db: web::Data<Arc<D
 }
 
 pub(crate) async fn create_discord_client() -> Result<CoreClient, Box<dyn std::error::Error>> {
-    let discord_client_id = ClientId::new(
-        get_secret("DISCORD_CLIENT_ID"),
-    );
+    let discord_client_id = ClientId::new(get_secret("DISCORD_CLIENT_ID"));
 
-    let discord_client_secret = ClientSecret::new(
-        get_secret("DISCORD_CLIENT_SECRET"),
-    );
+    let discord_client_secret = ClientSecret::new(get_secret("DISCORD_CLIENT_SECRET"));
 
-    let discord_redirect_uri = RedirectUrl::new(
-        get_secret("DISCORD_REDIRECT_URI")
-    )?;
+    let discord_redirect_uri = RedirectUrl::new(get_secret("DISCORD_REDIRECT_URI"))?;
 
     let issuer_url = IssuerUrl::new("https://discord.com".to_string())?;
 
-    let provider_metadata = CoreProviderMetadata::discover_async(issuer_url, async_http_client).await?;
+    let provider_metadata =
+        CoreProviderMetadata::discover_async(issuer_url, async_http_client).await?;
     Ok(CoreClient::from_provider_metadata(
         provider_metadata,
         discord_client_id,
         Some(discord_client_secret),
-    ).set_redirect_uri(discord_redirect_uri))
+    )
+    .set_redirect_uri(discord_redirect_uri))
 }
 
 #[derive(OpenApi)]
 #[openapi(
-    components(
-        schemas(
-            AuthResponse,
-            AuthRefreshResponse
-        )
-    ),
-    paths(
-        discord_auth,
-        discord_callback,
-        discord_refresh,
-    )
+    components(schemas(AuthResponse, AuthRefreshResponse)),
+    paths(discord_auth, discord_callback, discord_refresh,)
 )]
 pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
@@ -383,6 +412,6 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
         web::scope("/auth/discord")
             .service(discord_auth)
             .service(discord_callback)
-            .service(discord_refresh)
+            .service(discord_refresh),
     );
 }

@@ -1,13 +1,10 @@
-use crate::clans::Clan;
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
-use crate::schema::{clan_members, clans, permissions, roles, user_roles, users};
-use crate::users::{Role, User, UserResolved};
+use crate::schema::users;
+use crate::users::User;
 use chrono::{DateTime, Utc};
 use diesel::dsl::now;
-use diesel::{
-    ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
-};
+use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -26,53 +23,6 @@ pub struct UserMeUpdate {
 }
 
 impl User {
-    pub fn find_me(conn: &mut DbConnection, id: Uuid) -> Result<UserResolved, ApiError> {
-        let user = users::table
-            .filter(users::id.eq(id))
-            .select(User::as_select())
-            .first::<User>(conn)?;
-
-        let clan = clans::table
-            .inner_join(clan_members::table.on(clans::id.eq(clan_members::clan_id)))
-            .filter(clan_members::user_id.eq(id))
-            .select(Clan::as_select())
-            .first::<Clan>(conn)
-            .optional()?;
-
-        let roles = user_roles::table
-            .inner_join(roles::table.on(user_roles::role_id.eq(roles::id)))
-            .filter(user_roles::user_id.eq(id))
-            .select(Role::as_select())
-            .load::<Role>(conn)?;
-
-        let user_privilege_level: i32 = roles
-            .iter()
-            .map(|role| role.privilege_level)
-            .max()
-            .unwrap_or(0);
-
-        let all_permissions = permissions::table
-            .select((permissions::permission, permissions::privilege_level))
-            .load::<(String, i32)>(conn)?;
-
-        let scopes = all_permissions
-            .into_iter()
-            .filter_map(|(permission, privilege_level)| {
-                if user_privilege_level >= privilege_level {
-                    Some(permission)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<String>>();
-
-        Ok(UserResolved {
-            user,
-            clan,
-            roles,
-            scopes,
-        })
-    }
     pub fn update_me(
         conn: &mut DbConnection,
         id: Uuid,

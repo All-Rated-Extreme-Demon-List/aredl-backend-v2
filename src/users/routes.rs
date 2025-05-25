@@ -4,13 +4,38 @@ use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::users::{
     me, merge, names, PlaceholderOptions, User, UserBanUpdate, UserListQueryOptions, UserPage,
-    UserUpdate,
+    UserResolved, UserUpdate,
 };
 use actix_web::{get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
 use uuid::Uuid;
+
+#[utoipa::path(
+    get,
+    summary = "Get users",
+    description = "Get paginated list of users",
+    tag = "Users",
+    params(
+        ("id" = Uuid, Path, description = "The internal UUID of the user to lookup"),
+    ),
+    responses(
+        (status = 200, body = UserResolved)
+    ),
+)]
+#[get("/{id}")]
+async fn find(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<Uuid>,
+) -> Result<HttpResponse, ApiError> {
+    let result = web::block(move || {
+        let conn = &mut db.connection()?;
+        UserResolved::find_one(conn, id.into_inner())
+    })
+    .await??;
+    Ok(HttpResponse::Ok().json(result))
+}
 
 #[utoipa::path(
     get,
@@ -35,7 +60,7 @@ async fn list(
 ) -> Result<HttpResponse, ApiError> {
     let result = web::block(move || {
         let mut conn = db.connection()?;
-        User::find(&mut conn, page_query.into_inner(), options.into_inner())
+        User::find_all(&mut conn, page_query.into_inner(), options.into_inner())
     })
     .await??;
     Ok(HttpResponse::Ok().json(result))
@@ -168,6 +193,7 @@ async fn ban(
         )
     ),
     paths(
+        find,
         list,
         create_placeholder,
         update,
@@ -181,6 +207,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .configure(me::init_routes)
             .configure(names::init_routes)
             .configure(merge::init_routes)
+            .service(find)
             .service(list)
             .service(create_placeholder)
             .service(update)

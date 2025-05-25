@@ -2,15 +2,15 @@ use crate::clans::Clan;
 use crate::db::{DbAppState, DbConnection};
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
-use crate::schema::{roles, users};
+use crate::schema::{clan_members, clans, permissions, roles, user_roles, users};
 use actix_web::web;
 use chrono::{DateTime, Utc};
 use diesel::expression::AsExpression;
 use diesel::pg::Pg;
 use diesel::sql_types::Bool;
 use diesel::{
-    BoxableExpression, ExpressionMethods, OptionalExtension, PgTextExpressionMethods, QueryDsl,
-    RunQueryDsl, SelectableHelper,
+    BoxableExpression, ExpressionMethods, JoinOnDsl, OptionalExtension, PgTextExpressionMethods,
+    QueryDsl, RunQueryDsl, SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -109,6 +109,7 @@ pub struct UserUpdateOnLogin {
 
 #[derive(Serialize, Debug, ToSchema)]
 pub struct UserResolved {
+    #[serde(flatten)]
     pub user: User,
     /// Clan the user is in.
     pub clan: Option<Clan>,
@@ -221,7 +222,7 @@ impl User {
         }
     }
 
-    pub fn find<const D: i64>(
+    pub fn find_all<const D: i64>(
         conn: &mut DbConnection,
         page_query: PageQuery<D>,
         options: UserListQueryOptions,
@@ -321,5 +322,54 @@ impl From<User> for BaseUser {
             username: user.username,
             global_name: user.global_name,
         }
+    }
+}
+
+impl UserResolved {
+    pub fn find_one(conn: &mut DbConnection, user_id: Uuid) -> Result<Self, ApiError> {
+        let user = users::table
+            .filter(users::id.eq(user_id))
+            .select(User::as_select())
+            .first::<User>(conn)?;
+
+        let clan = clans::table
+            .inner_join(clan_members::table.on(clans::id.eq(clan_members::clan_id)))
+            .filter(clan_members::user_id.eq(user_id))
+            .select(Clan::as_select())
+            .first::<Clan>(conn)
+            .optional()?;
+
+        let roles = user_roles::table
+            .inner_join(roles::table.on(user_roles::role_id.eq(roles::id)))
+            .filter(user_roles::user_id.eq(user_id))
+            .select(Role::as_select())
+            .load::<Role>(conn)?;
+
+        let user_privilege_level: i32 = roles
+            .iter()
+            .map(|role| role.privilege_level)
+            .max()
+            .unwrap_or(0);
+
+        let all_permissions = permissions::table
+            .select((permissions::permission, permissions::privilege_level))
+            .load::<(String, i32)>(conn)?;
+
+        let scopes = all_permissions
+            .into_iter()
+            .filter_map(|(permission, privilege_level)| {
+                if user_privilege_level >= privilege_level {
+                    Some(permission)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<String>>();
+        Ok(UserResolved {
+            user,
+            clan,
+            roles,
+            scopes,
+        })
     }
 }
