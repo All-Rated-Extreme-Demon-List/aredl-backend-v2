@@ -234,6 +234,7 @@ async fn find_me(
         create,
         update,
         delete,
+        find,
         find_all,
         find_all_full,
         find_me,
@@ -249,6 +250,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .service(delete)
             .service(find_all)
             .service(find_all_full)
-            .service(find_me),
+            .service(find_me)
+            .service(find)
     );
 }
