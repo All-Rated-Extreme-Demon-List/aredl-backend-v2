@@ -1,7 +1,9 @@
+use std::time::Duration;
+
 use actix_web::{get, web, Error, HttpRequest, HttpResponse};
 use actix_ws::{handle, Message};
 use futures_util::StreamExt;
-use tokio::sync::broadcast;
+use tokio::{sync::broadcast, time::interval};
 use utoipa::OpenApi;
 
 use crate::{
@@ -35,10 +37,15 @@ async fn notifications_websocket(
 ) -> Result<HttpResponse, Error> {
     let (res, mut session, mut msg_stream) = handle(&req, stream)?;
     let mut rx = notify_tx.subscribe();
+    let mut heartbeat = interval(Duration::from_secs(30));
 
     actix_rt::spawn(async move {
         loop {
             tokio::select! {
+                _ = heartbeat.tick() => {
+                    let _ = session.ping(&[]).await;
+                }
+
                 Some(Ok(msg)) = msg_stream.next() => {
                     match msg {
                         Message::Ping(p)    => { let _ = session.pong(&p).await; }
