@@ -1,14 +1,11 @@
 #[cfg(test)]
 use crate::test_utils::*;
 #[cfg(test)]
-use crate::{
-    schema::{users, aredl::levels},
-    aredl::records::tests::create_test_record
-};
+use crate::{aredl::records::tests::create_test_record, schema::aredl::levels};
 #[cfg(test)]
 use actix_web::test::{self, read_body_json};
 #[cfg(test)]
-use diesel::{RunQueryDsl, ExpressionMethods, QueryDsl};
+use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 
 #[actix_web::test]
 async fn list_leaderboard() {
@@ -29,7 +26,7 @@ async fn list_leaderboard() {
             .filter(levels::id.eq(record.level_id))
             .select(levels::points)
             .get_result::<i32>(&mut conn)
-            .expect("hi")
+            .expect("hi"),
     );
 
     let resp = test::call_service(&app, req).await;
@@ -37,15 +34,32 @@ async fn list_leaderboard() {
     let body: serde_json::Value = read_body_json(resp).await;
 
     let data = body["data"].as_array().unwrap();
-    
+
     assert!(data.len() > 0, "No data was returned!");
-    assert_eq!(data[0]["rank"].as_i64().unwrap(), 1, "This user should be top 1!");
+    assert_eq!(
+        data[0]["rank"].as_i64().unwrap(),
+        1,
+        "This user should be top 1!"
+    );
 
-    let user_entry = data.iter().find(
-        |entry| entry["user"]["id"].as_str().unwrap().to_string() == user.to_string()
-    ).expect("User not found in leaderboard!");
+    let user_entry = data
+        .iter()
+        .find(|entry| entry["user"]["id"].as_str().unwrap().to_string() == user.to_string())
+        .expect("User not found in leaderboard!");
 
-    assert_eq!(user_entry["hardest"]["id"].as_str().unwrap().to_string(), record.level_id.to_string(), "Hardest does not match this user's hardest (and only) record!");
-    assert_eq!(user_entry["extremes"].as_i64().unwrap(), 1, "User should only have 1 record!");
-    assert_eq!(level_score, user_entry["total_points"].as_i64().unwrap(), "User's score does not match!")
+    assert_eq!(
+        user_entry["hardest"]["id"].as_str().unwrap().to_string(),
+        record.level_id.to_string(),
+        "Hardest does not match this user's hardest (and only) record!"
+    );
+    assert_eq!(
+        user_entry["extremes"].as_i64().unwrap(),
+        1,
+        "User should only have 1 record!"
+    );
+    assert_eq!(
+        level_score,
+        user_entry["total_points"].as_i64().unwrap(),
+        "User's score does not match!"
+    )
 }

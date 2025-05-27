@@ -142,47 +142,9 @@ jobs:
             cache-from: type=registry,ref=ghcr.io/${{ env.OWNER_LC  }}/aredl_backend_api:buildcache
             cache-to: type=registry,ref=ghcr.io/${{ env.OWNER_LC  }}/aredl_backend_api:buildcache,mode=max
   
-  build-migrate:
-    if: github.ref == 'refs/heads/main'
-    needs: test
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-        - uses: actions/checkout@v4
-        
-        - name: Login to GitHub Container Registry
-          uses: docker/login-action@v3
-          with:
-            registry: ghcr.io
-            username: ${{ github.actor }}
-            password: ${{ secrets.GITHUB_TOKEN }}
-            
-        - name: Set up Docker Buildx
-          uses: docker/setup-buildx-action@v3
-        
-        - name: Set owner name to lowercase for docker compatibility
-          run: |
-            echo "OWNER_LC=${OWNER,,}" >>${GITHUB_ENV}
-          env:
-            OWNER: '${{ github.repository_owner }}'
-          
-        - name: Build and push migrate image
-          uses: docker/build-push-action@v5
-          with:
-            context: .
-            file: ./tools/seed_aredl/Dockerfile
-            push: true
-            tags: |
-              ghcr.io/${{ env.OWNER_LC  }}/migrate:latest
-              ghcr.io/${{ env.OWNER_LC  }}/migrate:${{ github.sha }}
-            cache-from: type=registry,ref=ghcr.io/${{ env.OWNER_LC  }}/migrate:buildcache
-            cache-to: type=registry,ref=ghcr.io/${{ env.OWNER_LC  }}/migrate:buildcache,mode=max
   deploy:
     if: github.ref == 'refs/heads/main'
-    needs: [test, build-api, build-migrate]
+    needs: [test, build-api]
     runs-on: ubuntu-latest
     steps:
         - uses: actions/checkout@v4

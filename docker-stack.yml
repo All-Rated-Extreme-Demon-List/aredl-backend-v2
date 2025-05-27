@@ -83,33 +83,10 @@ services:
       - nlw_sheet_id
     networks:
       - api_net
-  migrate:
-    image: ghcr.io/all-rated-extreme-demon-list/migrate:${COMMIT_HASH:-latest}
-    environment:
-      AREDL_DATA_GIT: /run/secrets/aredl_data_git
-      AREDL_DATA_PARENT: "/migrate_data/aredl_data"
-      POSTGRES_USER: /run/secrets/postgres_user
-      POSTGRES_PASSWORD: /run/secrets/postgres_password
-    volumes:
-      - migrate_data:/migrate_data
-    depends_on:
-      - db
-    secrets:
-      - postgres_user
-      - postgres_password
-      - aredl_data_git
-    networks:
-      - api_net
-    deploy:
-      restart_policy:
-        condition: on-failure
-        max_attempts: 1
-        delay: 10s
          
 volumes:
   db_data:
   test_db_data:
-  migrate_data:
 
 secrets:
   postgres_user:
@@ -137,8 +114,6 @@ secrets:
   edel_sheet_id:
     external: true
   nlw_sheet_id:
-    external: true
-  aredl_data_git:
     external: true
 networks:
   api_net:
