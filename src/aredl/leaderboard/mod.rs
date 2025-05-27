@@ -3,5 +3,8 @@ mod model;
 mod countries;
 mod clans;
 
+#[cfg(test)]
+mod tests;
+
 pub use model::*;
 pub use routes::{init_routes, ApiDoc};

@@ -3,7 +3,11 @@ use crate::test_utils::*;
 #[cfg(test)]
 use crate::{
     auth::{create_test_token, Permission},
-    schema::aredl::levels_created
+    schema::aredl::{levels_created, pack_levels},
+    aredl::{
+        packs::tests::create_test_pack,
+        records::tests::create_test_record
+    }
 };
 #[cfg(test)]
 use actix_web::test::{self, read_body_json};
@@ -155,3 +159,68 @@ async fn add_and_remove_creators() {
     assert!(!body.as_array().unwrap().iter().any(|u| u["id"].as_str().unwrap() == user_id.to_string()), "Creator was not removed");
 }
 
+#[actix_web::test]
+async fn get_level_history() {
+    let (app, mut conn, _) = init_test_app().await;
+    let level_id = create_test_level(&mut conn).await;
+    // move this level by placing a new one at #1
+    let other_level = create_test_level(&mut conn).await;
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/aredl/levels/{}/history", level_id))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+    let body: serde_json::Value = read_body_json(resp).await;
+    let move_entry = &body.as_array().unwrap()[0];
+    let place_entry = &body.as_array().unwrap()[1];
+    assert_eq!(move_entry["event"].as_str().unwrap(), "OtherPlaced");
+    assert_eq!(move_entry["cause"].as_object().unwrap()["id"].as_str().unwrap().to_string(), other_level.to_string());
+    assert_eq!(move_entry["position_diff"].as_i64().unwrap(), 1);
+    assert_eq!(place_entry["event"].as_str().unwrap(), "Placed");
+}
+
+#[actix_web::test]
+async fn get_level_pack() {
+    let (app, mut conn, _) = init_test_app().await;
+    let level = create_test_level(&mut conn).await;
+    let pack = create_test_pack(&mut conn).await;
+    // insert the pack into the level
+    diesel::insert_into(pack_levels::table)
+        .values((
+            pack_levels::pack_id.eq(pack),
+            pack_levels::level_id.eq(level)
+        ))
+        .execute(&mut conn)
+        .expect("Failed to add level to pack!");
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/aredl/levels/{}/packs", level))
+        .to_request();
+
+    let res = test::call_service(&app, req).await;
+    assert!(res.status().is_success(), "status is {}", res.status());
+    let body: serde_json::Value = read_body_json(res).await;
+    let arr = body.as_array().unwrap();
+    assert_eq!(arr.len(), 1, "This level is in more than 1 pack!");
+    assert_eq!(arr[0].as_object().unwrap()["id"].as_str().unwrap().to_string(), pack.to_string(), "Pack IDs do not match!")
+
+}
+
+#[actix_web::test]
+async fn get_level_records() {
+    let (app, mut conn, _) = init_test_app().await;
+    let (submitter, _) = create_test_user(&mut conn, None).await;
+    let record = create_test_record(&mut conn, submitter).await;
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/aredl/levels/{}/records", record.level_id))
+        .to_request();
+
+    let res = test::call_service(&app, req).await;
+    assert!(res.status().is_success(), "status is {}", res.status());
+    let body: serde_json::Value = read_body_json(res).await;
+    let arr = body.as_array().unwrap();
+    assert_eq!(arr.len(), 1, "This level has more than 1 record!");
+    assert_eq!(arr[0].as_object().unwrap()["id"].as_str().unwrap().to_string(), record.id.to_string(), "Record IDs do not match!")
+}

@@ -17,7 +17,7 @@ use serde_json::json;
 use uuid::Uuid;
 
 #[cfg(test)]
-async fn create_test_record(conn: &mut DbConnection, submitter: Uuid) -> Record {
+pub async fn create_test_record(conn: &mut DbConnection, submitter: Uuid) -> Record {
     let level = create_test_level(conn).await;
     let record = diesel::insert_into(records::table)
         .values((
@@ -105,7 +105,7 @@ async fn update_record() {
 }
 
 #[actix_web::test]
-async fn get_own_record() {
+async fn get_own_records() {
     let (app, mut conn, auth) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
     let (user_id_2, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
@@ -149,4 +149,20 @@ async fn delete_record() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
+}
+
+#[actix_web::test]
+async fn get_one_record() {
+    let (app, mut conn, auth) = init_test_app().await;
+    let (user_id, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
+    let token = create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let record = create_test_record(&mut conn, user_id).await;
+    let req = test::TestRequest::get()
+        .uri(&format!("/aredl/records/{}", record.id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert_eq!(body["id"].as_str().unwrap().to_string(), record.id.to_string(), "Record IDs do not match!")
 }
