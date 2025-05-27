@@ -102,17 +102,13 @@ async fn accept(
     let new_record = web::block(move || {
         Submission::accept(
             db,
+            notify_tx.get_ref().clone(),
             id.into_inner(),
             authenticated.user_id,
             notes.into_inner().notes,
         )
     })
     .await??;
-    let notification: WebsocketNotification = WebsocketNotification {
-        notification_type: "SUBMISSION_ACCEPTED".into(),
-        data: serde_json::to_value(&new_record).expect("Failed to serialize record"),
-    };
-    let _ = notify_tx.send(notification);
 
     Ok(HttpResponse::Accepted().json(new_record))
 }
@@ -146,14 +142,15 @@ async fn deny(
     root_span.record("body", &tracing::field::debug(&notes));
 
     let new_record = web::block(move || {
-        Submission::reject(db, id.into_inner(), authenticated, notes.into_inner().notes)
+        Submission::reject(
+            db,
+            notify_tx.get_ref().clone(),
+            id.into_inner(),
+            authenticated,
+            notes.into_inner().notes,
+        )
     })
     .await??;
-    let notification = WebsocketNotification {
-        notification_type: "SUBMISSION_DENIED".into(),
-        data: serde_json::to_value(&new_record).expect("Failed to serialize record"),
-    };
-    let _ = notify_tx.send(notification);
     Ok(HttpResponse::Ok().json(new_record))
 }
 
@@ -179,6 +176,7 @@ async fn deny(
 )]
 async fn under_consideration(
     db: web::Data<Arc<DbAppState>>,
+    notify_tx: web::Data<broadcast::Sender<WebsocketNotification>>,
     id: web::Path<Uuid>,
     authenticated: Authenticated,
     notes: web::Json<ReviewerNotes>,
@@ -189,6 +187,7 @@ async fn under_consideration(
     let new_record = web::block(move || {
         Submission::under_consideration(
             db,
+            notify_tx.get_ref().clone(),
             id.into_inner(),
             authenticated,
             notes.into_inner().notes,

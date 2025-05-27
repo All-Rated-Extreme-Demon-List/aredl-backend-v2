@@ -103,7 +103,7 @@ pub struct ShiftPatch {
     pub completed_count: Option<i32>,
 }
 
-#[derive(Insertable)]
+#[derive(Insertable, Serialize, Clone)]
 #[diesel(table_name = shifts)]
 pub struct ShiftInsert {
     pub user_id: Uuid,

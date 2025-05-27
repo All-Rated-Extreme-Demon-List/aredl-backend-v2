@@ -1,14 +1,27 @@
+use crate::aredl::shifts::Shift as AredlShift;
+use crate::aredl::shifts::ShiftStatus as AredlShiftStatus;
+use crate::arepl::shifts::Shift as AreplShift;
+use crate::arepl::shifts::ShiftStatus as AreplShiftStatus;
 use crate::db::DbAppState;
+use crate::notifications::WebsocketNotification;
+use crate::schema::aredl::shifts as aredl_shifts;
+use crate::schema::arepl::shifts as arepl_shifts;
+
 use crate::get_secret;
 use chrono::Utc;
 use cron::Schedule;
-use diesel::RunQueryDsl;
+use diesel::query_dsl::methods::FilterDsl;
+use diesel::{ExpressionMethods, RunQueryDsl};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::broadcast;
 use tokio::task;
 
-pub async fn start_data_cleaner(db: Arc<DbAppState>) {
+pub async fn start_data_cleaner(
+    db: Arc<DbAppState>,
+    notify_tx: broadcast::Sender<WebsocketNotification>,
+) {
     let schedule = Schedule::from_str(&get_secret("DATA_CLEANER_SCHEDULE")).unwrap();
     let schedule = Arc::new(schedule);
     let db_clone = db.clone();
@@ -72,26 +85,65 @@ pub async fn start_data_cleaner(db: Arc<DbAppState>) {
             }
 
             tracing::info!("Expiring overdue shifts");
-            if let Err(e) = diesel::sql_query(
-                "UPDATE aredl.shifts \
-                 SET status = 'Expired', updated_at = NOW() \
-                 WHERE status = 'Running' \
-                   AND end_at < NOW();",
+
+            let aredl_expired_shifts: Vec<AredlShift> = aredl_shifts::table
+                .filter(aredl_shifts::status.eq(AredlShiftStatus::Running))
+                .filter(aredl_shifts::end_at.lt(Utc::now()))
+                .load(&mut conn)
+                .unwrap_or_else(|e| {
+                    tracing::error!("Failed to load expired shifts: {}", e);
+                    vec![]
+                });
+
+            if let Err(e) = diesel::update(
+                aredl_shifts::table
+                    .filter(aredl_shifts::status.eq(AredlShiftStatus::Running))
+                    .filter(aredl_shifts::end_at.lt(Utc::now())),
             )
+            .set((
+                aredl_shifts::status.eq(AredlShiftStatus::Expired),
+                aredl_shifts::updated_at.eq(Utc::now()),
+            ))
             .execute(&mut conn)
             {
-                tracing::error!("Failed to expire shifts for AREDL: {}", e);
+                tracing::error!("Failed to expire AREDL shifts: {}", e);
             }
 
-            if let Err(e) = diesel::sql_query(
-                "UPDATE arepl.shifts \
-                 SET status = 'Expired', updated_at = NOW() \
-                 WHERE status = 'Running' \
-                   AND end_at < NOW();",
+            let arepl_expired_shifts: Vec<AreplShift> = arepl_shifts::table
+                .filter(arepl_shifts::status.eq(AreplShiftStatus::Running))
+                .filter(arepl_shifts::end_at.lt(Utc::now()))
+                .load(&mut conn)
+                .unwrap_or_else(|e| {
+                    tracing::error!("Failed to load expired shifts: {}", e);
+                    vec![]
+                });
+
+            if let Err(e) = diesel::update(
+                arepl_shifts::table
+                    .filter(arepl_shifts::status.eq(AreplShiftStatus::Running))
+                    .filter(arepl_shifts::end_at.lt(Utc::now())),
             )
+            .set((
+                arepl_shifts::status.eq(AreplShiftStatus::Expired),
+                arepl_shifts::updated_at.eq(Utc::now()),
+            ))
             .execute(&mut conn)
             {
-                tracing::error!("Failed to expire shifts for AREPL: {}", e);
+                tracing::error!("Failed to expire AREPL shifts: {}", e);
+            }
+
+            let missed_shifts_payload = serde_json::json!({
+                "aredl": aredl_expired_shifts,
+                "arepl": arepl_expired_shifts,
+            });
+
+            let notification = WebsocketNotification {
+                notification_type: "SHIFTS_MISSED".into(),
+                data: serde_json::to_value(&missed_shifts_payload)
+                    .expect("Failed to serialize shifts"),
+            };
+            if let Err(e) = notify_tx.send(notification) {
+                tracing::error!("Failed to send shift notification: {}", e);
             }
 
             let now = Utc::now();

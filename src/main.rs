@@ -100,11 +100,11 @@ async fn main() -> std::io::Result<()> {
 
     start_leaderboard_refresher(db_app_state.clone()).await;
 
-    start_data_cleaner(db_app_state.clone()).await;
+    start_data_cleaner(db_app_state.clone(), notify_tx.clone()).await;
 
     start_level_data_refresher(db_app_state.clone()).await;
 
-    start_recurrent_shift_creator(db_app_state.clone()).await;
+    start_recurrent_shift_creator(db_app_state.clone(), notify_tx.clone()).await;
 
     let auth_app_state = auth::init_app_state().await;
 

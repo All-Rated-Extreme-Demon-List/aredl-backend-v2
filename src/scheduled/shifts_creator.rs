@@ -1,10 +1,15 @@
-use crate::{aredl::shifts::RecurringShift, db::DbAppState, get_secret};
+use crate::{
+    aredl::shifts::RecurringShift, db::DbAppState, get_secret, notifications::WebsocketNotification,
+};
 use chrono::{NaiveDate, Utc};
 use cron::Schedule;
 use std::{str::FromStr, sync::Arc, time::Duration};
-use tokio::task;
+use tokio::{sync::broadcast, task};
 
-pub async fn start_recurrent_shift_creator(db: Arc<DbAppState>) {
+pub async fn start_recurrent_shift_creator(
+    db: Arc<DbAppState>,
+    notify_tx: broadcast::Sender<WebsocketNotification>,
+) {
     let schedule = Schedule::from_str(&get_secret("RECURRING_SHIFTS_SCHEDULE")).unwrap();
     let schedule = Arc::new(schedule);
     let db_clone = db.clone();
@@ -23,8 +28,20 @@ pub async fn start_recurrent_shift_creator(db: Arc<DbAppState>) {
             };
 
             let today: NaiveDate = Utc::now().date_naive();
-            if let Err(e) = RecurringShift::create_shifts(&mut conn, today) {
-                tracing::error!("Failed to create shifts for {}: {}", today, e);
+            match RecurringShift::create_shifts(&mut conn, today) {
+                Ok(new_shifts) => {
+                    let notification = WebsocketNotification {
+                        notification_type: "SHIFTS_CREATED".into(),
+                        data: serde_json::to_value(&new_shifts)
+                            .expect("Failed to serialize shifts"),
+                    };
+                    if let Err(e) = notify_tx.send(notification) {
+                        tracing::error!("Failed to send shift notification: {}", e);
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Failed to create shifts for {}: {}", today, e);
+                }
             }
 
             let now = Utc::now();
