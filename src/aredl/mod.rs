@@ -6,7 +6,7 @@ mod levels;
 mod packs;
 mod packtiers;
 mod profile;
-mod records;
+pub mod records;
 mod routes;
 pub mod shifts;
 mod submissions;
