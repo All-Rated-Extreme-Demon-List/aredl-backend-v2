@@ -6,9 +6,11 @@ use crate::{
     auth::{Authenticated, Permission, UserAuth},
     db::DbAppState,
     error_handler::ApiError,
+    notifications::WebsocketNotification,
 };
 use actix_web::{get, post, web, HttpResponse};
 use std::sync::Arc;
+use tokio::sync::broadcast;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
 use uuid::Uuid;
@@ -90,15 +92,18 @@ async fn unclaim(
 )]
 async fn accept(
     db: web::Data<Arc<DbAppState>>,
+
     id: web::Path<Uuid>,
     authenticated: Authenticated,
     notes: web::Json<ReviewerNotes>,
     root_span: RootSpan,
+    notify_tx: web::Data<broadcast::Sender<WebsocketNotification>>,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&notes));
     let new_record = web::block(move || {
         Submission::accept(
             db,
+            notify_tx.get_ref().clone(),
             id.into_inner(),
             authenticated.user_id,
             notes.into_inner().notes,
@@ -131,6 +136,7 @@ async fn deny(
     id: web::Path<Uuid>,
     authenticated: Authenticated,
     body: Option<web::Json<ReviewerNotes>>,
+    notify_tx: web::Data<broadcast::Sender<WebsocketNotification>>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&body));
@@ -139,9 +145,16 @@ async fn deny(
         None => None,
     };
 
-    let new_record =
-        web::block(move || Submission::reject(db, id.into_inner(), authenticated, reason))
-            .await??;
+    let new_record = web::block(move || {
+        Submission::reject(
+            db,
+            notify_tx.get_ref().clone(),
+            id.into_inner(),
+            authenticated,
+            reason,
+        )
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(new_record))
 }
 
@@ -170,6 +183,7 @@ async fn under_consideration(
     id: web::Path<Uuid>,
     authenticated: Authenticated,
     body: Option<web::Json<ReviewerNotes>>,
+    notify_tx: web::Data<broadcast::Sender<WebsocketNotification>>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&body));
@@ -179,7 +193,13 @@ async fn under_consideration(
     };
 
     let new_record = web::block(move || {
-        Submission::under_consideration(db, id.into_inner(), authenticated, notes)
+        Submission::under_consideration(
+            db,
+            notify_tx.get_ref().clone(),
+            id.into_inner(),
+            authenticated,
+            notes,
+        )
     })
     .await??;
     Ok(HttpResponse::Ok().json(new_record))

@@ -1,12 +1,13 @@
 use crate::{
     arepl::{
         records::Record,
-        shifts::ShiftStatus,
+        shifts::{Shift, ShiftStatus},
         submissions::{history::SubmissionHistory, *},
     },
     auth::Authenticated,
     db::DbAppState,
     error_handler::ApiError,
+    notifications::WebsocketNotification,
     schema::arepl::{
         levels, records, shifts, submission_history, submissions, submissions_with_priority,
     },
@@ -20,6 +21,7 @@ use diesel::{
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tokio::sync::broadcast;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -29,7 +31,11 @@ pub struct ReviewerNotes {
 }
 
 impl Submission {
-    pub fn increment_user_shift(conn: &mut PgConnection, user_id: Uuid) -> Result<(), ApiError> {
+    pub fn increment_user_shift(
+        conn: &mut PgConnection,
+        notify_tx: broadcast::Sender<WebsocketNotification>,
+        user_id: Uuid,
+    ) -> Result<(), ApiError> {
         let now = Utc::now();
 
         let running_shift_id = shifts::table
@@ -43,16 +49,22 @@ impl Submission {
             .optional()?;
 
         if let Some(shift_id) = running_shift_id {
-            let (completed_count, target_count) =
-                diesel::update(shifts::table.filter(shifts::id.eq(shift_id)))
-                    .set((
-                        shifts::completed_count.eq(shifts::completed_count + 1),
-                        shifts::updated_at.eq(now),
-                    ))
-                    .returning((shifts::completed_count, shifts::target_count))
-                    .get_result::<(i32, i32)>(conn)?;
+            let updated_shift = diesel::update(shifts::table.filter(shifts::id.eq(shift_id)))
+                .set((
+                    shifts::completed_count.eq(shifts::completed_count + 1),
+                    shifts::updated_at.eq(now),
+                ))
+                .returning(Shift::as_select())
+                .get_result::<Shift>(conn)?;
 
-            if completed_count >= target_count {
+            if updated_shift.completed_count >= updated_shift.target_count {
+                let notification = WebsocketNotification {
+                    notification_type: "SHIFT_COMPLETED".into(),
+                    data: serde_json::to_value(&updated_shift).expect("Failed to serialize shift"),
+                };
+                if let Err(e) = notify_tx.send(notification) {
+                    tracing::error!("Failed to send shift notification: {}", e);
+                }
                 diesel::update(shifts::table.filter(shifts::id.eq(shift_id)))
                     .set(shifts::status.eq(ShiftStatus::Completed))
                     .execute(conn)?;
@@ -62,6 +74,7 @@ impl Submission {
     }
     pub fn accept(
         db: web::Data<Arc<DbAppState>>,
+        notify_tx: broadcast::Sender<WebsocketNotification>,
         id: Uuid,
         reviewer_id: Uuid,
         notes: Option<String>,
@@ -110,6 +123,12 @@ impl Submission {
                     .get_result::<Record>(connection)?
             };
 
+            let notification: WebsocketNotification = WebsocketNotification {
+                notification_type: "SUBMISSION_ACCEPTED".into(),
+                data: serde_json::to_value(&inserted).expect("Failed to serialize record"),
+            };
+            let _ = notify_tx.send(notification);
+
             // Log submission history
             let history = SubmissionHistory {
                 id: Uuid::new_v4(),
@@ -130,7 +149,7 @@ impl Submission {
                 .select(levels::name)
                 .first::<String>(connection)?;
 
-            Self::increment_user_shift(connection, reviewer_id)?;
+            Self::increment_user_shift(connection, notify_tx, reviewer_id)?;
 
             let content = format!("Your submissions for {:?} has been accepted!", level_name);
             Notification::create(
@@ -139,7 +158,6 @@ impl Submission {
                 content,
                 NotificationType::Success,
             )?;
-
             diesel::delete(submissions::table)
                 .filter(submissions::id.eq(id))
                 .execute(connection)?;
@@ -150,6 +168,7 @@ impl Submission {
 
     pub fn reject(
         db: web::Data<Arc<DbAppState>>,
+        notify_tx: broadcast::Sender<WebsocketNotification>,
         id: Uuid,
         authenticated: Authenticated,
         notes: Option<String>,
@@ -188,6 +207,13 @@ impl Submission {
         let resolved_updated_submission =
             SubmissionResolved::resolve_from_id(updated_submission.id, db, authenticated)?;
 
+        let notification = WebsocketNotification {
+            notification_type: "SUBMISSION_DENIED".into(),
+            data: serde_json::to_value(&resolved_updated_submission)
+                .expect("Failed to serialize record"),
+        };
+        let _ = notify_tx.send(notification);
+
         // Log submission history
         let history = SubmissionHistory {
             id: Uuid::new_v4(),
@@ -203,7 +229,7 @@ impl Submission {
             .values(&history)
             .execute(connection)?;
 
-        Self::increment_user_shift(connection, user_id)?;
+        Self::increment_user_shift(connection, notify_tx, user_id)?;
 
         let content: String = format!(
             "Your submission for {:?} has been denied.",
@@ -220,6 +246,7 @@ impl Submission {
 
     pub fn under_consideration(
         db: web::Data<Arc<DbAppState>>,
+        notify_tx: broadcast::Sender<WebsocketNotification>,
         id: Uuid,
         authenticated: Authenticated,
         notes: Option<String>,
@@ -273,7 +300,7 @@ impl Submission {
             .values(&history)
             .execute(connection)?;
 
-        Self::increment_user_shift(connection, user_id)?;
+        Self::increment_user_shift(connection, notify_tx, user_id)?;
 
         let content = format!(
             "Your submission for {:?} has been placed under consideration.",

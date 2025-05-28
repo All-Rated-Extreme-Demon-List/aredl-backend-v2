@@ -147,7 +147,10 @@ impl RecurringShift {
         Ok(deleted)
     }
 
-    pub fn create_shifts(conn: &mut PgConnection, date: NaiveDate) -> Result<(), ApiError> {
+    pub fn create_shifts(
+        conn: &mut PgConnection,
+        date: NaiveDate,
+    ) -> Result<Vec<ShiftInsert>, ApiError> {
         let today = match date.weekday().number_from_monday() {
             1 => Weekday::Monday,
             2 => Weekday::Tuesday,
@@ -162,6 +165,8 @@ impl RecurringShift {
         let templates: Vec<RecurringShift> = recurrent_shifts::table
             .filter(recurrent_shifts::weekday.eq(today))
             .load(conn)?;
+
+        let mut new_shifts = Vec::new();
 
         for template in templates {
             let naive_dt = date
@@ -184,12 +189,14 @@ impl RecurringShift {
                     start_at,
                     end_at,
                 };
+
+                new_shifts.push(new.clone());
                 diesel::insert_into(shifts::table)
                     .values(&new)
                     .execute(conn)?;
             }
         }
 
-        Ok(())
+        Ok(new_shifts)
     }
 }
