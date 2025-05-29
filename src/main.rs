@@ -11,6 +11,7 @@ mod test_utils;
 
 mod aredl;
 mod arepl;
+mod health;
 mod auth;
 mod cache_control;
 mod clans;
@@ -31,7 +32,7 @@ use actix_cors::Cors;
 use actix_web::body::MessageBody;
 use actix_web::dev::{ServiceRequest, ServiceResponse};
 use actix_web::middleware::NormalizePath;
-use actix_web::Error;
+use actix_web::{Error};
 use actix_web::{web, App, HttpServer};
 use actix_web_prom::PrometheusMetricsBuilder;
 
@@ -155,7 +156,8 @@ async fn main() -> std::io::Result<()> {
                     .configure(users::init_routes)
                     .configure(roles::init_routes)
                     .configure(clans::init_routes)
-                    .configure(notifications::init_routes),
+                    .configure(notifications::init_routes)
+					.configure(health::init_routes),
             )
             .service(
                 RapiDoc::with_openapi("/openapi.json", ApiDoc::openapi())
@@ -191,3 +193,4 @@ impl RootSpanBuilder for AppRootSpanBuilder {
         DefaultRootSpanBuilder::on_request_end(span, outcome);
     }
 }
+
