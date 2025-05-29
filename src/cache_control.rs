@@ -1,10 +1,15 @@
-use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
-use actix_web::http::header;
-use actix_web::http::header::{CacheControl, CacheDirective, TryIntoHeaderValue};
+use actix_web::{
+    body::MessageBody,
+    dev::{Service, ServiceRequest, ServiceResponse, Transform},
+    http::header::{self, CacheControl, CacheDirective, TryIntoHeaderValue},
+    Error,
+};
 use futures_util::future::{ready, LocalBoxFuture, Ready};
-use openidconnect::http::HeaderValue;
-use std::rc::Rc;
-use std::task::{Context, Poll};
+use std::{
+    marker::PhantomData,
+    rc::Rc,
+    task::{Context, Poll},
+};
 
 pub struct CacheController {
     cache_directive: Vec<CacheDirective>,
@@ -34,48 +39,46 @@ impl CacheController {
     }
 }
 
-impl<S> Transform<S, ServiceRequest> for CacheController
+impl<S, B> Transform<S, ServiceRequest> for CacheController
 where
-    S: Service<
-            ServiceRequest,
-            Response = ServiceResponse<actix_web::body::BoxBody>,
-            Error = actix_web::Error,
-        > + 'static,
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    B: MessageBody + 'static,
 {
-    type Response = ServiceResponse<actix_web::body::BoxBody>;
-    type Error = actix_web::Error;
-    type Transform = CacheControlMiddleware<S>;
+    type Response = ServiceResponse<B>;
+    type Error = Error;
+    type Transform = CacheControlMiddleware<S, B>;
     type InitError = ();
     type Future = Ready<Result<Self::Transform, Self::InitError>>;
 
     fn new_transform(&self, service: S) -> Self::Future {
-        ready(Ok(CacheControlMiddleware {
+        let header_value = CacheControl(self.cache_directive.clone())
+            .try_into_value()
+            .expect("Invalid cache directive");
+
+        ready(Ok(CacheControlMiddleware::<S, B> {
             service: Rc::new(service),
-            cache_directive: CacheControl(self.cache_directive.clone())
-                .try_into_value()
-                .unwrap(),
+            header_value,
             replace: self.replace,
+            _marker: PhantomData,
         }))
     }
 }
 
-pub struct CacheControlMiddleware<S> {
+pub struct CacheControlMiddleware<S, B> {
     service: Rc<S>,
-    cache_directive: HeaderValue,
+    header_value: header::HeaderValue,
     replace: bool,
+    _marker: PhantomData<B>,
 }
 
-impl<S> Service<ServiceRequest> for CacheControlMiddleware<S>
+impl<S, B> Service<ServiceRequest> for CacheControlMiddleware<S, B>
 where
-    S: Service<
-            ServiceRequest,
-            Response = ServiceResponse<actix_web::body::BoxBody>,
-            Error = actix_web::Error,
-        > + 'static,
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    B: MessageBody + 'static,
 {
-    type Response = ServiceResponse<actix_web::body::BoxBody>;
-    type Error = actix_web::Error;
-    type Future = LocalBoxFuture<'static, Result<Self::Response, actix_web::Error>>;
+    type Response = ServiceResponse<B>;
+    type Error = Error;
+    type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&self, ctx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.service.poll_ready(ctx)
@@ -83,14 +86,14 @@ where
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
         let fut = self.service.call(req);
-
         let replace = self.replace;
-        let cache_control = self.cache_directive.clone();
+        let header_value = self.header_value.clone();
+
         Box::pin(async move {
             let mut res = fut.await?;
             if !res.headers().contains_key(header::CACHE_CONTROL) || replace {
                 res.headers_mut()
-                    .insert(header::CACHE_CONTROL, cache_control);
+                    .insert(header::CACHE_CONTROL, header_value);
             }
             Ok(res)
         })
