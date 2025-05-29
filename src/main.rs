@@ -154,7 +154,6 @@ async fn main() -> std::io::Result<()> {
                     .app_data(web::Data::new(auth_app_state.clone()))
                     .app_data(web::Data::new(db_app_state.clone()))
                     .app_data(web::Data::new(notify_tx.clone()))
-                    .wrap(Governor::new(&governor_conf))
                     .wrap(CacheController::default_no_store())
                     .wrap(NormalizePath::trim())
                     .wrap(TracingLogger::<AppRootSpanBuilder>::new())
