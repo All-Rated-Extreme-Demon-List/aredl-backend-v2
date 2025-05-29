@@ -27,7 +27,7 @@ use uuid::Uuid;
 #[get(
     "",
     wrap = "UserAuth::load()",
-    wrap = "CacheController::public_cache()"
+    wrap = "CacheController::private_with_max_age(3600)"
 )]
 async fn find_all(
     db: web::Data<Arc<DbAppState>>,

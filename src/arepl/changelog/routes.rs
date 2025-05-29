@@ -1,4 +1,5 @@
 use crate::arepl::changelog::ChangelogPage;
+use crate::cache_control::CacheController;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
@@ -19,7 +20,7 @@ use utoipa::OpenApi;
         (status = 200, body = [Paginated<ChangelogPage>])
     ),
 )]
-#[get("")]
+#[get("", wrap = "CacheController::public_with_max_age(900)")]
 async fn list(
     db: web::Data<Arc<DbAppState>>,
     page_query: web::Query<PageQuery<20>>,

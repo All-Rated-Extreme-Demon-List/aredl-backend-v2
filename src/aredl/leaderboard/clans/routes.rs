@@ -1,11 +1,12 @@
-use crate::aredl::leaderboard::clans::{ClansLeaderboardPage, ClansLeaderboardQueryOptions};
+use crate::aredl::leaderboard::clans::{ ClansLeaderboardPage, ClansLeaderboardQueryOptions };
 use crate::aredl::leaderboard::LeaderboardOrder;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
-use crate::page_helper::{PageQuery, Paginated};
-use actix_web::{get, web, HttpResponse};
+use crate::page_helper::{ PageQuery, Paginated };
+use actix_web::{ get, web, HttpResponse };
 use std::sync::Arc;
 use utoipa::OpenApi;
+use crate::cache_control::CacheController;
 
 #[utoipa::path(
     get,
@@ -22,17 +23,16 @@ use utoipa::OpenApi;
         (status = 200, body = [Paginated<ClansLeaderboardPage>])
     ),
 )]
-#[get("")]
+#[get("", wrap = "CacheController::public_with_max_age(300)")]
 async fn list(
     db: web::Data<Arc<DbAppState>>,
     page_query: web::Query<PageQuery<100>>,
-    options: web::Query<ClansLeaderboardQueryOptions>,
+    options: web::Query<ClansLeaderboardQueryOptions>
 ) -> Result<HttpResponse, ApiError> {
     let result = web::block(move || {
         let mut conn = db.connection()?;
         ClansLeaderboardPage::find(&mut conn, page_query.into_inner(), options.into_inner())
-    })
-    .await??;
+    }).await??;
     Ok(HttpResponse::Ok().json(result))
 }
 

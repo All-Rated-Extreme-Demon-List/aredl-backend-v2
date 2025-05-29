@@ -1,33 +1,29 @@
 use crate::aredl::clan::ClanProfileResolved;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
-use actix_web::{get, web, HttpResponse};
+use actix_web::{ get, web, HttpResponse };
 use std::sync::Arc;
 use utoipa::OpenApi;
 use uuid::Uuid;
+use crate::cache_control::CacheController;
 
 #[utoipa::path(
     get,
     summary = "Clan",
     description = "Get a clan's AREDL profile",
     tag = "AREDL",
-    params(
-        ("id" = Uuid, description = "The clan to lookup the data for")
-    ),
-    responses(
-        (status = 200, body = ClanProfileResolved)
-    ),
+    params(("id" = Uuid, description = "The clan to lookup the data for")),
+    responses((status = 200, body = ClanProfileResolved))
 )]
-#[get("/{id}")]
+#[get("/{id}", wrap = "CacheController::public_with_max_age(900)")]
 async fn find(
     db: web::Data<Arc<DbAppState>>,
-    id: web::Path<Uuid>,
+    id: web::Path<Uuid>
 ) -> Result<HttpResponse, ApiError> {
     let profile = web::block(move || {
         let mut conn = db.connection()?;
         ClanProfileResolved::find(&mut conn, id.into_inner())
-    })
-    .await??;
+    }).await??;
     Ok(HttpResponse::Ok().json(profile))
 }
 

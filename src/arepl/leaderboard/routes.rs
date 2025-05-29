@@ -1,5 +1,6 @@
 use crate::arepl::leaderboard::{clans, countries};
 use crate::arepl::leaderboard::{LeaderboardOrder, LeaderboardPage, LeaderboardQueryOptions};
+use crate::cache_control::CacheController;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
@@ -23,7 +24,7 @@ use utoipa::OpenApi;
         (status = 200, body = [Paginated<LeaderboardPage>])
     ),
 )]
-#[get("")]
+#[get("", wrap = "CacheController::public_with_max_age(300)")]
 async fn list(
     db: web::Data<Arc<DbAppState>>,
     page_query: web::Query<PageQuery<100>>,

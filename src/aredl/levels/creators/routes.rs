@@ -1,5 +1,6 @@
 use crate::aredl::levels::id_resolver::resolve_level_id;
 use crate::auth::{Permission, UserAuth};
+use crate::cache_control::CacheController;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::users::BaseUser;
@@ -21,7 +22,7 @@ use uuid::Uuid;
         (status = 200, body = [BaseUser])
     ),
 )]
-#[get("")]
+#[get("", wrap = "CacheController::public_with_max_age(900)")]
 async fn find_all(
     db: web::Data<Arc<DbAppState>>,
     level_id: web::Path<String>,

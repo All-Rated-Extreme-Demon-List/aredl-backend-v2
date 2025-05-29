@@ -1,4 +1,5 @@
 use crate::arepl::country::CountryProfileResolved;
+use crate::cache_control::CacheController;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use actix_web::{get, web, HttpResponse};
@@ -17,7 +18,7 @@ use utoipa::OpenApi;
         (status = 200, body = CountryProfileResolved)
     ),
 )]
-#[get("/{id}")]
+#[get("/{id}", wrap = "CacheController::public_with_max_age(3600)")]
 async fn find(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<i32>,
