@@ -459,3 +459,24 @@ async fn submission_under_consideration() {
     assert_eq!(body["reviewer_notes"], under_consideration_data["notes"], "Reviewer notes do not match!");
     assert_eq!(body["status"].as_str().unwrap(), "UnderConsideration", "Submission is not denied!");
 }
+
+#[actix_web::test]
+async fn get_submission_history() {
+    let (app, mut conn, auth) = init_test_app().await;
+
+    let (user_id, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let level_id = create_test_level(&mut conn).await;
+
+    let submission: Uuid = create_test_submission(level_id, user_id, &mut conn).await;
+
+    let under_consideration_data = json!({"notes": "No way SpaceUK is hacking right guys"});
+
+    let req = test::TestRequest::post()
+        .uri(format!("/aredl/submissions/{submission}/underconsideration").as_str())
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&under_consideration_data)
+        .to_request();
+    
+}
