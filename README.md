@@ -17,7 +17,7 @@ For this guide you will need to install:
 After that, clone this repository onto your computer:
 
 ```bash
-cd path/to/repo/like/documents/github/or/something
+cd path/to/repo/
 git clone https://github.com/All-Rated-Extreme-Demon-List/aredl-backend-v2.git
 ```
 
