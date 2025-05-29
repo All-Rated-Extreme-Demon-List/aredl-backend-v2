@@ -241,8 +241,8 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/requests")
             .service(list)
-            .service(find_one)
             .service(claim)
+            .service(find_one)
             .service(create)
             .service(accept)
             .service(reject),
