@@ -34,6 +34,7 @@ pub struct SubmissionQueryOptions {
     pub level_filter: Option<Uuid>,
     pub submitter_filter: Option<Uuid>,
     pub priority_filter: Option<bool>,
+    pub reviewer_filter: Option<Uuid>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -69,6 +70,35 @@ macro_rules! aredl_base_resolved_submission_query {
 
 #[macro_export]
 macro_rules! aredl_apply_submissions_filters {
+    ($query:expr, $opts:expr) => {{
+        let opts = &$opts;
+        let mut new_query = $query;
+
+        if let Some(status) = opts.status_filter.clone() {
+            new_query = new_query.filter(submissions_with_priority::status.eq(status));
+        }
+        if let Some(mobile) = opts.mobile_filter.clone() {
+            new_query = new_query.filter(submissions_with_priority::mobile.eq(mobile));
+        }
+        if let Some(level) = opts.level_filter.clone() {
+            new_query = new_query.filter(submissions_with_priority::level_id.eq(level));
+        }
+        if let Some(submitter) = opts.submitter_filter.clone() {
+            new_query = new_query.filter(submissions_with_priority::submitted_by.eq(submitter));
+        }
+        if let Some(priority) = opts.priority_filter.clone() {
+            new_query = new_query.filter(submissions_with_priority::priority.eq(priority));
+        }
+        if let Some(reviewer) = opts.reviewer_filter.clone() {
+            new_query = new_query.filter(submissions_with_priority::reviewer_id.eq(reviewer));
+        }
+
+        new_query
+    }};
+}
+
+#[macro_export]
+macro_rules! aredl_apply_submissions_filters_unauth {
     ($query:expr, $opts:expr) => {{
         let opts = &$opts;
         let mut new_query = $query;
