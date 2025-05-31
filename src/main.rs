@@ -29,7 +29,7 @@ use crate::scheduled::refresh_leaderboard::start_leaderboard_refresher;
 use crate::scheduled::refresh_level_data::start_level_data_refresher;
 use crate::scheduled::shifts_creator::start_recurrent_shift_creator;
 use actix_cors::Cors;
-use actix_governor::{Governor, GovernorConfigBuilder};
+use actix_governor::GovernorConfigBuilder;
 use actix_web::body::MessageBody;
 use actix_web::dev::{ServiceRequest, ServiceResponse};
 use actix_web::middleware::NormalizePath;

@@ -478,5 +478,29 @@ async fn get_submission_history() {
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(&under_consideration_data)
         .to_request();
+
+    let res = test::call_service(&app, req).await;
+    assert!(res.status().is_success(), "status of req is {}", res.status());
+
+    let req = test::TestRequest::get()
+        .uri(format!("/aredl/submissions/{submission}/history").as_str())
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let res = test::call_service(&app, req).await;
+    assert!(res.status().is_success(), "status of req is {}", res.status());
+
+
+    let body: serde_json::Value = test::read_body_json(res).await;
+
+    let arr = body.as_array().unwrap();
+    assert_eq!(arr.len(), 1);
+    let entry = &arr[0];
+    
+    assert_eq!(entry["submission_id"], submission.to_string());
+    assert_eq!(entry["status"], "UnderConsideration");
+    assert_eq!(entry["reviewer_notes"], under_consideration_data["notes"]);
+
+    
     
 }
