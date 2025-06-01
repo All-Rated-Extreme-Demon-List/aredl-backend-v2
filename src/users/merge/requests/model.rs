@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use diesel::dsl::now;
 use diesel::pg::Pg;
 use diesel::prelude::*;
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper, sql_types::Bool};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -59,6 +59,13 @@ pub struct ResolvedMergeRequest {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct MergeRequestQueryOptions {
+    pub claimed_filter: Option<bool>,
+    pub rejected_filter: Option<bool>,
+    pub user_filter: Option<Uuid>,
+}
+
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct MergeRequestPage {
     pub data: Vec<ResolvedMergeRequest>,
@@ -98,6 +105,7 @@ impl MergeRequestPage {
     pub fn find_all<const D: i64>(
         conn: &mut DbConnection,
         page_query: PageQuery<D>,
+        options: MergeRequestQueryOptions
     ) -> Result<Paginated<Self>, ApiError> {
         let users2 = alias!(users as users2);
         let data_rows = merge_requests::table
@@ -105,6 +113,26 @@ impl MergeRequestPage {
             .inner_join(users2.on(merge_requests::secondary_user.eq(users2.field(users::id))))
             .limit(page_query.per_page())
             .offset(page_query.offset())
+            .filter(
+                options.claimed_filter.map_or_else(
+                    || Box::new(true.into_sql::<Bool>()) as Box<dyn BoxableExpression<_, _, SqlType = Bool>>,
+                    |claimed| Box::new(merge_requests::is_claimed.eq(claimed))
+                )
+            )
+            .filter(
+                options.rejected_filter.map_or_else(
+                    || Box::new(true.into_sql::<Bool>()) as Box<dyn BoxableExpression<_, _, SqlType = Bool>>,
+                    |rejected| Box::new(merge_requests::is_rejected.eq(rejected))
+                )
+            )
+            .filter(
+                options.user_filter.map_or_else(
+                    || Box::new(true.into_sql::<Bool>()) as Box<dyn BoxableExpression<_, _, SqlType = Bool>>,
+                    |user| Box::new(merge_requests::primary_user.eq(user).or(
+                        merge_requests::secondary_user.eq(user)
+                    ))
+                )
+            )
             .select((
                 MergeRequest::as_select(),
                 BaseUser::as_select(),
