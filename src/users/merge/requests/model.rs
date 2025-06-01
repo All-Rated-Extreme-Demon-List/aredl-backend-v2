@@ -116,7 +116,9 @@ impl MergeRequestPage {
             .filter(
                 options.claimed_filter.map_or_else(
                     || Box::new(true.into_sql::<Bool>()) as Box<dyn BoxableExpression<_, _, SqlType = Bool>>,
-                    |claimed| Box::new(merge_requests::is_claimed.eq(claimed))
+                    |claimed| Box::new(merge_requests::is_claimed.eq(claimed).and(
+                        merge_requests::is_rejected.eq(false)
+                    ))
                 )
             )
             .filter(
