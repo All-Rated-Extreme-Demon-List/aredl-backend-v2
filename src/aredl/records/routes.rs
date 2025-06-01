@@ -209,6 +209,7 @@ async fn find_me(
         level_filter: None,
         mobile_filter: None,
         submitter_filter: Some(authenticated.user_id),
+        reviewer_filter: None
     };
     let records = web::block(move || {
         FullRecordResolved::find_all(db, page_query.into_inner(), options, true)
