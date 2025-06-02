@@ -140,7 +140,7 @@ async fn main() -> std::io::Result<()> {
                 <img style=\"padding: 0.5rem; height: 3rem;\" slot=\"logo\"  src=\"https://aredl.net/logo.png\"/>
             </rapi-doc></body></html>";
 
-        let governor_conf = GovernorConfigBuilder::default()
+        let _governor_conf = GovernorConfigBuilder::default()
             .requests_per_minute(100)
             .burst_size(20)
             .use_headers()
