@@ -24,7 +24,6 @@ mod users;
 
 use crate::cache_control::CacheController;
 use crate::docs::ApiDoc;
-use crate::schema::users as users_table;
 use crate::scheduled::data_cleaner::start_data_cleaner;
 use crate::scheduled::refresh_leaderboard::start_leaderboard_refresher;
 use crate::scheduled::refresh_level_data::start_level_data_refresher;
@@ -38,12 +37,9 @@ use actix_web::Error;
 use actix_web::{web, App, HttpServer};
 use actix_web_prom::PrometheusMetricsBuilder;
 
-use db::DbConnection;
-use diesel::{RunQueryDsl, ExpressionMethods};
 use dotenv::dotenv;
 use listenfd::ListenFd;
 use notifications::WebsocketNotification;
-use uuid::Uuid;
 use std::env;
 use std::fs;
 use tokio::sync::broadcast;
@@ -64,15 +60,6 @@ pub fn get_secret(var_name: &str) -> String {
     } else {
         value
     }
-}
-
-fn update_padahk_country(conn: &mut DbConnection) {
-    let id = Uuid::parse_str("aefb4846-1443-4b24-9cd9-e63208905434").unwrap();
-    diesel::update(users_table::table)
-        .filter(users_table::id.eq(id))
-        .set(users_table::country.eq(840))
-        .execute(conn)
-        .expect("failed to update country");
 }
 
 #[actix_rt::main]
@@ -159,8 +146,6 @@ async fn main() -> std::io::Result<()> {
             .use_headers()
             .finish()
             .expect("invalid governor config");
-
-        update_padahk_country(&mut db_app_state.connection().unwrap());
 
         App::new()
             .wrap(prometheus.clone())
