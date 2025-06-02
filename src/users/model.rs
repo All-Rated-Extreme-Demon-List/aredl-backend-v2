@@ -167,6 +167,20 @@ pub struct UserPage {
     pub data: Vec<User>,
 }
 
+impl UserUpdate {
+    /// Validation for user edits
+    pub fn validate(&self) -> Result<(), ApiError> {
+        if let Some(new_name) = &self.global_name {
+            if new_name.len() > 35 {
+                return Err(ApiError::new(
+                400, "Your name must be shorter than 35 characters!"
+            ))
+            }
+        }
+        Ok(())
+    }
+}
+
 impl BaseUser {
     pub fn from_base_user_with_ban_level(user: BaseUserWithBanLevel) -> Self {
         BaseUser {
@@ -299,6 +313,8 @@ impl User {
         user_id: Uuid,
         user: UserUpdate,
     ) -> Result<Self, ApiError> {
+        user.validate()?;
+        
         let updated_user = diesel::update(users::table.filter(users::id.eq(user_id)))
             .set(&user)
             .returning(Self::as_select())
