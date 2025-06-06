@@ -186,6 +186,19 @@ impl BaseUser {
 }
 
 impl User {
+    pub fn is_banned(user_id: Uuid, db: web::Data<Arc<DbAppState>>) -> Result<bool, ApiError> {
+        let user = users::table
+            .filter(users::id.eq(user_id))
+            .select(users::ban_level)
+            .first::<i32>(&mut db.connection()?)
+            .optional()?;
+
+        match user {
+            Some(ban_level) => Ok(ban_level > 1),
+            None => Err(ApiError::new(404, "User not found")),
+        }
+    }
+
     pub fn upsert(
         db: web::Data<Arc<DbAppState>>,
         user_upsert: UserUpsert,

@@ -1,12 +1,12 @@
 use crate::{
-    aredl::submissions::{*, history::SubmissionHistory},
+    aredl::submissions::{history::SubmissionHistory, *},
     auth::Authenticated,
     db::DbAppState,
     error_handler::ApiError,
     roles::Role,
     schema::{
         aredl::{levels, submission_history, submissions},
-        roles, user_roles, users,
+        roles, user_roles,
     },
 };
 use actix_web::web;
@@ -105,21 +105,6 @@ impl Submission {
                         ));
                     }
                 }
-            }
-
-            // check that this user ID is not banned
-            // we know this user exists because it's based on the
-            // authenticated user
-            let submitter_ban = users::table
-                .filter(users::id.eq(&authenticated.user_id))
-                .select(users::ban_level)
-                .first::<i32>(connection)?;
-
-            if submitter_ban >= 2 {
-                return Err(ApiError::new(
-                    403,
-                    "You are banned from submitting records.",
-                ));
             }
 
             let roles = user_roles::table

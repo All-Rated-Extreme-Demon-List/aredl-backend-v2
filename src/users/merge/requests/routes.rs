@@ -124,6 +124,9 @@ async fn create(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&options));
+
+    authenticated.check_is_banned(db.clone())?;
+
     let result = web::block(move || {
         let mut conn = db.connection()?;
         let merge_upsert = MergeRequestUpsert {
