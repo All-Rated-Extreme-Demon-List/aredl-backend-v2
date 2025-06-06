@@ -151,7 +151,7 @@ impl Submission {
 
             Self::increment_user_shift(connection, notify_tx, reviewer_id)?;
 
-            let content = format!("Your submissions for {:?} has been accepted!", level_name);
+            let content = format!("Your submission for {:?} has been accepted!", level_name);
             Notification::create(
                 connection,
                 inserted.submitted_by,
