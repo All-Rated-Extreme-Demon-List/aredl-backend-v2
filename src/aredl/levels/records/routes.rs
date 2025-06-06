@@ -1,6 +1,7 @@
 use crate::aredl::levels::id_resolver::resolve_level_id;
 use crate::aredl::records::PublicRecordResolved;
 use crate::aredl::records::Record;
+use crate::cache_control::CacheController;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use actix_web::{get, web, HttpResponse};
@@ -19,7 +20,7 @@ use utoipa::OpenApi;
         (status = 200, body = [PublicRecordResolved])
     ),
 )]
-#[get("")]
+#[get("", wrap = "CacheController::public_with_max_age(900)")]
 async fn find_all(
     db: web::Data<Arc<DbAppState>>,
     level_id: web::Path<String>,

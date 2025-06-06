@@ -11,7 +11,7 @@ use diesel::query_dsl::JoinOnDsl;
 use diesel::sql_types::Bool;
 use diesel::{
     BoxableExpression, ExpressionMethods, Insertable, IntoSql, NullableExpressionMethods, QueryDsl,
-    RunQueryDsl, Selectable, SelectableHelper,
+    RunQueryDsl, Selectable, SelectableHelper, PgExpressionMethods
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -186,6 +186,7 @@ pub struct RecordsQueryOptions {
     pub mobile_filter: Option<bool>,
     pub level_filter: Option<Uuid>,
     pub submitter_filter: Option<Uuid>,
+    pub reviewer_filter: Option<Uuid>
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -233,10 +234,14 @@ impl FullRecordUnresolved {
     pub fn find_all<const D: i64>(
         db: web::Data<Arc<DbAppState>>,
         page_query: PageQuery<D>,
-        options: RecordsQueryOptions,
+        mut options: RecordsQueryOptions,
         hide_reviewer: bool,
     ) -> Result<Paginated<FullUnresolvedRecordPage>, ApiError> {
         let conn = &mut db.connection()?;
+
+        if hide_reviewer {
+            options.reviewer_filter = None;
+        }
 
         let total_count: i64 = records::table
             .filter(options.mobile_filter.map_or_else(
@@ -259,6 +264,13 @@ impl FullRecordUnresolved {
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
                 |submitter| Box::new(records::submitted_by.eq(submitter)),
+            ))
+            .filter(options.reviewer_filter.map_or_else(
+                || {
+                    Box::new(true.into_sql::<Bool>())
+                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
+                },
+                |reviewer| Box::new(records::reviewer_id.is_not_distinct_from(reviewer)),
             ))
             .count()
             .get_result(conn)?;
@@ -285,6 +297,13 @@ impl FullRecordUnresolved {
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
                 |submitter| Box::new(records::submitted_by.eq(submitter)),
+            ))
+            .filter(options.reviewer_filter.map_or_else(
+                || {
+                    Box::new(true.into_sql::<Bool>())
+                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
+                },
+                |reviewer| Box::new(records::reviewer_id.is_not_distinct_from(reviewer)),
             ))
             .limit(page_query.per_page())
             .offset(page_query.offset())
@@ -353,10 +372,14 @@ impl FullRecordResolved {
     pub fn find_all<const D: i64>(
         db: web::Data<Arc<DbAppState>>,
         page_query: PageQuery<D>,
-        options: RecordsQueryOptions,
+        mut options: RecordsQueryOptions,
         hide_reviewer: bool,
     ) -> Result<Paginated<FullResolvedRecordPage>, ApiError> {
         let conn = &mut db.connection()?;
+
+        if hide_reviewer {
+            options.reviewer_filter = None;
+        }
 
         let reviewers = alias!(users as reviewers);
 
@@ -381,6 +404,13 @@ impl FullRecordResolved {
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
                 |submitter| Box::new(records::submitted_by.eq(submitter)),
+            ))
+            .filter(options.reviewer_filter.map_or_else(
+                || {
+                    Box::new(true.into_sql::<Bool>())
+                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
+                },
+                |reviewer| Box::new(records::reviewer_id.is_not_distinct_from(reviewer)),
             ))
             .count()
             .get_result(conn)?;
@@ -407,6 +437,13 @@ impl FullRecordResolved {
                         as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
                 },
                 |submitter| Box::new(records::submitted_by.eq(submitter)),
+            ))
+            .filter(options.reviewer_filter.map_or_else(
+                || {
+                    Box::new(true.into_sql::<Bool>())
+                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
+                },
+                |reviewer| Box::new(records::reviewer_id.is_not_distinct_from(reviewer)),
             ))
             .inner_join(users::table.on(records::submitted_by.eq(users::id)))
             .inner_join(levels::table.on(records::level_id.eq(levels::id)))

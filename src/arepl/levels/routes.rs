@@ -3,6 +3,7 @@ use crate::arepl::levels::{
     creators, history, packs, records, Level, LevelPlace, LevelUpdate, ResolvedLevel,
 };
 use crate::auth::{Permission, UserAuth};
+use crate::cache_control::CacheController;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use actix_web::{get, patch, post, web, HttpResponse};
@@ -19,7 +20,7 @@ use utoipa::OpenApi;
         (status = 200, body = [Level])
     ),
 )]
-#[get("")]
+#[get("", wrap = "CacheController::public_with_max_age(900)")]
 async fn list(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
     let levels = web::block(|| Level::find_all(db)).await??;
     Ok(HttpResponse::Ok().json(levels))
@@ -90,7 +91,7 @@ async fn update(
         (status = 200, body = ResolvedLevel)
     ),
 )]
-#[get("/{level_id}")]
+#[get("/{level_id}", wrap = "CacheController::public_with_max_age(900)")]
 async fn find(
     db: web::Data<Arc<DbAppState>>,
     level_id: web::Path<String>,

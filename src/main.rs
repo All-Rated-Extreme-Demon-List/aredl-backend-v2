@@ -15,6 +15,7 @@ mod auth;
 mod cache_control;
 mod clans;
 mod docs;
+mod health;
 mod notifications;
 mod page_helper;
 mod roles;
@@ -28,6 +29,7 @@ use crate::scheduled::refresh_leaderboard::start_leaderboard_refresher;
 use crate::scheduled::refresh_level_data::start_level_data_refresher;
 use crate::scheduled::shifts_creator::start_recurrent_shift_creator;
 use actix_cors::Cors;
+use actix_governor::GovernorConfigBuilder;
 use actix_web::body::MessageBody;
 use actix_web::dev::{ServiceRequest, ServiceResponse};
 use actix_web::middleware::NormalizePath;
@@ -138,6 +140,13 @@ async fn main() -> std::io::Result<()> {
                 <img style=\"padding: 0.5rem; height: 3rem;\" slot=\"logo\"  src=\"https://aredl.net/logo.png\"/>
             </rapi-doc></body></html>";
 
+        let _governor_conf = GovernorConfigBuilder::default()
+            .requests_per_minute(100)
+            .burst_size(20)
+            .use_headers()
+            .finish()
+            .expect("invalid governor config");
+
         App::new()
             .wrap(prometheus.clone())
             .service(
@@ -155,7 +164,8 @@ async fn main() -> std::io::Result<()> {
                     .configure(users::init_routes)
                     .configure(roles::init_routes)
                     .configure(clans::init_routes)
-                    .configure(notifications::init_routes),
+                    .configure(notifications::init_routes)
+                    .configure(health::init_routes),
             )
             .service(
                 RapiDoc::with_openapi("/openapi.json", ApiDoc::openapi())

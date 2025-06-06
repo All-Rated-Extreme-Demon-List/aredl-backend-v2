@@ -4,7 +4,7 @@ use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::users::merge::requests::{
-    MergeRequest, MergeRequestPage, MergeRequestUpsert, ResolvedMergeRequest,
+    MergeRequest, MergeRequestPage, MergeRequestUpsert, ResolvedMergeRequest, MergeRequestQueryOptions
 };
 use actix_web::web;
 use actix_web::{get, post, HttpResponse, Result};
@@ -70,10 +70,11 @@ async fn find_one(
 async fn list(
     db: web::Data<Arc<DbAppState>>,
     page_query: web::Query<PageQuery<20>>,
+    options: web::Query<MergeRequestQueryOptions>
 ) -> Result<HttpResponse, ApiError> {
     let result = web::block(move || {
         let mut conn = db.connection()?;
-        MergeRequestPage::find_all(&mut conn, page_query.into_inner())
+        MergeRequestPage::find_all(&mut conn, page_query.into_inner(), options.into_inner())
     })
     .await??;
     Ok(HttpResponse::Ok().json(result))
@@ -244,8 +245,8 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/requests")
             .service(list)
-            .service(find_one)
             .service(claim)
+            .service(find_one)
             .service(create)
             .service(accept)
             .service(reject),

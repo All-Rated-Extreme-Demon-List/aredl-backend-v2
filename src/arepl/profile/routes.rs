@@ -1,3 +1,4 @@
+use crate::cache_control::CacheController;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::{arepl::profile::ProfileResolved, users::User};
@@ -18,7 +19,7 @@ use uuid::Uuid;
         (status = 200, body = ProfileResolved)
     ),
 )]
-#[get("/{id}")]
+#[get("/{id}", wrap = "CacheController::private_with_max_age(300)")]
 async fn find(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,

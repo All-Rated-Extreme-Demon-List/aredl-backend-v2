@@ -1,4 +1,5 @@
 use crate::arepl::clan::ClanProfileResolved;
+use crate::cache_control::CacheController;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use actix_web::{get, web, HttpResponse};
@@ -18,7 +19,7 @@ use uuid::Uuid;
         (status = 200, body = ClanProfileResolved)
     ),
 )]
-#[get("/{id}")]
+#[get("/{id}", wrap = "CacheController::public_with_max_age(900)")]
 async fn find(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,

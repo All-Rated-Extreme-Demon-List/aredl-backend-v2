@@ -3,6 +3,7 @@ use crate::aredl::levels::{
     creators, history, packs, records, Level, LevelPlace, LevelUpdate, ResolvedLevel,
 };
 use crate::auth::{Permission, UserAuth};
+use crate::cache_control::CacheController;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use actix_web::{get, patch, post, web, HttpResponse};
@@ -15,11 +16,9 @@ use utoipa::OpenApi;
     summary = "List all levels",
     description = "List all the levels on the list",
     tag = "AREDL - Levels",
-    responses(
-        (status = 200, body = [Level])
-    ),
+    responses((status = 200, body = [Level]))
 )]
-#[get("")]
+#[get("", wrap = "CacheController::public_with_max_age(900)")]
 async fn list(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
     let levels = web::block(|| Level::find_all(db)).await??;
     Ok(HttpResponse::Ok().json(levels))
@@ -30,13 +29,8 @@ async fn list(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> 
     summary = "[Staff]Add level",
     description = "Place a new level on the list",
     tag = "AREDL - Levels",
-    responses(
-        (status = 200, description = "Level added successfully", body = Level)
-    ),
-    security(
-        ("access_token" = ["LevelModify"]),
-        ("api_key" = ["LevelModify"]),
-    )
+    responses((status = 200, description = "Level added successfully", body = Level)),
+    security(("access_token" = ["LevelModify"]), ("api_key" = ["LevelModify"]))
 )]
 #[post("", wrap = "UserAuth::require(Permission::LevelModify)")]
 async fn create(
@@ -54,16 +48,12 @@ async fn create(
     summary = "[Staff]Edit level",
     description = "Edit the base information of a level",
     tag = "AREDL - Levels",
-    params(
-        ("level_id", description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
-    ),
-    responses(
-        (status = 200, description = "Level edited successfully", body = Level)
-    ),
-    security(
-        ("access_token" = ["LevelModify"]),
-        ("api_key" = ["LevelModify"]),
-    )
+    params((
+        "level_id",
+        description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)",
+    )),
+    responses((status = 200, description = "Level edited successfully", body = Level)),
+    security(("access_token" = ["LevelModify"]), ("api_key" = ["LevelModify"]))
 )]
 #[patch("/{level_id}", wrap = "UserAuth::require(Permission::LevelModify)")]
 async fn update(
@@ -83,14 +73,13 @@ async fn update(
     summary = "Get level details",
     description = "Get more detailed information about a level",
     tag = "AREDL - Levels",
-    params(
-        ("level_id", description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
-    ),
-    responses(
-        (status = 200, body = ResolvedLevel)
-    ),
+    params((
+        "level_id",
+        description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)",
+    )),
+    responses((status = 200, body = ResolvedLevel))
 )]
-#[get("/{level_id}")]
+#[get("/{level_id}", wrap = "CacheController::public_with_max_age(900)")]
 async fn find(
     db: web::Data<Arc<DbAppState>>,
     level_id: web::Path<String>,
@@ -108,20 +97,12 @@ async fn find(
         (path = "/{level_id}/records", api = records::ApiDoc),
         (path = "/{level_id}/packs", api = packs::ApiDoc)
     ),
-    tags(
-        (name = "AREDL - Levels", description="Endpoints for fetching and managing levels on the AREDL")
-    ),
-    components(
-        schemas(
-            Level,
-        )
-    ),
-    paths(
-        list,
-        create,
-        update,
-        find,
-    )
+    tags((
+        name = "AREDL - Levels",
+        description = "Endpoints for fetching and managing levels on the AREDL",
+    )),
+    components(schemas(Level)),
+    paths(list, create, update, find)
 )]
 pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
