@@ -183,3 +183,78 @@ jobs:
           run: rm -rf ~/.ssh
           if: always()
 
+build-api-dev:
+    if: github.ref == 'refs/heads/dev'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+        - uses: actions/checkout@v4
+        - name: Login to GitHub Container Registry
+          uses: docker/login-action@v3
+          with:
+            registry: ghcr.io
+            username: ${{ github.actor }}
+            password: ${{ secrets.GITHUB_TOKEN }}
+        - name: Set up Docker Buildx
+          uses: docker/setup-buildx-action@v3
+        - name: Set owner name to lowercase for docker compatibility
+          run: |
+            echo "OWNER_LC=${OWNER,,}" >>${GITHUB_ENV}
+          env:
+            OWNER: '${{ github.repository_owner }}'
+        - name: Build and push API image
+          uses: docker/build-push-action@v5
+          with:
+            context: .
+            file: ./Dockerfile
+            push: true
+            build-args: |
+              BUILD_PROFILE=${{ env.BUILD_PROFILE }}
+            tags: |
+              ghcr.io/${{ env.OWNER_LC }}/aredl_backend_api:dev
+              ghcr.io/${{ env.OWNER_LC }}/aredl_backend_api:${{ github.sha }}
+            cache-from: type=registry,ref=ghcr.io/${{ env.OWNER_LC }}/aredl_backend_api:buildcache
+            cache-to: type=registry,ref=ghcr.io/${{ env.OWNER_LC }}/aredl_backend_api:buildcache,mode=max
+deploy-dev:
+    if: github.ref == 'refs/heads/dev'
+    needs: [test, build-api-dev]
+    runs-on: ubuntu-latest
+    steps:
+        - uses: actions/checkout@v4
+
+        - name: Create SSH key
+          run: |
+            mkdir -p ~/.ssh
+            echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/id_rsa
+            chmod 600 ~/.ssh/id_rsa
+            ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+        - name: Create env file
+          run: |
+            echo "COMMIT_HASH=${{ github.sha }}" >> .env
+            echo "API_HOST=${{ secrets.DEV_API_HOST }}" >> .env
+            echo "API_PORT=${{ secrets.DEV_API_PORT }}" >> .env
+
+        - name: Copy files
+          run: |
+            scp docker-stack.yml ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:~/dev/docker-stack.yml
+            scp .env ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:~/dev/.env
+
+        - name: Deploy API
+          run: |
+            ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "\
+            docker login ghcr.io -u ${{ secrets.GHCR_USERNAME }} -p ${{ secrets.GHCR_TOKEN }} && \
+            COMMIT_HASH=${{ github.sha }} \
+            API_HOST=${{ secrets.DEV_API_HOST }} \
+            API_PORT=${{ secrets.DEV_API_PORT }} \
+            docker stack deploy \
+            --with-registry-auth \
+            --compose-file ~/dev/docker-stack.yml \
+            aredl_backend_dev_stack"
+
+        - name: Cleanup SSH key
+          run: rm -rf ~/.ssh
+          if: always()
