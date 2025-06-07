@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
       POSTGRES_DB: aredl
     ports:
-      - "5432:5432"
+      - "${API_DB_PORT}:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
     secrets:

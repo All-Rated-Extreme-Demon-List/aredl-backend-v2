@@ -161,6 +161,7 @@ jobs:
             echo "COMMIT_HASH=${{ github.sha }}" >> .env
             echo "API_HOST=${{ secrets.API_HOST }}" >> .env
             echo "API_PORT=${{ secrets.API_PORT }}" >> .env
+            echo "API_DB_PORT=${{ secrets.API_DB_PORT }}" >> .env
 
         - name: Copy files
           run: |
@@ -174,6 +175,7 @@ jobs:
             COMMIT_HASH=${{ github.sha }} \
             API_HOST=${{ secrets.API_HOST }} \
             API_PORT=${{ secrets.API_PORT }} \
+            API_DB_PORT=${{ secrets.API_DB_PORT }} \
             docker stack deploy \
             --with-registry-auth \
             --compose-file docker-stack.yml \
@@ -237,6 +239,7 @@ jobs:
             echo "COMMIT_HASH=${{ github.sha }}" >> .env
             echo "API_HOST=${{ secrets.DEV_API_HOST }}" >> .env
             echo "API_PORT=${{ secrets.DEV_API_PORT }}" >> .env
+            echo "API_DB_PORT=${{ secrets.DEV_API_DB_PORT }}" >> .env
 
         - name: Copy files
           run: |
@@ -250,6 +253,7 @@ jobs:
             COMMIT_HASH=${{ github.sha }} \
             API_HOST=${{ secrets.DEV_API_HOST }} \
             API_PORT=${{ secrets.DEV_API_PORT }} \
+            API_DB_PORT=${{ secrets.DEV_API_DB_PORT }} \
             docker stack deploy \
             --with-registry-auth \
             --compose-file ~/dev/docker-stack.yml \
