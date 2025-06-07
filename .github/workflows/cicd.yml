@@ -183,7 +183,7 @@ jobs:
           run: rm -rf ~/.ssh
           if: always()
 
-build-api-dev:
+  build-api-dev:
     if: github.ref == 'refs/heads/dev'
     needs: test
     runs-on: ubuntu-latest
@@ -218,7 +218,7 @@ build-api-dev:
               ghcr.io/${{ env.OWNER_LC }}/aredl_backend_api:${{ github.sha }}
             cache-from: type=registry,ref=ghcr.io/${{ env.OWNER_LC }}/aredl_backend_api:buildcache
             cache-to: type=registry,ref=ghcr.io/${{ env.OWNER_LC }}/aredl_backend_api:buildcache,mode=max
-deploy-dev:
+  deploy-dev:
     if: github.ref == 'refs/heads/dev'
     needs: [test, build-api-dev]
     runs-on: ubuntu-latest
