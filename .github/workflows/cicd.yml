@@ -144,7 +144,7 @@ jobs:
   
   deploy:
     if: github.ref == 'refs/heads/main'
-    needs: [test, build-api]
+    needs: build-api
     runs-on: ubuntu-latest
     steps:
         - uses: actions/checkout@v4
@@ -222,7 +222,7 @@ jobs:
             cache-to: type=registry,ref=ghcr.io/${{ env.OWNER_LC }}/aredl_backend_api:buildcache,mode=max
   deploy-dev:
     if: github.ref == 'refs/heads/dev'
-    needs: [test, build-api-dev]
+    needs: build-api-dev
     runs-on: ubuntu-latest
     steps:
         - uses: actions/checkout@v4
