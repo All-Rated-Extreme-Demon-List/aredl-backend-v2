@@ -162,6 +162,7 @@ jobs:
             echo "API_HOST=${{ secrets.API_HOST }}" >> .env
             echo "API_PORT=${{ secrets.API_PORT }}" >> .env
             echo "API_DB_PORT=${{ secrets.API_DB_PORT }}" >> .env
+            echo "API_NET=api_net" >> .env
 
         - name: Copy files
           run: |
@@ -176,6 +177,7 @@ jobs:
             API_HOST=${{ secrets.API_HOST }} \
             API_PORT=${{ secrets.API_PORT }} \
             API_DB_PORT=${{ secrets.API_DB_PORT }} \
+            API_NET=api_net \
             docker stack deploy \
             --with-registry-auth \
             --compose-file docker-stack.yml \
@@ -207,7 +209,7 @@ jobs:
             echo "OWNER_LC=${OWNER,,}" >>${GITHUB_ENV}
           env:
             OWNER: '${{ github.repository_owner }}'
-        - name: Build and push API image
+        - name: Build and push API dev image
           uses: docker/build-push-action@v5
           with:
             context: .
@@ -240,13 +242,14 @@ jobs:
             echo "API_HOST=${{ secrets.DEV_API_HOST }}" >> .env
             echo "API_PORT=${{ secrets.DEV_API_PORT }}" >> .env
             echo "API_DB_PORT=${{ secrets.DEV_API_DB_PORT }}" >> .env
+            echo "API_NET=api_net_dev" >> .env
 
         - name: Copy files
           run: |
             scp docker-stack.yml ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:~/dev/docker-stack.yml
             scp .env ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:~/dev/.env
 
-        - name: Deploy API
+        - name: Deploy dev API
           run: |
             ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "\
             docker login ghcr.io -u ${{ secrets.GHCR_USERNAME }} -p ${{ secrets.GHCR_TOKEN }} && \
@@ -254,6 +257,7 @@ jobs:
             API_HOST=${{ secrets.DEV_API_HOST }} \
             API_PORT=${{ secrets.DEV_API_PORT }} \
             API_DB_PORT=${{ secrets.DEV_API_DB_PORT }} \
+            API_NET=api_net_dev \
             docker stack deploy \
             --with-registry-auth \
             --compose-file ~/dev/docker-stack.yml \
@@ -262,3 +266,36 @@ jobs:
         - name: Cleanup SSH key
           run: rm -rf ~/.ssh
           if: always()
+  migrate-dev-db:
+    if: github.ref == 'refs/heads/dev'
+    needs: deploy-dev
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_KEY }}"      > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }}     >> ~/.ssh/known_hosts
+
+      - name: Dump prod DB
+        run: |
+          ssh -i ~/.ssh/id_rsa ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} '
+            PROD_DB=$(docker ps --filter label=com.docker.swarm.service.name=aredl_backend_stack_db --format "{{.Names}}")
+            PGUSER=$(docker exec "$PROD_DB" cat /run/secrets/postgres_user)
+            docker exec $PROD_DB bash -c "pg_dump -U $PGUSER -Fc aredl" > /tmp/prod_dump.dump
+          '
+
+      - name: Restore on dev
+        run: |
+          ssh -i ~/.ssh/id_rsa ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} '
+            DEV_DB=$(docker ps --filter label=com.docker.swarm.service.name=aredl_backend_dev_stack_db --format "{{.Names}}")
+            PGUSER=$(docker exec "$DEV_DB" cat /run/secrets/postgres_user)
+            docker exec -i $DEV_DB bash -c "pg_restore --clean --if-exists -U $PGUSER -d aredl" < /tmp/prod_dump.dump
+          '
+
+      - name: Cleanup SSH
+        run: rm -rf ~/.ssh
+        if: always()

@@ -117,4 +117,5 @@ secrets:
     external: true
 networks:
   api_net:
+    name: ${API_NET:-api_net}
     external: true
