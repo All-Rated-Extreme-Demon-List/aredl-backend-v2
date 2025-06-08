@@ -13,6 +13,10 @@ jobs:
       run: |
         curl https://rclone.org/install.sh | sudo bash
 
+    - name: Generate backup filename
+      run: |
+          echo "BACKUP_FILENAME=aredl_backup_$(date +'%Y%m%dT%H%MZ').dump.gz" >> $GITHUB_ENV
+
     - name: Dump prod db
       uses: appleboy/ssh-action@v0.1.7
       with:
@@ -20,13 +24,14 @@ jobs:
         username: ${{ secrets.DEPLOY_USER }}
         key:      ${{ secrets.DEPLOY_KEY }}
         script: |
+          DUMP_FILE="/tmp/${{ env.BACKUP_FILENAME }}"
           PROD_DB=$(docker ps \
           --filter label=com.docker.swarm.service.name=aredl_backend_stack_db \
           --format "{{.Names}}")
           PGUSER=$(docker exec "$PROD_DB" cat /run/secrets/postgres_user)
           TS=$(date +'%Y%m%dT%H%MZ')
           docker exec "$PROD_DB" pg_dump -U "$PGUSER" -Fc aredl \
-          | gzip > /tmp/aredl_backup_"$TS".dump.gz
+          | gzip > $DUMP_FILE
 
     - name: SCP dump back to runner
       uses: appleboy/scp-action@v0.1.0
@@ -34,7 +39,7 @@ jobs:
           host:     ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key:      ${{ secrets.DEPLOY_KEY }}
-          source:   /tmp/aredl_backup_*.dump.gz
+          source:   /tmp/${{ env.BACKUP_FILENAME }}
           target:   .
 
     - name: Configure rclone for Drive
@@ -55,7 +60,7 @@ jobs:
     - name: Upload backup to Drive
       run: |
         rclone copy \
-        aredl_backup_*.dump.gz \
+        ${{ env.BACKUP_FILENAME }} \
         gdrive_drive:/ \
         --quiet \
         --drive-chunk-size 64M \
