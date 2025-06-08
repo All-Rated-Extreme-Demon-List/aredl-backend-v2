@@ -1,0 +1,62 @@
+name: Daily backup of the prod db
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Install rclone
+      run: |
+        curl https://rclone.org/install.sh | sudo bash
+
+    - name: Dump prod db
+      uses: appleboy/ssh-action@v0.1.7
+      with:
+        host:     ${{ secrets.DEPLOY_HOST }}
+        username: ${{ secrets.DEPLOY_USER }}
+        key:      ${{ secrets.DEPLOY_KEY }}
+        script: |
+          PROD_DB=$(docker ps \
+          --filter label=com.docker.swarm.service.name=aredl_backend_stack_db \
+          --format "{{.Names}}")
+          PGUSER=$(docker exec "$PROD_DB" cat /run/secrets/postgres_user)
+          TS=$(date +'%Y%m%dT%H%MZ')
+          docker exec "$PROD_DB" pg_dump -U "$PGUSER" -Fc aredl \
+          | gzip > /tmp/aredl_backup_"$TS".dump.gz
+
+    - name: SCP dump back to runner
+      uses: appleboy/scp-action@v0.1.0
+      with:
+          host:     ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key:      ${{ secrets.DEPLOY_KEY }}
+          source:   /tmp/aredl_backup_*.dump.gz
+          target:   .
+
+    - name: Configure rclone for Drive
+      env:
+        RCLONE_CONFIG_PASS: ''
+        GDRIVE_SA_KEY: ${{ secrets.GDRIVE_SA_KEY }}
+      run: |
+        echo "$GDRIVE_SA_KEY" > service-account.json
+        export RCLONE_CONFIG=/tmp/rclone.conf
+
+        rclone config create \
+          gdrive_drive drive \
+          scope drive.file \
+          service_account_file service-account.json \
+          root_folder_id ${{ secrets.GDRIVE_FOLDER_ID }}
+          --config /tmp/rclone.conf
+
+    - name: Upload backup to Drive
+      run: |
+        rclone copy \
+        aredl_backup_*.dump.gz \
+        gdrive_drive:/ \
+        --quiet \
+        --drive-chunk-size 64M \
+        --stats 0 
