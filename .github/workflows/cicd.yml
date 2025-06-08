@@ -180,7 +180,6 @@ jobs:
             API_DB_PORT=${{ secrets.API_DB_PORT }} \
             API_NET=api_net \
             DB_ALIAS=db_prod \
-            
             docker stack deploy \
             --with-registry-auth \
             --compose-file docker-stack.yml \
@@ -263,7 +262,6 @@ jobs:
             API_DB_PORT=${{ secrets.DEV_API_DB_PORT }} \
             API_NET=api_net_dev \
             DB_ALIAS=db_dev \
-            
             docker stack deploy \
             --with-registry-auth \
             --compose-file ~/dev/docker-stack.yml \
