@@ -17,7 +17,9 @@ services:
         condition: any
         delay: 5s
     networks:
-      - api_net
+      api_net:
+        aliases:
+          - "${DB_ALIAS:-db}"
 
   api:
     image: ghcr.io/all-rated-extreme-demon-list/aredl_backend_api:${COMMIT_HASH:-latest}
