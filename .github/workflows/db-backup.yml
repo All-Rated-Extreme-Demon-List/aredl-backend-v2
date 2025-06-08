@@ -60,7 +60,7 @@ jobs:
 
     - name: Upload backup to Drive
       run: |
-        rclone copy \
+        rclone --config /tmp/rclone.conf copy \
         ${{ env.BACKUP_FILENAME }} \
         gdrive_drive:/ \
         --quiet \
