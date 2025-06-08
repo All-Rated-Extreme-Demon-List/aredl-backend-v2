@@ -266,3 +266,30 @@ jobs:
         - name: Cleanup SSH key
           run: rm -rf ~/.ssh
           if: always()
+  migrate-dev-db:
+    if: github.ref == 'refs/heads/dev'
+    needs: deploy-dev
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_KEY }}"      > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }}     >> ~/.ssh/known_hosts
+
+      - name: Dump prod DB
+        run: |
+          ssh -i ~/.ssh/id_rsa ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} '
+            PROD_DB=$(docker ps --filter label=com.docker.swarm.service.name=aredl_backend_stack_db --format "{{.Names}}")
+            docker exec $PROD_DB bash -c "pg_dump -U $(cat /run/secrets/postgres_user) -Fc aredl" > prod_dump.dump
+          '
+          scp -i ~/.ssh/id_rsa ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:prod_dump.dump .
+
+      
+
+      - name: Cleanup SSH
+        run: rm -rf ~/.ssh
+        if: always()
