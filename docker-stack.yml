@@ -19,11 +19,7 @@ services:
     networks:
       api_net:
         aliases:
-          - prod-db
-      api_net_dev:
-        aliases:
-          - dev-db
-      
+          - "${DB_ALIAS:-db}"
 
   api:
     image: ghcr.io/all-rated-extreme-demon-list/aredl_backend_api:${COMMIT_HASH:-latest}
@@ -125,3 +121,4 @@ networks:
   api_net:
     name: ${API_NET:-api_net}
     external: true
+  
