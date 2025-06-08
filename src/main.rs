@@ -30,6 +30,7 @@ use crate::scheduled::refresh_level_data::start_level_data_refresher;
 use crate::scheduled::shifts_creator::start_recurrent_shift_creator;
 use actix_cors::Cors;
 use actix_governor::GovernorConfigBuilder;
+use actix_http::StatusCode;
 use actix_web::body::MessageBody;
 use actix_web::dev::{ServiceRequest, ServiceResponse};
 use actix_web::middleware::NormalizePath;
@@ -93,6 +94,8 @@ async fn main() -> std::io::Result<()> {
 
     let prometheus = PrometheusMetricsBuilder::new("api")
         .endpoint("/metrics")
+        .exclude_status(StatusCode::NOT_FOUND)
+        .mask_unmatched_patterns("/unmatched")
         .build()
         .unwrap();
 
