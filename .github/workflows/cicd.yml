@@ -162,6 +162,7 @@ jobs:
             echo "API_HOST=${{ secrets.API_HOST }}" >> .env
             echo "API_PORT=${{ secrets.API_PORT }}" >> .env
             echo "API_DB_PORT=${{ secrets.API_DB_PORT }}" >> .env
+            echo "API_NET=api_net" >> .env
 
         - name: Copy files
           run: |
@@ -176,6 +177,7 @@ jobs:
             API_HOST=${{ secrets.API_HOST }} \
             API_PORT=${{ secrets.API_PORT }} \
             API_DB_PORT=${{ secrets.API_DB_PORT }} \
+            API_NET=api_net \
             docker stack deploy \
             --with-registry-auth \
             --compose-file docker-stack.yml \
@@ -207,7 +209,7 @@ jobs:
             echo "OWNER_LC=${OWNER,,}" >>${GITHUB_ENV}
           env:
             OWNER: '${{ github.repository_owner }}'
-        - name: Build and push API image
+        - name: Build and push API dev image
           uses: docker/build-push-action@v5
           with:
             context: .
@@ -240,13 +242,14 @@ jobs:
             echo "API_HOST=${{ secrets.DEV_API_HOST }}" >> .env
             echo "API_PORT=${{ secrets.DEV_API_PORT }}" >> .env
             echo "API_DB_PORT=${{ secrets.DEV_API_DB_PORT }}" >> .env
+            echo "API_NET=api_net_dev" >> .env
 
         - name: Copy files
           run: |
             scp docker-stack.yml ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:~/dev/docker-stack.yml
             scp .env ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:~/dev/.env
 
-        - name: Deploy API
+        - name: Deploy dev API
           run: |
             ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "\
             docker login ghcr.io -u ${{ secrets.GHCR_USERNAME }} -p ${{ secrets.GHCR_TOKEN }} && \
@@ -254,6 +257,7 @@ jobs:
             API_HOST=${{ secrets.DEV_API_HOST }} \
             API_PORT=${{ secrets.DEV_API_PORT }} \
             API_DB_PORT=${{ secrets.DEV_API_DB_PORT }} \
+            API_NET=api_net_dev \
             docker stack deploy \
             --with-registry-auth \
             --compose-file ~/dev/docker-stack.yml \
