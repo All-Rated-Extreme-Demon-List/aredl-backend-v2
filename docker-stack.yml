@@ -24,7 +24,7 @@ services:
   api:
     image: ghcr.io/all-rated-extreme-demon-list/aredl_backend_api:${COMMIT_HASH:-latest}
     ports:
-      - "${API_HOST}:${API_PORT}:${API_PORT}"
+      - "${API_PORT}:${API_PORT}"
     deploy:
       update_config:
             order: start-first
