@@ -13,6 +13,14 @@ jobs:
       run: |
         curl https://rclone.org/install.sh | sudo bash
 
+    - name: Setup SSH
+      run: |
+        sudo apt-get update && sudo apt-get install -y openssh-client
+        mkdir -p ~/.ssh
+        echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
     - name: Generate backup filename
       run: |
           echo "BACKUP_FILENAME=aredl_backup_$(date +'%Y%m%dT%H%MZ').dump.gz" >> $GITHUB_ENV
@@ -29,18 +37,17 @@ jobs:
           --filter label=com.docker.swarm.service.name=aredl_backend_stack_db \
           --format "{{.Names}}")
           PGUSER=$(docker exec "$PROD_DB" cat /run/secrets/postgres_user)
-          TS=$(date +'%Y%m%dT%H%MZ')
           docker exec "$PROD_DB" pg_dump -U "$PGUSER" -Fc aredl \
           | gzip > $DUMP_FILE
 
-    - name: SCP dump back to runner
-      uses: appleboy/scp-action@v0.1.0
-      with:
-          host:     ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key:      ${{ secrets.DEPLOY_KEY }}
-          source:   /tmp/${{ env.BACKUP_FILENAME }}
-          target:   .
+    - name: Copy backup dump back to worker
+      run: |
+        scp -i ~/.ssh/id_rsa \
+          -o StrictHostKeyChecking=no \
+          "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/tmp/${{ env.BACKUP_FILENAME }}" \
+          .
+
+        shred -u ~/.ssh/id_rsa
 
     - name: Configure rclone for Drive
       env:
