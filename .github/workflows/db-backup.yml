@@ -13,13 +13,12 @@ jobs:
       run: |
         curl https://rclone.org/install.sh | sudo bash
 
-    - name: Setup SSH
+    - name: Create SSH key
       run: |
-        sudo apt-get update && sudo apt-get install -y openssh-client
         mkdir -p ~/.ssh
         echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/id_rsa
         chmod 600 ~/.ssh/id_rsa
-        ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+        ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
 
     - name: Generate backup filename
       run: |
@@ -42,12 +41,7 @@ jobs:
 
     - name: Copy backup dump back to worker
       run: |
-        scp -i ~/.ssh/id_rsa \
-          -o StrictHostKeyChecking=no \
-          "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/tmp/${{ env.BACKUP_FILENAME }}" \
-          .
-
-        shred -u ~/.ssh/id_rsa
+        scp "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/tmp/${{ env.BACKUP_FILENAME }}" .
 
     - name: Configure rclone for Drive
       env:
@@ -57,12 +51,12 @@ jobs:
         echo "$GDRIVE_SA_KEY" > service-account.json
         export RCLONE_CONFIG=/tmp/rclone.conf
 
-        rclone config create \
+        rclone --config /tmp/rclone.conf config create \
           gdrive_drive drive \
           scope drive.file \
           service_account_file service-account.json \
-          root_folder_id ${{ secrets.GDRIVE_FOLDER_ID }}
-          --config /tmp/rclone.conf
+          root_folder_id ${{ secrets.GDRIVE_FOLDER_ID }} \
+          
 
     - name: Upload backup to Drive
       run: |
@@ -72,3 +66,7 @@ jobs:
         --quiet \
         --drive-chunk-size 64M \
         --stats 0 
+
+    - name: Cleanup SSH key
+      run: rm -rf ~/.ssh
+      if: always()
