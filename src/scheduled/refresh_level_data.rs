@@ -143,6 +143,8 @@ pub async fn start_level_data_refresher(db: Arc<DbAppState>) {
 struct GDDLResponse {
     #[serde(rename = "Rating")]
     rating: Option<f64>,
+    #[serde(rename = "DefaultRating")]
+    default_rating: Option<f64>,
     #[serde(rename = "TwoPlayerRating")]
     two_player_rating: Option<f64>,
 }
@@ -162,9 +164,11 @@ async fn aredl_update_gddl_data(
         .await
         .map_err(|e| ApiError::new(400, format!("Failed to request gddl: {}", e).as_str()))?;
 
-    let rating = match (two_player, data.two_player_rating) {
-        (false, _) => data.rating,
-        (true, rating) => rating,
+    let rating = match (two_player, data.two_player_rating, data.rating) {
+        (true, Some(two_player_rating), _) => Some(two_player_rating),
+        (true, None, _) => data.default_rating,
+        (false, _, Some(rating)) => Some(rating),
+        (false, _, None) => data.default_rating,
     };
 
     diesel::update(aredl::levels::table)
