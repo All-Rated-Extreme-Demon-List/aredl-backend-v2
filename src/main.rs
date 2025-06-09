@@ -140,7 +140,7 @@ async fn main() -> std::io::Result<()> {
                 nav-accent-color = #ff6f00 \
              >\
                 <header style=\"color:white; font-weight: lighter; font-size: 1.5rem;\" slot=\"header\">All Rated Extreme Demons List | API v2 Documentation</header>\
-                <img style=\"padding: 0.5rem; height: 3rem;\" slot=\"logo\"  src=\"https://aredl.net/logo.png\"/>
+                <img style=\"padding: 0.5rem; height: 3rem;\" slot=\"logo\"  src=\"https://aredl.net/assets/logo.png\"/>
             </rapi-doc></body></html>";
 
         let _governor_conf = GovernorConfigBuilder::default()

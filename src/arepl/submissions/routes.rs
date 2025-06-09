@@ -113,7 +113,7 @@ async fn delete(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticat
 #[derive(OpenApi)]
 #[openapi(
     tags(
-        (name = "AREDL (P) - Levels (Submissions)", description = "Endpoints for fetching and managing platformer submissions")
+        (name = "AREDL (P) - Submissions", description = "Endpoints for fetching and managing platformer submissions")
     ),
     nest(
         (path = "/", api=actions::ApiDoc),

@@ -14,8 +14,8 @@ use uuid::Uuid;
 
 #[utoipa::path(
     get,
-    summary = "Get users",
-    description = "Get paginated list of users",
+    summary = "Get user",
+    description = "Get a specific user by their internal UUID",
     tag = "Users",
     params(
         ("id" = Uuid, Path, description = "The internal UUID of the user to lookup"),
