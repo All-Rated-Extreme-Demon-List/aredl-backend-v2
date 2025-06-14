@@ -39,6 +39,7 @@ impl Notification {
     ) -> Result<Vec<Notification>, ApiError> {
         let notifications = notifications::table
             .filter(notifications::user_id.eq(user_id))
+            .order(notifications::created_at.desc())
             .load::<Notification>(conn)?;
         Ok(notifications)
     }
