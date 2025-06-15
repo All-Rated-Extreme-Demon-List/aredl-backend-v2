@@ -1,38 +1,20 @@
-#[cfg(test)]
-use crate::test_utils::*;
+use crate::aredl::levels::test_utils::create_test_level;
+use crate::aredl::submissions::test_utils::create_test_submission;
 #[cfg(test)]
 use crate::{
     auth::{create_test_token, Permission},
-    schema::{roles, user_roles, users, aredl::{submissions, records}},
-    db::DbConnection
-
+    schema::{aredl::records, roles, user_roles, users},
 };
+#[cfg(test)]
+use crate::{test_utils::*, users::test_utils::create_test_user};
 #[cfg(test)]
 use actix_web::test;
 #[cfg(test)]
-use diesel::{QueryDsl, ExpressionMethods, RunQueryDsl};
+use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 #[cfg(test)]
 use serde_json::json;
 #[cfg(test)]
 use uuid::Uuid;
-
-#[cfg(test)]
-async fn create_test_submission(level_id: Uuid, user_id: Uuid, conn: &mut DbConnection) -> Uuid {
-    diesel::insert_into(submissions::table)
-        .values((
-            submissions::level_id.eq(level_id),
-            submissions::submitted_by.eq(user_id),
-            submissions::mobile.eq(false),
-            submissions::video_url.eq("https://video.com"),
-            submissions::raw_url.eq("https://raw.com"),
-            submissions::priority.eq(false),
-            submissions::user_notes.eq("Test submission"),
-            submissions::mod_menu.eq("Mega hack"),
-        ))
-        .returning(submissions::id)
-        .get_result::<Uuid>(conn)
-        .expect("Failed to create test submission!")
-}
 
 #[actix_web::test]
 async fn create_submission() {
@@ -58,7 +40,11 @@ async fn create_submission() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let body: serde_json::Value = test::read_body_json(resp).await;
-    assert_eq!(body["submitted_by"].as_str().unwrap().to_string(), user_id.to_string(), "Submitters do not match!")
+    assert_eq!(
+        body["submitted_by"].as_str().unwrap().to_string(),
+        user_id.to_string(),
+        "Submitters do not match!"
+    )
 }
 
 #[actix_web::test]
@@ -338,7 +324,11 @@ async fn submission_banned_player() {
         .to_request();
 
     let resp_1 = test::call_service(&app, req_1).await;
-    assert!(resp_1.status().is_success(), "status of req 1 is {}", resp_1.status());
+    assert!(
+        resp_1.status().is_success(),
+        "status of req 1 is {}",
+        resp_1.status()
+    );
 
     let req_2 = test::TestRequest::post()
         .uri("/aredl/submissions")
@@ -347,7 +337,11 @@ async fn submission_banned_player() {
         .to_request();
 
     let resp_2 = test::call_service(&app, req_2).await;
-    assert!(resp_2.status().is_client_error(), "status of req 2 is {}", resp_2.status())
+    assert!(
+        resp_2.status().is_client_error(),
+        "status of req 2 is {}",
+        resp_2.status()
+    )
 }
 
 #[actix_web::test]
@@ -367,7 +361,11 @@ async fn delete_submission() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success(), "status of req is {}", resp.status());
+    assert!(
+        resp.status().is_success(),
+        "status of req is {}",
+        resp.status()
+    );
 }
 
 #[actix_web::test]
@@ -390,7 +388,11 @@ async fn accept_submission() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success(), "status of req is {}", resp.status());
+    assert!(
+        resp.status().is_success(),
+        "status of req is {}",
+        resp.status()
+    );
 
     let record_string = records::table
         .filter(records::level_id.eq(level_id))
@@ -401,7 +403,11 @@ async fn accept_submission() {
         .unwrap();
     let new_record = record_string.as_str();
 
-    assert_eq!(new_record, accept_data["notes"].as_str().unwrap(), "Reviewer notes do not match!")
+    assert_eq!(
+        new_record,
+        accept_data["notes"].as_str().unwrap(),
+        "Reviewer notes do not match!"
+    )
 }
 
 #[actix_web::test]
@@ -424,12 +430,23 @@ async fn deny_submission() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success(), "status of req is {}", resp.status());
+    assert!(
+        resp.status().is_success(),
+        "status of req is {}",
+        resp.status()
+    );
 
     let body: serde_json::Value = test::read_body_json(resp).await;
 
-    assert_eq!(body["reviewer_notes"], deny_data["notes"], "Reviewer notes do not match!");
-    assert_eq!(body["status"].as_str().unwrap(), "Denied", "Submission is not denied!");
+    assert_eq!(
+        body["reviewer_notes"], deny_data["notes"],
+        "Reviewer notes do not match!"
+    );
+    assert_eq!(
+        body["status"].as_str().unwrap(),
+        "Denied",
+        "Submission is not denied!"
+    );
 }
 
 #[actix_web::test]
@@ -452,12 +469,23 @@ async fn submission_under_consideration() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success(), "status of req is {}", resp.status());
+    assert!(
+        resp.status().is_success(),
+        "status of req is {}",
+        resp.status()
+    );
 
     let body: serde_json::Value = test::read_body_json(resp).await;
 
-    assert_eq!(body["reviewer_notes"], under_consideration_data["notes"], "Reviewer notes do not match!");
-    assert_eq!(body["status"].as_str().unwrap(), "UnderConsideration", "Submission is not denied!");
+    assert_eq!(
+        body["reviewer_notes"], under_consideration_data["notes"],
+        "Reviewer notes do not match!"
+    );
+    assert_eq!(
+        body["status"].as_str().unwrap(),
+        "UnderConsideration",
+        "Submission is not denied!"
+    );
 }
 
 #[actix_web::test]
@@ -480,7 +508,11 @@ async fn get_submission_history() {
         .to_request();
 
     let res = test::call_service(&app, req).await;
-    assert!(res.status().is_success(), "status of req is {}", res.status());
+    assert!(
+        res.status().is_success(),
+        "status of req is {}",
+        res.status()
+    );
 
     let req = test::TestRequest::get()
         .uri(format!("/aredl/submissions/{submission}/history").as_str())
@@ -488,19 +520,19 @@ async fn get_submission_history() {
         .to_request();
 
     let res = test::call_service(&app, req).await;
-    assert!(res.status().is_success(), "status of req is {}", res.status());
-
+    assert!(
+        res.status().is_success(),
+        "status of req is {}",
+        res.status()
+    );
 
     let body: serde_json::Value = test::read_body_json(res).await;
 
     let arr = body.as_array().unwrap();
     assert_eq!(arr.len(), 1);
     let entry = &arr[0];
-    
+
     assert_eq!(entry["submission_id"], submission.to_string());
     assert_eq!(entry["status"], "UnderConsideration");
     assert_eq!(entry["reviewer_notes"], under_consideration_data["notes"]);
-
-    
-    
 }

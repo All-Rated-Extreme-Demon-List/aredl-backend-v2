@@ -1,8 +1,10 @@
-mod routes;
-mod model;
-mod countries;
 mod clans;
+mod countries;
+mod model;
+mod routes;
 
+#[cfg(test)]
+pub mod test_utils;
 #[cfg(test)]
 mod tests;
 

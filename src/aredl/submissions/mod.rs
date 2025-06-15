@@ -8,7 +8,9 @@ mod resolved;
 mod routes;
 
 #[cfg(test)]
-mod tests;
+pub mod test_utils;
+#[cfg(test)]
+pub mod tests;
 
 pub use model::*;
 pub use routes::{init_routes, ApiDoc};

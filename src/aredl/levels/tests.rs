@@ -1,18 +1,16 @@
-#[cfg(test)]
-use crate::test_utils::*;
+use crate::aredl::levels::test_utils::{create_test_level, create_test_level_with_record};
 #[cfg(test)]
 use crate::{
+    aredl::packs::test_utils::create_test_pack,
     auth::{create_test_token, Permission},
     schema::aredl::{levels_created, pack_levels},
-    aredl::{
-        packs::tests::create_test_pack,
-        records::tests::create_test_record
-    }
 };
+#[cfg(test)]
+use crate::{test_utils::*, users::test_utils::create_test_user};
 #[cfg(test)]
 use actix_web::test::{self, read_body_json};
 #[cfg(test)]
-use diesel::{RunQueryDsl,ExpressionMethods};
+use diesel::{ExpressionMethods, RunQueryDsl};
 #[cfg(test)]
 use serde_json::json;
 
@@ -20,7 +18,8 @@ use serde_json::json;
 async fn create_level() {
     let (app, mut conn, auth) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::LevelModify)).await;
-    let token = create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let level_data = json!({
         "name": "Test Level",
         "position": 1,
@@ -38,27 +37,42 @@ async fn create_level() {
     assert!(resp.status().is_success(), "status is {}", resp.status());
 
     let body: serde_json::Value = read_body_json(resp).await;
-    assert_eq!(level_data["level_id"].as_i64().unwrap(), body["level_id"].as_i64().unwrap(), "Level IDs do not match!")
+    assert_eq!(
+        level_data["level_id"].as_i64().unwrap(),
+        body["level_id"].as_i64().unwrap(),
+        "Level IDs do not match!"
+    )
 }
 
 #[actix_web::test]
 async fn list_levels() {
     let (app, mut conn, _) = init_test_app().await;
+    create_test_level(&mut conn).await;
+    create_test_level(&mut conn).await;
+    create_test_level(&mut conn).await;
     let req = test::TestRequest::get().uri("/aredl/levels").to_request();
     let resp = test::call_service(&app, req).await;
-    create_test_level(&mut conn).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
 
     let body: serde_json::Value = read_body_json(resp).await;
-    assert_ne!(body.as_array().unwrap().len(), 0, "Response is empty!");
-    assert_eq!(body[0].as_object().unwrap()["position"].as_i64().unwrap(), 1, "First level returned is not the top 1!")
+    assert_eq!(
+        body.as_array().unwrap().len(),
+        3,
+        "Response doesn't have 3 levels!"
+    );
+    assert_eq!(
+        body[0].as_object().unwrap()["position"].as_i64().unwrap(),
+        1,
+        "First level returned is not the top 1!"
+    )
 }
 
 #[actix_web::test]
 async fn update_level() {
     let (app, mut conn, auth) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::LevelModify)).await;
-    let token = create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let level_id = create_test_level(&mut conn).await;
     let update_data = json!({
         "name": "Updated Level Name"
@@ -70,7 +84,7 @@ async fn update_level() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    
+
     let body: serde_json::Value = test::read_body_json(resp).await;
     assert_eq!(body["name"].to_string(), update_data["name"].to_string())
 }
@@ -79,12 +93,18 @@ async fn update_level() {
 async fn find_level() {
     let (app, mut conn, _auth) = init_test_app().await;
     let level_id = create_test_level(&mut conn).await;
-    let req = test::TestRequest::get().uri(&format!("/aredl/levels/{}", level_id)).to_request();
+    let req = test::TestRequest::get()
+        .uri(&format!("/aredl/levels/{}", level_id))
+        .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
 
     let body: serde_json::Value = test::read_body_json(resp).await;
-    assert_eq!(level_id.to_string(), body["id"].as_str().unwrap().to_string(), "IDs do not match!")
+    assert_eq!(
+        level_id.to_string(),
+        body["id"].as_str().unwrap().to_string(),
+        "IDs do not match!"
+    )
 }
 
 #[actix_web::test]
@@ -96,7 +116,7 @@ async fn list_creators() {
     diesel::insert_into(levels_created::table)
         .values((
             levels_created::level_id.eq(level_id),
-            levels_created::user_id.eq(creator_id)
+            levels_created::user_id.eq(creator_id),
         ))
         .execute(&mut conn)
         .expect("Failed to add creator to level!");
@@ -107,14 +127,22 @@ async fn list_creators() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let body: serde_json::Value = read_body_json(resp).await;
-    assert_eq!(body.as_array().unwrap()[0].as_object().unwrap()["id"].as_str().unwrap().to_string(), creator_id.to_string(), "Creators do not match!")
+    assert_eq!(
+        body.as_array().unwrap()[0].as_object().unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_string(),
+        creator_id.to_string(),
+        "Creators do not match!"
+    )
 }
 
 #[actix_web::test]
 async fn set_creators() {
     let (app, mut conn, auth) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::LevelModify)).await;
-    let token = create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let level_id = create_test_level(&mut conn).await;
     let new_creator_id = user_id;
     let req = test::TestRequest::post()
@@ -133,7 +161,8 @@ async fn set_creators() {
 async fn add_and_remove_creators() {
     let (app, mut conn, auth) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::LevelModify)).await;
-    let token = create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let level_id = create_test_level(&mut conn).await;
     // Add creator
     let req = test::TestRequest::patch()
@@ -145,7 +174,11 @@ async fn add_and_remove_creators() {
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let body: serde_json::Value = read_body_json(resp).await;
     assert!(body.is_array(), "Response is not an array");
-    assert!(body.as_array().unwrap().iter().any(|u| u.as_str().unwrap() == user_id.to_string()));
+    assert!(body
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|u| u.as_str().unwrap() == user_id.to_string()));
     // Remove creator
     let req = test::TestRequest::delete()
         .uri(&format!("/aredl/levels/{}/creators", level_id))
@@ -156,7 +189,14 @@ async fn add_and_remove_creators() {
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let body: serde_json::Value = read_body_json(resp).await;
     assert!(body.is_array(), "Response is not an array");
-    assert!(!body.as_array().unwrap().iter().any(|u| u["id"].as_str().unwrap() == user_id.to_string()), "Creator was not removed");
+    assert!(
+        !body
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|u| u["id"].as_str().unwrap() == user_id.to_string()),
+        "Creator was not removed"
+    );
 }
 
 #[actix_web::test]
@@ -175,7 +215,13 @@ async fn get_level_history() {
     let move_entry = &body.as_array().unwrap()[0];
     let place_entry = &body.as_array().unwrap()[1];
     assert_eq!(move_entry["event"].as_str().unwrap(), "OtherPlaced");
-    assert_eq!(move_entry["cause"].as_object().unwrap()["id"].as_str().unwrap().to_string(), other_level.to_string());
+    assert_eq!(
+        move_entry["cause"].as_object().unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_string(),
+        other_level.to_string()
+    );
     assert_eq!(move_entry["position_diff"].as_i64().unwrap(), 1);
     assert_eq!(place_entry["event"].as_str().unwrap(), "Placed");
 }
@@ -189,7 +235,7 @@ async fn get_level_pack() {
     diesel::insert_into(pack_levels::table)
         .values((
             pack_levels::pack_id.eq(pack),
-            pack_levels::level_id.eq(level)
+            pack_levels::level_id.eq(level),
         ))
         .execute(&mut conn)
         .expect("Failed to add level to pack!");
@@ -203,18 +249,24 @@ async fn get_level_pack() {
     let body: serde_json::Value = read_body_json(res).await;
     let arr = body.as_array().unwrap();
     assert_eq!(arr.len(), 1, "This level is in more than 1 pack!");
-    assert_eq!(arr[0].as_object().unwrap()["id"].as_str().unwrap().to_string(), pack.to_string(), "Pack IDs do not match!")
-
+    assert_eq!(
+        arr[0].as_object().unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_string(),
+        pack.to_string(),
+        "Pack IDs do not match!"
+    )
 }
 
 #[actix_web::test]
 async fn get_level_records() {
     let (app, mut conn, _) = init_test_app().await;
     let (submitter, _) = create_test_user(&mut conn, None).await;
-    let record = create_test_record(&mut conn, submitter).await;
+    let (level_id, record_id) = create_test_level_with_record(&mut conn, submitter).await;
 
     let req = test::TestRequest::get()
-        .uri(&format!("/aredl/levels/{}/records", record.level_id))
+        .uri(&format!("/aredl/levels/{}/records", level_id))
         .to_request();
 
     let res = test::call_service(&app, req).await;
@@ -222,5 +274,12 @@ async fn get_level_records() {
     let body: serde_json::Value = read_body_json(res).await;
     let arr = body.as_array().unwrap();
     assert_eq!(arr.len(), 1, "This level has more than 1 record!");
-    assert_eq!(arr[0].as_object().unwrap()["id"].as_str().unwrap().to_string(), record.id.to_string(), "Record IDs do not match!")
+    assert_eq!(
+        arr[0].as_object().unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_string(),
+        record_id.to_string(),
+        "Record IDs do not match!"
+    )
 }

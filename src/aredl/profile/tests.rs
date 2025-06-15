@@ -1,5 +1,5 @@
 #[cfg(test)]
-use crate::test_utils::*;
+use crate::{test_utils::*, users::test_utils::create_test_user};
 #[cfg(test)]
 use actix_web::test;
 

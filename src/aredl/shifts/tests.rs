@@ -1,62 +1,20 @@
 #[cfg(test)]
-use crate::test_utils::*;
+use crate::aredl::shifts::test_utils::{create_test_recurring_shift, create_test_shift};
 #[cfg(test)]
-use crate::{
-    auth::{create_test_token, Permission},
-    schema::aredl::{shifts, recurrent_shifts},
-    db::DbConnection,
-    aredl::shifts::Weekday,
-};
+use crate::auth::{create_test_token, Permission};
+#[cfg(test)]
+use crate::{test_utils::*, users::test_utils::create_test_user};
 #[cfg(test)]
 use actix_web::test::{self, read_body_json};
 #[cfg(test)]
-use diesel::{RunQueryDsl, ExpressionMethods};
-#[cfg(test)]
 use serde_json::json;
-#[cfg(test)]
-use uuid::Uuid;
-#[cfg(test)]
-use chrono::Utc;
-
-#[cfg(test)]
-async fn create_test_shift(conn: &mut DbConnection, user_id: Uuid, should_start_immediately: bool) -> Uuid {
-    let start_time = match should_start_immediately {
-        true => Utc::now(),
-        false => Utc::now() + chrono::Duration::hours(1),
-    };
-    
-    diesel::insert_into(shifts::table)
-        .values((
-            shifts::user_id.eq(user_id),
-            shifts::target_count.eq(20),
-            shifts::start_at.eq(start_time),
-            shifts::end_at.eq(start_time + chrono::Duration::hours(4))
-        ))
-        .returning(shifts::id)
-        .get_result::<Uuid>(conn)
-        .expect("Failed to create test shift")
-}
-
-async fn create_test_recurring_shift(conn: &mut DbConnection, user_id: Uuid) -> Uuid {
-    diesel::insert_into(recurrent_shifts::table)
-        .values((
-            recurrent_shifts::user_id.eq(user_id),
-            recurrent_shifts::start_hour.eq(12),
-            recurrent_shifts::target_count.eq(20),
-            recurrent_shifts::duration.eq(1),
-            recurrent_shifts::weekday.eq(Weekday::Friday)
-        ))
-        .returning(recurrent_shifts::id)
-        .get_result::<Uuid>(conn)
-        .expect("Failed to create test shift")
-}
-
 
 #[actix_web::test]
 async fn get_shifts_list() {
     let (app, mut conn, auth) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
-    let token = create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     create_test_shift(&mut conn, user_id, false).await;
     let req = test::TestRequest::get()
         .uri("/aredl/shifts")
@@ -72,7 +30,8 @@ async fn get_shifts_list() {
 async fn get_my_shifts() {
     let (app, mut conn, auth) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
-    let token = create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     create_test_shift(&mut conn, user_id, false).await;
     let req = test::TestRequest::get()
         .uri("/aredl/shifts/@me")
@@ -81,24 +40,23 @@ async fn get_my_shifts() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let body: serde_json::Value = read_body_json(resp).await;
-    assert!(
-        body["data"]
+    assert!(body["data"]
         .as_array()
         .unwrap()
         .iter()
-        .all(
-            |x| x["user"].as_object().unwrap()
-                ["id"].as_str().unwrap().to_string() ==
-                user_id.to_string()
-        )
-    )
+        .all(|x| x["user"].as_object().unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_string()
+            == user_id.to_string()))
 }
 
 #[actix_web::test]
 async fn patch_shift() {
     let (app, mut conn, auth) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
-    let token = create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let shift_id = create_test_shift(&mut conn, user_id, false).await;
     let patch_data = json!({
         "status": "Completed"
@@ -111,14 +69,19 @@ async fn patch_shift() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let body: serde_json::Value = read_body_json(resp).await;
-    assert_eq!(patch_data["status"].as_str().unwrap(), body["status"].as_str().unwrap(), "Statuses do not match!")
+    assert_eq!(
+        patch_data["status"].as_str().unwrap(),
+        body["status"].as_str().unwrap(),
+        "Statuses do not match!"
+    )
 }
 
 #[actix_web::test]
 async fn delete_shift() {
     let (app, mut conn, auth) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
-    let token = create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let shift_id = create_test_shift(&mut conn, user_id, false).await;
     let req = test::TestRequest::delete()
         .uri(&format!("/aredl/shifts/{}", shift_id))
@@ -132,7 +95,8 @@ async fn delete_shift() {
 async fn create_recurring_shift() {
     let (app, mut conn, auth) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
-    let token = create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let insert_data = json!({
         "user_id": user_id,
         "weekday": "Friday",
@@ -155,7 +119,8 @@ async fn create_recurring_shift() {
 async fn list_recurring_shifts() {
     let (app, mut conn, auth) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
-    let token = create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     create_test_recurring_shift(&mut conn, user_id).await;
     let req = test::TestRequest::get()
         .uri("/aredl/shifts/recurring")
@@ -164,14 +129,19 @@ async fn list_recurring_shifts() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let body: serde_json::Value = read_body_json(resp).await;
-    assert!(body.as_array().unwrap().iter().any(|x| x["user"]["id"].as_str().unwrap() == user_id.to_string()));
+    assert!(body
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|x| x["user"]["id"].as_str().unwrap() == user_id.to_string()));
 }
 
 #[actix_web::test]
 async fn patch_recurring_shift() {
     let (app, mut conn, auth) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
-    let token = create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let recurring_id = create_test_recurring_shift(&mut conn, user_id).await;
     let patch_data = json!({
         "target_count": 42
@@ -191,7 +161,8 @@ async fn patch_recurring_shift() {
 async fn delete_recurring_shift() {
     let (app, mut conn, auth) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
-    let token = create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let recurring_id = create_test_recurring_shift(&mut conn, user_id).await;
     let req = test::TestRequest::delete()
         .uri(&format!("/aredl/shifts/recurring/{}", recurring_id))

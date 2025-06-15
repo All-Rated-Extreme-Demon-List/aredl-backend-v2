@@ -2,7 +2,7 @@ mod changelog;
 mod clan;
 mod country;
 pub mod leaderboard;
-mod levels;
+pub mod levels;
 mod packs;
 mod packtiers;
 mod profile;

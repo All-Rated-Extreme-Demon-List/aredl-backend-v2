@@ -82,6 +82,8 @@ pub struct User {
     // Last time the user's tokens were invalidated.
     #[serde(skip_serializing)]
     pub access_valid_after: DateTime<Utc>,
+    /// The level the user has beaten and chosen as their profile background.
+    pub background_level: i32,
 }
 
 #[derive(Debug, Serialize, Deserialize, Insertable, AsChangeset, ToSchema)]
@@ -173,8 +175,9 @@ impl UserUpdate {
         if let Some(new_name) = &self.global_name {
             if new_name.len() > 35 {
                 return Err(ApiError::new(
-                400, "Your name must be shorter than 35 characters!"
-            ))
+                    400,
+                    "Your name must be shorter than 35 characters!",
+                ));
             }
         }
         Ok(())
@@ -327,7 +330,7 @@ impl User {
         user: UserUpdate,
     ) -> Result<Self, ApiError> {
         user.validate()?;
-        
+
         let updated_user = diesel::update(users::table.filter(users::id.eq(user_id)))
             .set(&user)
             .returning(Self::as_select())

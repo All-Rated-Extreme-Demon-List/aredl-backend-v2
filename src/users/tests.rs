@@ -1,7 +1,9 @@
 #[cfg(test)]
-use crate::auth::{create_test_token, Permission};
-#[cfg(test)]
-use crate::test_utils::{create_test_user, init_test_app};
+use crate::{
+    auth::{create_test_token, Permission},
+    test_utils::init_test_app,
+    users::test_utils::create_test_user,
+};
 #[cfg(test)]
 use actix_web::test;
 #[cfg(test)]
