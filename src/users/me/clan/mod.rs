@@ -1,5 +1,8 @@
+mod invites;
 mod model;
 mod routes;
-mod invites;
+
+#[cfg(test)]
+mod tests;
 
 pub use routes::{init_routes, ApiDoc};
