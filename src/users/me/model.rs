@@ -1,10 +1,14 @@
+use crate::aredl::levels::Level as AredlLevel;
+use crate::arepl::levels::Level as AreplLevel;
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
-use crate::schema::users;
+use crate::schema::{aredl, arepl, users};
 use crate::users::User;
 use chrono::{DateTime, Utc};
 use diesel::dsl::now;
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::{
+    ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
+};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -20,6 +24,8 @@ pub struct UserMeUpdate {
     pub country: Option<i32>,
     /// Your new ban level.
     pub ban_level: Option<i32>,
+    /// Your new background level. Must be the GD level ID of a level you have beaten. Can be a classic or platformer level. If the ID is 0, it will be reset to default (uses the hardest beaten level)
+    pub background_level: Option<i32>,
 }
 
 impl User {
@@ -65,6 +71,37 @@ impl User {
                     400,
                     "The description can at most be 300 characters long.",
                 ));
+            }
+        }
+
+        if user.background_level.is_some() {
+            if user.background_level.unwrap() != 0 {
+                let beaten_aredl_level: Option<AredlLevel> = aredl::records::table
+                    .filter(aredl::records::submitted_by.eq(id))
+                    .inner_join(
+                        aredl::levels::table.on(aredl::levels::id.eq(aredl::records::level_id)),
+                    )
+                    .filter(aredl::levels::level_id.eq(user.background_level.unwrap()))
+                    .select(AredlLevel::as_select())
+                    .get_result(conn)
+                    .optional()?;
+
+                let beaten_arepl_level: Option<AreplLevel> = arepl::records::table
+                    .filter(arepl::records::submitted_by.eq(id))
+                    .inner_join(
+                        arepl::levels::table.on(arepl::levels::id.eq(arepl::records::level_id)),
+                    )
+                    .filter(arepl::levels::level_id.eq(user.background_level.unwrap()))
+                    .select(AreplLevel::as_select())
+                    .get_result(conn)
+                    .optional()?;
+
+                if beaten_aredl_level.is_none() && beaten_arepl_level.is_none() {
+                    return Err(ApiError::new(
+                        400,
+                        "You have not beaten the selected level.",
+                    ));
+                }
             }
         }
 

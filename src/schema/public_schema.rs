@@ -133,6 +133,7 @@ pub mod public {
             discord_accent_color -> Nullable<Int4>,
             access_valid_after -> Timestamptz,
             created_at -> Timestamptz,
+            background_level -> Int4,
         }
     }
 
