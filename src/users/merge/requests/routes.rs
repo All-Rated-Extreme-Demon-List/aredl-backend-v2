@@ -4,7 +4,8 @@ use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::users::merge::requests::{
-    MergeRequest, MergeRequestPage, MergeRequestUpsert, ResolvedMergeRequest, MergeRequestQueryOptions
+    MergeRequest, MergeRequestPage, MergeRequestQueryOptions, MergeRequestUpsert,
+    ResolvedMergeRequest,
 };
 use actix_web::web;
 use actix_web::{get, post, HttpResponse, Result};
@@ -70,7 +71,7 @@ async fn find_one(
 async fn list(
     db: web::Data<Arc<DbAppState>>,
     page_query: web::Query<PageQuery<20>>,
-    options: web::Query<MergeRequestQueryOptions>
+    options: web::Query<MergeRequestQueryOptions>,
 ) -> Result<HttpResponse, ApiError> {
     let result = web::block(move || {
         let mut conn = db.connection()?;
@@ -238,7 +239,7 @@ async fn unclaim(
         MergeRequestPage,
         MergeRequestOptions
     )),
-    paths(list, find_one, claim, create, accept, reject)
+    paths(list, find_one, claim, create, accept, reject, unclaim)
 )]
 pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
@@ -249,6 +250,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .service(find_one)
             .service(create)
             .service(accept)
-            .service(reject),
+            .service(reject)
+            .service(unclaim),
     );
 }
