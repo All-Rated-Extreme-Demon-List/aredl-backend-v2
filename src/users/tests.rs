@@ -166,6 +166,7 @@ async fn user_character_limit() {
     let (app, mut conn, auth) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::UserModify)).await;
     let (staff_user_id, _) = create_test_user(&mut conn, Some(Permission::UserBan)).await;
+    let user_token = create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let staff_token =
         create_test_token(staff_user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -176,6 +177,15 @@ async fn user_character_limit() {
     let req = test::TestRequest::patch()
         .uri(&format!("/users/{}", user_id))
         .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .set_json(&update_payload)
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+
+    let req = test::TestRequest::post()
+        .uri("/users/@me")
+        .insert_header(("Authorization", format!("Bearer {}", user_token)))
         .set_json(&update_payload)
         .to_request();
 

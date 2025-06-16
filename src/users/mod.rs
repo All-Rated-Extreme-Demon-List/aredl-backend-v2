@@ -3,8 +3,9 @@ mod merge;
 mod model;
 mod names;
 mod routes;
-mod tests;
 
+#[cfg(test)]
+mod tests;
 #[cfg(test)]
 pub mod test_utils;
 
