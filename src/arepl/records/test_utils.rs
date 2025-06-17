@@ -17,5 +17,5 @@ pub async fn create_test_record(conn: &mut DbConnection, user_id: Uuid, level_id
         ))
         .returning(records::id)
         .get_result::<Uuid>(conn)
-        .expect("Failed to create test aredl record")
+        .expect("Failed to create test arepl record")
 }

@@ -1,0 +1,40 @@
+#[cfg(test)]
+use uuid::Uuid;
+
+#[cfg(test)]
+use crate::db::DbConnection;
+#[cfg(test)]
+use crate::schema::arepl::{pack_tiers, packs};
+#[cfg(test)]
+use diesel::{ExpressionMethods, RunQueryDsl};
+
+#[cfg(test)]
+pub async fn create_test_pack_tier(conn: &mut DbConnection) -> Uuid {
+    let tier_id = Uuid::new_v4();
+    diesel::insert_into(pack_tiers::table)
+        .values((
+            pack_tiers::id.eq(tier_id),
+            pack_tiers::name.eq("Test Tier"),
+            pack_tiers::color.eq("#abcdef"),
+            pack_tiers::placement.eq(1),
+        ))
+        .execute(conn)
+        .expect("Failed to create test pack tier");
+    tier_id
+}
+
+#[cfg(test)]
+pub async fn create_test_pack(conn: &mut DbConnection) -> Uuid {
+    let tier_id = create_test_pack_tier(conn).await;
+    let pack_id = Uuid::new_v4();
+    diesel::insert_into(packs::table)
+        .values((
+            packs::id.eq(pack_id),
+            packs::name.eq("Test Pack"),
+            packs::tier.eq(tier_id),
+        ))
+        .execute(conn)
+        .expect("Failed to create test pack");
+
+    pack_id
+}

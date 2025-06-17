@@ -31,7 +31,7 @@ pub async fn create_test_level(conn: &mut DbConnection) -> Uuid {
             levels::two_player.eq(false),
         ))
         .execute(conn)
-        .expect("Failed to create test aredl level");
+        .expect("Failed to create test arepl level");
 
     level_uuid
 }
