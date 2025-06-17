@@ -1,5 +1,5 @@
 use crate::{
-    aredl::levels::ExtendedBaseLevel,
+    aredl::{levels::ExtendedBaseLevel, submissions::history::SubmissionHistory},
     auth::{Authenticated, Permission},
     db::DbAppState,
     error_handler::ApiError,
@@ -14,8 +14,6 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
-
-use super::history::SubmissionHistory;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq)]
 #[ExistingTypePath = "crate::schema::aredl::sql_types::SubmissionStatus"]

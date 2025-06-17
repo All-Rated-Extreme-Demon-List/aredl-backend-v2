@@ -1,5 +1,5 @@
 use crate::{
-    aredl::submissions::{history::SubmissionHistory, *},
+    aredl::submissions::{history::SubmissionHistory, status::SubmissionsEnabled, *},
     auth::Authenticated,
     db::DbAppState,
     error_handler::ApiError,
@@ -54,17 +54,24 @@ impl Submission {
         let mut conn = db.connection()?;
 
         if !is_url(&inserted_submission.video_url) {
-            return Err(ApiError::new(400, "Your completion link is not a URL!"));
+            return Err(ApiError::new(400, "Your completion link is not a URL"));
         }
 
         if let Some(raw_url) = inserted_submission.raw_url.as_ref() {
             if !is_url(raw_url) {
-                return Err(ApiError::new(400, "Your raw footage is not a URL!"));
+                return Err(ApiError::new(400, "Your raw footage is not a URL"));
             }
         }
 
         conn.transaction(|connection| -> Result<Self, ApiError> {
             // a bunch of validation yay
+
+            // check if submissions are disabled
+            if !(SubmissionsEnabled::is_enabled(connection)?) {
+                return Err(ApiError::new(
+                    400, "Submissions are currently disabled"
+                ));
+            }
 
             // check if any submissions exist already
             let exists_submission = submissions::table
@@ -77,7 +84,7 @@ impl Submission {
             if exists_submission.is_some() {
                 return Err(ApiError::new(
                     409,
-                    "You already have a submission for this level!",
+                    "You already have a submission for this level",
                 ));
             }
 
@@ -90,18 +97,18 @@ impl Submission {
                 .optional()?;
 
             match level_info {
-                None => return Err(ApiError::new(404, "Could not find this level!")),
+                None => return Err(ApiError::new(404, "Could not find this level")),
                 Some((legacy, pos)) => {
                     if legacy == true {
                         return Err(ApiError::new(
                             400,
-                            "This level is on the legacy list and is not accepting records!",
+                            "This level is on the legacy list and is not accepting records.",
                         ));
                     }
                     if pos <= 400 && inserted_submission.raw_url.is_none() {
                         return Err(ApiError::new(
                             400,
-                            "This level is top 400 and requires raw footage!",
+                            "This level is top 400 and requires raw footage",
                         ));
                     }
                 }

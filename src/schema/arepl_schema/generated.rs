@@ -180,6 +180,15 @@ pub mod arepl {
         }
     }
 
+    diesel::table! {
+        arepl.submissions_enabled (id) {
+            id -> Uuid,
+            enabled -> Bool,
+            moderator -> Uuid,
+            created_at -> Timestamptz,
+        }
+    }
+
     diesel::allow_tables_to_appear_in_same_query!(
         last_gddl_update,
         levels,
@@ -193,5 +202,6 @@ pub mod arepl {
         shifts,
         submission_history,
         submissions,
+        submissions_enabled,
     );
 }
