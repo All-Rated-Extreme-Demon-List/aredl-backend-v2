@@ -96,6 +96,7 @@ pub fn init_test_db_state() -> Arc<DbAppState> {
         ("level_modify", 50),
         ("merge_review", 60),
         ("clan_modify", 70),
+        ("notifications_subscribe", 75),
         ("user_ban", 85),
         ("direct_merge", 90),
         ("shift_manage", 95),
@@ -150,7 +151,13 @@ pub async fn init_test_app() -> (
             .wrap(TracingLogger::<AppRootSpanBuilder>::new())
             .wrap(BoxResponse)
             .configure(crate::users::init_routes)
-            .configure(crate::aredl::init_routes),
+            .configure(crate::aredl::init_routes)
+            .configure(crate::arepl::init_routes)
+            .configure(crate::auth::init_routes)
+            .configure(crate::roles::init_routes)
+            .configure(crate::clans::init_routes)
+            .configure(crate::notifications::init_routes)
+            .configure(crate::health::init_routes),
     )
     .await;
 
