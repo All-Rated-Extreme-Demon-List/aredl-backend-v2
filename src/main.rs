@@ -6,6 +6,10 @@ extern crate diesel_migrations;
 mod db;
 mod error_handler;
 mod schema;
+
+#[cfg(test)]
+mod tests;
+
 #[cfg(test)]
 mod test_utils;
 

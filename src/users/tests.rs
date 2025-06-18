@@ -193,3 +193,31 @@ async fn user_character_limit() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_client_error());
 }
+
+#[actix_web::test]
+async fn list_users_with_filters() {
+    let (app, mut conn, _, _) = init_test_app().await;
+    let (_, name) = create_test_user(&mut conn, None).await;
+    let (placeholder_id, _) =
+        crate::users::test_utils::create_test_placeholder_user(&mut conn, None).await;
+
+    let req = test::TestRequest::get()
+        .uri("/users?placeholder=true")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    let users: serde_json::Value = test::read_body_json(resp).await;
+    assert!(users["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|u| u["id"] == placeholder_id.to_string()));
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/users?name_filter=%{}%&per_page=1&page=1", name))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    let users: serde_json::Value = test::read_body_json(resp).await;
+    assert_eq!(users["data"].as_array().unwrap().len(), 1);
+}
