@@ -10,8 +10,8 @@ use diesel::pg::Pg;
 use diesel::query_dsl::JoinOnDsl;
 use diesel::sql_types::Bool;
 use diesel::{
-    BoxableExpression, ExpressionMethods, Insertable, IntoSql, NullableExpressionMethods, QueryDsl,
-    RunQueryDsl, Selectable, SelectableHelper, PgExpressionMethods
+    BoxableExpression, ExpressionMethods, Insertable, IntoSql, NullableExpressionMethods,
+    PgExpressionMethods, QueryDsl, RunQueryDsl, Selectable, SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -96,7 +96,7 @@ pub struct RecordUpdate {
     /// Internal UUID of the level the record is for.
     pub level_id: Option<Uuid>,
     /// Completion time of the record in milliseconds.
-    pub completion_time: i64,
+    pub completion_time: Option<i64>,
     /// Whether this record is the verification of this level or not.
     pub is_verification: Option<bool>,
     /// Link to the raw video file of the completion.
@@ -186,7 +186,7 @@ pub struct RecordsQueryOptions {
     pub mobile_filter: Option<bool>,
     pub level_filter: Option<Uuid>,
     pub submitter_filter: Option<Uuid>,
-    pub reviewer_filter: Option<Uuid>
+    pub reviewer_filter: Option<Uuid>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]

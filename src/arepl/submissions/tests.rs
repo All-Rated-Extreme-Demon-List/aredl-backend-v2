@@ -28,7 +28,8 @@ async fn create_submission() {
     let submission_data = json!({
         "level_id": level_id,
         "video_url": "https://video.com",
-        "raw_url": "https://raw.com"
+        "raw_url": "https://raw.com",
+        "completion_time": 1000000,
     });
 
     let req = test::TestRequest::post()
@@ -58,7 +59,8 @@ async fn submission_without_raw() {
 
     let submission_data = json!({
         "level_id": level_id,
-        "video_url": "https://video.com"
+        "video_url": "https://video.com",
+        "completion_time": 1000000,
     });
 
     let req = test::TestRequest::post()
@@ -88,7 +90,8 @@ async fn submission_malformed_url() {
     let submission_data = json!({
         "level_id": level_id,
         "video_url": "slkdfjskdlf",
-        "raw_url": "https://raw.com"
+        "raw_url": "https://raw.com",
+        "completion_time": 1000000,
     });
 
     let req = test::TestRequest::post()
@@ -103,7 +106,8 @@ async fn submission_malformed_url() {
     let submission_data = json!({
         "level_id": level_id,
         "video_url": "https://video.com",
-        "raw_url": "isldjfsdkf"
+        "raw_url": "isldjfsdkf",
+        "completion_time": 1000000,
     });
 
     let req = test::TestRequest::post()
@@ -230,7 +234,8 @@ async fn submission_aredlplus_boost() {
     let submission_data = json!({
         "level_id": level_id,
         "video_url": "https://video.com",
-        "raw_url": "https://raw.com"
+        "raw_url": "https://raw.com",
+        "completion_time": 1000000,
     });
 
     let req = test::TestRequest::post()
@@ -314,7 +319,8 @@ async fn submission_banned_player() {
     let submission_data = json!({
         "level_id": level_id,
         "video_url": "https://video.com",
-        "raw_url": "https://raw.com"
+        "raw_url": "https://raw.com",
+        "completion_time": 1000000,
     });
 
     let req_1 = test::TestRequest::post()

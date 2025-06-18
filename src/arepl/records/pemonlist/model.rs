@@ -137,7 +137,7 @@ impl PemonlistPlayer {
                             pemonlist_record.video_id.clone()
                         )),
                         level_id: None,
-                        completion_time: timestamp,
+                        completion_time: Some(timestamp),
                         is_verification: Some(false),
                         raw_url: None,
                         updated_at: Some(now),
