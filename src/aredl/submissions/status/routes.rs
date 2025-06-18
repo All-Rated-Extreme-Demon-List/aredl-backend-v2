@@ -84,7 +84,7 @@ async fn get_status_full(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse,
         ("api_key" = []),
     ),
 )]
-#[get("/")]
+#[get("")]
 async fn get_status(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
     let res = web::block(
         move || SubmissionsEnabled::is_enabled(&mut db.connection()?)
