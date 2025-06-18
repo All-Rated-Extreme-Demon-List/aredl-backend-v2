@@ -1,7 +1,7 @@
 use actix_web::{post, web, HttpResponse, get};
 use std::sync::Arc;
 use crate::{
-    aredl::submissions::status::SubmissionsEnabled,
+    arepl::submissions::status::SubmissionsEnabled,
     auth::{Authenticated, Permission, UserAuth}, 
     db::DbAppState, 
     error_handler::ApiError,
@@ -12,7 +12,7 @@ use utoipa::OpenApi;
     post,
     summary = "[Staff]Enable submissions",
     description = "Toggle submissions on, allowing users to submit records to the list",
-    tag = "AREDL - Submissions",
+    tag = "AREDL (P) - Submissions",
     responses(
         (status = 200)
     ),
@@ -33,7 +33,7 @@ async fn enable(db: web::Data<Arc<DbAppState>>, authenticated: Authenticated) ->
     post,
     summary = "[Staff]Disable submissions",
     description = "Toggle submissions off, stopping users from submitting records to the list.",
-    tag = "AREDL - Submissions",
+    tag = "AREDL (P) - Submissions",
     responses(
         (status = 200)
     ),
@@ -54,7 +54,7 @@ async fn disable(db: web::Data<Arc<DbAppState>>, authenticated: Authenticated) -
     get,
     summary = "[Staff]Get submission status details",
     description = "Get the status of submissions. In addition to the status, this also returns the moderator who last enabled/disabled submissions, and the timestamp.",
-    tag = "AREDL - Submissions",
+    tag = "AREDL (P) - Submissions",
     responses(
         (status = 200, body = SubmissionsEnabled)
     ),
@@ -75,7 +75,7 @@ async fn get_status_full(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse,
     get,
     summary = "Get submission status",
     description = "Get the status of submissions. Returns `false` if submissions are disabled, and `true` otherwise.",
-    tag = "AREDL - Submissions",
+    tag = "AREDL (P) - Submissions",
     responses(
         (status = 200)
     ),
@@ -84,7 +84,7 @@ async fn get_status_full(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse,
         ("api_key" = []),
     ),
 )]
-#[get("/")]
+#[get("")]
 async fn get_status(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
     let res = web::block(
         move || SubmissionsEnabled::is_enabled(&mut db.connection()?)
@@ -96,7 +96,7 @@ async fn get_status(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiE
     get,
     summary = "[Staff]Get submission status history",
     description = "Get a log of when submissions were enabled or disabled and by whom.",
-    tag = "AREDL - Submissions",
+    tag = "AREDL (P) - Submissions",
     responses(
         (status = 200, body = [SubmissionsEnabled])
     ),

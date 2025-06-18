@@ -122,7 +122,7 @@ async fn delete(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticat
         (path = "/", api=history::ApiDoc),
         (path = "/", api=queue::ApiDoc),
         (path = "/", api=resolved::ApiDoc),
-        (path = "/", api=status::ApiDoc),
+        (path = "/status", api=status::ApiDoc),
     ),
     components(
         schemas(

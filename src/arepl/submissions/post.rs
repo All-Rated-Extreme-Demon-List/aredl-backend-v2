@@ -1,5 +1,5 @@
 use crate::{
-    arepl::submissions::*,
+    arepl::submissions::{*, history::SubmissionHistory, status::SubmissionsEnabled},
     auth::Authenticated,
     db::DbAppState,
     error_handler::ApiError,
@@ -20,7 +20,6 @@ use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use super::history::SubmissionHistory;
 
 #[derive(Serialize, Deserialize, Debug, Insertable, ToSchema)]
 #[diesel(table_name=submissions, check_for_backend(Pg))]
@@ -67,6 +66,13 @@ impl Submission {
 
         conn.transaction(|connection| -> Result<Self, ApiError> {
             // a bunch of validation yay
+
+            // check if submissions are disabled
+            if !(SubmissionsEnabled::is_enabled(connection)?) {
+                return Err(ApiError::new(
+                    400, "Submissions are currently disabled"
+                ));
+            }
 
             // check if any submissions exist already
             let exists_submission = submissions::table
