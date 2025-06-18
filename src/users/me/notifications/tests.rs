@@ -13,7 +13,7 @@ use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 #[cfg(test)]
 #[actix_web::test]
 async fn list_notifications() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, None).await;
 
     Notification::create(&mut conn, user_id, "One".into(), NotificationType::Info).unwrap();
@@ -34,7 +34,7 @@ async fn list_notifications() {
 
 #[actix_web::test]
 async fn clear_notifications() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, None).await;
 
     Notification::create(&mut conn, user_id, "One".into(), NotificationType::Info).unwrap();

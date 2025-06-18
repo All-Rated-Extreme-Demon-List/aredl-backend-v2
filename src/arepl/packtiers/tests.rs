@@ -10,7 +10,7 @@ use serde_json::json;
 
 #[actix_web::test]
 async fn create_pack_tier() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::PackTierModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -39,7 +39,7 @@ async fn create_pack_tier() {
 
 #[actix_web::test]
 async fn get_pack_tiers() {
-    let (app, _, _auth) = init_test_app().await;
+    let (app, _, _, _) = init_test_app().await;
     let req = test::TestRequest::get()
         .uri("/arepl/pack-tiers")
         .to_request();
@@ -49,7 +49,7 @@ async fn get_pack_tiers() {
 
 #[actix_web::test]
 async fn update_pack_tier() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::PackTierModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -75,7 +75,7 @@ async fn update_pack_tier() {
 
 #[actix_web::test]
 async fn delete_pack_tier() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::PackTierModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");

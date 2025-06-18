@@ -11,7 +11,7 @@ use serde_json::json;
 
 #[actix_web::test]
 async fn create_placeholder_user() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (staff_user_id, _) = create_test_user(&mut conn, Some(Permission::PlaceholderCreate)).await;
     let staff_token =
@@ -36,7 +36,7 @@ async fn create_placeholder_user() {
 
 #[actix_web::test]
 async fn update_user_info() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::UserModify)).await;
     let (staff_user_id, _) = create_test_user(&mut conn, Some(Permission::UserBan)).await;
     let staff_token =
@@ -63,7 +63,7 @@ async fn update_user_info() {
 
 #[actix_web::test]
 async fn update_user_info_less_privilege() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::UserModify)).await;
     let user_token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -86,7 +86,7 @@ async fn update_user_info_less_privilege() {
 
 #[actix_web::test]
 async fn ban_user() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, username) = create_test_user(&mut conn, None).await;
     let (staff_user_id, _) = create_test_user(&mut conn, Some(Permission::UserBan)).await;
     let staff_token =
@@ -118,7 +118,7 @@ async fn ban_user() {
 
 #[actix_web::test]
 async fn find_user() {
-    let (app, mut conn, _auth) = init_test_app().await;
+    let (app, mut conn, _, _) = init_test_app().await;
     let (user_id, username) = create_test_user(&mut conn, None).await;
 
     let req = test::TestRequest::get()
@@ -134,7 +134,7 @@ async fn find_user() {
 
 #[actix_web::test]
 async fn list_users() {
-    let (app, mut conn, _auth) = init_test_app().await;
+    let (app, mut conn, _, _) = init_test_app().await;
     let (_, username) = create_test_user(&mut conn, None).await;
     create_test_user(&mut conn, None).await;
 
@@ -163,10 +163,11 @@ async fn list_users() {
 
 #[actix_web::test]
 async fn user_character_limit() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::UserModify)).await;
     let (staff_user_id, _) = create_test_user(&mut conn, Some(Permission::UserBan)).await;
-    let user_token = create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let user_token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let staff_token =
         create_test_token(staff_user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 

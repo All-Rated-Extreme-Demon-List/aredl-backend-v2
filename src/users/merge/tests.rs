@@ -20,7 +20,7 @@ use serde_json::json;
 
 #[actix_web::test]
 async fn direct_merge() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (user_1_id, _) = create_test_user(&mut conn, None).await;
     let (user_2_id, _) = create_test_placeholder_user(&mut conn, None).await;
@@ -64,7 +64,7 @@ async fn direct_merge() {
 
 #[actix_web::test]
 async fn list_merge_logs() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (user_1_id, _) = create_test_user(&mut conn, None).await;
     let (user_2_id, _) = create_test_placeholder_user(&mut conn, None).await;

@@ -14,7 +14,7 @@ use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 #[cfg(test)]
 #[actix_web::test]
 async fn list_invites() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (owner_id, _) = create_test_user(&mut conn, None).await;
     let (user_id, _) = create_test_user(&mut conn, None).await;
 
@@ -38,7 +38,7 @@ async fn list_invites() {
 
 #[actix_web::test]
 async fn accept_invite() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (owner_id, _) = create_test_user(&mut conn, None).await;
     let (user_id, _) = create_test_user(&mut conn, None).await;
 
@@ -80,7 +80,7 @@ async fn accept_invite() {
 
 #[actix_web::test]
 async fn reject_invite() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (owner_id, _) = create_test_user(&mut conn, None).await;
     let (user_id, _) = create_test_user(&mut conn, None).await;
 
@@ -115,7 +115,7 @@ async fn reject_invite() {
 
 #[actix_web::test]
 async fn leave_clan() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (owner_id, _) = create_test_user(&mut conn, None).await;
     let (user_id, _) = create_test_user(&mut conn, None).await;
 
@@ -143,7 +143,7 @@ async fn leave_clan() {
 
 #[actix_web::test]
 async fn leave_clan_not_member() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, None).await;
 
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
@@ -158,7 +158,7 @@ async fn leave_clan_not_member() {
 
 #[actix_web::test]
 async fn leave_clan_owner_forbidden() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (owner_id, _) = create_test_user(&mut conn, None).await;
 
     let clan_id = create_test_clan(&mut conn).await;

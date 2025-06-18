@@ -12,7 +12,7 @@ use serde_json::json;
 
 #[actix_web::test]
 async fn create_record() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -45,7 +45,7 @@ async fn create_record() {
 
 #[actix_web::test]
 async fn get_record_list() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -67,7 +67,7 @@ async fn get_record_list() {
 
 #[actix_web::test]
 async fn update_record() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -93,7 +93,7 @@ async fn update_record() {
 
 #[actix_web::test]
 async fn get_own_records() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
     let (user_id_2, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
     let token =
@@ -135,7 +135,7 @@ async fn get_own_records() {
 
 #[actix_web::test]
 async fn delete_record() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -150,7 +150,7 @@ async fn delete_record() {
 
 #[actix_web::test]
 async fn get_one_record() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");

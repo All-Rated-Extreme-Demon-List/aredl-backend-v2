@@ -18,7 +18,7 @@ use uuid::Uuid;
 
 #[actix_web::test]
 async fn create_submission() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&mut conn, None).await;
     let token =
@@ -50,7 +50,7 @@ async fn create_submission() {
 
 #[actix_web::test]
 async fn submission_without_raw() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&mut conn, None).await;
     let token =
@@ -79,7 +79,7 @@ async fn submission_without_raw() {
 
 #[actix_web::test]
 async fn submission_malformed_url() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&mut conn, None).await;
     let token =
@@ -132,7 +132,7 @@ async fn submission_malformed_url() {
 
 #[actix_web::test]
 async fn submission_edit_no_perms() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (user_id_1, _) = create_test_user(&mut conn, None).await;
     let token_1 =
@@ -199,7 +199,7 @@ async fn submission_edit_no_perms() {
 
 #[actix_web::test]
 async fn submission_aredlplus_boost() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&mut conn, None).await;
     let (user_id_2, _) = create_test_user(&mut conn, None).await;
@@ -298,7 +298,7 @@ async fn submission_aredlplus_boost() {
 
 #[actix_web::test]
 async fn submission_banned_player() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (not_banned, _) = create_test_user(&mut conn, None).await;
     let not_banned_token =
@@ -352,7 +352,7 @@ async fn submission_banned_player() {
 
 #[actix_web::test]
 async fn delete_submission() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
     let token =
@@ -376,7 +376,7 @@ async fn delete_submission() {
 
 #[actix_web::test]
 async fn accept_submission() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
     let token =
@@ -418,7 +418,7 @@ async fn accept_submission() {
 
 #[actix_web::test]
 async fn deny_submission() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
     let token =
@@ -457,7 +457,7 @@ async fn deny_submission() {
 
 #[actix_web::test]
 async fn submission_under_consideration() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
     let token =
@@ -496,7 +496,7 @@ async fn submission_under_consideration() {
 
 #[actix_web::test]
 async fn get_submission_history() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
     let token =

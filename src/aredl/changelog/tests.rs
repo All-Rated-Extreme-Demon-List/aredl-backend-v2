@@ -4,7 +4,7 @@ use crate::test_utils::*;
 use actix_web::test;
 #[actix_web::test]
 async fn get_changelog() {
-    let (app, _, _) = init_test_app().await;
+    let (app, _, _, _) = init_test_app().await;
     let req = test::TestRequest::get()
         .uri("/aredl/changelog")
         .to_request();

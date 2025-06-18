@@ -1,6 +1,10 @@
 pub mod members;
 mod model;
 mod routes;
+
+#[cfg(test)]
+mod tests;
+
 #[cfg(test)]
 pub mod test_utils;
 

@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 #[actix_web::test]
 async fn get_clan() {
-    let (app, mut conn, _) = init_test_app().await;
+    let (app, mut conn, _, _) = init_test_app().await;
     let (user, _) = create_test_user(&mut conn, None).await;
     let (_, record_id) = create_test_level_with_record(&mut conn, user).await;
 

@@ -126,6 +126,7 @@ pub async fn init_test_app() -> (
     impl Service<Request, Response = ServiceResponse<BoxBody>, Error = Error>,
     DbConnection,
     Arc<AuthAppState>,
+    tokio::sync::broadcast::Sender<crate::notifications::WebsocketNotification>,
 ) {
     use actix_web::middleware::NormalizePath;
     use tokio::sync::broadcast;
@@ -161,5 +162,5 @@ pub async fn init_test_app() -> (
     )
     .await;
 
-    (app, conn, auth_app_state)
+    (app, conn, auth_app_state, notify_tx)
 }

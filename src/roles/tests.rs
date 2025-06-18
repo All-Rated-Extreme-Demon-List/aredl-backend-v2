@@ -12,7 +12,7 @@ use serde_json::json;
 
 #[actix_web::test]
 async fn list_roles() {
-    let (app, mut conn, _) = init_test_app().await;
+    let (app, mut conn, _, _) = init_test_app().await;
     let role1 = create_test_role(&mut conn, 10).await;
     let role2 = create_test_role(&mut conn, 20).await;
 
@@ -28,7 +28,7 @@ async fn list_roles() {
 
 #[actix_web::test]
 async fn create_role() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (staff_id, _) = create_test_user(&mut conn, Some(Permission::RoleManage)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
 
@@ -46,7 +46,7 @@ async fn create_role() {
 
 #[actix_web::test]
 async fn update_role() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (staff_id, _) = create_test_user(&mut conn, Some(Permission::RoleManage)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
     let role_id = create_test_role(&mut conn, 30).await;
@@ -68,7 +68,7 @@ async fn update_role() {
 
 #[actix_web::test]
 async fn delete_role() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (staff_id, _) = create_test_user(&mut conn, Some(Permission::RoleManage)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
     let role_id: i32 = create_test_role(&mut conn, 30).await;

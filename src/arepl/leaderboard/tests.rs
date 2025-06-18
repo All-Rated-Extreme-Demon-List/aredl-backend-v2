@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 #[actix_web::test]
 async fn list_leaderboard() {
-    let (app, mut conn, _) = init_test_app().await;
+    let (app, mut conn, _, _) = init_test_app().await;
     let (user, _) = create_test_user(&mut conn, None).await;
     let (level_id, _) = create_test_level_with_record(&mut conn, user).await;
 
@@ -69,7 +69,7 @@ async fn list_leaderboard() {
 
 #[actix_web::test]
 async fn get_country_lb() {
-    let (app, mut conn, _) = init_test_app().await;
+    let (app, mut conn, _, _) = init_test_app().await;
     let (user, _) = create_test_user(&mut conn, None).await;
     create_test_level_with_record(&mut conn, user).await;
 
@@ -103,7 +103,7 @@ async fn get_country_lb() {
 
 #[actix_web::test]
 async fn get_clans_lb() {
-    let (app, mut conn, _) = init_test_app().await;
+    let (app, mut conn, _, _) = init_test_app().await;
     let (user, _) = create_test_user(&mut conn, None).await;
     create_test_level_with_record(&mut conn, user).await;
 

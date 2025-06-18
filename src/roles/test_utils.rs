@@ -39,3 +39,14 @@ pub async fn create_test_role_with_user(
         .expect("Failed to assign role to user!");
     (role_id, user_id)
 }
+
+#[cfg(test)]
+pub async fn add_user_to_role(conn: &mut DbConnection, role_id: i32, user_id: Uuid) {
+    diesel::insert_into(user_roles::table)
+        .values((
+            user_roles::user_id.eq(user_id),
+            user_roles::role_id.eq(role_id),
+        ))
+        .execute(conn)
+        .expect("Failed to assign role to user!");
+}

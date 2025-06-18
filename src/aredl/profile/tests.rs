@@ -5,7 +5,7 @@ use actix_web::test;
 
 #[actix_web::test]
 async fn get_profile() {
-    let (app, mut conn, _auth) = init_test_app().await;
+    let (app, mut conn, _, _) = init_test_app().await;
     let (user, _) = create_test_user(&mut conn, None).await;
     let req = test::TestRequest::get()
         .uri(format!("/aredl/profile/{user}").as_str())

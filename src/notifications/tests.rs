@@ -19,7 +19,7 @@ fn ws_request(path: &str) -> test::TestRequest {
 
 #[actix_web::test]
 async fn websocket_requires_auth() {
-    let (app, _, _) = init_test_app().await;
+    let (app, _, _, _) = init_test_app().await;
     let req = ws_request("/notifications/websocket").to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status().as_u16(), 403);
@@ -27,7 +27,7 @@ async fn websocket_requires_auth() {
 
 #[actix_web::test]
 async fn websocket_success() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::NotificationsSubscribe)).await;
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
 
@@ -37,4 +37,20 @@ async fn websocket_success() {
 
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status().as_u16(), 101);
+}
+
+#[actix_web::test]
+async fn notification_broadcast() {
+    use serde_json::json;
+
+    let (_app, _conn, _auth, notify_tx) = init_test_app().await;
+    let mut rx = notify_tx.subscribe();
+
+    let note = crate::notifications::WebsocketNotification {
+        notification_type: "test".into(),
+        data: json!({"hello": 1}),
+    };
+    notify_tx.send(note.clone()).unwrap();
+    let received = rx.recv().await.unwrap();
+    assert_eq!(received.notification_type, note.notification_type);
 }

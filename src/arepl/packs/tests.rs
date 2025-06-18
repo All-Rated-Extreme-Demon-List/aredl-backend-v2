@@ -12,7 +12,7 @@ use serde_json::json;
 
 #[actix_web::test]
 async fn create_pack() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::PackModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -39,7 +39,7 @@ async fn create_pack() {
 
 #[actix_web::test]
 async fn update_pack() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::PackModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -65,7 +65,7 @@ async fn update_pack() {
 
 #[actix_web::test]
 async fn remove_pack() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::PackModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -80,7 +80,7 @@ async fn remove_pack() {
 
 #[actix_web::test]
 async fn add_level_to_pack() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::PackModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -107,7 +107,7 @@ async fn add_level_to_pack() {
 
 #[actix_web::test]
 async fn set_pack_levels() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::PackModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -134,7 +134,7 @@ async fn set_pack_levels() {
 
 #[actix_web::test]
 async fn remove_level_from_pack() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::PackModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");

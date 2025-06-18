@@ -12,7 +12,7 @@ use serde_json::json;
 
 #[actix_web::test]
 async fn enable_submissions() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
     let token =
@@ -35,7 +35,7 @@ async fn enable_submissions() {
 
 #[actix_web::test]
 async fn disable_submissions() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
     let token =
@@ -73,7 +73,7 @@ async fn disable_submissions() {
 
 #[actix_web::test]
 async fn get_submission_status() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
     let token =
@@ -109,7 +109,7 @@ async fn get_submission_status() {
 
 #[actix_web::test]
 async fn get_submission_status_full() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
     let token =
@@ -132,7 +132,7 @@ async fn get_submission_status_full() {
 
 #[actix_web::test]
 async fn get_submission_status_history() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
     let token =

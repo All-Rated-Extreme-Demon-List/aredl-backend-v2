@@ -20,7 +20,7 @@ use serde_json::json;
 
 #[actix_web::test]
 async fn create_merge_request() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (user_1_id, _) = create_test_user(&mut conn, Some(Permission::MergeReview)).await;
     let (user_2_id, _) = create_test_placeholder_user(&mut conn, None).await;
@@ -66,7 +66,7 @@ async fn create_merge_request() {
 
 #[actix_web::test]
 async fn accept_merge_request() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (user_1_id, _) = create_test_user(&mut conn, None).await;
     let (user_2_id, _) = create_test_placeholder_user(&mut conn, None).await;
@@ -114,7 +114,7 @@ async fn accept_merge_request() {
 
 #[actix_web::test]
 async fn reject_merge_request() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (user_1_id, _) = create_test_user(&mut conn, None).await;
     let (user_2_id, _) = create_test_placeholder_user(&mut conn, None).await;
@@ -153,7 +153,7 @@ async fn reject_merge_request() {
 
 #[actix_web::test]
 async fn list_merge_requests() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (user_1_id, _) = create_test_user(&mut conn, None).await;
     let (user_2_id, _) = create_test_placeholder_user(&mut conn, None).await;
@@ -180,7 +180,7 @@ async fn list_merge_requests() {
 
 #[actix_web::test]
 async fn find_merge_request() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (user_1_id, _) = create_test_user(&mut conn, None).await;
     let (user_2_id, _) = create_test_placeholder_user(&mut conn, None).await;
@@ -203,7 +203,7 @@ async fn find_merge_request() {
 
 #[actix_web::test]
 async fn claim_merge_request() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (user_1_id, _) = create_test_user(&mut conn, None).await;
     let (user_2_id, _) = create_test_placeholder_user(&mut conn, None).await;
@@ -232,7 +232,7 @@ async fn claim_merge_request() {
 
 #[actix_web::test]
 async fn unclaim_merge_request() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (user_1_id, _) = create_test_user(&mut conn, None).await;
     let (user_2_id, _) = create_test_placeholder_user(&mut conn, None).await;

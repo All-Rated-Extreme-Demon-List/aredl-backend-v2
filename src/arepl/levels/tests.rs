@@ -16,7 +16,7 @@ use serde_json::json;
 
 #[actix_web::test]
 async fn create_level() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::LevelModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -46,7 +46,7 @@ async fn create_level() {
 
 #[actix_web::test]
 async fn list_levels() {
-    let (app, mut conn, _) = init_test_app().await;
+    let (app, mut conn, _, _) = init_test_app().await;
     create_test_level(&mut conn).await;
     create_test_level(&mut conn).await;
     create_test_level(&mut conn).await;
@@ -69,7 +69,7 @@ async fn list_levels() {
 
 #[actix_web::test]
 async fn update_level() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::LevelModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -91,7 +91,7 @@ async fn update_level() {
 
 #[actix_web::test]
 async fn find_level() {
-    let (app, mut conn, _auth) = init_test_app().await;
+    let (app, mut conn, _, _) = init_test_app().await;
     let level_id = create_test_level(&mut conn).await;
     let req = test::TestRequest::get()
         .uri(&format!("/arepl/levels/{}", level_id))
@@ -109,7 +109,7 @@ async fn find_level() {
 
 #[actix_web::test]
 async fn list_creators() {
-    let (app, mut conn, _) = init_test_app().await;
+    let (app, mut conn, _, _) = init_test_app().await;
     let level_id = create_test_level(&mut conn).await;
     let (creator_id, _) = create_test_user(&mut conn, None).await;
 
@@ -139,7 +139,7 @@ async fn list_creators() {
 
 #[actix_web::test]
 async fn set_creators() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::LevelModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -159,7 +159,7 @@ async fn set_creators() {
 
 #[actix_web::test]
 async fn add_and_remove_creators() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::LevelModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -201,7 +201,7 @@ async fn add_and_remove_creators() {
 
 #[actix_web::test]
 async fn get_level_history() {
-    let (app, mut conn, _) = init_test_app().await;
+    let (app, mut conn, _, _) = init_test_app().await;
     let level_id = create_test_level(&mut conn).await;
     // move this level by placing a new one at #1
     let other_level = create_test_level(&mut conn).await;
@@ -228,7 +228,7 @@ async fn get_level_history() {
 
 #[actix_web::test]
 async fn get_level_pack() {
-    let (app, mut conn, _) = init_test_app().await;
+    let (app, mut conn, _, _) = init_test_app().await;
     let level = create_test_level(&mut conn).await;
     let pack = create_test_pack(&mut conn).await;
     // insert the pack into the level
@@ -261,7 +261,7 @@ async fn get_level_pack() {
 
 #[actix_web::test]
 async fn get_level_records() {
-    let (app, mut conn, _) = init_test_app().await;
+    let (app, mut conn, _, _) = init_test_app().await;
     let (submitter, _) = create_test_user(&mut conn, None).await;
     let (level_id, record_id) = create_test_level_with_record(&mut conn, submitter).await;
 
