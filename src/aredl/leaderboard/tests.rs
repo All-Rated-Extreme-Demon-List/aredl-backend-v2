@@ -140,3 +140,119 @@ async fn get_clans_lb() {
         "Country codes do not match!"
     );
 }
+
+#[actix_web::test]
+async fn leaderboard_filters() {
+    let (app, mut conn, _, _) = init_test_app().await;
+    let (u1, name1) = create_test_user(&mut conn, None).await;
+    let (u2, _name2) = create_test_user(&mut conn, None).await;
+    create_test_level_with_record(&mut conn, u1).await;
+    create_test_level_with_record(&mut conn, u2).await;
+    create_test_level_with_record(&mut conn, u2).await;
+
+    let us_id = 840;
+    diesel::update(users::table)
+        .filter(users::id.eq(u1))
+        .set(users::country.eq(us_id))
+        .execute(&mut conn)
+        .unwrap();
+
+    let clan_id = diesel::insert_into(clans::table)
+        .values((clans::global_name.eq("Clan"), clans::tag.eq("CL")))
+        .returning(clans::id)
+        .get_result::<Uuid>(&mut conn)
+        .unwrap();
+    diesel::insert_into(clan_members::table)
+        .values((
+            clan_members::clan_id.eq(clan_id),
+            clan_members::user_id.eq(u1),
+        ))
+        .execute(&mut conn)
+        .unwrap();
+
+    refresh_test_leaderboards(&mut conn).await;
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/aredl/leaderboard/?name_filter={name1}"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["data"].as_array().unwrap().len(), 1);
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/aredl/leaderboard/?country_filter={us_id}"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert!(body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|e| e["user"]["id"] == u1.to_string()));
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/aredl/leaderboard/?clan_filter={clan_id}"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert!(body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|e| e["user"]["id"] == u1.to_string()));
+
+    let req = test::TestRequest::get()
+        .uri("/aredl/leaderboard/?order=ExtremeCount")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["data"][0]["user"]["id"], u2.to_string());
+}
+
+#[actix_web::test]
+async fn country_clan_leaderboard_orders() {
+    let (app, mut conn, _, _) = init_test_app().await;
+    let (u1, _) = create_test_user(&mut conn, None).await;
+    let (u2, _) = create_test_user(&mut conn, None).await;
+    let _level1 = create_test_level_with_record(&mut conn, u1).await;
+    create_test_level_with_record(&mut conn, u2).await;
+    create_test_level_with_record(&mut conn, u2).await;
+
+    diesel::update(users::table.filter(users::id.eq(u1)))
+        .set(users::country.eq(840))
+        .execute(&mut conn)
+        .unwrap();
+    diesel::update(users::table.filter(users::id.eq(u2)))
+        .set(users::country.eq(124))
+        .execute(&mut conn)
+        .unwrap();
+
+    let clan_id = diesel::insert_into(clans::table)
+        .values((clans::global_name.eq("Clan"), clans::tag.eq("CL")))
+        .returning(clans::id)
+        .get_result::<Uuid>(&mut conn)
+        .unwrap();
+    diesel::insert_into(clan_members::table)
+        .values((
+            clan_members::clan_id.eq(clan_id),
+            clan_members::user_id.eq(u1),
+        ))
+        .execute(&mut conn)
+        .unwrap();
+
+    refresh_test_leaderboards(&mut conn).await;
+
+    let req = test::TestRequest::get()
+        .uri("/aredl/leaderboard/countries?order=ExtremeCount")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["data"][0]["country"], 124);
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/aredl/leaderboard/clans?order=ExtremeCount"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["data"][0]["clan"]["id"], clan_id.to_string());
+}

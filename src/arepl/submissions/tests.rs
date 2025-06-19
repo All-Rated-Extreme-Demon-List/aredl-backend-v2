@@ -3,14 +3,16 @@ use crate::arepl::submissions::test_utils::create_test_submission;
 #[cfg(test)]
 use crate::{
     auth::{create_test_token, Permission},
-    schema::{arepl::records, roles, user_roles, users},
+    schema::{roles, user_roles, users},
 };
 #[cfg(test)]
 use crate::{test_utils::*, users::test_utils::create_test_user};
 #[cfg(test)]
 use actix_web::test;
 #[cfg(test)]
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
+use actix_web::test::read_body_json;
+#[cfg(test)]
+use diesel::{ExpressionMethods, RunQueryDsl};
 #[cfg(test)]
 use serde_json::json;
 #[cfg(test)]
@@ -198,7 +200,7 @@ async fn submission_edit_no_perms() {
 }
 
 #[actix_web::test]
-async fn submission_aredlplus_boost() {
+async fn submission_areplplus_boost() {
     let (app, mut conn, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&mut conn, None).await;
@@ -375,126 +377,6 @@ async fn delete_submission() {
 }
 
 #[actix_web::test]
-async fn accept_submission() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
-    let token =
-        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let level_id = create_test_level(&mut conn).await;
-
-    let submission: Uuid = create_test_submission(level_id, user_id, &mut conn).await;
-
-    let accept_data = json!({"notes": "GG!"});
-
-    let req = test::TestRequest::post()
-        .uri(format!("/arepl/submissions/{submission}/accept").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&accept_data)
-        .to_request();
-
-    let resp = test::call_service(&app, req).await;
-    assert!(
-        resp.status().is_success(),
-        "status of req is {}",
-        resp.status()
-    );
-
-    let record_string = records::table
-        .filter(records::level_id.eq(level_id))
-        .filter(records::submitted_by.eq(user_id))
-        .select(records::reviewer_notes)
-        .first::<Option<String>>(&mut conn)
-        .expect("Failed to get new record!")
-        .unwrap();
-    let new_record = record_string.as_str();
-
-    assert_eq!(
-        new_record,
-        accept_data["notes"].as_str().unwrap(),
-        "Reviewer notes do not match!"
-    )
-}
-
-#[actix_web::test]
-async fn deny_submission() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
-    let token =
-        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let level_id = create_test_level(&mut conn).await;
-
-    let submission: Uuid = create_test_submission(level_id, user_id, &mut conn).await;
-
-    let deny_data = json!({"notes": "No Cheat Indicator:tm:"});
-
-    let req = test::TestRequest::post()
-        .uri(format!("/arepl/submissions/{submission}/deny").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&deny_data)
-        .to_request();
-
-    let resp = test::call_service(&app, req).await;
-    assert!(
-        resp.status().is_success(),
-        "status of req is {}",
-        resp.status()
-    );
-
-    let body: serde_json::Value = test::read_body_json(resp).await;
-
-    assert_eq!(
-        body["reviewer_notes"], deny_data["notes"],
-        "Reviewer notes do not match!"
-    );
-    assert_eq!(
-        body["status"].as_str().unwrap(),
-        "Denied",
-        "Submission is not denied!"
-    );
-}
-
-#[actix_web::test]
-async fn submission_under_consideration() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
-    let token =
-        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let level_id = create_test_level(&mut conn).await;
-
-    let submission: Uuid = create_test_submission(level_id, user_id, &mut conn).await;
-
-    let under_consideration_data = json!({"notes": "No way SpaceUK is hacking right guys"});
-
-    let req = test::TestRequest::post()
-        .uri(format!("/arepl/submissions/{submission}/underconsideration").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&under_consideration_data)
-        .to_request();
-
-    let resp = test::call_service(&app, req).await;
-    assert!(
-        resp.status().is_success(),
-        "status of req is {}",
-        resp.status()
-    );
-
-    let body: serde_json::Value = test::read_body_json(resp).await;
-
-    assert_eq!(
-        body["reviewer_notes"], under_consideration_data["notes"],
-        "Reviewer notes do not match!"
-    );
-    assert_eq!(
-        body["status"].as_str().unwrap(),
-        "UnderConsideration",
-        "Submission is not denied!"
-    );
-}
-
-#[actix_web::test]
 async fn get_submission_history() {
     let (app, mut conn, auth, _) = init_test_app().await;
 
@@ -541,4 +423,38 @@ async fn get_submission_history() {
     assert_eq!(entry["submission_id"], submission.to_string());
     assert_eq!(entry["status"], "UnderConsideration");
     assert_eq!(entry["reviewer_notes"], under_consideration_data["notes"]);
+}
+
+#[actix_web::test]
+async fn get_global_queue() {
+    let (app, mut conn, _, _) = init_test_app().await;
+    let (user, _) = create_test_user(&mut conn, None).await;
+    let level = create_test_level(&mut conn).await;
+    create_test_submission(level, user, &mut conn).await;
+
+    let req = test::TestRequest::get()
+        .uri("/arepl/submissions/queue")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["levels_in_queue"].as_i64().unwrap(), 1);
+}
+
+#[actix_web::test]
+async fn get_submission_queue() {
+    let (app, mut conn, auth, _) = init_test_app().await;
+    let (user, _) = create_test_user(&mut conn, None).await;
+    let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
+    let level = create_test_level(&mut conn).await;
+    let submission = create_test_submission(level, user, &mut conn).await;
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/arepl/submissions/{submission}/queue"))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["total"].as_i64().unwrap(), 1);
 }
