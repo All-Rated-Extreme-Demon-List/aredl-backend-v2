@@ -173,3 +173,45 @@ async fn leave_clan_owner_forbidden() {
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status().as_u16(), 403);
 }
+
+#[actix_web::test]
+async fn accept_invite_not_mine() {
+    let (app, mut conn, auth, _) = init_test_app().await;
+    let (owner_id, _) = create_test_user(&mut conn, None).await;
+    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let (other_id, _) = create_test_user(&mut conn, None).await;
+
+    let clan_id = create_test_clan(&mut conn).await;
+    create_test_clan_member(&mut conn, clan_id, owner_id, 2).await;
+    let invite_id = create_test_clan_invite(&mut conn, clan_id, other_id, owner_id).await;
+
+    let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
+    let req = test::TestRequest::post()
+        .uri(&format!("/users/@me/clan/invites/{invite_id}/accept"))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status().as_u16(), 403);
+}
+
+#[actix_web::test]
+async fn reject_invite_not_mine() {
+    let (app, mut conn, auth, _) = init_test_app().await;
+    let (owner_id, _) = create_test_user(&mut conn, None).await;
+    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let (other_id, _) = create_test_user(&mut conn, None).await;
+
+    let clan_id = create_test_clan(&mut conn).await;
+    create_test_clan_member(&mut conn, clan_id, owner_id, 2).await;
+    let invite_id = create_test_clan_invite(&mut conn, clan_id, other_id, owner_id).await;
+
+    let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
+    let req = test::TestRequest::post()
+        .uri(&format!("/users/@me/clan/invites/{invite_id}/reject"))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status().as_u16(), 403);
+}
