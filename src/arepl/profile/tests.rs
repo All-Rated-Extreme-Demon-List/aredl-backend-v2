@@ -8,7 +8,7 @@ async fn get_profile() {
     let (app, mut conn, _, _) = init_test_app().await;
     let (user, _) = create_test_user(&mut conn, None).await;
     let req = test::TestRequest::get()
-        .uri(format!("/aredl/profile/{user}").as_str())
+        .uri(format!("/arepl/profile/{user}").as_str())
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
