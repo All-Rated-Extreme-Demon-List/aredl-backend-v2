@@ -223,3 +223,129 @@ async fn accept_existing_record() {
     let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(body["id"].as_str().unwrap(), existing_record.to_string());
 }
+
+#[actix_web::test]
+async fn shift_completes_after_accept() {
+    use crate::aredl::shifts::ShiftStatus;
+    use crate::schema::aredl::shifts;
+    use diesel::{ExpressionMethods, RunQueryDsl};
+
+    let (app, mut conn, auth, _) = init_test_app().await;
+    let (mod_id, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
+    let token = create_test_token(mod_id, &auth.jwt_encoding_key).unwrap();
+    let shift_id = create_test_shift(&mut conn, mod_id, true).await;
+    diesel::update(shifts::table.filter(shifts::id.eq(shift_id)))
+        .set(shifts::target_count.eq(1))
+        .execute(&mut conn)
+        .unwrap();
+    let level = create_test_level(&mut conn).await;
+    let _sub = create_test_submission(level, mod_id, &mut conn).await;
+
+    let req = test::TestRequest::get()
+        .uri("/aredl/submissions/claim")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    let body: serde_json::Value = read_body_json(resp).await;
+    let sub_id = body["id"].as_str().unwrap();
+
+    let req = test::TestRequest::post()
+        .uri(&format!("/aredl/submissions/{sub_id}/accept"))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&json!({}))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+
+    let status: ShiftStatus = shifts::table
+        .find(shift_id)
+        .select(shifts::status)
+        .first(&mut conn)
+        .unwrap();
+    assert_eq!(status, ShiftStatus::Completed);
+}
+
+#[actix_web::test]
+async fn deny_already_denied() {
+    let (app, mut conn, auth, _) = init_test_app().await;
+    let (mod_id, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
+    let token = create_test_token(mod_id, &auth.jwt_encoding_key).unwrap();
+    let level = create_test_level(&mut conn).await;
+    let _submission = create_test_submission(level, mod_id, &mut conn).await;
+
+    let req = test::TestRequest::get()
+        .uri("/aredl/submissions/claim")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    let body: serde_json::Value = read_body_json(resp).await;
+    let sub_id = body["id"].as_str().unwrap().to_string();
+    let notes = json!({"notes":"hi"});
+    let req = test::TestRequest::post()
+        .uri(&format!("/aredl/submissions/{sub_id}/deny"))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&notes)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+
+    let req = test::TestRequest::post()
+        .uri(&format!("/aredl/submissions/{sub_id}/deny"))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&notes)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_client_error());
+}
+
+#[actix_web::test]
+async fn under_consideration_already_uc() {
+    let (app, mut conn, auth, _) = init_test_app().await;
+    let (mod_id, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
+    let token = create_test_token(mod_id, &auth.jwt_encoding_key).unwrap();
+    let level = create_test_level(&mut conn).await;
+    let _submission = create_test_submission(level, mod_id, &mut conn).await;
+
+    let req = test::TestRequest::get()
+        .uri("/aredl/submissions/claim")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    let body: serde_json::Value = read_body_json(resp).await;
+    let sub_id = body["id"].as_str().unwrap().to_string();
+    let notes = json!({"notes":"ok"});
+    let req = test::TestRequest::post()
+        .uri(&format!("/aredl/submissions/{sub_id}/underconsideration"))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&notes)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+
+    let req = test::TestRequest::post()
+        .uri(&format!("/aredl/submissions/{sub_id}/underconsideration"))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&notes)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_client_error());
+}
+
+#[actix_web::test]
+async fn unclaim_not_claimed() {
+    let (app, mut conn, auth, _) = init_test_app().await;
+    let (mod_id, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
+    let token = create_test_token(mod_id, &auth.jwt_encoding_key).unwrap();
+    let level = create_test_level(&mut conn).await;
+    let submission_id = create_test_submission(level, mod_id, &mut conn).await;
+
+    let req = test::TestRequest::post()
+        .uri(&format!("/aredl/submissions/{submission_id}/unclaim"))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_client_error());
+}

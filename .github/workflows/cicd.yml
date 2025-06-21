@@ -293,6 +293,16 @@ jobs:
           ssh -i ~/.ssh/id_rsa ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} '
             docker service scale aredl_backend_dev_stack_api=0
           '
+      - name: Wait for dev API to stop
+        run: |
+          ssh -i ~/.ssh/id_rsa ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} '
+            until [ "$(docker service ls \
+                        --filter name=aredl_backend_dev_stack_api \
+                        --format "{{.Replicas}}" | cut -d/ -f1)" -eq 0 ]; do
+              echo "Waiting for aredl_backend_dev_stack_api to fully stop…"
+              sleep 5
+            done
+          '
 
       - name: Dump prod DB
         run: |

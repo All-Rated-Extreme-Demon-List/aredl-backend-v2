@@ -3,7 +3,7 @@ use crate::{
     arepl::{
         levels::test_utils::create_test_level, submissions::test_utils::create_test_submission,
     },
-    auth::create_test_token,
+    auth::{create_test_token, Permission},
     test_utils::*,
     users::test_utils::create_test_user,
 };
@@ -53,4 +53,42 @@ async fn resolved_find_all_requires_auth() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_client_error());
+}
+
+#[actix_web::test]
+async fn resolved_find_all() {
+    let (app, mut conn, auth, _) = init_test_app().await;
+    let (mod_user, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
+    let token = create_test_token(mod_user, &auth.jwt_encoding_key).unwrap();
+    let level = create_test_level(&mut conn).await;
+    create_test_submission(level, mod_user, &mut conn).await;
+
+    let req = test::TestRequest::get()
+        .uri("/arepl/submissions")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+}
+
+#[actix_web::test]
+async fn resolved_find_own() {
+    let (app, mut conn, auth, _) = init_test_app().await;
+    let (user, _) = create_test_user(&mut conn, None).await;
+    let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
+    let level = create_test_level(&mut conn).await;
+    let submission = create_test_submission(level, user, &mut conn).await;
+
+    let req = test::TestRequest::get()
+        .uri("/arepl/submissions/@me")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert!(body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|s| s["id"] == submission.to_string()));
 }
