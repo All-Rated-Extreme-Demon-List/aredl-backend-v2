@@ -317,7 +317,13 @@ jobs:
           ssh -i ~/.ssh/id_rsa ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} '
             DEV_DB=$(docker ps --filter label=com.docker.swarm.service.name=aredl_backend_dev_stack_db --format "{{.Names}}")
             PGUSER=$(docker exec "$DEV_DB" cat /run/secrets/postgres_user)
-            docker exec -i $DEV_DB bash -c "pg_restore --no-owner --clean --create -U $PGUSER -d aredl" < /tmp/prod_dump.dump
+            docker exec -i $DEV_DB bash -c "pg_restore \
+                --no-owner \
+                --clean \
+                --create \
+                --username=$PGUSER \
+                --dbname=postgres
+            " < /tmp/prod_dump.dump
           '
 
       - name: Start dev API service
