@@ -1,7 +1,7 @@
 use actix_web::{post, web, HttpResponse, get};
 use std::sync::Arc;
 use crate::{
-    arepl::submissions::status::SubmissionsEnabled,
+    arepl::submissions::status::{SubmissionsEnabled, SubmissionsEnabledFull},
     auth::{Authenticated, Permission, UserAuth}, 
     db::DbAppState, 
     error_handler::ApiError,
@@ -56,7 +56,7 @@ async fn disable(db: web::Data<Arc<DbAppState>>, authenticated: Authenticated) -
     description = "Get the status of submissions. In addition to the status, this also returns the moderator who last enabled/disabled submissions, and the timestamp.",
     tag = "AREDL (P) - Submissions",
     responses(
-        (status = 200, body = SubmissionsEnabled)
+        (status = 200, body = SubmissionsEnabledFull)
     ),
     security(
         ("access_token" = []),
@@ -66,7 +66,7 @@ async fn disable(db: web::Data<Arc<DbAppState>>, authenticated: Authenticated) -
 #[get("/full", wrap="UserAuth::require(Permission::ShiftManage)")]
 async fn get_status_full(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
     let res = web::block(
-        move || SubmissionsEnabled::get_status(&mut db.connection()?)
+        move || SubmissionsEnabledFull::get_status(&mut db.connection()?)
     ).await??;
     return Ok(HttpResponse::Ok().json(res));
 }
@@ -98,7 +98,7 @@ async fn get_status(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiE
     description = "Get a log of when submissions were enabled or disabled and by whom.",
     tag = "AREDL (P) - Submissions",
     responses(
-        (status = 200, body = [SubmissionsEnabled])
+        (status = 200, body = [SubmissionsEnabledFull])
     ),
     security(
         ("access_token" = []),
@@ -108,7 +108,7 @@ async fn get_status(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiE
 #[get("/history")]
 async fn get_history(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
     let res = web::block(
-        move || SubmissionsEnabled::get_statuses(&mut db.connection()?)
+        move || SubmissionsEnabledFull::get_statuses(&mut db.connection()?)
     ).await??;
     return Ok(HttpResponse::Ok().json(res));
 }
@@ -116,7 +116,7 @@ async fn get_history(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, Api
 #[derive(OpenApi)]
 #[openapi(
     components(schemas(
-        SubmissionsEnabled
+        SubmissionsEnabled, SubmissionsEnabledFull
     )),
     paths(get_status, get_status_full, enable, disable, get_history)
 )]

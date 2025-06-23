@@ -1,10 +1,11 @@
 use crate::{
     db::DbConnection,
     error_handler::ApiError,
-    schema::aredl::submissions_enabled,
+    schema::{aredl::submissions_enabled, users},
+    users::BaseUser
 };
 use chrono::{DateTime, Utc};
-use diesel::{pg::Pg, ExpressionMethods, RunQueryDsl, Selectable, QueryDsl, SelectableHelper, result::Error as DieselError};
+use diesel::{pg::Pg, ExpressionMethods, RunQueryDsl, Selectable, QueryDsl, SelectableHelper, result::Error as DieselError, JoinOnDsl};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -16,6 +17,16 @@ pub struct SubmissionsEnabled {
     enabled: bool,
     /// The moderator that performed this change
     moderator: Uuid,
+    /// Timestamp of when submissions were toggled on or off
+    created_at: DateTime<Utc>
+}
+
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct SubmissionsEnabledFull {
+    /// Whether submissions have been enabled or disabled.
+    enabled: bool,
+    /// The moderator that performed this change
+    moderator: BaseUser,
     /// Timestamp of when submissions were toggled on or off
     created_at: DateTime<Utc>
 }
@@ -64,15 +75,27 @@ impl SubmissionsEnabled {
             Err(e) => return Err(ApiError::from(e))
         })
     }
+}
 
+impl SubmissionsEnabledFull {
     pub fn get_status(
         conn: &mut DbConnection
     ) -> Result<Self, ApiError> {
         let status = submissions_enabled::table
             .order_by(submissions_enabled::created_at.desc())
-            .select(Self::as_select())
-            .first::<Self>(conn)?;
-        Ok(status)
+            .select(SubmissionsEnabled::as_select())
+            .first::<SubmissionsEnabled>(conn)?;
+
+        let moderator = users::table
+            .filter(users::id.eq(status.moderator))
+            .select(BaseUser::as_select())
+            .get_result(conn)?;
+
+        Ok(Self {
+            enabled: status.enabled,
+            moderator,
+            created_at: status.created_at,
+        })
     }
 
     pub fn get_statuses(
@@ -80,8 +103,19 @@ impl SubmissionsEnabled {
     ) -> Result<Vec<Self>, ApiError> {
         let status = submissions_enabled::table
             .order_by(submissions_enabled::created_at.desc())
-            .select(Self::as_select())
-            .load::<Self>(conn)?;
-        Ok(status)
+            .inner_join(users::table.on(users::id.eq(submissions_enabled::moderator)))
+            .select((SubmissionsEnabled::as_select(), BaseUser::as_select()))
+            .load::<(SubmissionsEnabled, BaseUser)>(conn)?;
+
+        Ok(status
+            .into_iter()
+            .map(|(status, user)| 
+                SubmissionsEnabledFull {
+                    enabled: status.enabled,
+                    moderator: user,
+                    created_at: status.created_at
+                })
+            .collect::<Vec<SubmissionsEnabledFull>>()
+        )
     }
 }

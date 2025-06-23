@@ -135,7 +135,7 @@ async fn get_submission_status_full() {
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let body: serde_json::Value = test::read_body_json(resp).await;
 
-    assert_eq!(body["moderator"], user_id.to_string());
+    assert_eq!(body["moderator"]["id"], user_id.to_string());
     assert_eq!(body["enabled"], false);
 }
 
@@ -167,5 +167,5 @@ async fn get_submission_status_history() {
         .as_array()
         .unwrap()
         .iter()
-        .all(|s| s["moderator"] == user_id.to_string()))
+        .all(|s| s["moderator"]["id"] == user_id.to_string()))
 }
