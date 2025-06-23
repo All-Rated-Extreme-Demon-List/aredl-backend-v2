@@ -1,17 +1,17 @@
 use crate::{
     aredl::{levels::ExtendedBaseLevel, submissions::*},
     auth::{Authenticated, Permission},
-    db::DbAppState,
+    db::{DbAppState, DbConnection},
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
     schema::{
-        aredl::{levels, submissions_with_priority},
+        aredl::{levels, submission_history, submissions_with_priority},
         users,
     },
     users::BaseUser,
 };
 use actix_web::web;
-use diesel::expression_methods::NullableExpressionMethods;
+use diesel::{expression_methods::NullableExpressionMethods, BoolExpressionMethods, PgTextExpressionMethods};
 use diesel::{
     pg::Pg, ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl, Selectable, SelectableHelper,
 };
@@ -27,6 +27,17 @@ pub type ResolvedSubmissionRow = (
     Option<BaseUser>,
 );
 
+fn get_submission_ids_from_notes(note_text: String, conn: &mut DbConnection) -> Result<Vec<Uuid>, ApiError> {
+    Ok(submission_history::table
+        .filter(
+            submission_history::user_notes.ilike(&note_text)
+                .or(submission_history::reviewer_notes.ilike(&note_text)),
+        )
+        .select(submission_history::submission_id)
+        .distinct()
+        .load(conn)?)
+}
+
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct SubmissionQueryOptions {
     pub status_filter: Option<SubmissionStatus>,
@@ -35,6 +46,7 @@ pub struct SubmissionQueryOptions {
     pub submitter_filter: Option<Uuid>,
     pub priority_filter: Option<bool>,
     pub reviewer_filter: Option<Uuid>,
+    pub note_filter: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -70,9 +82,10 @@ macro_rules! aredl_base_resolved_submission_query {
 
 #[macro_export]
 macro_rules! aredl_apply_submissions_filters {
-    ($query:expr, $opts:expr) => {{
+    ($query:expr, $opts:expr, $conn:expr) => {{
         let opts = &$opts;
         let mut new_query = $query;
+        let conn = $conn;
 
         if let Some(status) = opts.status_filter.clone() {
             new_query = new_query.filter(submissions_with_priority::status.eq(status));
@@ -91,6 +104,11 @@ macro_rules! aredl_apply_submissions_filters {
         }
         if let Some(reviewer) = opts.reviewer_filter.clone() {
             new_query = new_query.filter(submissions_with_priority::reviewer_id.eq(reviewer));
+        }
+
+        if let Some(note_text) = opts.note_filter.clone() {
+            let ids = get_submission_ids_from_notes(note_text, conn)?;
+            new_query = new_query.filter(submissions_with_priority::id.eq_any(ids));
         }
 
         new_query
@@ -196,7 +214,7 @@ impl ResolvedSubmissionPage {
         let conn = &mut db.connection()?;
 
         let mut query = aredl_base_resolved_submission_query!();
-        query = aredl_apply_submissions_filters!(query, options);
+        query = aredl_apply_submissions_filters!(query, options, &mut db.connection()?);
 
         let submissions = query
             .limit(page_query.per_page())
@@ -208,13 +226,13 @@ impl ResolvedSubmissionPage {
             .map(|resolved_row| SubmissionResolved::from_data(resolved_row))
             .collect::<Vec<_>>();
 
+        let mut count_query = aredl_base_resolved_submission_query!();
+        count_query = aredl_apply_submissions_filters!(count_query, options, &mut db.connection()?);
+        let total_count: i64 = count_query.count().get_result(conn)?;
+
         if !authenticated.has_permission(db, Permission::SubmissionReview)? {
             submissions.iter_mut().for_each(|s| s.reviewer = None);
         }
-
-        let mut count_query = aredl_base_resolved_submission_query!();
-        count_query = aredl_apply_submissions_filters!(count_query, options);
-        let total_count: i64 = count_query.count().get_result(conn)?;
 
         Ok(Paginated::<Self>::from_data(
             page_query,
