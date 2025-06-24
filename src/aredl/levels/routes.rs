@@ -25,6 +25,19 @@ async fn list(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> 
 }
 
 #[utoipa::path(
+    get,
+    summary = "List all non-legacy levels",
+    description = "List all levels on the list, excluding legacy levels.",
+    tag = "AREDL - Levels",
+    responses((status = 200, body = [Level]))
+)]
+#[get("/listed", wrap = "CacheController::public_with_max_age(900)")]
+async fn listed(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
+    let levels = web::block(move || Level::find_all_listed(&mut db.connection()?)).await??;
+    Ok(HttpResponse::Ok().json(levels))
+}
+
+#[utoipa::path(
     post,
     summary = "[Staff]Add level",
     description = "Place a new level on the list",
@@ -102,13 +115,14 @@ async fn find(
         description = "Endpoints for fetching and managing levels on the AREDL",
     )),
     components(schemas(Level)),
-    paths(list, create, update, find)
+    paths(list, listed, create, update, find)
 )]
 pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/levels")
             .service(list)
+            .service(listed)
             .service(create)
             .service(update)
             .service(find)
