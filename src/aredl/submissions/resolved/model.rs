@@ -201,6 +201,7 @@ impl ResolvedSubmissionPage {
         let submissions = query
             .limit(page_query.per_page())
             .offset(page_query.offset())
+            .order(submissions_with_priority::created_at.desc())
             .load::<ResolvedSubmissionRow>(conn)?;
 
         let mut submissions = submissions

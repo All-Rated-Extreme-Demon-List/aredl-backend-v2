@@ -1,5 +1,5 @@
 use crate::aredl::records::{PublicRecordResolved, PublicRecordUnresolved};
-use crate::db::DbAppState;
+use crate::db::{DbAppState, DbConnection};
 use crate::error_handler::ApiError;
 use crate::schema::aredl::{levels, records};
 use crate::schema::users;
@@ -162,6 +162,15 @@ impl Level {
             .select(Level::as_select())
             .order(levels::position)
             .load::<Self>(&mut db.connection()?)?;
+        Ok(levels)
+    }
+
+    pub fn find_all_listed(conn: &mut DbConnection) -> Result<Vec<Self>, ApiError> {
+        let levels = levels::table
+            .filter(levels::legacy.eq(false))
+            .select(Level::as_select())
+            .order(levels::position)
+            .load::<Self>(conn)?;
         Ok(levels)
     }
 
