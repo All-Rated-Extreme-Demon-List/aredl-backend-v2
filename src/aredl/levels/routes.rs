@@ -11,29 +11,26 @@ use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
 
+#[derive(serde::Deserialize)]
+struct LevelQueryOptions {
+    exclude_legacy: Option<bool>
+}
+
 #[utoipa::path(
     get,
     summary = "List all levels",
     description = "List all the levels on the list",
     tag = "AREDL - Levels",
+    params(
+        ("exclude_legacy" = Option<bool>, Query, description = "Whether levels on the legacy list should be excluded"),
+    ),
     responses((status = 200, body = [Level]))
 )]
 #[get("", wrap = "CacheController::public_with_max_age(900)")]
-async fn list(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
-    let levels = web::block(|| Level::find_all(db)).await??;
-    Ok(HttpResponse::Ok().json(levels))
-}
-
-#[utoipa::path(
-    get,
-    summary = "List all non-legacy levels",
-    description = "List all levels on the list, excluding legacy levels.",
-    tag = "AREDL - Levels",
-    responses((status = 200, body = [Level]))
-)]
-#[get("/listed", wrap = "CacheController::public_with_max_age(900)")]
-async fn listed(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
-    let levels = web::block(move || Level::find_all_listed(&mut db.connection()?)).await??;
+async fn list(db: web::Data<Arc<DbAppState>>, query: web::Query<LevelQueryOptions>) -> Result<HttpResponse, ApiError> {
+    let levels = web::block(
+        move || Level::find_all(db, query.exclude_legacy)
+    ).await??;
     Ok(HttpResponse::Ok().json(levels))
 }
 
@@ -115,14 +112,13 @@ async fn find(
         description = "Endpoints for fetching and managing levels on the AREDL",
     )),
     components(schemas(Level)),
-    paths(list, listed, create, update, find)
+    paths(list, create, update, find)
 )]
 pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/levels")
             .service(list)
-            .service(listed)
             .service(create)
             .service(update)
             .service(find)
