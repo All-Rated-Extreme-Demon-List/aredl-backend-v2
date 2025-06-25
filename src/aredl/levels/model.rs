@@ -6,7 +6,7 @@ use crate::schema::users;
 use crate::users::{BaseUser, BaseUserWithBanLevel};
 use actix_web::web;
 use diesel::prelude::*;
-use diesel::{ExpressionMethods, RunQueryDsl};
+use diesel::{ExpressionMethods, RunQueryDsl, pg::Pg};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::ToSchema;
@@ -157,8 +157,14 @@ pub struct ResolvedLevel {
 }
 
 impl Level {
-    pub fn find_all(db: web::Data<Arc<DbAppState>>) -> Result<Vec<Self>, ApiError> {
-        let levels = levels::table
+    pub fn find_all(db: web::Data<Arc<DbAppState>>, no_legacy: Option<bool>) -> Result<Vec<Self>, ApiError> {
+        let mut levels = levels::table.into_boxed::<Pg>();
+
+        if let Some(true) = no_legacy {
+            levels = levels.filter(levels::legacy.eq(false))
+        }
+
+        let levels = levels
             .select(Level::as_select())
             .order(levels::position)
             .load::<Self>(&mut db.connection()?)?;
