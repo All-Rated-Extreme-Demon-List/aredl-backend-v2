@@ -201,14 +201,19 @@ async fn discord_callback(
         .await
         .map_err(|_| ApiError::new(401, "Failed to request token!"))?;
 
-    let nonce: Nonce = Nonce::new(request_data.nonce);
     let id_token_verifier: CoreIdTokenVerifier = client.id_token_verifier();
-    match token_response.extra_fields().id_token() {
-        Some(id_token) => id_token
-            .claims(&id_token_verifier, &nonce)
-            .map_err(|_| ApiError::new(401, "Failed to verify ID token!")),
-        None => Err(ApiError::new(500, "No id token provided!")),
-    }?;
+    if let Some(id_token) = token_response.extra_fields().id_token() {
+        match id_token.claims(&id_token_verifier, &Nonce::new(request_data.nonce)) {
+            Ok(_) => {}
+            Err(e) if format!("{:?}", e).starts_with("InvalidNonce") => {}
+            Err(e) => {
+                return Err(ApiError::new(
+                    401,
+                    &format!("Failed to verify ID token: {}", e),
+                ));
+            }
+        }
+    }
 
     let access_token = token_response.access_token();
 
