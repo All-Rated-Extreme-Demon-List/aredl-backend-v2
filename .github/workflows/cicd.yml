@@ -168,6 +168,7 @@ jobs:
             echo "API_DB_PORT=${{ secrets.API_DB_PORT }}" >> .env
             echo "API_NET=api_net" >> .env
             echo "DB_ALIAS=db_prod" >> .env
+            echo "DISCORD_REDIRECT_URI=discord_redirect_uri_prod" >> .env
 
         - name: Copy files
           run: |
@@ -184,6 +185,7 @@ jobs:
             API_DB_PORT=${{ secrets.API_DB_PORT }} \
             API_NET=api_net \
             DB_ALIAS=db_prod \
+            DISCORD_REDIRECT_URI=discord_redirect_uri_prod \
             docker stack deploy \
             --with-registry-auth \
             --compose-file docker-stack.yml \
@@ -250,6 +252,7 @@ jobs:
             echo "API_DB_PORT=${{ secrets.DEV_API_DB_PORT }}" >> .env
             echo "API_NET=api_net_dev" >> .env
             echo "DB_ALIAS=db_dev" >> .env
+            echo "DISCORD_REDIRECT_URI=discord_redirect_uri_dev" >> .env
 
         - name: Copy files
           run: |
@@ -266,6 +269,7 @@ jobs:
             API_DB_PORT=${{ secrets.DEV_API_DB_PORT }} \
             API_NET=api_net_dev \
             DB_ALIAS=db_dev \
+            DISCORD_REDIRECT_URI=discord_redirect_uri_dev \
             docker stack deploy \
             --with-registry-auth \
             --compose-file ~/dev/docker-stack.yml \
