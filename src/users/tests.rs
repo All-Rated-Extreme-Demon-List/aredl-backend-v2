@@ -29,7 +29,7 @@ async fn create_placeholder_user() {
     assert!(resp.status().is_success());
 
     let created_user: serde_json::Value = test::read_body_json(resp).await;
-    assert_eq!(created_user["username"], "test_placeholder");
+    assert_eq!(created_user["global_name"], "test_placeholder");
 }
 
 #[actix_web::test]
@@ -179,4 +179,29 @@ async fn user_character_limit() {
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_client_error());
+}
+
+#[actix_web::test]
+async fn placeholder_random_username() {
+    let (app, mut conn, auth) = init_test_app().await;
+
+    let (staff_user_id, _) = create_test_user(&mut conn, Some(Permission::PlaceholderCreate)).await;
+    let staff_token =
+        create_test_token(staff_user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    let placeholder_payload = json!({
+        "username": "test_placeholder"
+    });
+
+    let req = test::TestRequest::post()
+        .uri("/users/placeholders")
+        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .set_json(&placeholder_payload)
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+
+    let created_user: serde_json::Value = test::read_body_json(resp).await;
+    assert_ne!(created_user["username"], "test_placeholder");
 }

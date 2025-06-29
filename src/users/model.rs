@@ -302,22 +302,13 @@ impl User {
         conn: &mut DbConnection,
         options: PlaceholderOptions,
     ) -> Result<Self, ApiError> {
-        let user_data = UserUpsert {
-            username: options.username.clone(),
-            global_name: options.username,
-            placeholder: true,
-            discord_id: None,
-            country: None,
-            discord_avatar: None,
-            discord_banner: None,
-            discord_accent_color: None,
-        };
-
         let user = diesel::insert_into(users::table)
-            .values(&user_data)
+            .values((
+                users::placeholder.eq(true),
+                users::global_name.eq(options.username)
+            ))
             .returning(Self::as_select())
             .get_result::<Self>(conn)?;
-
         Ok(user)
     }
 
