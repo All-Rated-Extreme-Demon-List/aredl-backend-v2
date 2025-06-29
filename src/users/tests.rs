@@ -1,11 +1,17 @@
 #[cfg(test)]
 use crate::{
     auth::{create_test_token, Permission},
+    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper},
+    schema::users,
     test_utils::init_test_app,
     users::test_utils::create_test_user,
 };
+use crate::{
+    test_utils::init_test_db_state,
+    users::{User, UserUpsert},
+};
 #[cfg(test)]
-use actix_web::test;
+use actix_web::{test, web};
 #[cfg(test)]
 use serde_json::json;
 
@@ -220,4 +226,51 @@ async fn list_users_with_filters() {
     assert!(resp.status().is_success());
     let users: serde_json::Value = test::read_body_json(resp).await;
     assert_eq!(users["data"].as_array().unwrap().len(), 1);
+}
+
+#[actix_web::test]
+async fn upsert_creates_and_updates_user() {
+    let (_, _, _, _) = init_test_app().await;
+    let db_state = init_test_db_state();
+    let db_data = web::Data::new(db_state.clone());
+
+    let user_upsert = UserUpsert {
+        username: "new_user".to_string(),
+        global_name: "New User".to_string(),
+        discord_id: Some("123".to_string()),
+        placeholder: false,
+        country: Some(1),
+        discord_avatar: Some("avatar".to_string()),
+        discord_banner: None,
+        discord_accent_color: None,
+    };
+
+    let created = User::upsert(db_data.clone(), user_upsert).expect("insert");
+    assert_eq!(created.username, "new_user");
+    assert_eq!(created.discord_id.as_deref(), Some("123"));
+
+    let mut conn = db_state.connection().unwrap();
+    let fetched = users::table
+        .filter(users::id.eq(created.id))
+        .select(User::as_select())
+        .first::<User>(&mut conn)
+        .unwrap();
+    assert_eq!(fetched.username, "new_user");
+
+    let update_upsert = UserUpsert {
+        username: "updated".to_string(),
+        global_name: "Updated".to_string(),
+        discord_id: Some("123".to_string()),
+        placeholder: false,
+        country: Some(2),
+        discord_avatar: Some("newavatar".to_string()),
+        discord_banner: Some("banner".to_string()),
+        discord_accent_color: Some(5),
+    };
+
+    let updated = User::upsert(db_data.clone(), update_upsert).expect("update");
+    assert_eq!(updated.id, created.id);
+    assert_eq!(updated.username, "updated");
+    assert_eq!(updated.country, Some(1));
+    assert_eq!(updated.global_name, "New User");
 }
