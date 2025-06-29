@@ -24,6 +24,7 @@ services:
     environment:
       HOST: "0.0.0.0"
       PORT: ${API_PORT}
+      PEMONLIST_API_URL: https://pemonlist.com/api/player
 
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}

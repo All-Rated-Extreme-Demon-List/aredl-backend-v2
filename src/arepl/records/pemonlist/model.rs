@@ -68,7 +68,9 @@ impl PemonlistPlayer {
         let player_discord_id = player_discord_id.unwrap();
 
         let client = reqwest::Client::new();
-        let url = format!("https://pemonlist.com/api/player/{}", player_discord_id);
+        let base_url = std::env::var("PEMONLIST_API_URL")
+            .unwrap_or_else(|_| "https://pemonlist.com/api/player".to_string());
+        let url = format!("{}/{}", base_url.trim_end_matches('/'), player_discord_id);
         let resp = client
             .get(&url)
             .send()
