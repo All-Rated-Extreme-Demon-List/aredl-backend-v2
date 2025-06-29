@@ -277,7 +277,7 @@ async fn upsert_creates_and_updates_user() {
 
 #[actix_web::test]
 async fn placeholder_random_username() {
-    let (app, mut conn, auth) = init_test_app().await;
+    let (app, mut conn, auth, _) = init_test_app().await;
 
     let (staff_user_id, _) = create_test_user(&mut conn, Some(Permission::PlaceholderCreate)).await;
     let staff_token =
