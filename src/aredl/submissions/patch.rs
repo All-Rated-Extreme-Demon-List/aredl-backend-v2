@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    aredl::submissions::*,
+    aredl::submissions::{status::SubmissionsEnabled, *},
     auth::{Authenticated, Permission},
     db,
     error_handler::ApiError,
@@ -103,6 +103,14 @@ impl SubmissionPatchUser {
 
         let resub = old_submission.status == SubmissionStatus::Denied;
 
+        // disallow resubmissions if submissions are disabled
+        if resub && !SubmissionsEnabled::is_enabled(conn)? {
+            return Err(ApiError::new(
+                400,
+                "Submissions are closed, please wait to resubmit this record!"
+            ))
+        }
+
         let level_id = match patch.level_id {
             Some(new_level_id) => new_level_id,
             None => old_submission.level_id,
@@ -113,7 +121,7 @@ impl SubmissionPatchUser {
             None => old_submission.raw_url,
         };
 
-        // if either of these fields changed, we need revalidate the raw
+        // if either of these fields change, we need to revalidate the raw
         if patch.level_id.is_some() || patch.raw_url.is_some() {
             let level_exists = levels::table
                 .filter(levels::id.eq(level_id))
