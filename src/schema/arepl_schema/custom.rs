@@ -3,7 +3,7 @@
 
 use crate::schema::arepl::{
     levels, levels_created, pack_levels, pack_tiers, packs, records, recurrent_shifts, shifts,
-    submission_history, submissions, submissions_enabled,
+    submission_history, submissions, submissions_enabled, level_ldms
 };
 use crate::schema::{clan_members, clans, users};
 
@@ -213,8 +213,10 @@ diesel::table! {
 }
 
 diesel::joinable!(submissions -> submissions_with_priority (id));
+diesel::joinable!(users -> level_ldms (id));
 
 diesel::allow_tables_to_appear_in_same_query!(submissions, submissions_with_priority);
 diesel::allow_tables_to_appear_in_same_query!(levels, submissions_with_priority);
 diesel::allow_tables_to_appear_in_same_query!(users, submissions_with_priority);
 diesel::allow_tables_to_appear_in_same_query!(users, submissions_enabled);
+diesel::allow_tables_to_appear_in_same_query!(users, level_ldms);

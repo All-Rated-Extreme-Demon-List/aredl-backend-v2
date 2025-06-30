@@ -1,7 +1,9 @@
-use crate::arepl::levels::test_utils::{create_test_level, create_test_level_with_record};
 #[cfg(test)]
 use crate::{
-    arepl::packs::test_utils::create_test_pack,
+    arepl::{
+        packs::test_utils::create_test_pack,
+        levels::test_utils::{create_test_level, create_test_level_with_record}
+    },
     auth::{create_test_token, Permission},
     schema::arepl::{levels_created, pack_levels},
 };

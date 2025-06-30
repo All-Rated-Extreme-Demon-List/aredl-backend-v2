@@ -23,6 +23,18 @@ pub mod aredl {
     }
 
     diesel::table! {
+        aredl.level_ldms (id) {
+            id -> Uuid,
+            level_id -> Uuid,
+            ldm_id -> Int4,
+            is_allowed -> Bool,
+            added_by -> Uuid,
+            description -> Nullable<Varchar>,
+            created_at -> Timestamptz,
+        }
+    }
+
+    diesel::table! {
         aredl.levels (id) {
             id -> Uuid,
             position -> Int4,
@@ -187,8 +199,11 @@ pub mod aredl {
         }
     }
 
+    diesel::joinable!(level_ldms -> levels (level_id));
+
     diesel::allow_tables_to_appear_in_same_query!(
         last_gddl_update,
+        level_ldms,
         levels,
         levels_created,
         pack_levels,

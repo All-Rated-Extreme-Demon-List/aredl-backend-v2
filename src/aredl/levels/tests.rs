@@ -1,9 +1,12 @@
-use crate::aredl::levels::test_utils::{create_test_level, create_test_level_with_record};
 #[cfg(test)]
 use crate::{
-    aredl::packs::test_utils::create_test_pack,
+    aredl::{
+        packs::test_utils::create_test_pack,
+        levels::test_utils::{create_test_level, create_test_level_with_record}
+    },
     auth::{create_test_token, Permission},
     schema::aredl::{levels_created, pack_levels},
+    
 };
 #[cfg(test)]
 use crate::{test_utils::*, users::test_utils::create_test_user};

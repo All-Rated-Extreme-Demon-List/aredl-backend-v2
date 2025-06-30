@@ -5,6 +5,7 @@ mod model;
 mod packs;
 pub mod records;
 mod routes;
+mod ldms;
 
 #[cfg(test)]
 pub mod test_utils;

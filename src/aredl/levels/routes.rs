@@ -1,6 +1,6 @@
 use crate::aredl::levels::id_resolver::resolve_level_id;
 use crate::aredl::levels::{
-    creators, history, packs, records, Level, LevelPlace, LevelUpdate, ResolvedLevel,
+    creators, history, ldms, packs, records, Level, LevelPlace, LevelUpdate, ResolvedLevel
 };
 use crate::auth::{Permission, UserAuth};
 use crate::cache_control::CacheController;
@@ -105,7 +105,8 @@ async fn find(
         (path = "/{level_id}/creators", api = creators::ApiDoc),
         (path = "/{level_id}/history", api = history::ApiDoc),
         (path = "/{level_id}/records", api = records::ApiDoc),
-        (path = "/{level_id}/packs", api = packs::ApiDoc)
+        (path = "/{level_id}/packs", api = packs::ApiDoc),
+        (path = "/ldms", api = ldms::ApiDoc)
     ),
     tags((
         name = "AREDL - Levels",
@@ -118,13 +119,14 @@ pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/levels")
-            .service(list)
-            .service(create)
-            .service(update)
-            .service(find)
             .configure(history::init_routes)
             .configure(packs::init_routes)
             .configure(records::init_routes)
-            .configure(creators::init_routes),
+            .configure(ldms::init_routes)
+            .configure(creators::init_routes)
+            .service(list)
+            .service(create)
+            .service(update)
+            .service(find),
     );
 }
