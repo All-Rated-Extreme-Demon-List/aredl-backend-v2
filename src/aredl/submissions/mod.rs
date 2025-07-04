@@ -7,6 +7,7 @@ mod queue;
 mod resolved;
 mod routes;
 mod status;
+mod guidelines;
 
 #[cfg(test)]
 pub mod test_utils;
