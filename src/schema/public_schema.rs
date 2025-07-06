@@ -88,7 +88,6 @@ pub mod public {
         oauth_requests (csrf_state) {
             csrf_state -> Varchar,
             pkce_verifier -> Varchar,
-            nonce -> Varchar,
             callback -> Nullable<Varchar>,
             created_at -> Nullable<Timestamptz>,
         }

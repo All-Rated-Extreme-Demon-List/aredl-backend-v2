@@ -4,13 +4,11 @@ use actix_web::http::header;
 use actix_web::{get, web, HttpRequest, HttpResponse};
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use diesel::prelude::*;
-use openidconnect::core::{
-    CoreAuthenticationFlow, CoreClient, CoreIdTokenVerifier, CoreProviderMetadata,
-};
+use openidconnect::core::{CoreAuthenticationFlow, CoreClient, CoreJsonWebKeySet};
 use openidconnect::reqwest::async_http_client;
 use openidconnect::{
-    AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce, OAuth2TokenResponse,
-    PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope,
+    AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce,
+    OAuth2TokenResponse, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, TokenUrl,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::{OpenApi, ToSchema};
@@ -35,7 +33,6 @@ struct OAuthCallbackQuery {
 struct OAuthRequestData {
     pub csrf_state: String,
     pub pkce_verifier: String,
-    pub nonce: String,
     pub callback: Option<String>,
 }
 
@@ -143,7 +140,7 @@ async fn discord_auth(
 
     let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
 
-    let (authorize_url, csrf_state, nonce) = client
+    let (authorize_url, csrf_state, _) = client
         .authorize_url(
             CoreAuthenticationFlow::AuthorizationCode,
             CsrfToken::new_random,
@@ -158,7 +155,6 @@ async fn discord_auth(
         OAuthRequestData {
             csrf_state: csrf_state.secret().clone(),
             pkce_verifier: pkce_verifier.secret().to_string(),
-            nonce: nonce.secret().to_string(),
             callback: options.callback.clone(),
         },
     )?;
@@ -201,19 +197,12 @@ async fn discord_callback(
         .await
         .map_err(|_| ApiError::new(401, "Failed to request token!"))?;
 
-    let nonce: Nonce = Nonce::new(request_data.nonce);
-    let id_token_verifier: CoreIdTokenVerifier = client.id_token_verifier();
-    match token_response.extra_fields().id_token() {
-        Some(id_token) => id_token
-            .claims(&id_token_verifier, &nonce)
-            .map_err(|_| ApiError::new(401, "Failed to verify ID token!")),
-        None => Err(ApiError::new(500, "No id token provided!")),
-    }?;
-
     let access_token = token_response.access_token();
 
+    let discord_base =
+        std::env::var("DISCORD_BASE_URL").unwrap_or_else(|_| "https://discord.com".to_string());
     let discord_user_data = reqwest::Client::new()
-        .get("https://discord.com/api/users/@me")
+        .get(format!("{}/api/users/@me", discord_base))
         .bearer_auth(access_token.secret())
         .send()
         .await
@@ -290,7 +279,7 @@ async fn discord_callback(
         })
         .collect::<Vec<String>>();
 
-    let auth_response = AuthResponse {
+    Ok(HttpResponse::Ok().json(AuthResponse {
         access_token,
         access_expires,
         refresh_token,
@@ -298,10 +287,9 @@ async fn discord_callback(
         user,
         roles,
         scopes,
-    };
-
-    Ok(HttpResponse::Ok().json(auth_response))
+    }))
 }
+
 #[utoipa::path(
     get,
     summary = "[Auth]Refresh Discord auth",
@@ -389,16 +377,23 @@ pub(crate) async fn create_discord_client() -> Result<CoreClient, Box<dyn std::e
 
     let discord_redirect_uri = RedirectUrl::new(get_secret("DISCORD_REDIRECT_URI"))?;
 
-    let issuer_url = IssuerUrl::new("https://discord.com".to_string())?;
+    let base_discord_url =
+        std::env::var("DISCORD_BASE_URL").unwrap_or_else(|_| "https://discord.com".to_string());
 
-    let provider_metadata =
-        CoreProviderMetadata::discover_async(issuer_url, async_http_client).await?;
-    Ok(CoreClient::from_provider_metadata(
-        provider_metadata,
+    let issuer = IssuerUrl::new(base_discord_url.clone())?;
+    let auth_url = AuthUrl::new(format!("{}/oauth2/authorize", base_discord_url).to_string())?;
+    let token_url = TokenUrl::new(format!("{}/api/oauth2/token", base_discord_url).to_string())?;
+
+    return Ok(CoreClient::new(
         discord_client_id,
         Some(discord_client_secret),
+        issuer,
+        auth_url,
+        Some(token_url),
+        None,
+        CoreJsonWebKeySet::default(),
     )
-    .set_redirect_uri(discord_redirect_uri))
+    .set_redirect_uri(discord_redirect_uri));
 }
 
 #[derive(OpenApi)]
