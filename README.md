@@ -1,8 +1,18 @@
-# aredl-backend-v2
+<div align="center">
 
-Welcome to the repository for the [All Rated Extreme Demons List](https://aredl.net/) backend! This codebase uses Rust, the [Actix framework](https://actix.rs/docs/), and PostgreSQL. Feel free to report bugs, suggest features and/or create pull requests!
+# AREDL Backend V2
 
-# How to run the API locally
+[![CI](https://img.shields.io/github/actions/workflow/status/All-Rated-Extreme-Demon-List/aredl-backend-v2/cicd.yml?branch=main&label=CI)](https://github.com/All-Rated-Extreme-Demon-List/aredl-backend-v2/actions)
+[![Coverage](https://img.shields.io/codecov/c/github/All-Rated-Extreme-Demon-List/aredl-backend-v2)](https://codecov.io/gh/All-Rated-Extreme-Demon-List/aredl-backend-v2)
+[![deps.rs](https://deps.rs/repo/github/All-Rated-Extreme-Demon-List/aredl-backend-v2/status.svg)](https://deps.rs/repo/github/All-Rated-Extreme-Demon-List/aredl-backend-v2)
+[![License](https://img.shields.io/github/license/All-Rated-Extreme-Demon-List/aredl-backend-v2)](LICENSE)
+[![Discord](https://img.shields.io/discord/1009514584928956427)](https://discord.gg/aredl)
+[![API Docs](https://img.shields.io/badge/docs-openapi-blue)](https://api.aredl.net/v2/docs)
+
+Welcome to the repository for the [All Rated Extreme Demons List](https://aredl.net/) backend! This codebase uses Rust, the [Actix web framework](https://actix.rs/docs/), the [Diesel ORM](https://diesel.rs/), and a PostgreSQL database. Feel free to report bugs, suggest features and/or create pull requests!
+</div>
+
+# Running the API Locally
 
 ## Step 1: Install everything
 
