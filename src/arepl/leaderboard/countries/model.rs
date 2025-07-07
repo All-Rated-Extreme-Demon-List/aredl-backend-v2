@@ -8,11 +8,10 @@ use crate::schema::{
     matview_refresh_log,
 };
 use chrono::Utc;
-use diesel::expression::expression_types::NotSelectable;
 use diesel::pg::Pg;
 use diesel::{
-    BoxableExpression, ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl,
-    RunQueryDsl, SelectableHelper,
+    ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl,
+    SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -67,33 +66,34 @@ impl CountryLeaderboardPage {
         page_query: PageQuery<D>,
         options: CountryLeaderboardQueryOptions,
     ) -> Result<Paginated<Self>, ApiError> {
-        let selection = (
-            CountryLeaderboardEntry::as_select(),
-            (levels::id, levels::name).nullable(),
-        );
-
-        let order = options.order.unwrap_or(LeaderboardOrder::TotalPoints);
-
-        let ordering: Box<dyn BoxableExpression<_, _, SqlType = NotSelectable>> = match order {
-            LeaderboardOrder::TotalPoints => Box::new(country_leaderboard::rank.asc()),
-            LeaderboardOrder::ExtremeCount => Box::new(country_leaderboard::extremes_rank.asc()),
-            LeaderboardOrder::RawPoints => Box::new(country_leaderboard::rank.asc()),
+        let build_query = || {
+            country_leaderboard::table
+                .left_join(levels::table.on(country_leaderboard::hardest.eq(levels::id.nullable())))
+                .into_boxed::<Pg>()
         };
 
-        let query = country_leaderboard::table
-            .left_join(levels::table.on(country_leaderboard::hardest.eq(levels::id.nullable())));
+        let total_count: i64 = build_query().count().get_result(conn)?;
 
-        let entries = query
-            .clone()
+        let mut query = build_query();
+
+        match options.order.unwrap_or(LeaderboardOrder::TotalPoints) {
+            LeaderboardOrder::TotalPoints => query = query.order(country_leaderboard::rank.asc()),
+            LeaderboardOrder::ExtremeCount => {
+                query = query.order(country_leaderboard::extremes_rank.asc())
+            }
+            LeaderboardOrder::RawPoints => query = query.order(country_leaderboard::rank.asc()),
+        }
+
+        let raw_entries: Vec<(CountryLeaderboardEntry, Option<BaseLevel>)> = query
             .limit(page_query.per_page())
             .offset(page_query.offset())
-            .order((ordering, country_leaderboard::country.asc()))
-            .select(selection)
-            .load::<(CountryLeaderboardEntry, Option<BaseLevel>)>(conn)?;
+            .select((
+                CountryLeaderboardEntry::as_select(),
+                (levels::id, levels::name).nullable(),
+            ))
+            .load(conn)?;
 
-        let count = query.count().get_result(conn)?;
-
-        let entries_resolved = entries
+        let entries_resolved = raw_entries
             .into_iter()
             .map(|(entry, hardest)| CountryLeaderboardEntryResolved {
                 rank: entry.rank,
@@ -116,7 +116,7 @@ impl CountryLeaderboardPage {
 
         Ok(Paginated::<Self>::from_data(
             page_query,
-            count,
+            total_count,
             Self {
                 last_refreshed: refresh_log.last_refresh,
                 data: entries_resolved,

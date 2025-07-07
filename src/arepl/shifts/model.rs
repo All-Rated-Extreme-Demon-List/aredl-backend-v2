@@ -7,8 +7,8 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use diesel::{
-    sql_types::Bool, AsChangeset, BoxableExpression, ExpressionMethods, Identifiable, IntoSql,
-    JoinOnDsl, QueryDsl, Queryable, RunQueryDsl, SelectableHelper,
+    pg::Pg, AsChangeset, ExpressionMethods, Identifiable, JoinOnDsl, QueryDsl, Queryable,
+    RunQueryDsl, SelectableHelper,
 };
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
@@ -191,47 +191,26 @@ impl ShiftPage {
     ) -> Result<Paginated<ShiftPage>, ApiError> {
         let conn = &mut db.connection()?;
 
-        let total = shifts::table
-            .into_boxed()
-            .filter(options.user_id.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |user_id| Box::new(shifts::user_id.eq(user_id)),
-            ))
-            .filter(options.status.clone().map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |status| Box::new(shifts::status.eq(status)),
-            ))
-            .count()
-            .get_result::<i64>(conn)?;
+        let build_filtered = || {
+            let mut q = shifts::table.into_boxed::<Pg>();
+            if let Some(user_id) = options.user_id {
+                q = q.filter(shifts::user_id.eq(user_id));
+            }
+            if let Some(status) = options.status.clone() {
+                q = q.filter(shifts::status.eq(status));
+            }
+            q
+        };
 
-        let shift_rows = shifts::table
+        let total_count: i64 = build_filtered().count().get_result(conn)?;
+
+        let shift_rows: Vec<(Shift, BaseUser)> = build_filtered()
             .inner_join(users::table.on(shifts::user_id.eq(users::id)))
-            .into_boxed()
-            .filter(options.user_id.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |user_id| Box::new(shifts::user_id.eq(user_id)),
-            ))
-            .filter(options.status.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |status| Box::new(shifts::status.eq(status)),
-            ))
             .order(shifts::start_at.desc())
             .limit(page_query.per_page())
             .offset(page_query.offset())
             .select((Shift::as_select(), BaseUser::as_select()))
-            .load::<(Shift, BaseUser)>(conn)?;
+            .load(conn)?;
 
         let resolved_shifts = shift_rows
             .into_iter()
@@ -240,7 +219,7 @@ impl ShiftPage {
 
         Ok(Paginated::from_data(
             page_query,
-            total,
+            total_count,
             ShiftPage {
                 data: resolved_shifts,
             },

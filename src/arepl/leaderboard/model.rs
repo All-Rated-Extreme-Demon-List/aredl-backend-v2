@@ -9,13 +9,10 @@ use crate::schema::{
 };
 use crate::users::BaseDiscordUser;
 use chrono::Utc;
-use diesel::expression::expression_types::NotSelectable;
-use diesel::expression::AsExpression;
 use diesel::pg::Pg;
-use diesel::sql_types::{Bool, Nullable};
 use diesel::{
-    BoolExpressionMethods, BoxableExpression, ExpressionMethods, JoinOnDsl,
-    NullableExpressionMethods, PgTextExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper,
+    ExpressionMethods, JoinOnDsl, NullableExpressionMethods, PgTextExpressionMethods, QueryDsl,
+    RunQueryDsl, SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -108,111 +105,88 @@ impl LeaderboardPage {
         page_query: PageQuery<D>,
         options: LeaderboardQueryOptions,
     ) -> Result<Paginated<Self>, ApiError> {
-        let name_filter: Box<dyn BoxableExpression<_, _, SqlType = Bool>> =
-            match options.name_filter.clone() {
-                Some(filter) => Box::new(users::global_name.ilike(filter)),
-                None => Box::new(<bool as AsExpression<Bool>>::as_expression(true)),
-            };
-        let country_filter: Box<dyn BoxableExpression<_, _, SqlType = Nullable<Bool>>> =
-            match options.country_filter.clone() {
-                Some(country) => Box::new(
-                    user_leaderboard::country
-                        .is_not_null()
-                        .and(user_leaderboard::country.eq(country)),
-                ),
-                None => Box::new(<bool as AsExpression<Bool>>::as_expression(true).nullable()),
-            };
+        let build_filtered_query = || {
+            let mut q = user_leaderboard::table
+                .inner_join(users::table.on(users::id.eq(user_leaderboard::user_id)))
+                .left_join(clans::table.on(user_leaderboard::clan_id.eq(clans::id.nullable())))
+                .left_join(levels::table.on(user_leaderboard::hardest.eq(levels::id.nullable())))
+                .into_boxed::<Pg>();
 
-        let clan_filter: Box<dyn BoxableExpression<_, _, SqlType = Nullable<Bool>>> =
-            match options.clan_filter.clone() {
-                Some(clan_id) => Box::new(
-                    user_leaderboard::clan_id
-                        .is_not_null()
-                        .and(user_leaderboard::clan_id.eq(clan_id)),
-                ),
-                None => Box::new(<bool as AsExpression<Bool>>::as_expression(true).nullable()),
-            };
+            if let Some(name_like) = options.name_filter.clone() {
+                q = q.filter(users::global_name.ilike(name_like));
+            }
 
-        let selection = (
-            LeaderboardEntry::as_select(),
-            BaseDiscordUser::as_select(),
-            Option::<Clan>::as_select(),
-            Option::<BaseLevel>::as_select(),
-        );
+            if let Some(country) = options.country_filter {
+                q = q.filter(user_leaderboard::country.eq(country));
+            }
 
-        let order = options.order.unwrap_or(LeaderboardOrder::TotalPoints);
+            if let Some(clan_id) = options.clan_filter {
+                q = q.filter(user_leaderboard::clan_id.eq(clan_id));
+            }
+            q
+        };
 
-        let ordering: Box<dyn BoxableExpression<_, _, SqlType = NotSelectable>> =
-            match (options.country_filter, order) {
-                (None, LeaderboardOrder::TotalPoints) => Box::new(user_leaderboard::rank.asc()),
-                (None, LeaderboardOrder::ExtremeCount) => {
-                    Box::new(user_leaderboard::extremes_rank.asc())
-                }
-                (None, LeaderboardOrder::RawPoints) => Box::new(user_leaderboard::raw_rank.asc()),
-                (Some(_), LeaderboardOrder::TotalPoints) => {
-                    Box::new(user_leaderboard::country_rank.asc())
-                }
-                (Some(_), LeaderboardOrder::ExtremeCount) => {
-                    Box::new(user_leaderboard::country_extremes_rank.asc())
-                }
-                (Some(_), LeaderboardOrder::RawPoints) => {
-                    Box::new(user_leaderboard::country_raw_rank.asc())
-                }
-            };
+        let total_count: i64 = build_filtered_query().count().get_result(conn)?;
 
-        let query = user_leaderboard::table
-            .inner_join(users::table.on(users::id.eq(user_leaderboard::user_id)))
-            .left_join(clans::table.on(user_leaderboard::clan_id.eq(clans::id.nullable())))
-            .left_join(levels::table.on(user_leaderboard::hardest.eq(levels::id.nullable())));
+        let mut query = build_filtered_query();
 
-        let entries = query
-            .clone()
+        match (
+            options.country_filter.is_some(),
+            options.order.unwrap_or(LeaderboardOrder::TotalPoints),
+        ) {
+            (false, LeaderboardOrder::TotalPoints) => {
+                query = query.order(user_leaderboard::rank.asc())
+            }
+            (false, LeaderboardOrder::ExtremeCount) => {
+                query = query.order(user_leaderboard::extremes_rank.asc())
+            }
+            (false, LeaderboardOrder::RawPoints) => {
+                query = query.order(user_leaderboard::raw_rank.asc())
+            }
+            (true, LeaderboardOrder::TotalPoints) => {
+                query = query.order(user_leaderboard::country_rank.asc())
+            }
+            (true, LeaderboardOrder::ExtremeCount) => {
+                query = query.order(user_leaderboard::country_extremes_rank.asc())
+            }
+            (true, LeaderboardOrder::RawPoints) => {
+                query = query.order(user_leaderboard::country_raw_rank.asc())
+            }
+        };
+
+        let query = query.then_order_by(user_leaderboard::user_id.asc());
+
+        let raw: Vec<(
+            LeaderboardEntry,
+            BaseDiscordUser,
+            Option<Clan>,
+            Option<BaseLevel>,
+        )> = query
             .limit(page_query.per_page())
             .offset(page_query.offset())
-            .filter(name_filter)
-            .filter(country_filter)
-            .filter(clan_filter)
-            .order((ordering, user_leaderboard::user_id))
-            .select(selection)
-            .load::<(
-                LeaderboardEntry,
-                BaseDiscordUser,
-                Option<Clan>,
-                Option<BaseLevel>,
-            )>(conn)?;
+            .select((
+                LeaderboardEntry::as_select(),
+                BaseDiscordUser::as_select(),
+                Option::<Clan>::as_select(),
+                Option::<BaseLevel>::as_select(),
+            ))
+            .load(conn)?;
 
-        let name_filter: Box<dyn BoxableExpression<_, _, SqlType = Bool>> =
-            match options.name_filter {
-                Some(filter) => Box::new(users::global_name.ilike(filter)),
-                None => Box::new(<bool as AsExpression<Bool>>::as_expression(true)),
-            };
-        let country_filter: Box<dyn BoxableExpression<_, _, SqlType = Nullable<Bool>>> =
-            match options.country_filter {
-                Some(country) => Box::new(user_leaderboard::country.eq(country)),
-                None => Box::new(<bool as AsExpression<Bool>>::as_expression(true).nullable()),
-            };
-
-        let count = query
-            .filter(name_filter)
-            .filter(country_filter)
-            .count()
-            .get_result(conn)?;
-
-        let entries_resolved = entries
+        let entries_resolved = raw
             .into_iter()
-            .map(|(entry, user, clan, hardest)| LeaderboardEntryResolved {
-                rank: entry.rank,
-                extremes_rank: entry.extremes_rank,
-                raw_rank: entry.raw_rank,
-                country_rank: entry.country_rank,
-                country_extremes_rank: entry.country_extremes_rank,
-                country_raw_rank: entry.country_raw_rank,
+            .map(|(e, user, clan, lvl)| LeaderboardEntryResolved {
+                rank: e.rank,
+                extremes_rank: e.extremes_rank,
+                raw_rank: e.raw_rank,
+                country_rank: e.country_rank,
+                country_extremes_rank: e.country_extremes_rank,
+                country_raw_rank: e.country_raw_rank,
                 user,
-                country: entry.country,
-                total_points: entry.total_points,
-                pack_points: entry.pack_points,
-                hardest,
-                extremes: entry.extremes,
+                country: e.country,
+                total_points: e.total_points,
+                pack_points: e.pack_points,
+                hardest: lvl,
+                extremes: e.extremes,
                 clan,
             })
             .collect::<Vec<_>>();
@@ -227,7 +201,7 @@ impl LeaderboardPage {
 
         Ok(Paginated::<Self>::from_data(
             page_query,
-            count,
+            total_count,
             Self {
                 last_refreshed: refresh_log.last_refresh,
                 data: entries_resolved,

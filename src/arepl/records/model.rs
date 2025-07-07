@@ -8,10 +8,9 @@ use actix_web::web;
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::query_dsl::JoinOnDsl;
-use diesel::sql_types::Bool;
 use diesel::{
-    BoxableExpression, ExpressionMethods, Insertable, IntoSql, NullableExpressionMethods,
-    PgExpressionMethods, QueryDsl, RunQueryDsl, Selectable, SelectableHelper,
+    ExpressionMethods, Insertable, NullableExpressionMethods, PgExpressionMethods, QueryDsl,
+    RunQueryDsl, Selectable, SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -243,68 +242,26 @@ impl FullRecordUnresolved {
             options.reviewer_filter = None;
         }
 
-        let total_count: i64 = records::table
-            .filter(options.mobile_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |mobile| Box::new(records::mobile.eq(mobile)),
-            ))
-            .filter(options.level_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |level| Box::new(records::level_id.eq(level)),
-            ))
-            .filter(options.submitter_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |submitter| Box::new(records::submitted_by.eq(submitter)),
-            ))
-            .filter(options.reviewer_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |reviewer| Box::new(records::reviewer_id.is_not_distinct_from(reviewer)),
-            ))
-            .count()
-            .get_result(conn)?;
+        let build_filtered = || {
+            let mut q = records::table.into_boxed::<Pg>();
+            if let Some(mobile) = options.mobile_filter {
+                q = q.filter(records::mobile.eq(mobile));
+            }
+            if let Some(level) = options.level_filter {
+                q = q.filter(records::level_id.eq(level));
+            }
+            if let Some(submitter) = options.submitter_filter {
+                q = q.filter(records::submitted_by.eq(submitter));
+            }
+            if let Some(reviewer) = options.reviewer_filter {
+                q = q.filter(records::reviewer_id.is_not_distinct_from(reviewer));
+            }
+            q
+        };
 
-        let query = records::table.into_boxed::<Pg>();
-        let raw_records = query
-            .filter(options.mobile_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |mobile| Box::new(records::mobile.eq(mobile)),
-            ))
-            .filter(options.level_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |level| Box::new(records::level_id.eq(level)),
-            ))
-            .filter(options.submitter_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |submitter| Box::new(records::submitted_by.eq(submitter)),
-            ))
-            .filter(options.reviewer_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |reviewer| Box::new(records::reviewer_id.is_not_distinct_from(reviewer)),
-            ))
+        let total_count: i64 = build_filtered().count().get_result(conn)?;
+
+        let raw_records = build_filtered()
             .limit(page_query.per_page())
             .offset(page_query.offset())
             .select(FullRecordUnresolved::as_select())
@@ -383,68 +340,26 @@ impl FullRecordResolved {
 
         let reviewers = alias!(users as reviewers);
 
-        let total_count: i64 = records::table
-            .filter(options.mobile_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |mobile| Box::new(records::mobile.eq(mobile)),
-            ))
-            .filter(options.level_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |level| Box::new(records::level_id.eq(level)),
-            ))
-            .filter(options.submitter_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |submitter| Box::new(records::submitted_by.eq(submitter)),
-            ))
-            .filter(options.reviewer_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |reviewer| Box::new(records::reviewer_id.is_not_distinct_from(reviewer)),
-            ))
-            .count()
-            .get_result(conn)?;
+        let build_filtered = || {
+            let mut q = records::table.into_boxed::<Pg>();
+            if let Some(mobile) = options.mobile_filter {
+                q = q.filter(records::mobile.eq(mobile));
+            }
+            if let Some(level) = options.level_filter {
+                q = q.filter(records::level_id.eq(level));
+            }
+            if let Some(submitter) = options.submitter_filter {
+                q = q.filter(records::submitted_by.eq(submitter));
+            }
+            if let Some(reviewer) = options.reviewer_filter {
+                q = q.filter(records::reviewer_id.is_not_distinct_from(reviewer));
+            }
+            q
+        };
 
-        let query = records::table.into_boxed::<Pg>();
-        let records = query
-            .filter(options.mobile_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |mobile| Box::new(records::mobile.eq(mobile)),
-            ))
-            .filter(options.level_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |level| Box::new(records::level_id.eq(level)),
-            ))
-            .filter(options.submitter_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |submitter| Box::new(records::submitted_by.eq(submitter)),
-            ))
-            .filter(options.reviewer_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |reviewer| Box::new(records::reviewer_id.is_not_distinct_from(reviewer)),
-            ))
+        let total_count: i64 = build_filtered().count().get_result(conn)?;
+
+        let records = build_filtered()
             .inner_join(users::table.on(records::submitted_by.eq(users::id)))
             .inner_join(levels::table.on(records::level_id.eq(levels::id)))
             .left_join(

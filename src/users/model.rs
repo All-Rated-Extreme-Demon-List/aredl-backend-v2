@@ -5,12 +5,10 @@ use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::{clan_members, clans, permissions, roles, user_roles, users};
 use actix_web::web;
 use chrono::{DateTime, Utc};
-use diesel::expression::AsExpression;
 use diesel::pg::Pg;
-use diesel::sql_types::Bool;
 use diesel::{
-    BoxableExpression, ExpressionMethods, JoinOnDsl, OptionalExtension, PgTextExpressionMethods,
-    QueryDsl, RunQueryDsl, SelectableHelper,
+    ExpressionMethods, JoinOnDsl, OptionalExtension, PgTextExpressionMethods, QueryDsl,
+    RunQueryDsl, SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -242,46 +240,29 @@ impl User {
         page_query: PageQuery<D>,
         options: UserListQueryOptions,
     ) -> Result<Paginated<UserPage>, ApiError> {
-        let name_filter: Box<dyn BoxableExpression<_, _, SqlType = Bool>> =
-            match options.name_filter.clone() {
-                Some(filter) => Box::new(users::global_name.ilike(filter)),
-                None => Box::new(<bool as AsExpression<Bool>>::as_expression(true)),
-            };
-        let placeholder_filter: Box<dyn BoxableExpression<_, _, SqlType = Bool>> =
-            match options.placeholder.clone() {
-                Some(placeholder) => Box::new(users::placeholder.eq(placeholder)),
-                None => Box::new(<bool as AsExpression<Bool>>::as_expression(true)),
-            };
+        let build_query = || {
+            let mut q = users::table.into_boxed::<Pg>();
+            if let Some(ref name_like) = options.name_filter {
+                q = q.filter(users::global_name.ilike(name_like));
+            }
+            if let Some(placeholder) = options.placeholder {
+                q = q.filter(users::placeholder.eq(placeholder));
+            }
+            q
+        };
 
-        let entries = users::table
-            .filter(name_filter)
-            .filter(placeholder_filter)
-            .order(users::username)
+        let total_count: i64 = build_query().count().get_result(conn)?;
+
+        let entries: Vec<User> = build_query()
+            .order(users::username.asc())
             .limit(page_query.per_page())
             .offset(page_query.offset())
             .select(User::as_select())
-            .load::<User>(conn)?;
+            .load(conn)?;
 
-        let name_filter: Box<dyn BoxableExpression<_, _, SqlType = Bool>> =
-            match options.name_filter {
-                Some(filter) => Box::new(users::global_name.ilike(filter)),
-                None => Box::new(<bool as AsExpression<Bool>>::as_expression(true)),
-            };
-        let placeholder_filter: Box<dyn BoxableExpression<_, _, SqlType = Bool>> =
-            match options.placeholder {
-                Some(placeholder) => Box::new(users::placeholder.eq(placeholder)),
-                None => Box::new(<bool as AsExpression<Bool>>::as_expression(true)),
-            };
-
-        let count = users::table
-            .filter(name_filter)
-            .filter(placeholder_filter)
-            .count()
-            .get_result(conn)?;
-
-        Ok(Paginated::<UserPage>::from_data(
+        Ok(Paginated::from_data(
             page_query,
-            count,
+            total_count,
             UserPage { data: entries },
         ))
     }
@@ -293,7 +274,7 @@ impl User {
         let user = diesel::insert_into(users::table)
             .values((
                 users::placeholder.eq(true),
-                users::global_name.eq(options.username)
+                users::global_name.eq(options.username),
             ))
             .returning(Self::as_select())
             .get_result::<Self>(conn)?;
