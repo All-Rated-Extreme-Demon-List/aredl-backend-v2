@@ -1,11 +1,11 @@
 use crate::{
-    aredl::shifts::{
-        recurring, ResolvedShift, Shift, ShiftFilterQuery, ShiftPage, ShiftPatch, ShiftStatus,
-    },
     auth::{Authenticated, Permission, UserAuth},
     db::DbAppState,
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
+    shifts::{
+        recurring, ResolvedShift, Shift, ShiftFilterQuery, ShiftPage, ShiftPatch, ShiftStatus,
+    },
 };
 use actix_web::{delete, get, patch, web, HttpResponse};
 use std::sync::Arc;
@@ -17,7 +17,7 @@ use uuid::Uuid;
     get,
     summary = "[Staff]List shifts",
     description = "Get a possibly filtered list of all current and past shifts.",
-    tag = "AREDL - Shifts",
+    tag = "Shifts",
     responses(
         (status = 200, body = Paginated<ShiftPage>)
     ),
@@ -48,7 +48,7 @@ async fn find_all_shifts(
     get,
     summary = "[Staff]List my shifts",
     description = "Get a list of all current and past shifts for the authenticated user.",
-    tag = "AREDL - Shifts",
+    tag = "Shifts",
     responses(
         (status = 200, body = Paginated<ShiftPage>)
     ),
@@ -77,7 +77,7 @@ async fn find_all_shifts_me(
     patch,
     summary = "[Staff]Edit a shift",
     description = "Edits a current or past shift.",
-    tag = "AREDL - Shifts",
+    tag = "Shifts",
     responses(
         (status = 200, body = Shift)
     ),
@@ -104,7 +104,7 @@ async fn patch_shift(
     delete,
     summary = "[Staff]Delete a shift",
     description = "Deletes a current or past shift.",
-    tag = "AREDL - Shifts",
+    tag = "Shifts",
     responses(
         (status = 200, body = Shift)
     ),
@@ -125,7 +125,7 @@ async fn delete_shift(
 #[derive(OpenApi)]
 #[openapi(
     tags(
-        (name = "AREDL - Shifts", description = "Endpoints for fetching and managing shifts and recurring shifts."),
+        (name = "Shifts", description = "Endpoints for fetching and managing shifts and recurring shifts."),
     ),
     nest(
         (path = "/recurring", api=recurring::ApiDoc),

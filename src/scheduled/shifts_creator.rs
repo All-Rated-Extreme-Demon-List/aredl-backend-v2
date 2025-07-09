@@ -1,5 +1,5 @@
 use crate::{
-    aredl::shifts::RecurringShift, db::DbAppState, get_secret, notifications::WebsocketNotification,
+    db::DbAppState, get_secret, notifications::WebsocketNotification, shifts::RecurringShift,
 };
 use chrono::{NaiveDate, Utc};
 use cron::Schedule;

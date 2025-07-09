@@ -1,11 +1,11 @@
 use crate::{
-    arepl::shifts::{
-        recurring::{RecurringShift, RecurringShiftInsert, RecurringShiftPatch},
-        ResolvedRecurringShift,
-    },
     auth::{Permission, UserAuth},
     db::DbAppState,
     error_handler::ApiError,
+    shifts::{
+        recurring::{RecurringShift, RecurringShiftInsert, RecurringShiftPatch},
+        ResolvedRecurringShift,
+    },
 };
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
@@ -17,7 +17,7 @@ use uuid::Uuid;
     get,
     summary = "[Staff]List recurring shifts",
     description = "Get a possibly filtered list of the currently scheduled recurring shifts.",
-    tag = "AREDL (P) - Shifts",
+    tag = "Shifts",
     responses(
         (status = 200, body = Vec<ResolvedRecurringShift>)
     ),
@@ -38,7 +38,7 @@ async fn find_all_recurring_shifts(
     post,
     summary = "[Staff]Create a recurring shift",
     description = "Schedules a new recurring shift for a user on a specific week day and time",
-    tag = "AREDL (P) - Shifts",
+    tag = "Shifts",
     responses(
         (status = 200, body = RecurringShift)
     ),
@@ -62,7 +62,7 @@ async fn create_new_recurring_shift(
     patch,
     summary = "[Staff]Edit a recurring shift",
     description = "Edits a recurring shift data.",
-    tag = "AREDL (P) - Shifts",
+    tag = "Shifts",
     responses(
         (status = 200, body = RecurringShift)
     ),
@@ -90,7 +90,7 @@ async fn patch_recurring_shift(
     delete,
     summary = "[Staff]Delete a recurrent shift",
     description = "Deletes a recurrent shift.",
-    tag = "AREDL (P) - Shifts",
+    tag = "Shifts",
     responses(
         (status = 200, body = RecurringShift)
     ),

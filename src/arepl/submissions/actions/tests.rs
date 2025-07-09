@@ -1,11 +1,11 @@
 #[cfg(test)]
 use crate::{
     arepl::{
-        levels::test_utils::create_test_level, shifts::test_utils::create_test_shift,
-        submissions::test_utils::create_test_submission,
+        levels::test_utils::create_test_level, submissions::test_utils::create_test_submission,
     },
     auth::{create_test_token, Permission},
-    schema::arepl::{records, shifts},
+    schema::{arepl::records, shifts},
+    shifts::{test_utils::create_test_shift, ShiftStatus},
     test_utils::*,
     users::test_utils::create_test_user,
 };
@@ -226,8 +226,6 @@ async fn accept_existing_record() {
 
 #[actix_web::test]
 async fn shift_completes_after_accept() {
-    use crate::arepl::shifts::ShiftStatus;
-    use crate::schema::arepl::shifts;
     use diesel::{ExpressionMethods, RunQueryDsl};
 
     let (app, mut conn, auth, _) = init_test_app().await;

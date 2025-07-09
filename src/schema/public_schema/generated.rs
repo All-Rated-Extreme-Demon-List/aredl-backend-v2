@@ -5,6 +5,14 @@ pub mod public {
         #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
         #[diesel(postgres_type(name = "notification_type"))]
         pub struct NotificationType;
+
+        #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+        #[diesel(postgres_type(name = "shift_status"))]
+        pub struct ShiftStatus;
+
+        #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+        #[diesel(postgres_type(name = "weekday"))]
+        pub struct Weekday;
     }
 
     diesel::table! {
@@ -101,10 +109,43 @@ pub mod public {
     }
 
     diesel::table! {
+        use diesel::sql_types::*;
+        use super::sql_types::Weekday;
+
+        recurrent_shifts (id) {
+            id -> Uuid,
+            user_id -> Uuid,
+            weekday -> Weekday,
+            start_hour -> Int4,
+            duration -> Int4,
+            target_count -> Int4,
+            created_at -> Timestamptz,
+            updated_at -> Timestamptz,
+        }
+    }
+
+    diesel::table! {
         roles (id) {
             id -> Int4,
             privilege_level -> Int4,
             role_desc -> Varchar,
+        }
+    }
+
+    diesel::table! {
+        use diesel::sql_types::*;
+        use super::sql_types::ShiftStatus;
+
+        shifts (id) {
+            id -> Uuid,
+            user_id -> Uuid,
+            target_count -> Int4,
+            completed_count -> Int4,
+            start_at -> Timestamptz,
+            end_at -> Timestamptz,
+            status -> ShiftStatus,
+            created_at -> Timestamptz,
+            updated_at -> Timestamptz,
         }
     }
 
@@ -154,7 +195,9 @@ pub mod public {
         notifications,
         oauth_requests,
         permissions,
+        recurrent_shifts,
         roles,
+        shifts,
         user_roles,
         users,
     );

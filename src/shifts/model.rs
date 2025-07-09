@@ -2,7 +2,7 @@ use crate::{
     db::DbAppState,
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
-    schema::{arepl::shifts, users},
+    schema::{shifts, users},
     users::BaseUser,
 };
 use chrono::{DateTime, Utc};
@@ -16,7 +16,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq)]
-#[ExistingTypePath = "crate::schema::arepl::sql_types::ShiftStatus"]
+#[ExistingTypePath = "crate::schema::sql_types::ShiftStatus"]
 #[DbValueStyle = "PascalCase"]
 pub enum ShiftStatus {
     Running,
@@ -25,7 +25,7 @@ pub enum ShiftStatus {
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq)]
-#[ExistingTypePath = "crate::schema::arepl::sql_types::Weekday"]
+#[ExistingTypePath = "crate::schema::sql_types::Weekday"]
 #[DbValueStyle = "PascalCase"]
 pub enum Weekday {
     Monday,

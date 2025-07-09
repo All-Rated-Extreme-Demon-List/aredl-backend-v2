@@ -3,16 +3,8 @@
 pub mod arepl {
     pub mod sql_types {
         #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
-        #[diesel(postgres_type(name = "shift_status"))]
-        pub struct ShiftStatus;
-
-        #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
         #[diesel(postgres_type(name = "submission_status"))]
         pub struct SubmissionStatus;
-
-        #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
-        #[diesel(postgres_type(name = "weekday"))]
-        pub struct Weekday;
     }
 
     diesel::table! {
@@ -121,39 +113,6 @@ pub mod arepl {
 
     diesel::table! {
         use diesel::sql_types::*;
-        use super::sql_types::Weekday;
-
-        arepl.recurrent_shifts (id) {
-            id -> Uuid,
-            user_id -> Uuid,
-            weekday -> Weekday,
-            start_hour -> Int4,
-            duration -> Int4,
-            target_count -> Int4,
-            created_at -> Timestamptz,
-            updated_at -> Timestamptz,
-        }
-    }
-
-    diesel::table! {
-        use diesel::sql_types::*;
-        use super::sql_types::ShiftStatus;
-
-        arepl.shifts (id) {
-            id -> Uuid,
-            user_id -> Uuid,
-            target_count -> Int4,
-            completed_count -> Int4,
-            start_at -> Timestamptz,
-            end_at -> Timestamptz,
-            status -> ShiftStatus,
-            created_at -> Timestamptz,
-            updated_at -> Timestamptz,
-        }
-    }
-
-    diesel::table! {
-        use diesel::sql_types::*;
         use super::sql_types::SubmissionStatus;
 
         arepl.submission_history (id) {
@@ -213,8 +172,6 @@ pub mod arepl {
         packs,
         position_history,
         records,
-        recurrent_shifts,
-        shifts,
         submission_history,
         submissions,
         submissions_enabled,

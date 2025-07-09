@@ -1,4 +1,4 @@
-use crate::{aredl, arepl, auth, clans, get_secret, health, notifications, roles, users};
+use crate::{aredl, arepl, auth, clans, get_secret, health, notifications, roles, shifts, users};
 use serde_json::json;
 use utoipa::openapi::extensions::Extensions;
 use utoipa::openapi::path::Operation;
@@ -17,6 +17,7 @@ use utoipa::{Modify, OpenApi};
         (path = "/clans", api = clans::ApiDoc),
         (path = "/notifications", api = notifications::ApiDoc),
 		(path = "/health", api = health::ApiDoc),
+        (path = "/shifts", api=shifts::ApiDoc),
 	)
 )]
 
@@ -25,7 +26,7 @@ struct MainApiDoc;
 #[openapi(
     info(
         title = "AREDL API",
-        version = "2.0 Alpha",
+        version = "2.01",
 
         description = "# Welcome to the AREDL API v2 Documentation!    \n\
         ## Useful Links    \n\
@@ -45,7 +46,6 @@ struct MainApiDoc;
             | **AREDL - Records** | Endpoints for fetching and managing AREDL records |    \n\
             | **AREDL - Packs** | Staff only endpoints used to manage AREDL packs. To fetch packs data, use Pack Tiers endpoints instead. |    \n\
             | **AREDL - Pack Tiers** | Endpoints to fetch and manage AREDL pack tiers |    \n\
-            | **AREDL - Shifts** | Staff endpoints to fetch and manage staff shifts for reviewing records |    \n\
             | **AREDL (P)** | All previous AREDL specific endpoints duplicated for platformer mode |    \n\
             | **Authentication** | Endpoints for authenticating with Discord and managing api keys |    \n\
             | **Roles** | Endpoints for fetching and managing the roles and their assigned users |    \n\
@@ -54,6 +54,7 @@ struct MainApiDoc;
             | **Users - Merges** | Endpoints for merging users and submitting/managing merge requests |    \n\
             | **Clans** | Endpoints for fetching and managing clans, both for staff and clan leaders |    \n\
             | **Clans - Members** | Endpoints for fetching, inviting and managing members of a clan, both for staff and clan leaders/vice-leaders |    \n\
+            | **Shifts** | Staff endpoints to fetch and manage staff shifts for reviewing records |    \n\
             | **Notifications** | Endpoints for opening a web socket to receive real time data from the API. Used by the AREDL Bot. |    \n\
             | **Health** | Endpoints for checking whether the API is online or not |    \n\n\
         In addition to that, endpoints are also categorized by the type of authentication they require:\n\n\

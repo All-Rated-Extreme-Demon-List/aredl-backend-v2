@@ -158,6 +158,7 @@ pub async fn init_test_app() -> (
             .configure(crate::roles::init_routes)
             .configure(crate::clans::init_routes)
             .configure(crate::notifications::init_routes)
+            .configure(crate::shifts::init_routes)
             .configure(crate::health::init_routes),
     )
     .await;

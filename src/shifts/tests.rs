@@ -1,7 +1,7 @@
 #[cfg(test)]
-use crate::aredl::shifts::test_utils::{create_test_recurring_shift, create_test_shift};
-#[cfg(test)]
 use crate::auth::{create_test_token, Permission};
+#[cfg(test)]
+use crate::shifts::test_utils::{create_test_recurring_shift, create_test_shift};
 #[cfg(test)]
 use crate::{test_utils::*, users::test_utils::create_test_user};
 #[cfg(test)]
@@ -17,7 +17,7 @@ async fn get_shifts_list() {
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     create_test_shift(&mut conn, user_id, false).await;
     let req = test::TestRequest::get()
-        .uri("/aredl/shifts")
+        .uri("/shifts")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -34,7 +34,7 @@ async fn get_my_shifts() {
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     create_test_shift(&mut conn, user_id, false).await;
     let req = test::TestRequest::get()
-        .uri("/aredl/shifts/@me")
+        .uri("/shifts/@me")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -62,7 +62,7 @@ async fn patch_shift() {
         "status": "Completed"
     });
     let req = test::TestRequest::patch()
-        .uri(&format!("/aredl/shifts/{}", shift_id))
+        .uri(&format!("/shifts/{}", shift_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(&patch_data)
         .to_request();
@@ -84,7 +84,7 @@ async fn delete_shift() {
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let shift_id = create_test_shift(&mut conn, user_id, false).await;
     let req = test::TestRequest::delete()
-        .uri(&format!("/aredl/shifts/{}", shift_id))
+        .uri(&format!("/shifts/{}", shift_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -105,7 +105,7 @@ async fn create_recurring_shift() {
         "target_count": 20
     });
     let req = test::TestRequest::post()
-        .uri("/aredl/shifts/recurring")
+        .uri("/shifts/recurring")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(&insert_data)
         .to_request();
@@ -123,7 +123,7 @@ async fn list_recurring_shifts() {
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     create_test_recurring_shift(&mut conn, user_id).await;
     let req = test::TestRequest::get()
-        .uri("/aredl/shifts/recurring")
+        .uri("/shifts/recurring")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -147,7 +147,7 @@ async fn patch_recurring_shift() {
         "target_count": 42
     });
     let req = test::TestRequest::patch()
-        .uri(&format!("/aredl/shifts/recurring/{}", recurring_id))
+        .uri(&format!("/shifts/recurring/{}", recurring_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(&patch_data)
         .to_request();
@@ -165,7 +165,7 @@ async fn delete_recurring_shift() {
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let recurring_id = create_test_recurring_shift(&mut conn, user_id).await;
     let req = test::TestRequest::delete()
-        .uri(&format!("/aredl/shifts/recurring/{}", recurring_id))
+        .uri(&format!("/shifts/recurring/{}", recurring_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
     let resp = test::call_service(&app, req).await;

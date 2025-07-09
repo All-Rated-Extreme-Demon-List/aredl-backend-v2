@@ -2,8 +2,8 @@
 // diesel won't autogenerate in schema.rs
 
 use crate::schema::arepl::{
-    levels, levels_created, pack_levels, pack_tiers, packs, records, recurrent_shifts, shifts,
-    submission_history, submissions, submissions_enabled, level_ldms
+    level_ldms, levels, levels_created, pack_levels, pack_tiers, packs, records,
+    submission_history, submissions, submissions_enabled,
 };
 use crate::schema::{clan_members, clans, users};
 
@@ -12,8 +12,6 @@ use crate::schema::{clan_members, clans, users};
 diesel::joinable!(levels -> users (publisher_id));
 diesel::joinable!(levels_created -> users (user_id));
 diesel::joinable!(records -> users (submitted_by));
-diesel::joinable!(recurrent_shifts -> users (user_id));
-diesel::joinable!(shifts -> users (user_id));
 diesel::joinable!(submission_history -> users (reviewer_id));
 
 diesel::allow_tables_to_appear_in_same_query!(levels, users);
@@ -25,8 +23,6 @@ diesel::allow_tables_to_appear_in_same_query!(levels_created, clan_members);
 diesel::allow_tables_to_appear_in_same_query!(records, users);
 diesel::allow_tables_to_appear_in_same_query!(records, clans);
 diesel::allow_tables_to_appear_in_same_query!(records, clan_members);
-diesel::allow_tables_to_appear_in_same_query!(recurrent_shifts, users);
-diesel::allow_tables_to_appear_in_same_query!(shifts, users);
 diesel::allow_tables_to_appear_in_same_query!(submission_history, users);
 
 diesel::table! {

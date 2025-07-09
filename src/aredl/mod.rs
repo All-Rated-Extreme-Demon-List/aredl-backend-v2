@@ -8,7 +8,6 @@ mod packtiers;
 mod profile;
 pub mod records;
 mod routes;
-pub mod shifts;
 mod submissions;
 
 pub use routes::{init_routes, ApiDoc};

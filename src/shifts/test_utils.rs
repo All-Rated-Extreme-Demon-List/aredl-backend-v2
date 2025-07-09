@@ -1,8 +1,8 @@
 #[cfg(test)]
 use crate::{
-    arepl::shifts::Weekday,
     db::DbConnection,
-    schema::arepl::{recurrent_shifts, shifts},
+    schema::{recurrent_shifts, shifts},
+    shifts::Weekday,
 };
 #[cfg(test)]
 use chrono::Utc;

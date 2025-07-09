@@ -1,11 +1,10 @@
 use crate::{
-    aredl::shifts::{ShiftInsert, Weekday},
     db::DbAppState,
     error_handler::ApiError,
     schema::{
-        aredl::{recurrent_shifts, shifts},
-        users,
+        users, {recurrent_shifts, shifts},
     },
+    shifts::{ShiftInsert, Weekday},
     users::BaseUser,
 };
 use chrono::{DateTime, Datelike, NaiveDate, TimeZone, Utc};

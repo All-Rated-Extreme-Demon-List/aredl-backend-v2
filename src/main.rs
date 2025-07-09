@@ -24,6 +24,7 @@ mod notifications;
 mod page_helper;
 mod roles;
 mod scheduled;
+mod shifts;
 mod users;
 
 use crate::cache_control::CacheController;
@@ -172,7 +173,8 @@ async fn main() -> std::io::Result<()> {
                     .configure(roles::init_routes)
                     .configure(clans::init_routes)
                     .configure(notifications::init_routes)
-                    .configure(health::init_routes),
+                    .configure(health::init_routes)
+                    .configure(shifts::init_routes),
             )
             .service(
                 RapiDoc::with_openapi("/openapi.json", ApiDoc::openapi())

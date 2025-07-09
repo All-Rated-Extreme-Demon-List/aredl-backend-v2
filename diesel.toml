@@ -2,7 +2,7 @@
 # see https://diesel.rs/guides/configuring-diesel-cli
 
 [print_schema.public]
-file = "src/schema/public_schema.rs"
+file = "src/schema/public_schema/generated.rs"
 schema = "public"
 custom_type_derives = ["diesel::query_builder::QueryId"]
 

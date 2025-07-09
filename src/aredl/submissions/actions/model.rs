@@ -1,16 +1,17 @@
 use crate::{
     aredl::{
         records::Record,
-        shifts::{Shift, ShiftStatus},
         submissions::{history::SubmissionHistory, *},
     },
     auth::Authenticated,
     db::DbAppState,
     error_handler::ApiError,
     notifications::WebsocketNotification,
-    schema::aredl::{
-        levels, records, shifts, submission_history, submissions, submissions_with_priority,
+    schema::{
+        aredl::{levels, records, submission_history, submissions, submissions_with_priority},
+        shifts,
     },
+    shifts::{Shift, ShiftStatus},
     users::me::notifications::{Notification, NotificationType},
 };
 use actix_web::web;
