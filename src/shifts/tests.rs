@@ -1,13 +1,19 @@
 #[cfg(test)]
-use crate::auth::{create_test_token, Permission};
-#[cfg(test)]
-use crate::shifts::test_utils::{create_test_recurring_shift, create_test_shift};
-#[cfg(test)]
-use crate::{test_utils::*, users::test_utils::create_test_user};
-#[cfg(test)]
-use actix_web::test::{self, read_body_json};
-#[cfg(test)]
-use serde_json::json;
+use {
+    crate::{
+        auth::{create_test_token, Permission},
+        schema::shifts,
+        shifts::{
+            recurring::RecurringShift,
+            test_utils::{create_test_recurring_shift, create_test_shift},
+        },
+        {test_utils::*, users::test_utils::create_test_user},
+    },
+    actix_web::test::{self, read_body_json},
+    chrono::NaiveDate,
+    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
+    serde_json::json,
+};
 
 #[actix_web::test]
 async fn get_shifts_list() {
@@ -172,4 +178,102 @@ async fn delete_recurring_shift() {
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(body["id"].as_str().unwrap(), recurring_id.to_string());
+}
+
+#[actix_web::test]
+async fn create_shifts_from_recurring() {
+    let (_, mut conn, _, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
+
+    create_test_recurring_shift(&mut conn, user_id).await;
+
+    let friday_date = NaiveDate::from_ymd_opt(2025, 7, 11).unwrap();
+    let created_shifts = RecurringShift::create_shifts(&mut conn, friday_date)
+        .expect("Failed to create shifts from recurring template");
+
+    assert_eq!(created_shifts.len(), 1, "Should create one shift");
+    assert_eq!(
+        created_shifts[0].user_id, user_id,
+        "Shift should be assigned to the correct user"
+    );
+    assert_eq!(
+        created_shifts[0].target_count, 20,
+        "Target count should match recurring shift"
+    );
+
+    let db_shifts: Vec<crate::shifts::Shift> = shifts::table
+        .filter(shifts::user_id.eq(user_id))
+        .load(&mut conn)
+        .expect("Failed to load shifts from database");
+
+    assert_eq!(db_shifts.len(), 1, "Should have one shift in database");
+    assert_eq!(
+        db_shifts[0].user_id, user_id,
+        "Database shift should be assigned to correct user"
+    );
+    assert_eq!(
+        db_shifts[0].target_count, 20,
+        "Database shift target count should match"
+    );
+}
+
+#[actix_web::test]
+async fn create_shifts_no_duplicates() {
+    use crate::schema::shifts;
+    use crate::shifts::recurring::RecurringShift;
+    use chrono::NaiveDate;
+    use diesel::{QueryDsl, RunQueryDsl};
+
+    let (_, mut conn, _, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
+
+    create_test_recurring_shift(&mut conn, user_id).await;
+
+    let friday_date = NaiveDate::from_ymd_opt(2025, 7, 11).unwrap();
+
+    let created_shifts_1 = RecurringShift::create_shifts(&mut conn, friday_date)
+        .expect("Failed to create shifts from recurring template (first call)");
+
+    let created_shifts_2 = RecurringShift::create_shifts(&mut conn, friday_date)
+        .expect("Failed to create shifts from recurring template (second call)");
+
+    assert_eq!(
+        created_shifts_1.len(),
+        1,
+        "First call should create one shift"
+    );
+    assert_eq!(
+        created_shifts_2.len(),
+        0,
+        "Second call should create no shifts (no duplicates)"
+    );
+
+    let db_shifts: Vec<crate::shifts::Shift> = shifts::table
+        .filter(shifts::user_id.eq(user_id))
+        .load(&mut conn)
+        .expect("Failed to load shifts from database");
+
+    assert_eq!(db_shifts.len(), 1, "Should have only one shift in database");
+}
+
+#[actix_web::test]
+async fn create_shifts_wrong_weekday() {
+    use crate::shifts::recurring::RecurringShift;
+    use chrono::NaiveDate;
+
+    let (_, mut conn, _, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
+
+    create_test_recurring_shift(&mut conn, user_id).await;
+
+    let monday_date = NaiveDate::from_ymd_opt(2025, 7, 7).unwrap();
+
+    let created_shifts = RecurringShift::create_shifts(&mut conn, monday_date)
+        .expect("Failed to create shifts from recurring template");
+
+    assert_eq!(
+        created_shifts.len(),
+        0,
+        "Should create no shifts for wrong weekday"
+    );
 }
