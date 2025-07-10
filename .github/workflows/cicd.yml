@@ -90,7 +90,7 @@ jobs:
             --out Lcov \
             --timeout 120 \
             --ignore-tests \
-            --rustflags="-C opt-level=0"
+            --rustflags="-C opt-level=0" \
             --exclude-files "tools/*" "src/schema/*" "src/scheduled/*" "src/main.rs" "src/docs.rs"
 
       - name: Upload coverage to Codecov
