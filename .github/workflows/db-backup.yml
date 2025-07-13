@@ -47,16 +47,16 @@ jobs:
     - name: Configure rclone for Drive
       env:
         RCLONE_CONFIG_PASS: ''
-        GDRIVE_SA_KEY: ${{ secrets.GDRIVE_SA_KEY }}
       run: |
-        echo "$GDRIVE_SA_KEY" > service-account.json
-        export RCLONE_CONFIG=/tmp/rclone.conf
-
-        rclone --config /tmp/rclone.conf config create \
-          gdrive_drive drive \
-          scope drive.file \
-          service_account_file service-account.json \
-          root_folder_id ${{ secrets.GDRIVE_FOLDER_ID }} \
+        cat <<EOF > /tmp/rclone.conf
+        [gdrive_drive]
+        type = drive
+        client_id = ${{ secrets.GDRIVE_CLIENT_ID }}
+        client_secret = ${{ secrets.GDRIVE_CLIENT_SECRET }}
+        token = ${{ secrets.GDRIVE_TOKEN }}
+        scope = drive.file
+        root_folder_id ${{ secrets.GDRIVE_FOLDER_ID }} \
+        EOF
           
 
     - name: Upload backup to Drive
