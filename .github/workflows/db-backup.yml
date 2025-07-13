@@ -55,7 +55,7 @@ jobs:
         client_secret = ${{ secrets.GDRIVE_CLIENT_SECRET }}
         token = ${{ secrets.GDRIVE_TOKEN }}
         scope = drive.file
-        root_folder_id ${{ secrets.GDRIVE_FOLDER_ID }} \
+        root_folder_id = ${{ secrets.GDRIVE_FOLDER_ID }}
         EOF
           
 
