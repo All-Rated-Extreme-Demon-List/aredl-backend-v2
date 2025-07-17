@@ -25,7 +25,8 @@ async fn create_ldm() {
 
     let ldm_data = json!({
         "ldm_id": 123456,
-        "description": "Bugfix",
+        "id_type": "Bugfix",
+        "status": "Allowed",
     });
     let req = test::TestRequest::post()
         .uri(format!("/aredl/levels/ldms/{}", level_id).as_str())
@@ -47,8 +48,8 @@ async fn create_ldm() {
         "Level IDs do not match!"
     );
     assert_eq!(
-        body["is_allowed"],
-        true
+        ldm_data["id_type"],
+        "Bugfix"
     );
     assert_eq!(
         body["added_by"],
@@ -68,7 +69,8 @@ async fn update_ldm() {
     let ldm = create_test_ldm(&mut conn, level_id, user_id).await;
 
     let ldm_data = json!({
-        "is_allowed": false
+        "status": "Banned",
+        "id_type": "Ldm"
     });
     let req = test::TestRequest::patch()
         .uri(format!("/aredl/levels/ldms/{}", ldm).as_str())
@@ -80,8 +82,12 @@ async fn update_ldm() {
 
     let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(
-        body["is_allowed"],
-        ldm_data["is_allowed"]
+        body["status"],
+        ldm_data["status"]
+    );
+    assert_eq!(
+        body["id_type"],
+        ldm_data["id_type"]
     );
 }
 
@@ -114,7 +120,7 @@ async fn list_ldms() {
     create_test_ldm(&mut conn, level_id, user_id).await;
 
     let req = test::TestRequest::get()
-        .uri(format!("/aredl/levels/ldms?level_id={}&is_allowed=true&description=%es%", level_id).as_str())
+        .uri(format!("/aredl/levels/ldms?level_id={}&type_filter=Bugfix&status_filter=Allowed&description=%es%", level_id).as_str())
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -146,7 +152,9 @@ async fn ldm_auth() {
 
     let ldm_data = json!({
         "ldm_id": 123456,
-        "description": "Bugfix"
+        "description": "test description",
+        "id_type": "Bugfix",
+        "status": "Allowed"
     });
     let req = test::TestRequest::post()
         .uri(format!("/aredl/levels/ldms/{}", level_id).as_str())

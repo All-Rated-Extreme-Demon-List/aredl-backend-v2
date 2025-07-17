@@ -8,6 +8,8 @@ use diesel::{ExpressionMethods, RunQueryDsl};
 use rand::Rng;
 #[cfg(test)]
 use uuid::Uuid;
+#[cfg(test)]
+use super::{LevelLDMStatus, LevelLDMType};
 
 #[cfg(test)]
 pub async fn create_test_ldm(conn: &mut DbConnection, level_id: Uuid, user: Uuid) -> Uuid {
@@ -21,7 +23,10 @@ pub async fn create_test_ldm(conn: &mut DbConnection, level_id: Uuid, user: Uuid
             level_ldms::added_by.eq(user),
             level_ldms::level_id.eq(level_id),
             level_ldms::ldm_id.eq(ldm_id),
-            level_ldms::description.eq("Test")
+            level_ldms::description.eq("Test"),
+            level_ldms::status.eq(LevelLDMStatus::Allowed),
+            level_ldms::id_type.eq(LevelLDMType::Bugfix),
+
         ))
         .execute(conn)
         .expect("Failed to create test LDM id");

@@ -23,15 +23,47 @@ use diesel::{
     JoinOnDsl,
     PgTextExpressionMethods,
 };
+use diesel_derive_enum::DbEnum;
+
+#[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq)]
+#[ExistingTypePath = "crate::schema::arepl::sql_types::CustomIdStatus"]
+#[DbValueStyle = "PascalCase"]
+pub enum LevelLDMStatus {
+    /// This ID is the one suggested for use. Levels can only have 1 
+    /// "Published" ID per type per level (e.g. one bugfix, one globed copy, etc.)
+    Published,
+    /// This ID is not the one suggested for use, but is allowed in records
+    Allowed,
+    /// This ID cannot be used in records
+    Banned,
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq)]
+#[ExistingTypePath = "crate::schema::arepl::sql_types::CustomIdType"]
+#[DbValueStyle = "PascalCase"]
+pub enum LevelLDMType {
+    /// This level fixes a bug in the offical level
+    Bugfix,
+    /// This level is made for use with Globed Deathlink
+    GlobedCopy,
+    /// This level is a Low Detail Mode of the official level
+    Ldm,
+    Other
+}
 
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
 #[diesel(table_name = level_ldms, check_for_backend(Pg))]
 pub struct LevelLDM {
+    /// The internal ID of this LDM entry
     pub id: Uuid,
+    /// The internal ID this LDM is for
     pub level_id: Uuid,
+    /// The in-game ID of this LDM
     pub ldm_id: i32,
-    pub is_allowed: bool,
+    /// The moderator who added this LDM
     pub added_by: Uuid,
+    pub id_type: LevelLDMType,
+    pub status: LevelLDMStatus,
     pub description: Option<String>,
     pub created_at: DateTime<Utc>
 }
@@ -41,7 +73,8 @@ pub struct LevelLDMResolved {
     pub id: Uuid,
     pub level_id: Uuid,
     pub ldm_id: i32,
-    pub is_allowed: bool,
+    pub id_type: LevelLDMType,
+    pub status: LevelLDMStatus,
     pub added_by: BaseUser,
     pub description: Option<String>,
     pub created_at: DateTime<Utc>
@@ -57,7 +90,8 @@ pub struct LevelLDMResolvedPage {
 pub struct LevelLDMInsert {
     pub level_id: Uuid,
     pub ldm_id: i32,
-    pub is_allowed: Option<bool>,
+    pub id_type: LevelLDMType,
+    pub status: LevelLDMStatus,
     pub description: Option<String>,
     pub added_by: Uuid
 }
@@ -66,26 +100,28 @@ pub struct LevelLDMInsert {
 #[diesel(table_name = level_ldms, check_for_backend(Pg))]
 pub struct LevelLDMUpdate {
     pub ldm_id: Option<i32>,
-    pub is_allowed: Option<bool>,
+    pub id_type: Option<LevelLDMType>,
+    pub status: Option<LevelLDMStatus>,
     pub description: Option<Option<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct LevelLDMBody {
     pub ldm_id: i32,
-    pub is_allowed: Option<bool>,
+    pub id_type: LevelLDMType,
+    pub status: LevelLDMStatus,
     pub description: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct LevelLDMQueryOptions {
     pub level_id: Option<Uuid>,
-    pub is_allowed: Option<bool>,
-    pub description: Option<Option<String>>,
+    pub type_filter: Option<LevelLDMType>,
+    pub status_filter: Option<LevelLDMStatus>,
+    pub description_filter: Option<Option<String>>,
     pub added_by: Option<Uuid>
 }
 
-#[macro_export]
 macro_rules! arepl_apply_ldm_filters {
     ($query:expr, $opts:expr) => {{
         let filters = &$opts;
@@ -94,13 +130,16 @@ macro_rules! arepl_apply_ldm_filters {
         if let Some(id) = filters.level_id {
             new_query = new_query.filter(level_ldms::level_id.eq(id))
         }
-        if let Some(allowed) = filters.is_allowed {
-            new_query = new_query.filter(level_ldms::is_allowed.eq(allowed))
-        }
         if let Some(user) = filters.added_by {
             new_query = new_query.filter(level_ldms::added_by.eq(user))
         }
-        if let Some(desc) = &filters.description {
+        if let Some(ldm_type) = &filters.type_filter {
+            new_query = new_query.filter(level_ldms::id_type.eq(ldm_type))
+        }
+        if let Some(status) = &filters.status_filter {
+            new_query = new_query.filter(level_ldms::status.eq(status))
+        }
+        if let Some(desc) = &filters.description_filter {
             match desc {
                 Some(desc) => new_query = new_query.filter(level_ldms::description.ilike(desc)),
                 None => new_query = new_query.filter(level_ldms::description.is_null())
@@ -143,7 +182,8 @@ impl LevelLDM {
                     id: ldm.id,
                     level_id: ldm.level_id,
                     ldm_id: ldm.ldm_id,
-                    is_allowed: ldm.is_allowed,
+                    id_type: ldm.id_type,
+                    status: ldm.status,
                     added_by: moderator,
                     description: ldm.description,
                     created_at: ldm.created_at
@@ -161,7 +201,8 @@ impl LevelLDM {
     pub fn create(conn: &mut DbConnection, body: LevelLDMBody, level_id: Uuid, auth: Authenticated) -> Result<LevelLDM, ApiError> {
         let data = LevelLDMInsert {
             level_id,
-            is_allowed: body.is_allowed,
+            status: body.status,
+            id_type: body.id_type,
             ldm_id: body.ldm_id,
             description: body.description,
             added_by: auth.user_id

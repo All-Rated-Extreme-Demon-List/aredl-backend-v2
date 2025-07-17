@@ -1,5 +1,5 @@
 use crate::{
-    aredl::levels::ldms::{LevelLDM, LevelLDMBody, LevelLDMQueryOptions, LevelLDMUpdate},
+    aredl::levels::ldms::{LevelLDM, LevelLDMBody, LevelLDMQueryOptions, LevelLDMUpdate, LevelLDMType, LevelLDMStatus},
     auth::{Authenticated, UserAuth, Permission},
     db::DbAppState,
     error_handler::ApiError,
@@ -23,7 +23,8 @@ use uuid::Uuid;
         ("page" = Option<i64>, Query, description = "The page of the LDM list to fetch."),
         ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page."),
         ("level_id" = Option<Uuid>, Query, description = "The internal ID of the original level to filter by."),
-        ("is_allowed" = Option<bool>, Query, description = "Whether to filter by allowed or banned LDMs."),
+        ("type_filter" = Option<LevelLDMType>, Query, description = "The type of LDM to filter by."),
+        ("status_filter" = Option<LevelLDMStatus>, Query, description = "The status of an LDM to filter by."),
         ("description" = Option<String>, Query, description = "Filter for the description of this LDM. Use SQL LIKE syntax."),
         ("added_by" = Option<Uuid>, Query, description = "Filter by the moderator that added an LDM."),
     ),

@@ -3,6 +3,14 @@
 pub mod arepl {
     pub mod sql_types {
         #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+        #[diesel(postgres_type(name = "custom_id_status", schema = "arepl"))]
+        pub struct CustomIdStatus;
+
+        #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+        #[diesel(postgres_type(name = "custom_id_type", schema = "arepl"))]
+        pub struct CustomIdType;
+
+        #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
         #[diesel(postgres_type(name = "submission_status"))]
         pub struct SubmissionStatus;
     }
@@ -15,14 +23,19 @@ pub mod arepl {
     }
 
     diesel::table! {
+        use diesel::sql_types::*;
+        use super::sql_types::CustomIdType;
+        use super::sql_types::CustomIdStatus;
+
         arepl.level_ldms (id) {
             id -> Uuid,
             level_id -> Uuid,
             ldm_id -> Int4,
-            is_allowed -> Bool,
             added_by -> Uuid,
             description -> Nullable<Varchar>,
             created_at -> Timestamptz,
+            id_type -> CustomIdType,
+            status -> CustomIdStatus,
         }
     }
 
