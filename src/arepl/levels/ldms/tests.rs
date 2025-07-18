@@ -103,7 +103,7 @@ async fn delete_ldm() {
     let ldm = create_test_ldm(&mut conn, level_id, user_id).await;
 
     let req = test::TestRequest::delete()
-        .uri(format!("/arepl/slevels/ldms/{}", ldm).as_str())
+        .uri(format!("/arepl/levels/ldms/{}", ldm).as_str())
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
     let resp = test::call_service(&app, req).await;
