@@ -1,14 +1,26 @@
-use crate::aredl::records::{PublicRecordResolved, PublicRecordUnresolved};
+use crate::aredl::records::{PublicRecordResolved, PublicRecordUnresolved, PublicRecordResolvedWithCountry};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::schema::{aredl::records, users};
-use crate::users::BaseUser;
+use crate::users::{BaseUser, BaseUserWithCountry};
 use actix_web::web;
 use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl, SelectableHelper};
 use std::sync::Arc;
 use uuid::Uuid;
 
 impl PublicRecordResolved {
+    pub fn from_data(record: PublicRecordUnresolved, user: BaseUser) -> Self {
+        Self {
+            id: record.id,
+            submitted_by: user,
+            mobile: record.mobile,
+            video_url: record.video_url,
+            created_at: record.created_at,
+        }
+    }
+}
+
+impl PublicRecordResolvedWithCountry {
     pub fn find_all_by_level(
         db: web::Data<Arc<DbAppState>>,
         level_id: Uuid,
@@ -19,8 +31,8 @@ impl PublicRecordResolved {
             .inner_join(users::table.on(records::submitted_by.eq(users::id)))
             .filter(users::ban_level.le(1))
             .order(records::placement_order.asc())
-            .select((PublicRecordUnresolved::as_select(), BaseUser::as_select()))
-            .load::<(PublicRecordUnresolved, BaseUser)>(&mut db.connection()?)?;
+            .select((PublicRecordUnresolved::as_select(), BaseUserWithCountry::as_select()))
+            .load::<(PublicRecordUnresolved, BaseUserWithCountry)>(&mut db.connection()?)?;
 
         let records_resolved = records
             .into_iter()
@@ -30,7 +42,7 @@ impl PublicRecordResolved {
         Ok(records_resolved)
     }
 
-    pub fn from_data(record: PublicRecordUnresolved, user: BaseUser) -> Self {
+    pub fn from_data(record: PublicRecordUnresolved, user: BaseUserWithCountry) -> Self {
         Self {
             id: record.id,
             submitted_by: user,

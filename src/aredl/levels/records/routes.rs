@@ -1,5 +1,5 @@
 use crate::aredl::levels::id_resolver::resolve_level_id;
-use crate::aredl::records::PublicRecordResolved;
+use crate::aredl::records::{PublicRecordResolvedWithCountry};
 use crate::aredl::records::Record;
 use crate::cache_control::CacheController;
 use crate::db::DbAppState;
@@ -17,7 +17,7 @@ use utoipa::OpenApi;
         ("level_id" = String, description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
-        (status = 200, body = [PublicRecordResolved])
+        (status = 200, body = [PublicRecordResolvedWithCountry])
     ),
 )]
 #[get("", wrap = "CacheController::public_with_max_age(900)")]
@@ -27,7 +27,7 @@ async fn find_all(
 ) -> Result<HttpResponse, ApiError> {
     let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
     let records =
-        web::block(move || PublicRecordResolved::find_all_by_level(db, level_id)).await??;
+        web::block(move || PublicRecordResolvedWithCountry::find_all_by_level(db, level_id)).await??;
     Ok(HttpResponse::Ok().json(records))
 }
 
@@ -39,7 +39,7 @@ async fn find_all(
     components(
         schemas(
             Record,
-            PublicRecordResolved,
+            PublicRecordResolvedWithCountry,
         )
     ),
     paths(
