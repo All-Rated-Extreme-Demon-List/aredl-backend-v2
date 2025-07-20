@@ -3,7 +3,7 @@ use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::{arepl::levels, arepl::records, users};
-use crate::users::BaseUser;
+use crate::users::{BaseUser, BaseUserWithCountry};
 use actix_web::web;
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
@@ -125,6 +125,7 @@ pub struct PublicRecordTemplate<T> {
 
 pub type PublicRecordUnresolved = PublicRecordTemplate<Uuid>;
 pub type PublicRecordResolved = PublicRecordTemplate<BaseUser>;
+pub type PublicRecordResolvedWithCountry = PublicRecordTemplate<BaseUserWithCountry>;
 
 #[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
 #[diesel(table_name=records, check_for_backend(Pg))]
