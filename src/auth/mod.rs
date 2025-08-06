@@ -4,7 +4,7 @@ mod authenticated;
 mod discord;
 mod logout;
 mod middleware;
-mod permission;
+pub mod permission;
 mod routes;
 mod tests;
 mod token;

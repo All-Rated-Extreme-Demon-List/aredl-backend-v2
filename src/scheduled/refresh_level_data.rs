@@ -105,31 +105,6 @@ pub async fn start_level_data_refresher(db: Arc<DbAppState>) {
                 }
             }
 
-            if let Ok(list) = arepl::levels::table
-                .left_join(
-                    arepl::last_gddl_update::table
-                        .on(arepl::last_gddl_update::id.eq(arepl::levels::id)),
-                )
-                .filter(
-                    arepl::last_gddl_update::updated_at
-                        .is_null()
-                        .or(arepl::last_gddl_update::updated_at.lt(one_day_ago)),
-                )
-                .select((
-                    arepl::levels::id,
-                    arepl::levels::level_id,
-                    arepl::levels::two_player,
-                ))
-                .load::<(Uuid, i32, bool)>(&mut conn)
-            {
-                for (id, level_id, two_p) in list {
-                    tokio::time::sleep(Duration::from_secs(5)).await;
-                    if let Err(e) = arepl_update_gddl_data(&mut conn, id, level_id, two_p).await {
-                        tracing::error!("AREPL GDDL {} failed: {}", level_id, e);
-                    }
-                }
-            }
-
             let now = Utc::now();
             let next = schedule.upcoming(Utc).next().unwrap();
             let duration = next - now;
@@ -156,13 +131,29 @@ async fn aredl_update_gddl_data(
     two_player: bool,
 ) -> Result<(), ApiError> {
     let url = format!("https://gdladder.com/api/level/{}", level_id);
-    let response = reqwest::get(&url)
+
+    let client = reqwest::Client::builder()
+        .user_agent("AredlBackend/2.0 (+https://api.aredl.net)")
+        .build()
+        .map_err(|e| {
+            ApiError::new(
+                400,
+                format!("Failed to build HTTP client: {:?}", e).as_str(),
+            )
+        })?;
+
+    let response = client
+        .get(&url)
+        .send()
         .await
-        .map_err(|e| ApiError::new(400, format!("Failed to request gddl: {}", e).as_str()))?;
+        .map_err(|e| ApiError::new(400, &format!("Request failed: {:?}", e)))?
+        .error_for_status()
+        .map_err(|e| ApiError::new(400, &format!("HTTP error: {:?}", e)))?;
+
     let data: GDDLResponse = response
         .json()
         .await
-        .map_err(|e| ApiError::new(400, format!("Failed to request gddl: {}", e).as_str()))?;
+        .map_err(|e| ApiError::new(400, format!("Failed to request gddl: {:?}", e).as_str()))?;
 
     let rating = match (two_player, data.two_player_rating, data.rating) {
         (true, Some(two_player_rating), _) => Some(two_player_rating),
@@ -184,44 +175,6 @@ async fn aredl_update_gddl_data(
         .on_conflict(aredl::last_gddl_update::id)
         .do_update()
         .set(aredl::last_gddl_update::updated_at.eq(Utc::now()))
-        .execute(conn)?;
-
-    Ok(())
-}
-
-async fn arepl_update_gddl_data(
-    conn: &mut DbConnection,
-    id: Uuid,
-    level_id: i32,
-    two_player: bool,
-) -> Result<(), ApiError> {
-    let url = format!("https://gdladder.com/api/level/{}", level_id);
-    let response = reqwest::get(&url)
-        .await
-        .map_err(|e| ApiError::new(400, format!("Failed to request gddl: {}", e).as_str()))?;
-    let data: GDDLResponse = response
-        .json()
-        .await
-        .map_err(|e| ApiError::new(400, format!("Failed to request gddl: {}", e).as_str()))?;
-
-    let rating = match (two_player, data.two_player_rating) {
-        (false, _) => data.rating,
-        (true, rating) => rating,
-    };
-
-    diesel::update(arepl::levels::table)
-        .filter(arepl::levels::id.eq(id))
-        .set(arepl::levels::gddl_tier.eq(rating))
-        .execute(conn)?;
-
-    diesel::insert_into(arepl::last_gddl_update::table)
-        .values((
-            arepl::last_gddl_update::id.eq(id),
-            arepl::last_gddl_update::updated_at.eq(Utc::now()),
-        ))
-        .on_conflict(arepl::last_gddl_update::id)
-        .do_update()
-        .set(arepl::last_gddl_update::updated_at.eq(Utc::now()))
         .execute(conn)?;
 
     Ok(())

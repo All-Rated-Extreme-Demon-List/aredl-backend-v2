@@ -1,6 +1,11 @@
+use crate::{
+    arepl::submissions::{history::SubmissionHistory, SubmissionStatus},
+    schema::arepl::submission_history,
+};
 #[cfg(test)]
 use crate::{db::DbConnection, schema::arepl::submissions};
 
+use chrono::Utc;
 #[cfg(test)]
 use diesel::{ExpressionMethods, RunQueryDsl};
 
@@ -28,4 +33,26 @@ pub async fn create_test_submission(
         .returning(submissions::id)
         .get_result::<Uuid>(conn)
         .expect("Failed to create test submission!")
+}
+
+pub async fn insert_history_entry(
+    submission_id: Uuid,
+    reviewer_id: Option<Uuid>,
+    status: SubmissionStatus,
+    conn: &mut DbConnection,
+) {
+    let history = SubmissionHistory {
+        id: Uuid::new_v4(),
+        submission_id,
+        record_id: None,
+        reviewer_notes: None,
+        status,
+        timestamp: Utc::now(),
+        user_notes: None,
+        reviewer_id,
+    };
+    diesel::insert_into(submission_history::table)
+        .values(&history)
+        .execute(conn)
+        .expect("Failed to insert submission history");
 }

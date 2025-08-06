@@ -1,9 +1,10 @@
-use crate::aredl::leaderboard::{LeaderboardOrder, MatviewRefreshLog};
+use crate::aredl::leaderboard::LeaderboardOrder;
 use crate::aredl::levels::BaseLevel;
 use crate::clans::Clan;
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
+use crate::scheduled::refresh_matviews::MatviewRefreshLog;
 use crate::schema::{
     aredl::{clans_leaderboard, levels},
     clans, matview_refresh_log,

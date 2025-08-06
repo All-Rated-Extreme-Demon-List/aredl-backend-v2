@@ -10,10 +10,15 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::task;
 
-use crate::aredl::leaderboard::MatviewRefreshLog;
+#[derive(Queryable, Insertable, Debug)]
+#[diesel(table_name = matview_refresh_log, check_for_backend(Pg))]
+pub struct MatviewRefreshLog {
+    pub view_name: String,
+    pub last_refresh: chrono::DateTime<Utc>,
+}
 
-pub async fn start_leaderboard_refresher(db: Arc<DbAppState>) {
-    let schedule = Schedule::from_str(&get_secret("LEADERBOARD_REFRESH_SCHEDULE")).unwrap();
+pub async fn start_matviews_refresher(db: Arc<DbAppState>) {
+    let schedule = Schedule::from_str(&get_secret("MATVIEWS_REFRESH_SCHEDULE")).unwrap();
     let schedule = Arc::new(schedule);
     let db_clone = db.clone();
 
@@ -22,13 +27,14 @@ pub async fn start_leaderboard_refresher(db: Arc<DbAppState>) {
         "user_leaderboard",
         "country_leaderboard",
         "clans_leaderboard",
+        "submission_stats",
     ];
 
     task::spawn(async move {
         loop {
             tokio::time::sleep(Duration::from_secs(10)).await;
 
-            tracing::info!("Refreshing leaderboard");
+            tracing::info!("Refreshing materialized views");
 
             let conn_result = db_clone.connection();
 

@@ -30,8 +30,8 @@ mod users;
 use crate::cache_control::CacheController;
 use crate::docs::ApiDoc;
 use crate::scheduled::data_cleaner::start_data_cleaner;
-use crate::scheduled::refresh_leaderboard::start_leaderboard_refresher;
 use crate::scheduled::refresh_level_data::start_level_data_refresher;
+use crate::scheduled::refresh_matviews::start_matviews_refresher;
 use crate::scheduled::shifts_creator::start_recurrent_shift_creator;
 use actix_cors::Cors;
 use actix_governor::GovernorConfigBuilder;
@@ -108,7 +108,7 @@ async fn main() -> std::io::Result<()> {
 
     db_app_state.run_pending_migrations();
 
-    start_leaderboard_refresher(db_app_state.clone()).await;
+    start_matviews_refresher(db_app_state.clone()).await;
 
     start_data_cleaner(db_app_state.clone(), notify_tx.clone()).await;
 

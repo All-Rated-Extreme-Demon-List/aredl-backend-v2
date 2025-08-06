@@ -6,7 +6,7 @@ use utoipa::OpenApi;
 use crate::{
     arepl::{
         records::Record, submissions::{
-            actions, patch::{SubmissionPatchMod, SubmissionPatchUser}, status, post::SubmissionInsert, Submission, SubmissionPage,  SubmissionResolved, SubmissionStatus
+            actions, patch::{SubmissionPatchMod, SubmissionPatchUser}, post::SubmissionInsert, statistics, status, Submission, SubmissionPage, SubmissionResolved, SubmissionStatus
         }
     },
     auth::{Authenticated, Permission, UserAuth}, 
@@ -121,6 +121,7 @@ async fn delete(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticat
         (path = "/", api=queue::ApiDoc),
         (path = "/", api=resolved::ApiDoc),
         (path = "/status", api=status::ApiDoc),
+        (path = "/statistics", api=statistics::ApiDoc),
     ),
     components(
         schemas(
@@ -144,6 +145,7 @@ pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/submissions")
+            .configure(statistics::init_routes)
             .configure(actions::init_routes)
             .configure(status::init_routes)
             .configure(history::init_routes)

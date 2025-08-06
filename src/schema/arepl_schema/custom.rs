@@ -216,3 +216,17 @@ diesel::allow_tables_to_appear_in_same_query!(levels, submissions_with_priority)
 diesel::allow_tables_to_appear_in_same_query!(users, submissions_with_priority);
 diesel::allow_tables_to_appear_in_same_query!(users, submissions_enabled);
 diesel::allow_tables_to_appear_in_same_query!(users, level_ldms);
+
+diesel::table! {
+    arepl.submission_stats (day, moderator_id) {
+        day -> Date,
+        moderator_id -> Nullable<Uuid>,
+        submitted -> Int8,
+        accepted -> Int8,
+        denied -> Int8,
+        under_consideration -> Int8,
+    }
+}
+
+diesel::joinable!(submission_stats -> users (moderator_id));
+diesel::allow_tables_to_appear_in_same_query!(submission_stats, users);

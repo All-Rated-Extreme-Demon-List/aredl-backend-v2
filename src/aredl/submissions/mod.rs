@@ -1,4 +1,5 @@
 mod actions;
+mod guidelines;
 mod history;
 mod model;
 mod patch;
@@ -6,8 +7,8 @@ mod post;
 mod queue;
 mod resolved;
 mod routes;
+mod statistics;
 mod status;
-mod guidelines;
 
 #[cfg(test)]
 pub mod test_utils;

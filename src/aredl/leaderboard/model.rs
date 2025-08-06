@@ -3,6 +3,7 @@ use crate::clans::Clan;
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
+use crate::scheduled::refresh_matviews::MatviewRefreshLog;
 use crate::schema::{
     aredl::{levels, user_leaderboard},
     clans, matview_refresh_log, users,
@@ -90,13 +91,6 @@ pub struct LeaderboardQueryOptions {
     pub country_filter: Option<i32>,
     pub clan_filter: Option<Uuid>,
     pub order: Option<LeaderboardOrder>,
-}
-
-#[derive(Queryable, Insertable, Debug)]
-#[diesel(table_name = matview_refresh_log, check_for_backend(Pg))]
-pub struct MatviewRefreshLog {
-    pub view_name: String,
-    pub last_refresh: chrono::DateTime<Utc>,
 }
 
 impl LeaderboardPage {
