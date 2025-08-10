@@ -58,7 +58,7 @@ jobs:
       run: |
         rclone --config ~/.config/rclone/rclone.conf copy \
         ${{ env.BACKUP_FILENAME }} \
-        gdrive_drive:/ \
+        gdrive:/ \
         --quiet \
         --drive-chunk-size 64M \
         --stats 0 
