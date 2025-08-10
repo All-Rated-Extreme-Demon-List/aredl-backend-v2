@@ -279,16 +279,12 @@ jobs:
         - name: Cleanup SSH key
           run: rm -rf ~/.ssh
           if: always()
-          
+
   migrate-dev-db:
     if: github.ref == 'refs/heads/dev'
     needs: deploy-dev
-    runs-on: ubuntu-latest
-    steps:
-      - name: Run migrate-dev-db workflow
-        uses: ./.github/workflows/migrate-dev-db.yml
-        with:
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
-          DISCORD_CLIENT_SECRET: ${{ secrets.DISCORD_CLIENT_SECRET }}
-          DISCORD_REDIRECT_URI: ${{ secrets.DISCORD_REDIRECT_URI }}
+    uses: ./.github/workflows/migrate-dev-db.yml
+    secrets:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_KEY:  ${{ secrets.DEPLOY_KEY }}
