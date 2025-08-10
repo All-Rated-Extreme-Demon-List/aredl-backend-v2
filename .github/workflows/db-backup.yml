@@ -44,29 +44,14 @@ jobs:
       run: |
         scp "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/tmp/${{ env.BACKUP_FILENAME }}" .
 
-    - name: Configure rclone for Drive
-      env:
-        RCLONE_CONFIG_PASS: ''
-      run: |
-        cat <<EOF > /tmp/rclone.conf
-        [gdrive_drive]
-        type = drive
-        client_id = ${{ secrets.GDRIVE_CLIENT_ID }}
-        client_secret = ${{ secrets.GDRIVE_CLIENT_SECRET }}
-        token = ${{ secrets.GDRIVE_TOKEN }}
-        scope = drive.file
-        root_folder_id = ${{ secrets.GDRIVE_FOLDER_ID }}
-        EOF
-          
-
-    - name: Upload backup to Drive
-      run: |
-        rclone --config /tmp/rclone.conf copy \
-        ${{ env.BACKUP_FILENAME }} \
-        gdrive_drive:/ \
-        --quiet \
-        --drive-chunk-size 64M \
-        --stats 0 
+    - name: Upload to gdrive
+      uses: adityak74/google-drive-upload-git-action@main
+      with:
+        credentials: ${{ secrets.GDRIVE_SA_KEY }}
+        filename: "${{ env.BACKUP_FILENAME }}"
+        folderId: ${{ secrets.GDRIVE_FOLDER_ID }}
+        name: "${{ env.BACKUP_FILENAME }}"
+        overwrite: "true"
 
     - name: Cleanup SSH key
       run: rm -rf ~/.ssh

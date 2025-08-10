@@ -279,80 +279,16 @@ jobs:
         - name: Cleanup SSH key
           run: rm -rf ~/.ssh
           if: always()
+          
   migrate-dev-db:
     if: github.ref == 'refs/heads/dev'
     needs: deploy-dev
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.DEPLOY_KEY }}"      > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }}     >> ~/.ssh/known_hosts
-
-      - name: Stop dev API service
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} '
-            docker service scale aredl_backend_dev_stack_api=0
-          '
-      - name: Wait for dev API to stop
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} '
-            until [ "$(docker service ls \
-                        --filter name=aredl_backend_dev_stack_api \
-                        --format "{{.Replicas}}" | cut -d/ -f1)" -eq 0 ]; do
-              echo "Waiting for aredl_backend_dev_stack_api to fully stop…"
-              sleep 5
-            done
-          '
-
-      - name: Dump prod DB
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} '
-            PROD_DB=$(docker ps --filter label=com.docker.swarm.service.name=aredl_backend_stack_db --format "{{.Names}}")
-            PGUSER=$(docker exec "$PROD_DB" cat /run/secrets/postgres_user)
-            docker exec $PROD_DB bash -c "pg_dump -U $PGUSER -Fc aredl" > /tmp/prod_dump.dump
-          '
-
-      - name: Restore on dev
-        shell: bash
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} <<'EOF'
-            set -euo pipefail
-            DEV_DB=$(docker ps \
-              --filter label=com.docker.swarm.service.name=aredl_backend_dev_stack_db \
-              --format "{{.Names}}")
-            PGUSER=$(docker exec "$DEV_DB" cat /run/secrets/postgres_user)
-
-            docker exec "$DEV_DB" psql -U "$PGUSER" -d postgres -c \
-              "UPDATE pg_database SET datallowconn = false WHERE datname = 'aredl';"
-            docker exec "$DEV_DB" psql -U "$PGUSER" -d postgres -c \
-              "SELECT pg_terminate_backend(pid) \
-              FROM pg_stat_activity \
-              WHERE datname = 'aredl' \
-                AND pid <> pg_backend_pid();"
-
-            docker exec -i "$DEV_DB" bash -c "pg_restore \
-                --no-owner \
-                --clean \
-                --create \
-                --username=\"$PGUSER\" \
-                --dbname=postgres
-            " < /tmp/prod_dump.dump
-
-            docker exec "$DEV_DB" psql -U "$PGUSER" -d postgres -c \
-              "UPDATE pg_database SET datallowconn = true WHERE datname = 'aredl';"
-          EOF
-
-      - name: Start dev API service
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} '
-            docker service scale aredl_backend_dev_stack_api=1
-          '
-
-      - name: Cleanup SSH
-        run: rm -rf ~/.ssh
-        if: always()
+      - name: Run migrate-dev-db workflow
+        uses: ./.github/workflows/migrate-dev-db.yml
+        with:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
+          DISCORD_CLIENT_SECRET: ${{ secrets.DISCORD_CLIENT_SECRET }}
+          DISCORD_REDIRECT_URI: ${{ secrets.DISCORD_REDIRECT_URI }}
