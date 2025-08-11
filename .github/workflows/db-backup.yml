@@ -48,22 +48,17 @@ jobs:
       env:
         RCLONE_CONFIG_PASS: ''
       run: |
-        cat <<EOF > /tmp/rclone.conf
-        [gdrive_drive]
-        type = drive
-        client_id = ${{ secrets.GDRIVE_CLIENT_ID }}
-        client_secret = ${{ secrets.GDRIVE_CLIENT_SECRET }}
-        token = ${{ secrets.GDRIVE_TOKEN }}
-        scope = drive.file
-        root_folder_id = ${{ secrets.GDRIVE_FOLDER_ID }}
-        EOF
-          
+          mkdir -p ~/.config/rclone
+          cat > ~/.config/rclone/rclone.conf << 'EOF'
+          ${{ secrets.GDRIVE_RCLONE_CONFIG }}
+          EOF
+          chmod 600 ~/.config/rclone/rclone.conf          
 
     - name: Upload backup to Drive
       run: |
-        rclone --config /tmp/rclone.conf copy \
+        rclone --config ~/.config/rclone/rclone.conf copy \
         ${{ env.BACKUP_FILENAME }} \
-        gdrive_drive:/ \
+        gdrive:/ \
         --quiet \
         --drive-chunk-size 64M \
         --stats 0 

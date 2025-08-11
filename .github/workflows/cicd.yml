@@ -51,7 +51,6 @@ jobs:
         command: test
 
   generate-code-coverage:
-    needs: test
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -91,7 +90,8 @@ jobs:
             --out Lcov \
             --timeout 120 \
             --ignore-tests \
-            --exclude-files "tools/*" "src/schema/*"
+            --rustflags="-C opt-level=0" \
+            --exclude-files "tools/*" "src/schema/*" "src/scheduled/*" "src/main.rs" "src/docs.rs"
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
@@ -142,9 +142,14 @@ jobs:
             cache-from: type=registry,ref=ghcr.io/${{ env.OWNER_LC  }}/aredl_backend_api:buildcache
             cache-to: type=registry,ref=ghcr.io/${{ env.OWNER_LC  }}/aredl_backend_api:buildcache,mode=max
   
-  deploy:
+  pre_deploy_backup:
     if: github.ref == 'refs/heads/main'
     needs: build-api
+    uses: ./.github/workflows/db-backup.yml
+  
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: [build-api, pre_deploy_backup]
     runs-on: ubuntu-latest
     steps:
         - uses: actions/checkout@v4
@@ -164,6 +169,7 @@ jobs:
             echo "API_DB_PORT=${{ secrets.API_DB_PORT }}" >> .env
             echo "API_NET=api_net" >> .env
             echo "DB_ALIAS=db_prod" >> .env
+            echo "DISCORD_REDIRECT_URI=discord_redirect_uri_prod" >> .env
 
         - name: Copy files
           run: |
@@ -180,6 +186,7 @@ jobs:
             API_DB_PORT=${{ secrets.API_DB_PORT }} \
             API_NET=api_net \
             DB_ALIAS=db_prod \
+            DISCORD_REDIRECT_URI=discord_redirect_uri_prod \
             docker stack deploy \
             --with-registry-auth \
             --compose-file docker-stack.yml \
@@ -246,6 +253,7 @@ jobs:
             echo "API_DB_PORT=${{ secrets.DEV_API_DB_PORT }}" >> .env
             echo "API_NET=api_net_dev" >> .env
             echo "DB_ALIAS=db_dev" >> .env
+            echo "DISCORD_REDIRECT_URI=discord_redirect_uri_dev" >> .env
 
         - name: Copy files
           run: |
@@ -262,6 +270,7 @@ jobs:
             API_DB_PORT=${{ secrets.DEV_API_DB_PORT }} \
             API_NET=api_net_dev \
             DB_ALIAS=db_dev \
+            DISCORD_REDIRECT_URI=discord_redirect_uri_dev \
             docker stack deploy \
             --with-registry-auth \
             --compose-file ~/dev/docker-stack.yml \
@@ -270,48 +279,12 @@ jobs:
         - name: Cleanup SSH key
           run: rm -rf ~/.ssh
           if: always()
+
   migrate-dev-db:
     if: github.ref == 'refs/heads/dev'
     needs: deploy-dev
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.DEPLOY_KEY }}"      > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }}     >> ~/.ssh/known_hosts
-
-      - name: Stop dev API service
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} '
-            docker service scale aredl_backend_dev_stack_api=0
-          '
-
-      - name: Dump prod DB
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} '
-            PROD_DB=$(docker ps --filter label=com.docker.swarm.service.name=aredl_backend_stack_db --format "{{.Names}}")
-            PGUSER=$(docker exec "$PROD_DB" cat /run/secrets/postgres_user)
-            docker exec $PROD_DB bash -c "pg_dump -U $PGUSER -Fc aredl" > /tmp/prod_dump.dump
-          '
-
-      - name: Restore on dev
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} '
-            DEV_DB=$(docker ps --filter label=com.docker.swarm.service.name=aredl_backend_dev_stack_db --format "{{.Names}}")
-            PGUSER=$(docker exec "$DEV_DB" cat /run/secrets/postgres_user)
-            docker exec -i $DEV_DB bash -c "pg_restore --clean --if-exists -U $PGUSER -d aredl" < /tmp/prod_dump.dump
-          '
-
-      - name: Start dev API service
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} '
-            docker service scale aredl_backend_dev_stack_api=1
-          '
-
-      - name: Cleanup SSH
-        run: rm -rf ~/.ssh
-        if: always()
+    uses: ./.github/workflows/migrate-dev-db.yml
+    secrets:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_KEY:  ${{ secrets.DEPLOY_KEY }}
