@@ -120,16 +120,10 @@ struct ServerAddon;
 
 impl Modify for ServerAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
-        let url = if cfg!(debug_assertions) {
-            format!("http://127.0.0.1:{}", get_secret("PORT")).to_string()
-        } else {
-            "https://api.aredl.net/v2/".to_string()
-        };
-
         let mut server: Server = Default::default();
-        server.url = url.to_string();
+        server.url = std::env::var("DOCS_API_SERVER")
+            .unwrap_or_else(|_| format!("http://127.0.0.1:{}", get_secret("PORT")).to_string());
         server.description = Some("API Server".to_string());
-
         openapi.servers = Some(vec![server]);
     }
 }
