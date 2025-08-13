@@ -107,12 +107,21 @@ impl SubmissionPatchUser {
 
         let resub = old_submission.status == SubmissionStatus::Denied;
 
-        // disallow resubmissions if submissions are disabled
-        if resub && !SubmissionsEnabled::is_enabled(conn)? {
-            return Err(ApiError::new(
-                400,
-                "Submissions are closed, please wait to resubmit this record!"
-            ))
+        if resub {
+            if !SubmissionsEnabled::is_enabled(conn)? {
+                return Err(ApiError::new(
+                    400,
+                    "Submissions are closed, please wait to resubmit this record!"
+                ))
+            }
+            let submitter_ban = users::table
+                .filter(users::id.eq(user))
+                .select(users::ban_level)
+                .first::<i32>(conn)?;
+
+            if submitter_ban >= 2 {
+                return Err(ApiError::new(403, "You are banned from resubmitting records."));
+            }
         }
 
         let level_id = match patch.level_id {

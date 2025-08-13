@@ -1,9 +1,9 @@
 use crate::arepl::levels::test_utils::create_test_level;
-use crate::arepl::submissions::test_utils::create_test_submission;
+use crate::arepl::submissions::{test_utils::create_test_submission, SubmissionStatus};
 #[cfg(test)]
 use crate::{
     auth::{create_test_token, Permission},
-    schema::{roles, user_roles, users},
+    schema::{roles, user_roles, users, arepl::submissions},
 };
 #[cfg(test)]
 use crate::{test_utils::*, users::test_utils::create_test_user};
@@ -628,4 +628,35 @@ async fn patch_submission_mod_errors() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_client_error());
+}
+
+#[actix_web::test]
+async fn banned_player_resubmission() {
+    let (app, mut conn, auth, _) = init_test_app().await;
+    let (user, _) = create_test_user(&mut conn, None).await;
+    let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
+    let level = create_test_level(&mut conn).await;
+    let submission = create_test_submission(level, user, &mut conn).await;
+
+    diesel::update(submissions::table)
+        .filter(submissions::id.eq(submission))
+        .set(submissions::status.eq(SubmissionStatus::Denied))
+        .execute(&mut conn)
+        .unwrap();
+
+    diesel::update(users::table)
+        .filter(users::id.eq(user))
+        .set(users::ban_level.eq(2))
+        .execute(&mut conn)
+        .unwrap();
+
+    let req = test::TestRequest::patch()
+        .uri(&format!("/arepl/submissions/{submission}"))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&json!({}))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_client_error());
+
+
 }
