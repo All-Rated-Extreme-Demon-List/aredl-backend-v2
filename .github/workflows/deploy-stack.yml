@@ -67,15 +67,24 @@ jobs:
             echo "DISCORD_REDIRECT_URI=${{ inputs.discord_redirect_uri }}"
           } >> .env
 
+      - name: Check if remote directory exists
+        run: |
+          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" "\
+            REMOTE_PATH='${{ inputs.remote_path }}'; \
+            REMOTE_PATH=\${REMOTE_PATH/#\~/\$HOME}; \
+            mkdir -p \"\${REMOTE_PATH}\""
+
       - name: Copy files
         run: |
-          scp "docker-stack.yml" "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ inputs.remote_path }}"
-          scp .env "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ inputs.remote_path }}"
+          scp docker-stack.yml "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ inputs.remote_path }}/docker-stack.yml"
+          scp .env "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ inputs.remote_path }}/.env"
 
       - name: Deploy stack
         run: |
           ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" "\
-            docker login ghcr.io -u '${{ secrets.GHCR_USERNAME }}' -p '${{ secrets.GHCR_TOKEN }}' && \
+            docker login ghcr.io -u '${{ secrets.GHCR_USERNAME }}' --password-stdin <<< '${{ secrets.GHCR_TOKEN }}' && \
+            REMOTE_PATH='${{ inputs.remote_path }}'; \
+            REMOTE_PATH=\${REMOTE_PATH/#\~/\$HOME}; \
             COMMIT_HASH='${{ github.sha }}' \
             API_HOST='${{ secrets.API_HOST }}' \
             API_PORT='${{ secrets.API_PORT }}' \
@@ -86,7 +95,7 @@ jobs:
             DISCORD_REDIRECT_URI='${{ inputs.discord_redirect_uri }}' \
             docker stack deploy \
               --with-registry-auth \
-              --compose-file '${{ inputs.remote_path }}/docker-stack.yml' \
+              --compose-file \"\${REMOTE_PATH}/docker-stack.yml\" \
               '${{ inputs.stack_name }}'"
 
       - name: Cleanup SSH key
