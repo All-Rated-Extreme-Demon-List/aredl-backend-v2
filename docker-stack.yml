@@ -67,14 +67,10 @@ services:
         no-file: "true"
         loki-pipeline-stages: |
           - json
-          - json:
-              expressions:
-                http: http
-            source: span
-          - json:
-              expressions:
-                http_method: method
-            source: http
+          - template:
+              source: span
+              template: '{{ index . "http.method" }}'
+              dest: http_method
           - labels:
               http_method:
     depends_on:
