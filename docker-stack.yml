@@ -66,7 +66,8 @@ services:
         loki-url: "http://127.0.0.1:3100/loki/api/v1/push"
         no-file: "true"
         loki-pipeline-stages: |
-          - json
+          - json:
+              drop_malformed: true
           - template:
               source: span
               template: '{{ index . "http.method" }}'
