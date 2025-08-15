@@ -39,6 +39,9 @@ services:
     environment:
       HOST: "0.0.0.0"
       PORT: ${API_PORT}
+      DOCS_API_SERVER: ${DOCS_API_SERVER}
+      
+      PEMONLIST_API_URL: https://pemonlist.com/api/player
 
       JWT_SECRET: /run/secrets/jwt_secret
 
@@ -61,10 +64,11 @@ services:
       driver: loki
       options:
         loki-url: "http://127.0.0.1:3100/loki/api/v1/push"
+        no-file: "true"
         loki-pipeline-stages: |
           - json:
               expressions:
-                http_method: span.http.method
+                http_method: 'span."http.method"'
           - labels:
               http_method:
     depends_on:
@@ -75,7 +79,8 @@ services:
       - jwt_secret
       - discord_client_id
       - discord_client_secret
-      - discord_redirect_uri
+      - source: ${DISCORD_REDIRECT_URI}
+        target: discord_redirect_uri
       - leaderboard_refresh_schedule
       - level_data_refresh_schedule
       - recurring_shifts_schedule
@@ -101,7 +106,9 @@ secrets:
     external: true
   discord_client_secret:
     external: true
-  discord_redirect_uri:
+  discord_redirect_uri_prod:
+    external: true
+  discord_redirect_uri_dev:
     external: true
   leaderboard_refresh_schedule:
     external: true

@@ -1,0 +1,103 @@
+name: Deploy docker stack to host
+
+on:
+  workflow_call:
+    inputs:
+      stack_name:
+        required: true
+        type: string
+      remote_path:
+        required: true
+        type: string
+      docs_api_server:
+        required: true
+        type: string
+      api_net:
+        required: true
+        type: string
+      db_alias:
+        required: true
+        type: string
+      discord_redirect_uri:
+        required: true
+        type: string
+
+
+    secrets:
+      DEPLOY_HOST:
+        required: true
+      DEPLOY_USER:
+        required: true
+      DEPLOY_KEY:
+        required: true
+      GHCR_USERNAME:
+        required: true
+      GHCR_TOKEN:
+        required: true
+      API_HOST:
+        required: true
+      API_PORT:
+        required: true
+      API_DB_PORT:
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Create env file
+        run: |
+          {
+            echo "COMMIT_HASH=${{ github.sha }}"
+            echo "API_HOST=${{ secrets.API_HOST }}"
+            echo "API_PORT=${{ secrets.API_PORT }}"
+            echo "API_DB_PORT=${{ secrets.API_DB_PORT }}"
+            echo "DOCS_API_SERVER=${{ inputs.docs_api_server }}"
+            echo "API_NET=${{ inputs.api_net }}"
+            echo "DB_ALIAS=${{ inputs.db_alias }}"
+            echo "DISCORD_REDIRECT_URI=${{ inputs.discord_redirect_uri }}"
+          } >> .env
+
+      - name: Check if remote directory exists
+        run: |
+          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" "\
+            REMOTE_PATH='${{ inputs.remote_path }}'; \
+            REMOTE_PATH=\${REMOTE_PATH/#\~/\$HOME}; \
+            mkdir -p \"\${REMOTE_PATH}\""
+
+      - name: Copy files
+        run: |
+          scp docker-stack.yml "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ inputs.remote_path }}/docker-stack.yml"
+          scp .env "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ inputs.remote_path }}/.env"
+
+      - name: Deploy stack
+        run: |
+          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" "\
+            docker login ghcr.io -u '${{ secrets.GHCR_USERNAME }}' --password-stdin <<< '${{ secrets.GHCR_TOKEN }}' && \
+            REMOTE_PATH='${{ inputs.remote_path }}'; \
+            REMOTE_PATH=\${REMOTE_PATH/#\~/\$HOME}; \
+            COMMIT_HASH='${{ github.sha }}' \
+            API_HOST='${{ secrets.API_HOST }}' \
+            API_PORT='${{ secrets.API_PORT }}' \
+            API_DB_PORT='${{ secrets.API_DB_PORT }}' \
+            DOCS_API_SERVER='${{ inputs.docs_api_server }}' \
+            API_NET='${{ inputs.api_net }}' \
+            DB_ALIAS='${{ inputs.db_alias }}' \
+            DISCORD_REDIRECT_URI='${{ inputs.discord_redirect_uri }}' \
+            docker stack deploy \
+              --with-registry-auth \
+              --compose-file \"\${REMOTE_PATH}/docker-stack.yml\" \
+              '${{ inputs.stack_name }}'"
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -rf ~/.ssh
