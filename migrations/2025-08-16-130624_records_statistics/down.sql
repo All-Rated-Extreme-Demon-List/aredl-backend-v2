@@ -1,0 +1,2 @@
+DROP MATERIALIZED VIEW IF EXISTS aredl.record_totals;
+DROP MATERIALIZED VIEW IF EXISTS arepl.record_totals;

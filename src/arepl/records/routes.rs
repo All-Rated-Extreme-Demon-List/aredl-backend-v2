@@ -1,7 +1,7 @@
 use crate::arepl::records::model::{RecordInsert, RecordUpdate};
 use crate::arepl::records::{
-    FullRecordResolved, FullRecordUnresolved, FullRecordUnresolvedDto, FullResolvedRecordPage,
-    FullUnresolvedRecordPage, Record, RecordsQueryOptions,
+    statistics, FullRecordResolved, FullRecordUnresolved, FullRecordUnresolvedDto,
+    FullResolvedRecordPage, FullUnresolvedRecordPage, Record, RecordsQueryOptions,
 };
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::db::DbAppState;
@@ -226,7 +226,8 @@ async fn find_me(
         (name = "AREDL (P) - Records", description = "Endpoints for fetching and managing platformer records")
     ),
     nest(
-        (path = "/pemonlist", api=pemonlist::ApiDoc)
+        (path = "/pemonlist", api=pemonlist::ApiDoc),
+        (path = "/statistics", api=statistics::ApiDoc),
     ),
     components(
         schemas(
@@ -252,6 +253,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/records")
             .configure(pemonlist::init_routes)
+            .configure(statistics::init_routes)
             .service(create)
             .service(update)
             .service(delete)

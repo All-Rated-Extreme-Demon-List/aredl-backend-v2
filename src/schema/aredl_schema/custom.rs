@@ -237,3 +237,13 @@ diesel::table! {
         total -> Int8,
     }
 }
+
+diesel::table! {
+    aredl.record_totals (level_id) {
+        level_id -> Nullable<Uuid>,
+        records -> Int8,
+    }
+}
+
+diesel::joinable!(record_totals -> levels (level_id));
+diesel::allow_tables_to_appear_in_same_query!(record_totals, levels);

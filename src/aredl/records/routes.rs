@@ -1,7 +1,7 @@
 use crate::aredl::records::model::{RecordInsert, RecordUpdate};
 use crate::aredl::records::{
-    FullRecordResolved, FullRecordUnresolved, FullRecordUnresolvedDto, FullResolvedRecordPage,
-    FullUnresolvedRecordPage, Record, RecordsQueryOptions,
+    statistics, FullRecordResolved, FullRecordUnresolved, FullRecordUnresolvedDto,
+    FullResolvedRecordPage, FullUnresolvedRecordPage, Record, RecordsQueryOptions,
 };
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::db::DbAppState;
@@ -209,7 +209,7 @@ async fn find_me(
         level_filter: None,
         mobile_filter: None,
         submitter_filter: Some(authenticated.user_id),
-        reviewer_filter: None
+        reviewer_filter: None,
     };
     let records = web::block(move || {
         FullRecordResolved::find_all(db, page_query.into_inner(), options, true)
@@ -231,6 +231,9 @@ async fn find_me(
             FullRecordUnresolvedDto
         )
     ),
+    nest(
+        (path = "/statistics", api=statistics::ApiDoc)
+    ),
     paths(
         create,
         update,
@@ -246,12 +249,13 @@ pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/records")
+            .configure(statistics::init_routes)
             .service(create)
             .service(update)
             .service(delete)
             .service(find_all)
             .service(find_all_full)
             .service(find_me)
-            .service(find)
+            .service(find),
     );
 }
