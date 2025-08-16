@@ -1,5 +1,4 @@
 mod actions;
-mod guidelines;
 mod history;
 mod model;
 mod patch;
