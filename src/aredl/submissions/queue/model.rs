@@ -6,7 +6,7 @@ use crate::{
 };
 use actix_web::web;
 use chrono::{DateTime, Utc};
-use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl, RunQueryDsl};
+use diesel::{BoolExpressionMethods, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::ToSchema;
@@ -15,7 +15,11 @@ use uuid::Uuid;
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct SubmissionQueue {
     /// The amount of pending submissions in the database.
-    pub levels_in_queue: i32,
+    pub submissions_in_queue: i32,
+    /// The amount of submissions currently under consideration.
+    pub uc_submissions: i32,
+    /// The timestamp of the oldest pending submission in the queue, if any.
+    pub oldest_submission: Option<DateTime<Utc>>,
 }
 
 #[derive(serde::Serialize, utoipa::ToSchema)]
@@ -70,13 +74,27 @@ impl SubmissionQueue {
     pub fn get_queue(db: web::Data<Arc<DbAppState>>) -> Result<Self, ApiError> {
         let conn = &mut db.connection()?;
 
-        let levels = submissions::table
+        let submissions_in_queue = submissions::table
             .filter(submissions::status.eq(SubmissionStatus::Pending))
             .count()
             .get_result::<i64>(conn)? as i32;
 
+        let uc_submissions = submissions::table
+            .filter(submissions::status.eq(SubmissionStatus::UnderConsideration))
+            .count()
+            .get_result::<i64>(conn)? as i32;
+
+        let oldest_submission = submissions::table
+            .filter(submissions::status.eq(SubmissionStatus::Pending))
+            .select(submissions::created_at)
+            .order(submissions::created_at.asc())
+            .first::<DateTime<Utc>>(conn)
+            .optional()?;
+
         Ok(Self {
-            levels_in_queue: levels,
+            submissions_in_queue,
+            uc_submissions,
+            oldest_submission,
         })
     }
 }
