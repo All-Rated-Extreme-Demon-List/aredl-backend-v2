@@ -81,6 +81,7 @@ services:
       - jwt_secret
       - discord_client_id
       - discord_client_secret
+      - discord_bot_token
       - source: ${DISCORD_REDIRECT_URI}
         target: discord_redirect_uri
       - matviews_refresh_schedule
@@ -113,6 +114,8 @@ secrets:
   discord_redirect_uri_prod:
     external: true
   discord_redirect_uri_dev:
+    external: true
+  discord_bot_token:
     external: true
   matviews_refresh_schedule:
     external: true
