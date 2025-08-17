@@ -30,6 +30,7 @@ mod users;
 use crate::cache_control::CacheController;
 use crate::docs::ApiDoc;
 use crate::scheduled::data_cleaner::start_data_cleaner;
+use crate::scheduled::refresh_discord_avatars::start_discord_avatars_refresher;
 use crate::scheduled::refresh_level_data::start_level_data_refresher;
 use crate::scheduled::refresh_matviews::start_matviews_refresher;
 use crate::scheduled::shifts_creator::start_recurrent_shift_creator;
@@ -115,6 +116,8 @@ async fn main() -> std::io::Result<()> {
     start_level_data_refresher(db_app_state.clone()).await;
 
     start_recurrent_shift_creator(db_app_state.clone(), notify_tx.clone()).await;
+
+    start_discord_avatars_refresher(db_app_state.clone()).await;
 
     let auth_app_state = auth::init_app_state().await;
 

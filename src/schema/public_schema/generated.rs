@@ -174,6 +174,7 @@ pub mod public {
             access_valid_after -> Timestamptz,
             created_at -> Timestamptz,
             background_level -> Int4,
+            last_discord_avatar_update -> Nullable<Timestamp>,
         }
     }
 

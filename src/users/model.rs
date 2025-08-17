@@ -4,7 +4,7 @@ use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::{clan_members, clans, permissions, roles, user_roles, users};
 use actix_web::web;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::pg::Pg;
 use diesel::{
     ExpressionMethods, JoinOnDsl, OptionalExtension, PgTextExpressionMethods, QueryDsl,
@@ -108,6 +108,7 @@ pub struct UserUpsert {
     pub discord_avatar: Option<String>,
     pub discord_banner: Option<String>,
     pub discord_accent_color: Option<i32>,
+    pub last_discord_avatar_update: Option<NaiveDateTime>,
 }
 
 #[derive(Debug, Serialize, Deserialize, AsChangeset, ToSchema)]
@@ -118,6 +119,7 @@ pub struct UserUpdateOnLogin {
     pub discord_avatar: Option<String>,
     pub discord_banner: Option<String>,
     pub discord_accent_color: Option<i32>,
+    pub last_discord_avatar_update: Option<NaiveDateTime>,
 }
 
 #[derive(Serialize, Debug, ToSchema)]
@@ -233,6 +235,7 @@ impl User {
                         discord_avatar: user_upsert.discord_avatar,
                         discord_banner: user_upsert.discord_banner,
                         discord_accent_color: user_upsert.discord_accent_color,
+                        last_discord_avatar_update: Some(Utc::now().naive_utc()),
                     })
                     .returning(Self::as_select())
                     .get_result::<Self>(&mut conn)?;

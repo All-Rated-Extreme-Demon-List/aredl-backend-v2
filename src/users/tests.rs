@@ -12,6 +12,7 @@ use crate::{
 };
 #[cfg(test)]
 use actix_web::{test, web};
+use chrono::Utc;
 #[cfg(test)]
 use serde_json::json;
 
@@ -243,6 +244,7 @@ async fn upsert_creates_and_updates_user() {
         discord_avatar: Some("avatar".to_string()),
         discord_banner: None,
         discord_accent_color: None,
+        last_discord_avatar_update: Some(Utc::now().naive_utc()),
     };
 
     let created = User::upsert(db_data.clone(), user_upsert).expect("insert");
@@ -266,6 +268,7 @@ async fn upsert_creates_and_updates_user() {
         discord_avatar: Some("newavatar".to_string()),
         discord_banner: Some("banner".to_string()),
         discord_accent_color: Some(5),
+        last_discord_avatar_update: Some(Utc::now().naive_utc()),
     };
 
     let updated = User::upsert(db_data.clone(), update_upsert).expect("update");

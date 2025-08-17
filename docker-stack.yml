@@ -51,9 +51,11 @@ services:
       DISCORD_CLIENT_ID: /run/secrets/discord_client_id
       DISCORD_CLIENT_SECRET: /run/secrets/discord_client_secret
       DISCORD_REDIRECT_URI: /run/secrets/discord_redirect_uri
+      DISCORD_BOT_TOKEN: /run/secrets/discord_bot_token
 
       MATVIEWS_REFRESH_SCHEDULE: /run/secrets/matviews_refresh_schedule
       LEVEL_DATA_REFRESH_SCHEDULE: /run/secrets/level_data_refresh_schedule
+      DISCORD_AVATARS_REFRESH_SCHEDULE: /run/secrets/discord_avatars_refresh_schedule
       DATA_CLEANER_SCHEDULE: /run/secrets/data_cleaner_schedule
       RECURRING_SHIFTS_SCHEDULE: /run/secrets/recurring_shifts_schedule
 
@@ -84,10 +86,12 @@ services:
       - matviews_refresh_schedule
       - level_data_refresh_schedule
       - recurring_shifts_schedule
+      - discord_avatars_refresh_schedule
       - data_cleaner_schedule
       - google_api_key
       - edel_sheet_id
       - nlw_sheet_id
+      
     networks:
       - api_net
          
@@ -117,6 +121,8 @@ secrets:
   data_cleaner_schedule:
     external: true
   recurring_shifts_schedule:
+    external: true
+  discord_avatars_refresh_schedule:
     external: true
   google_api_key:
     external: true
