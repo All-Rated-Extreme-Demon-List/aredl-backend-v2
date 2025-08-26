@@ -23,7 +23,7 @@ use uuid::Uuid;
 #[diesel(table_name = submission_stats, check_for_backend(Pg))]
 pub struct DailyStats {
     pub day: NaiveDate,
-    pub moderator_id: Option<Uuid>,
+    pub reviewer_id: Option<Uuid>,
     pub submitted: i64,
     pub accepted: i64,
     pub denied: i64,
@@ -70,19 +70,19 @@ impl DailyStatsPage {
     pub fn find<const D: i64>(
         db: web::Data<Arc<DbAppState>>,
         page_query: PageQuery<D>,
-        moderator_id: Option<Uuid>,
+        reviewer_id: Option<Uuid>,
     ) -> Result<Paginated<Self>, ApiError> {
         let conn = &mut db.connection()?;
 
         let build_filtered_query = || {
             let mut q = submission_stats::table
-                .left_join(users::table.on(users::id.nullable().eq(submission_stats::moderator_id)))
+                .left_join(users::table.on(users::id.nullable().eq(submission_stats::reviewer_id)))
                 .into_boxed::<Pg>();
 
-            if let Some(ref filter) = moderator_id {
-                q = q.filter(submission_stats::moderator_id.eq(filter));
+            if let Some(ref filter) = reviewer_id {
+                q = q.filter(submission_stats::reviewer_id.eq(filter));
             } else {
-                q = q.filter(submission_stats::moderator_id.is_null());
+                q = q.filter(submission_stats::reviewer_id.is_null());
             }
             q
         };
@@ -117,7 +117,7 @@ pub fn stats_mod_leaderboard(
     let conn = &mut db.connection()?;
 
     let mut query = submission_stats::table
-        .inner_join(users::table.on(users::id.nullable().eq(submission_stats::moderator_id)))
+        .inner_join(users::table.on(users::id.nullable().eq(submission_stats::reviewer_id)))
         .select((DailyStats::as_select(), BaseUser::as_select()))
         .into_boxed::<Pg>();
 

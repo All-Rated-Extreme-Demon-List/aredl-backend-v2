@@ -28,7 +28,7 @@ async fn submission_stats_filter_moderator() {
         .unwrap();
 
     let uri = format!(
-        "/arepl/submissions/statistics?moderator_id={}&page=1&per_page=10",
+        "/arepl/submissions/statistics?reviewer_id={}&page=1&per_page=10",
         mod_id
     );
     let req = TestRequest::get()

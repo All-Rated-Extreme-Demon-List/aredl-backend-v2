@@ -16,7 +16,7 @@ use uuid::Uuid;
 
 #[derive(Deserialize, ToSchema)]
 pub struct StatsQuery {
-    pub moderator_id: Option<Uuid>,
+    pub reviewer_id: Option<Uuid>,
 }
 
 #[utoipa::path(
@@ -27,7 +27,7 @@ pub struct StatsQuery {
     params(
         ("page" = Option<i64>, Query, description = "The page to fetch"),
         ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page"),
-        ("moderator_id" = Option<Uuid>, Query, description = "Filter for a specific moderator")
+        ("reviewer_id" = Option<Uuid>, Query, description = "Filter for a specific moderator")
     ),
     responses((status = 200, body = Paginated<DailyStatsPage>)),
     security(("access_token" = ["SubmissionReview"]), ("api_key" = ["SubmissionReview"]))
@@ -40,7 +40,7 @@ pub async fn stats(
 ) -> Result<HttpResponse, ApiError> {
     let q = query.into_inner();
     let page_query = page.into_inner();
-    let stats = web::block(move || DailyStatsPage::find(db, page_query, q.moderator_id)).await??;
+    let stats = web::block(move || DailyStatsPage::find(db, page_query, q.reviewer_id)).await??;
     Ok(HttpResponse::Ok().json(stats))
 }
 

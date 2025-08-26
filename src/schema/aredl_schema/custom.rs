@@ -215,9 +215,9 @@ diesel::allow_tables_to_appear_in_same_query!(users, submissions_enabled);
 diesel::allow_tables_to_appear_in_same_query!(users, level_ldms);
 
 diesel::table! {
-    aredl.submission_stats (day, moderator_id) {
+    aredl.submission_stats (day, reviewer_id) {
         day -> Date,
-        moderator_id -> Nullable<Uuid>,
+        reviewer_id -> Nullable<Uuid>,
         submitted -> Int8,
         accepted -> Int8,
         denied -> Int8,
@@ -225,12 +225,12 @@ diesel::table! {
     }
 }
 
-diesel::joinable!(submission_stats -> users (moderator_id));
+diesel::joinable!(submission_stats -> users (reviewer_id));
 diesel::allow_tables_to_appear_in_same_query!(submission_stats, users);
 
 diesel::table! {
-    aredl.submission_stats_leaderboard (moderator_id) {
-        moderator_id -> Uuid,
+    aredl.submission_stats_leaderboard (reviewer_id) {
+        reviewer_id -> Uuid,
         accepted -> Int8,
         denied -> Int8,
         under_consideration -> Int8,
