@@ -3,7 +3,7 @@ use crate::arepl::submissions::{test_utils::create_test_submission, SubmissionSt
 #[cfg(test)]
 use crate::{
     auth::{create_test_token, Permission},
-    schema::{roles, user_roles, users, arepl::submissions},
+    schema::{arepl::submissions, roles, user_roles, users},
 };
 #[cfg(test)]
 use crate::{test_utils::*, users::test_utils::create_test_user};
@@ -438,7 +438,8 @@ async fn get_global_queue() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
     let body: serde_json::Value = read_body_json(resp).await;
-    assert_eq!(body["levels_in_queue"].as_i64().unwrap(), 1);
+    assert_eq!(body["submissions_in_queue"].as_i64().unwrap(), 1);
+    assert_eq!(body["uc_submissions"].as_i64().unwrap(), 0);
 }
 
 #[actix_web::test]
@@ -657,6 +658,4 @@ async fn banned_player_resubmission() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_client_error());
-
-
 }
