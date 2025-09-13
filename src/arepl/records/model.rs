@@ -70,7 +70,7 @@ pub struct RecordInsert {
     /// Video link of the completion.
     pub video_url: String,
     /// Whether the record's video should be hidden on the website.
-    pub hide_video: bool,
+    pub hide_video: Option<bool>,
     /// Completion time of the record in milliseconds.
     pub completion_time: i64,
     /// Whether this record is the verification of this level or not.
