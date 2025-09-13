@@ -1,7 +1,7 @@
 use crate::{
     aredl::{
         records::Record,
-        submissions::{actions::ReviewerNotes, Submission, SubmissionResolved},
+        submissions::{actions::{AcceptParams, ReviewerNotes}, Submission, SubmissionResolved},
     },
     auth::{Authenticated, Permission, UserAuth},
     db::DbAppState,
@@ -77,7 +77,7 @@ async fn unclaim(
     responses(
         (status = 202, body = Record)
     ),
-    request_body = ReviewerNotes,
+    request_body = AcceptParams,
     security(
         ("access_token" = []),
         ("api_key" = []),
@@ -94,18 +94,18 @@ async fn accept(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
     authenticated: Authenticated,
-    notes: web::Json<ReviewerNotes>,
+    opts: web::Json<AcceptParams>,
     root_span: RootSpan,
     notify_tx: web::Data<broadcast::Sender<WebsocketNotification>>,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&notes));
+    root_span.record("body", &tracing::field::debug(&opts));
     let new_record = web::block(move || {
         Submission::accept(
             db,
             notify_tx.get_ref().clone(),
             id.into_inner(),
             authenticated.user_id,
-            notes.into_inner().notes,
+            opts.into_inner(),
         )
     })
     .await??;

@@ -32,6 +32,12 @@ pub struct ReviewerNotes {
     pub notes: Option<String>,
 }
 
+#[derive(Serialize, Deserialize, ToSchema, Debug)]
+pub struct AcceptParams {
+    pub notes: Option<String>,
+    pub hide_video: Option<bool>,
+}
+
 impl Submission {
     pub fn increment_user_shift(
         conn: &mut PgConnection,
@@ -79,7 +85,7 @@ impl Submission {
         notify_tx: broadcast::Sender<WebsocketNotification>,
         id: Uuid,
         reviewer_id: Uuid,
-        notes: Option<String>,
+        opts: AcceptParams,
     ) -> Result<Record, ApiError> {
         let conn = &mut db.connection()?;
         conn.transaction(|connection| -> Result<Record, ApiError> {
@@ -99,11 +105,12 @@ impl Submission {
                 records::mobile.eq(updated.mobile),
                 records::ldm_id.eq(updated.ldm_id),
                 records::video_url.eq(updated.video_url),
+                records::hide_video.eq(opts.hide_video.unwrap_or(false)),
                 records::raw_url.eq(updated.raw_url),
                 records::reviewer_id.eq(Some(reviewer_id)),
                 records::mod_menu.eq(updated.mod_menu),
                 records::user_notes.eq(updated.user_notes),
-                records::reviewer_notes.eq(notes.clone()),
+                records::reviewer_notes.eq(opts.notes.clone()),
                 records::updated_at.eq(chrono::Utc::now()),
             );
 
@@ -136,7 +143,7 @@ impl Submission {
                 submission_id: updated.id,
                 record_id: Some(inserted.id),
                 status: SubmissionStatus::Accepted,
-                reviewer_notes: notes,
+                reviewer_notes: opts.notes,
                 reviewer_id: Some(reviewer_id),
                 user_notes: None,
                 timestamp: chrono::Utc::now(),

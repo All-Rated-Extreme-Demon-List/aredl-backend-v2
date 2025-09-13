@@ -138,6 +138,7 @@ impl PemonlistPlayer {
                             "https://youtu.be/{}",
                             pemonlist_record.video_id.clone()
                         )),
+                        hide_video: false,
                         level_id: None,
                         completion_time: Some(timestamp),
                         is_verification: Some(false),
@@ -156,6 +157,7 @@ impl PemonlistPlayer {
                             "https://youtu.be/{}",
                             pemonlist_record.video_id.clone()
                         ),
+                        hide_video: false,
                         completion_time: timestamp,
                         is_verification: Some(false),
                         raw_url: None,

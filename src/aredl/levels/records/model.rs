@@ -16,6 +16,7 @@ impl PublicRecordResolved {
             mobile: record.mobile,
             video_url: record.video_url,
             created_at: record.created_at,
+            hide_video: record.hide_video,
         }
     }
 }
@@ -49,6 +50,7 @@ impl PublicRecordResolvedWithCountry {
             mobile: record.mobile,
             video_url: record.video_url,
             created_at: record.created_at,
+            hide_video: record.hide_video,
         }
     }
 }

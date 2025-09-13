@@ -121,6 +121,7 @@ pub mod arepl {
             mod_menu -> Nullable<Varchar>,
             user_notes -> Nullable<Varchar>,
             completion_time -> Int8,
+            hide_video -> Bool,
         }
     }
 

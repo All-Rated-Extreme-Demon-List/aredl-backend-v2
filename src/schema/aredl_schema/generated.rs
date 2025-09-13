@@ -129,6 +129,7 @@ pub mod aredl {
             reviewer_notes -> Nullable<Varchar>,
             mod_menu -> Nullable<Varchar>,
             user_notes -> Nullable<Varchar>,
+            hide_video -> Bool,
         }
     }
 

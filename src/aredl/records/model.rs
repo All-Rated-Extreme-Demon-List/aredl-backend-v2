@@ -32,6 +32,8 @@ pub struct Record {
     pub ldm_id: Option<i32>,
     /// Video link of the completion.
     pub video_url: String,
+    /// Whether the record's video should be hidden on the website.
+    pub hide_video: bool,
     /// Link to the raw video file of the completion.
     pub raw_url: Option<String>,
     /// Whether this record is the verification of this level or not.
@@ -65,6 +67,8 @@ pub struct RecordInsert {
     pub level_id: Uuid,
     /// Video link of the completion.
     pub video_url: String,
+    /// Whether the record's video should be hidden on the website.
+    pub hide_video: Option<bool>,
     /// Whether this record is the verification of this level or not.
     pub is_verification: Option<bool>,
     /// Link to the raw video file of the completion.
@@ -88,6 +92,8 @@ pub struct RecordUpdate {
     pub ldm_id: Option<i32>,
     /// Video link of the completion.
     pub video_url: Option<String>,
+    /// Whether the record's video should be hidden on the website.
+    pub hide_video: Option<bool>,
     /// Internal UUID of the level the record is for.
     pub level_id: Option<Uuid>,
     /// Whether this record is the verification of this level or not.
@@ -111,6 +117,8 @@ pub struct PublicRecordTemplate<T> {
     pub mobile: bool,
     /// Video link of the completion.
     pub video_url: String,
+    /// Whether the record's video should be hidden on the website.
+    pub hide_video: bool,
     /// Timestamp of when the record was created (first accepted).
     pub created_at: DateTime<Utc>,
 }
@@ -136,6 +144,8 @@ pub struct FullRecordTemplate<LevelT, UserT> {
     pub ldm_id: Option<i32>,
     /// Video link of the completion.
     pub video_url: String,
+    /// Whether the record's video should be hidden on the website.
+    pub hide_video: bool,
     /// Link to the raw video file of the completion.
     pub raw_url: Option<String>,
     /// Name of the mod menu used for this record, if any.
@@ -417,6 +427,7 @@ impl FullRecordResolved {
             mod_menu: record.mod_menu,
             created_at: record.created_at,
             updated_at: record.updated_at,
+            hide_video: record.hide_video,
         }
     }
 }
