@@ -97,7 +97,7 @@ pub struct RecordUpdate {
     /// Video link of the completion.
     pub video_url: Option<String>,
     /// Whether the record's video should be hidden on the website.
-    pub hide_video: bool,
+    pub hide_video: Option<bool>,
     /// Internal UUID of the level the record is for.
     pub level_id: Option<Uuid>,
     /// Completion time of the record in milliseconds.
