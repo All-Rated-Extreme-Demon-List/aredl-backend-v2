@@ -85,89 +85,96 @@ pub async fn start_discord_avatars_refresher(db: Arc<DbAppState>) {
 
             if users_to_refresh.is_empty() {
                 tracing::info!("No stale user avatars to refresh");
-                continue;
-            }
+            } else {
+                tracing::info!("Found {} users to refresh", users_to_refresh.len());
 
-            tracing::info!("Found {} users to refresh", users_to_refresh.len());
+                for (user_id, discord_id) in users_to_refresh {
+                    let Some(discord_id) = discord_id else {
+                        continue;
+                    };
 
-            for (user_id, discord_id) in users_to_refresh {
-                let Some(discord_id) = discord_id else {
-                    continue;
-                };
+                    let url = format!("{}/api/v10/users/{}", discord_base, discord_id);
+                    let resp = match client
+                        .get(&url)
+                        .header(AUTHORIZATION, format!("Bot {}", discord_bot_token))
+                        .send()
+                        .await
+                    {
+                        Ok(r) => r,
+                        Err(e) => {
+                            tracing::warn!(
+                                "Failed to request discord avatar for {}: {}",
+                                discord_id,
+                                e
+                            );
+                            tokio::time::sleep(Duration::from_millis(DEFAULT_DELAY_MS)).await;
+                            continue;
+                        }
+                    };
 
-                let url = format!("{}/api/v10/users/{}", discord_base, discord_id);
-                let resp = match client
-                    .get(&url)
-                    .header(AUTHORIZATION, format!("Bot {}", discord_bot_token))
-                    .send()
-                    .await
-                {
-                    Ok(r) => r,
-                    Err(e) => {
+                    if resp.status() == StatusCode::TOO_MANY_REQUESTS {
+                        if let Ok(value) = resp.json::<serde_json::Value>().await {
+                            if let Some(retry_after_s) =
+                                value.get("retry_after").and_then(|v| v.as_f64())
+                            {
+                                let retry_after_ms = (retry_after_s * 1000.0) as u64;
+                                tracing::warn!(
+                                    "Rate limited by discord: waiting for {} ms",
+                                    retry_after_ms
+                                );
+                                tokio::time::sleep(Duration::from_millis(retry_after_ms)).await;
+                                continue;
+                            }
+                        } else {
+                            tokio::time::sleep(Duration::from_millis(DEFAULT_DELAY_MS)).await;
+                        }
+                        continue;
+                    }
+
+                    if !resp.status().is_success() {
                         tracing::warn!(
-                            "Failed to request discord avatar for {}: {}",
+                            "Failed to refresh avatar for {}: {}",
                             discord_id,
-                            e
+                            resp.status()
                         );
                         tokio::time::sleep(Duration::from_millis(DEFAULT_DELAY_MS)).await;
                         continue;
                     }
-                };
 
-                if resp.status() == StatusCode::TOO_MANY_REQUESTS {
-                    if let Ok(value) = resp.json::<serde_json::Value>().await {
-                        if let Some(retry_after_s) =
-                            value.get("retry_after").and_then(|v| v.as_f64())
-                        {
-                            let retry_after_ms = (retry_after_s * 1000.0) as u64;
+                    let headers = resp.headers().clone();
+
+                    let updated_discord_user: DiscordUser = match resp.json().await {
+                        Ok(j) => j,
+                        Err(e) => {
                             tracing::warn!(
-                                "Rate limited by discord: waiting for {} ms",
-                                retry_after_ms
+                                "Failed to parse discord user for {}: {}",
+                                discord_id,
+                                e
                             );
-                            tokio::time::sleep(Duration::from_millis(retry_after_ms)).await;
+                            tokio::time::sleep(Duration::from_millis(DEFAULT_DELAY_MS)).await;
                             continue;
                         }
-                    } else {
-                        tokio::time::sleep(Duration::from_millis(DEFAULT_DELAY_MS)).await;
+                    };
+
+                    match diesel::update(users::table.find(user_id))
+                        .set((
+                            users::discord_avatar.eq(updated_discord_user.avatar),
+                            users::last_discord_avatar_update.eq(Utc::now().naive_utc()),
+                        ))
+                        .execute(&mut conn)
+                    {
+                        Ok(_) => {}
+                        Err(e) => {
+                            tracing::warn!(
+                                "Failed to update user avatar for {}: {}",
+                                discord_id,
+                                e
+                            );
+                        }
                     }
-                    continue;
+
+                    sleep_for_ratelimit(&headers, DEFAULT_DELAY_MS).await;
                 }
-
-                if !resp.status().is_success() {
-                    tracing::warn!(
-                        "Failed to refresh avatar for {}: {}",
-                        discord_id,
-                        resp.status()
-                    );
-                    tokio::time::sleep(Duration::from_millis(DEFAULT_DELAY_MS)).await;
-                    continue;
-                }
-
-                let headers = resp.headers().clone();
-
-                let updated_discord_user: DiscordUser = match resp.json().await {
-                    Ok(j) => j,
-                    Err(e) => {
-                        tracing::warn!("Failed to parse discord user for {}: {}", discord_id, e);
-                        tokio::time::sleep(Duration::from_millis(DEFAULT_DELAY_MS)).await;
-                        continue;
-                    }
-                };
-
-                match diesel::update(users::table.find(user_id))
-                    .set((
-                        users::discord_avatar.eq(updated_discord_user.avatar),
-                        users::last_discord_avatar_update.eq(Utc::now().naive_utc()),
-                    ))
-                    .execute(&mut conn)
-                {
-                    Ok(_) => {}
-                    Err(e) => {
-                        tracing::warn!("Failed to update user avatar for {}: {}", discord_id, e);
-                    }
-                }
-
-                sleep_for_ratelimit(&headers, DEFAULT_DELAY_MS).await;
             }
 
             let now = Utc::now();
