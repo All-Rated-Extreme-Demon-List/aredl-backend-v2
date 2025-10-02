@@ -367,6 +367,8 @@ impl SubmissionResolved {
             .transaction(|conn| -> Result<SubmissionResolved, ApiError> {
                 let next_id: Uuid = submissions_with_priority::table
                     .filter(submissions_with_priority::status.eq(SubmissionStatus::Pending))
+                    // prevent moderators from claiming their own submissions
+                    .filter(submissions_with_priority::submitted_by.ne(authenticated.user_id))
                     .for_update()
                     .skip_locked()
                     .order((
