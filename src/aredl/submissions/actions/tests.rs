@@ -141,11 +141,12 @@ async fn submission_under_consideration() {
 #[actix_web::test]
 async fn actions_increment_shift() {
     let (app, mut conn, auth, _) = init_test_app().await;
+    let (submitter_id, _) = create_test_user(&mut conn, None).await;
     let (mod_id, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
     let token_mod = create_test_token(mod_id, &auth.jwt_encoding_key).unwrap();
     let shift_id = create_test_shift(&mut conn, mod_id, true).await;
     let level = create_test_level(&mut conn).await;
-    let _submission = create_test_submission(level, mod_id, &mut conn).await;
+    create_test_submission(level, submitter_id, &mut conn).await;
 
     let req = test::TestRequest::get()
         .uri("/aredl/submissions/claim")
@@ -176,10 +177,11 @@ async fn actions_increment_shift() {
 #[actix_web::test]
 async fn unclaim_submission() {
     let (app, mut conn, auth, _) = init_test_app().await;
+    let (submitter_id, _) = create_test_user(&mut conn, None).await;
     let (mod_id, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
     let token_mod = create_test_token(mod_id, &auth.jwt_encoding_key).unwrap();
     let level = create_test_level(&mut conn).await;
-    let submission_id = create_test_submission(level, mod_id, &mut conn).await;
+    let submission_id = create_test_submission(level, submitter_id, &mut conn).await;
 
     let req = test::TestRequest::get()
         .uri("/aredl/submissions/claim")
@@ -229,6 +231,7 @@ async fn shift_completes_after_accept() {
     use diesel::{ExpressionMethods, RunQueryDsl};
 
     let (app, mut conn, auth, _) = init_test_app().await;
+    let (submitter_id, _) = create_test_user(&mut conn, None).await;
     let (mod_id, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
     let token = create_test_token(mod_id, &auth.jwt_encoding_key).unwrap();
     let shift_id = create_test_shift(&mut conn, mod_id, true).await;
@@ -237,7 +240,7 @@ async fn shift_completes_after_accept() {
         .execute(&mut conn)
         .unwrap();
     let level = create_test_level(&mut conn).await;
-    let _sub = create_test_submission(level, mod_id, &mut conn).await;
+    create_test_submission(level, submitter_id, &mut conn).await;
 
     let req = test::TestRequest::get()
         .uri("/aredl/submissions/claim")
@@ -267,10 +270,11 @@ async fn shift_completes_after_accept() {
 #[actix_web::test]
 async fn deny_already_denied() {
     let (app, mut conn, auth, _) = init_test_app().await;
+    let (submitter_id, _) = create_test_user(&mut conn, None).await;
     let (mod_id, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
     let token = create_test_token(mod_id, &auth.jwt_encoding_key).unwrap();
     let level = create_test_level(&mut conn).await;
-    let _submission = create_test_submission(level, mod_id, &mut conn).await;
+    create_test_submission(level, submitter_id, &mut conn).await;
 
     let req = test::TestRequest::get()
         .uri("/aredl/submissions/claim")
@@ -301,10 +305,11 @@ async fn deny_already_denied() {
 #[actix_web::test]
 async fn under_consideration_already_uc() {
     let (app, mut conn, auth, _) = init_test_app().await;
+    let (submitter_id, _) = create_test_user(&mut conn, None).await;
     let (mod_id, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
     let token = create_test_token(mod_id, &auth.jwt_encoding_key).unwrap();
     let level = create_test_level(&mut conn).await;
-    let _submission = create_test_submission(level, mod_id, &mut conn).await;
+    let _submission = create_test_submission(level, submitter_id, &mut conn).await;
 
     let req = test::TestRequest::get()
         .uri("/aredl/submissions/claim")
