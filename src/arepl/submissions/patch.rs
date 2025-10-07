@@ -107,6 +107,17 @@ impl SubmissionPatchUser {
 
         let resub = old_submission.status == SubmissionStatus::Denied;
 
+        if resub {
+            let submitter_ban = users::table
+                .filter(users::id.eq(user))
+                .select(users::ban_level)
+                .first::<i32>(conn)?;
+
+            if submitter_ban >= 2 {
+                return Err(ApiError::new(403, "You are banned from resubmitting records."));
+            }
+        }
+
         let level_id = match patch.level_id {
             Some(new_level_id) => new_level_id,
             None => old_submission.level_id,
