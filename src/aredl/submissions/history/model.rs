@@ -71,6 +71,8 @@ impl SubmissionHistoryResolved {
     ) -> Result<Vec<SubmissionHistoryResolved>, ApiError> {
         let conn = &mut db.connection()?;
 
+        let is_record = options.is_record_id.unwrap_or(false);
+
         let mut query = submission_history::table
             .left_join(users::table.on(submission_history::reviewer_id.eq(users::id.nullable())))
             .into_boxed::<Pg>()
@@ -80,13 +82,32 @@ impl SubmissionHistoryResolved {
             ))
             .order(submission_history::timestamp.desc());
 
-        if options.is_record_id.unwrap_or(false) {
+        if is_record {
             query = query.filter(submission_history::record_id.eq(id));
         } else {
             query = query.filter(submission_history::submission_id.eq(id));
         }
 
-        let history_row = query.load::<(SubmissionHistory, Option<BaseUser>)>(conn)?;
+        let mut history_row = query.load::<(SubmissionHistory, Option<BaseUser>)>(conn)?;
+
+        if is_record {
+            let accept_log = &history_row[0].0;
+            
+            if accept_log.record_id.is_some() {
+                let other_logs = submission_history::table
+                    .left_join(users::table.on(submission_history::reviewer_id.eq(users::id.nullable())))
+                    .filter(submission_history::submission_id.eq(accept_log.submission_id))
+                    .filter(submission_history::timestamp.lt(accept_log.timestamp))
+                    .order(submission_history::timestamp.desc())
+                    .select((
+                        SubmissionHistory::as_select(),
+                        (users::id, users::username, users::global_name).nullable(),
+                    ))
+                    .load::<(SubmissionHistory, Option<BaseUser>)>(conn)?;
+                
+                history_row.extend(other_logs);
+            }
+        }
 
         let mut resolved_history = history_row
             .into_iter()
