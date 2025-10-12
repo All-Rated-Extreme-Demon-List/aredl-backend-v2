@@ -53,7 +53,7 @@ pub async fn start_data_cleaner(
 
             let result = diesel::sql_query(
                 "UPDATE aredl.submissions \
-                 SET status = 'Pending' \
+                 SET status = 'Pending', reviewer_id = NULL \
                  WHERE status = 'Claimed' \
                    AND updated_at < NOW() - INTERVAL '120 minutes';",
             )
@@ -68,7 +68,7 @@ pub async fn start_data_cleaner(
 
             let result = diesel::sql_query(
                 "UPDATE arepl.submissions \
-                 SET status = 'Pending' \
+                 SET status = 'Pending', reviewer_id = NULL \
                  WHERE status = 'Claimed' \
                    AND updated_at < NOW() - INTERVAL '120 minutes';",
             )
