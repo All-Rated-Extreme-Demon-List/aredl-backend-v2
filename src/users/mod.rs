@@ -1,4 +1,3 @@
-mod id_resolver;
 pub mod me;
 mod merge;
 mod model;
