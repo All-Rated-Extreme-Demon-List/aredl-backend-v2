@@ -8,7 +8,7 @@ use crate::schema::{
     arepl::{
         completed_packs, levels, levels_created, pack_tiers, packs, records, user_leaderboard,
     },
-    clan_members, clans, roles, user_roles, users,
+    clan_members, clans, roles, user_roles,
 };
 use crate::users::{Role, User};
 use chrono::{DateTime, Utc};
@@ -91,34 +91,40 @@ pub struct ProfileResolved {
 }
 
 impl ProfileResolved {
-    pub fn find(conn: &mut DbConnection, id: Uuid) -> Result<Self, ApiError> {
-        let user = users::table
-            .filter(users::id.eq(id))
-            .select(User::as_select())
-            .get_result::<User>(conn)?;
+    pub fn from_str(conn: &mut DbConnection, user_id: &str) -> Result<Self, ApiError> {
+        let user = User::from_str(conn, user_id)?;
+        Self::from_user(conn, user)
+    }
 
+    pub fn from_user(conn: &mut DbConnection, user: User) -> Result<Self, ApiError> {
+        if User::is_banned(user.id.clone(), conn)? {
+            return Err(ApiError::new(
+                403,
+                "This user has been banned from the list.".into(),
+            ));
+        }
         let clan = clans::table
             .inner_join(clan_members::table.on(clans::id.eq(clan_members::clan_id)))
-            .filter(clan_members::user_id.eq(id))
+            .filter(clan_members::user_id.eq(user.id))
             .select(Clan::as_select())
             .first::<Clan>(conn)
             .optional()?;
 
         let roles = roles::table
             .inner_join(user_roles::table.on(user_roles::role_id.eq(roles::id)))
-            .filter(user_roles::user_id.eq(id))
+            .filter(user_roles::user_id.eq(user.id))
             .order(roles::privilege_level.desc())
             .select(Role::as_select())
             .load::<Role>(conn)?;
 
         let rank = user_leaderboard::table
-            .filter(user_leaderboard::user_id.eq(id))
+            .filter(user_leaderboard::user_id.eq(user.id))
             .select(Rank::as_select())
             .first(conn)
             .optional()?;
 
         let full_records = records::table
-            .filter(records::submitted_by.eq(id))
+            .filter(records::submitted_by.eq(user.id))
             .inner_join(levels::table.on(levels::id.eq(records::level_id)))
             .order(levels::position.asc())
             .select((ProfileRecord::as_select(), ExtendedBaseLevel::as_select()))
@@ -134,19 +140,19 @@ impl ProfileResolved {
         let mut created = levels::table
             .inner_join(levels_created::table.on(levels_created::level_id.eq(levels::id)))
             .order(levels::position.asc())
-            .filter(levels_created::user_id.eq(id))
+            .filter(levels_created::user_id.eq(user.id))
             .select(ExtendedBaseLevel::as_select())
             .load::<ExtendedBaseLevel>(conn)?;
 
         let published = levels::table
-            .filter(levels::publisher_id.eq(id))
+            .filter(levels::publisher_id.eq(user.id))
             .order(levels::position.asc())
             .select(ExtendedBaseLevel::as_select())
             .load::<ExtendedBaseLevel>(conn)?;
 
         let published_without_creators_list: Vec<ExtendedBaseLevel> = levels::table
             .left_outer_join(levels_created::table.on(levels_created::level_id.eq(levels::id)))
-            .filter(levels::publisher_id.eq(id))
+            .filter(levels::publisher_id.eq(user.id))
             .filter(levels_created::level_id.is_null())
             .order(levels::position.asc())
             .select(ExtendedBaseLevel::as_select())
@@ -158,7 +164,7 @@ impl ProfileResolved {
         let packs = packs::table
             .inner_join(completed_packs::table.on(completed_packs::pack_id.eq(packs::id)))
             .inner_join(pack_tiers::table.on(pack_tiers::id.eq(packs::tier)))
-            .filter(completed_packs::user_id.eq(id))
+            .filter(completed_packs::user_id.eq(user.id))
             .order(pack_tiers::placement.asc())
             .select((BasePack::as_select(), BasePackTier::as_select()))
             .load::<(BasePack, BasePackTier)>(conn)?

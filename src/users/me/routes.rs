@@ -28,7 +28,7 @@ async fn find(
 ) -> Result<HttpResponse, ApiError> {
     let user = web::block(move || {
         let conn = &mut db.connection()?;
-        UserResolved::find_one(conn, authenticated.user_id)
+        UserResolved::from_uuid(conn, authenticated.user_id)
     })
     .await??;
     Ok(HttpResponse::Ok().json(user))

@@ -18,7 +18,7 @@ use uuid::Uuid;
     description = "Get a specific user by their internal UUID",
     tag = "Users",
     params(
-        ("id" = Uuid, Path, description = "The internal UUID of the user to lookup"),
+        ("id" = String, Path, description = "The internal UUID or the discord ID of the user to lookup"),
     ),
     responses(
         (status = 200, body = UserResolved)
@@ -27,11 +27,12 @@ use uuid::Uuid;
 #[get("/{id}")]
 async fn find(
     db: web::Data<Arc<DbAppState>>,
-    id: web::Path<Uuid>,
+    id: web::Path<String>,
 ) -> Result<HttpResponse, ApiError> {
+    let id = id.into_inner();
     let result = web::block(move || {
         let conn = &mut db.connection()?;
-        UserResolved::find_one(conn, id.into_inner())
+        UserResolved::from_str(conn, id.as_str())
     })
     .await??;
     Ok(HttpResponse::Ok().json(result))

@@ -1,7 +1,7 @@
 use crate::auth::token::UserClaims;
 use crate::auth::{permission, Permission};
 use crate::clans::ClanMember;
-use crate::db::DbAppState;
+use crate::db::{DbAppState, DbConnection};
 use crate::error_handler::ApiError;
 use crate::schema::clan_members;
 use crate::users::User;
@@ -33,8 +33,8 @@ impl FromRequest for Authenticated {
 }
 
 impl Authenticated {
-    pub fn check_is_banned(&self, db: web::Data<Arc<DbAppState>>) -> Result<(), ApiError> {
-        if User::is_banned(self.user_id, db)? {
+    pub fn check_is_banned(&self, conn: &mut DbConnection) -> Result<(), ApiError> {
+        if User::is_banned(self.user_id, conn)? {
             return Err(ApiError::new(
                 403,
                 "You have been banned from the list.".into(),

@@ -126,11 +126,11 @@ async fn create(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&options));
+    let mut conn = db.connection()?;
 
-    authenticated.check_is_banned(db.clone())?;
+    authenticated.check_is_banned(&mut conn)?;
 
     let result = web::block(move || {
-        let mut conn = db.connection()?;
         let merge_upsert = MergeRequestUpsert {
             primary_user: authenticated.user_id,
             secondary_user: options.secondary_user,

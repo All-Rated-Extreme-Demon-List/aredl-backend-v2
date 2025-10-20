@@ -140,6 +140,28 @@ async fn find_user() {
 }
 
 #[actix_web::test]
+async fn find_user_by_discord_id() {
+    let (app, mut conn, _, _) = init_test_app().await;
+    let (user_id, username) = create_test_user(&mut conn, None).await;
+    let discord_id = "1234567890";
+
+    diesel::update(users::table.filter(users::id.eq(user_id)))
+        .set(users::discord_id.eq(Some(discord_id)))
+        .execute(&mut conn)
+        .expect("Failed to update discord id");
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/users/{}", discord_id))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+
+    let user: serde_json::Value = test::read_body_json(resp).await;
+    assert_eq!(user["username"], username);
+}
+
+#[actix_web::test]
 async fn list_users() {
     let (app, mut conn, _, _) = init_test_app().await;
     let (_, username) = create_test_user(&mut conn, None).await;

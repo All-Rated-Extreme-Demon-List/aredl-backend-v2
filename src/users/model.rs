@@ -201,11 +201,28 @@ impl BaseUser {
 }
 
 impl User {
-    pub fn is_banned(user_id: Uuid, db: web::Data<Arc<DbAppState>>) -> Result<bool, ApiError> {
+    pub fn from_uuid(conn: &mut DbConnection, user_id: Uuid) -> Result<Self, ApiError> {
+        Ok(users::table
+            .filter(users::id.eq(user_id))
+            .select(User::as_select())
+            .first::<User>(conn)?)
+    }
+
+    pub fn from_str(conn: &mut DbConnection, user_id: &str) -> Result<Self, ApiError> {
+        match Uuid::parse_str(user_id) {
+            Ok(uuid) => Ok(Self::from_uuid(conn, uuid)?),
+            Err(_) => Ok(users::table
+                .filter(users::discord_id.eq(Some(user_id.to_owned())))
+                .select(User::as_select())
+                .first::<User>(conn)?),
+        }
+    }
+
+    pub fn is_banned(user_id: Uuid, conn: &mut DbConnection) -> Result<bool, ApiError> {
         let user = users::table
             .filter(users::id.eq(user_id))
             .select(users::ban_level)
-            .first::<i32>(&mut db.connection()?)
+            .first::<i32>(conn)
             .optional()?;
 
         match user {
@@ -329,22 +346,27 @@ impl From<User> for BaseUser {
 }
 
 impl UserResolved {
-    pub fn find_one(conn: &mut DbConnection, user_id: Uuid) -> Result<Self, ApiError> {
-        let user = users::table
-            .filter(users::id.eq(user_id))
-            .select(User::as_select())
-            .first::<User>(conn)?;
+    pub fn from_uuid(conn: &mut DbConnection, uuid: Uuid) -> Result<Self, ApiError> {
+        let user = User::from_uuid(conn, uuid)?;
+        Self::from_user(conn, user)
+    }
 
+    pub fn from_str(conn: &mut DbConnection, user_id: &str) -> Result<Self, ApiError> {
+        let user = User::from_str(conn, user_id)?;
+        Self::from_user(conn, user)
+    }
+
+    pub fn from_user(conn: &mut DbConnection, user: User) -> Result<Self, ApiError> {
         let clan = clans::table
             .inner_join(clan_members::table.on(clans::id.eq(clan_members::clan_id)))
-            .filter(clan_members::user_id.eq(user_id))
+            .filter(clan_members::user_id.eq(user.id))
             .select(Clan::as_select())
             .first::<Clan>(conn)
             .optional()?;
 
         let roles = user_roles::table
             .inner_join(roles::table.on(user_roles::role_id.eq(roles::id)))
-            .filter(user_roles::user_id.eq(user_id))
+            .filter(user_roles::user_id.eq(user.id))
             .select(Role::as_select())
             .load::<Role>(conn)?;
 

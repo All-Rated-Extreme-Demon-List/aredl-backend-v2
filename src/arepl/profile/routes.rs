@@ -1,11 +1,10 @@
+use crate::arepl::profile::ProfileResolved;
 use crate::cache_control::CacheController;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
-use crate::{arepl::profile::ProfileResolved, users::User};
 use actix_web::{get, web, HttpResponse};
 use std::sync::Arc;
 use utoipa::OpenApi;
-use uuid::Uuid;
 
 #[utoipa::path(
     get,
@@ -13,7 +12,7 @@ use uuid::Uuid;
     description = "Get an user AREDL platformer profile",
     tag = "AREDL (P)",
     params(
-        ("id" = Uuid, description = "The user to lookup the profile for")
+        ("id" = String, description = "The user UUID or discord ID to lookup the profile for")
     ),
     responses(
         (status = 200, body = ProfileResolved)
@@ -22,17 +21,11 @@ use uuid::Uuid;
 #[get("/{id}", wrap = "CacheController::private_with_max_age(300)")]
 async fn find(
     db: web::Data<Arc<DbAppState>>,
-    id: web::Path<Uuid>,
+    id: web::Path<String>,
 ) -> Result<HttpResponse, ApiError> {
-    if User::is_banned(id.clone(), db.clone())? {
-        return Err(ApiError::new(
-            403,
-            "This user has been banned from the list.".into(),
-        ));
-    }
     let profile = web::block(move || {
         let mut conn = db.connection()?;
-        ProfileResolved::find(&mut conn, id.into_inner())
+        ProfileResolved::from_str(&mut conn, id.as_str())
     })
     .await??;
     Ok(HttpResponse::Ok().json(profile))

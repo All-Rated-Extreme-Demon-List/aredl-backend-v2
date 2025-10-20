@@ -33,9 +33,10 @@ use super::{history, queue, resolved};
 #[post("", wrap="UserAuth::load()")]
 async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionInsert>, authenticated: Authenticated, root_span: RootSpan) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&body));
-    authenticated.check_is_banned(db.clone())?;
+    let mut conn = db.connection()?;
+    authenticated.check_is_banned(&mut conn)?;
     let created = web::block(
-        move || Submission::create(db, body.into_inner(), authenticated)
+        move || Submission::create(&mut conn, body.into_inner(), authenticated)
     ).await??;
     Ok(HttpResponse::Created().json(created))
 }
