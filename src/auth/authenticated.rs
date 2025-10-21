@@ -1,16 +1,15 @@
 use crate::auth::token::UserClaims;
 use crate::auth::{permission, Permission};
 use crate::clans::ClanMember;
-use crate::db::{DbAppState, DbConnection};
+use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::clan_members;
 use crate::users::User;
 use actix_web::dev::Payload;
-use actix_web::{web, FromRequest, HttpMessage, HttpRequest};
+use actix_web::{FromRequest, HttpMessage, HttpRequest};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
 use serde::{Deserialize, Serialize};
 use std::future::{ready, Ready};
-use std::sync::Arc;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -45,15 +44,15 @@ impl Authenticated {
 
     pub fn has_permission(
         &self,
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         permission: Permission,
     ) -> Result<bool, ApiError> {
-        permission::check_permission(db, self.user_id, permission)
+        permission::check_permission(conn, self.user_id, permission)
     }
 
     pub fn has_clan_permission(
         &self,
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         clan_id: Uuid,
         clan_role_level: i32,
     ) -> Result<(), ApiError> {
@@ -61,10 +60,10 @@ impl Authenticated {
             .filter(clan_members::clan_id.eq(clan_id))
             .filter(clan_members::user_id.eq(self.user_id))
             .select(ClanMember::as_select())
-            .first::<ClanMember>(&mut db.connection()?)
+            .first::<ClanMember>(conn)
             .optional()?;
 
-        let has_permission = self.has_permission(db, Permission::ClanModify)?;
+        let has_permission = self.has_permission(conn, Permission::ClanModify)?;
         if (member.is_none() || member.unwrap().role < clan_role_level) && !has_permission {
             return Err(ApiError::new(
                 403,
@@ -77,7 +76,7 @@ impl Authenticated {
 
     pub fn has_clan_higher_permission(
         &self,
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         clan_id: Uuid,
         target_member_id: Uuid,
     ) -> Result<(), ApiError> {
@@ -85,11 +84,11 @@ impl Authenticated {
             .filter(clan_members::clan_id.eq(clan_id))
             .filter(clan_members::user_id.eq(target_member_id))
             .select(ClanMember::as_select())
-            .first::<ClanMember>(&mut db.connection()?)
+            .first::<ClanMember>(conn)
             .optional()?;
 
         if member.is_some() {
-            self.has_clan_permission(db, clan_id, member.unwrap().role)?;
+            self.has_clan_permission(conn, clan_id, member.unwrap().role)?;
         }
 
         Ok(())

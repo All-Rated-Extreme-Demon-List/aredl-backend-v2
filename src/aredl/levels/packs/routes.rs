@@ -24,8 +24,12 @@ async fn find_all(
     db: web::Data<Arc<DbAppState>>,
     level_id: web::Path<String>,
 ) -> Result<HttpResponse, ApiError> {
-    let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
-    let packs = web::block(move || PackWithTierResolved::find_all(db, level_id)).await??;
+    let packs = web::block(move || {
+        let conn = &mut db.connection()?;
+        let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
+        PackWithTierResolved::find_all(conn, level_id)
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(packs))
 }
 

@@ -33,9 +33,13 @@ async fn find_all(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Option<Authenticated>,
 ) -> Result<HttpResponse, ApiError> {
-    let tiers =
-        web::block(|| PackTierResolved::find_all(db, authenticated.map(|user| user.user_id)))
-            .await??;
+    let tiers = web::block(move || {
+        PackTierResolved::find_all(
+            &mut db.connection()?,
+            authenticated.map(|user| user.user_id),
+        )
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(tiers))
 }
 
@@ -60,7 +64,8 @@ async fn create(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&tier));
-    let tier = web::block(|| PackTier::create(db, tier.into_inner())).await??;
+    let tier =
+        web::block(move || PackTier::create(&mut db.connection()?, tier.into_inner())).await??;
     Ok(HttpResponse::Ok().json(tier))
 }
 #[utoipa::path(
@@ -88,7 +93,10 @@ async fn update(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&tier));
-    let tier = web::block(|| PackTier::update(db, id.into_inner(), tier.into_inner())).await??;
+    let tier = web::block(move || {
+        PackTier::update(&mut db.connection()?, id.into_inner(), tier.into_inner())
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(tier))
 }
 
@@ -113,7 +121,8 @@ async fn delete(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
 ) -> Result<HttpResponse, ApiError> {
-    let tier = web::block(|| PackTier::delete(db, id.into_inner())).await??;
+    let tier =
+        web::block(move || PackTier::delete(&mut db.connection()?, id.into_inner())).await??;
     Ok(HttpResponse::Ok().json(tier))
 }
 

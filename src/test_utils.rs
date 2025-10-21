@@ -83,7 +83,7 @@ pub fn init_test_db_state() -> Arc<DbAppState> {
 
     test_db_state.run_pending_migrations();
 
-    let mut conn = test_db_state.connection().unwrap();
+    let conn = &mut test_db_state.connection().unwrap();
 
     let permissions_data = vec![
         ("plus", 5),
@@ -115,7 +115,7 @@ pub fn init_test_db_state() -> Arc<DbAppState> {
                 })
                 .collect::<Vec<_>>(),
         )
-        .execute(&mut conn)
+        .execute(conn)
         .expect("Failed to insert permissions");
 
     test_db_state

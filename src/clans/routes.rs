@@ -33,8 +33,11 @@ async fn list(
     options: web::Query<ClanListQueryOptions>,
 ) -> Result<HttpResponse, ApiError> {
     let result = web::block(move || {
-        let mut conn = db.connection()?;
-        Clan::find(&mut conn, options.into_inner(), page_query.into_inner())
+        Clan::find(
+            &mut db.connection()?,
+            options.into_inner(),
+            page_query.into_inner(),
+        )
     })
     .await??;
     Ok(HttpResponse::Ok().json(result))
@@ -63,8 +66,7 @@ async fn create_and_join(
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&clan));
     let result = web::block(move || {
-        let mut conn = db.connection()?;
-        Clan::create_and_join(&mut conn, clan.into_inner(), authenticated)
+        Clan::create_and_join(&mut db.connection()?, clan.into_inner(), authenticated)
     })
     .await??;
     Ok(HttpResponse::Ok().json(result))
@@ -91,11 +93,8 @@ async fn create_empty(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&clan));
-    let result = web::block(move || {
-        let mut conn = db.connection()?;
-        Clan::create_empty(&mut conn, clan.into_inner())
-    })
-    .await??;
+    let result =
+        web::block(move || Clan::create_empty(&mut db.connection()?, clan.into_inner())).await??;
     Ok(HttpResponse::Ok().json(result))
 }
 
@@ -129,11 +128,9 @@ async fn update(
     root_span.record("body", &tracing::field::debug(&clan));
     let clan_id = id.into_inner();
     let result = web::block(move || {
-        let mut conn = db.connection()?;
-
-        authenticated.has_clan_permission(db, clan_id, 2)?;
-
-        Clan::update(&mut conn, clan_id, clan.into_inner())
+        let conn = &mut db.connection()?;
+        authenticated.has_clan_permission(conn, clan_id, 2)?;
+        Clan::update(conn, clan_id, clan.into_inner())
     })
     .await??;
 
@@ -166,15 +163,15 @@ async fn delete(
 ) -> Result<HttpResponse, ApiError> {
     let clan_id = id.into_inner();
     let result = web::block(move || {
-        let mut conn = db.connection()?;
+        let conn = &mut db.connection()?;
 
-        authenticated.has_clan_permission(db.clone(), clan_id, 2)?;
-        let has_staff_permission = authenticated.has_permission(db, Permission::ClanModify)?;
+        authenticated.has_clan_permission(conn, clan_id, 2)?;
+        let has_staff_permission = authenticated.has_permission(conn, Permission::ClanModify)?;
 
         let members_count: i64 = clan_members::table
             .filter(clan_members::clan_id.eq(clan_id))
             .select(count_star())
-            .first(&mut conn)?;
+            .first(conn)?;
         if members_count > 1 && !has_staff_permission {
             return Err(ApiError::new(
                 403,
@@ -182,7 +179,7 @@ async fn delete(
             ));
         }
 
-        Clan::delete(&mut conn, clan_id)
+        Clan::delete(conn, clan_id)
     })
     .await??;
 

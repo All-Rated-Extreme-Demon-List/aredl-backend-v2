@@ -26,11 +26,9 @@ async fn find(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let user = web::block(move || {
-        let conn = &mut db.connection()?;
-        UserResolved::from_uuid(conn, authenticated.user_id)
-    })
-    .await??;
+    let user =
+        web::block(move || UserResolved::from_uuid(&mut db.connection()?, authenticated.user_id))
+            .await??;
     Ok(HttpResponse::Ok().json(user))
 }
 
@@ -57,8 +55,11 @@ async fn update(
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&user));
     let user = web::block(move || {
-        let conn = &mut db.connection()?;
-        User::update_me(conn, authenticated.user_id, user.into_inner())
+        User::update_me(
+            &mut db.connection()?,
+            authenticated.user_id,
+            user.into_inner(),
+        )
     })
     .await??;
     Ok(HttpResponse::Ok().json(user))

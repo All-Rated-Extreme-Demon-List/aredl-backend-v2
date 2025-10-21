@@ -1,3 +1,4 @@
+use crate::users::{User, UserUpsert};
 #[cfg(test)]
 use crate::{
     auth::{create_test_token, Permission},
@@ -6,12 +7,8 @@ use crate::{
     test_utils::init_test_app,
     users::test_utils::create_test_user,
 };
-use crate::{
-    test_utils::init_test_db_state,
-    users::{User, UserUpsert},
-};
 #[cfg(test)]
-use actix_web::{test, web};
+use actix_web::test;
 use chrono::Utc;
 #[cfg(test)]
 use serde_json::json;
@@ -253,9 +250,7 @@ async fn list_users_with_filters() {
 
 #[actix_web::test]
 async fn upsert_creates_and_updates_user() {
-    let (_, _, _, _) = init_test_app().await;
-    let db_state = init_test_db_state();
-    let db_data = web::Data::new(db_state.clone());
+    let (_, mut conn, _, _) = init_test_app().await;
 
     let user_upsert = UserUpsert {
         username: "new_user".to_string(),
@@ -269,11 +264,10 @@ async fn upsert_creates_and_updates_user() {
         last_discord_avatar_update: Some(Utc::now().naive_utc()),
     };
 
-    let created = User::upsert(db_data.clone(), user_upsert).expect("insert");
+    let created = User::upsert(&mut conn, user_upsert).expect("insert");
     assert_eq!(created.username, "new_user");
     assert_eq!(created.discord_id.as_deref(), Some("123"));
 
-    let mut conn = db_state.connection().unwrap();
     let fetched = users::table
         .filter(users::id.eq(created.id))
         .select(User::as_select())
@@ -293,7 +287,7 @@ async fn upsert_creates_and_updates_user() {
         last_discord_avatar_update: Some(Utc::now().naive_utc()),
     };
 
-    let updated = User::upsert(db_data.clone(), update_upsert).expect("update");
+    let updated = User::upsert(&mut conn, update_upsert).expect("update");
     assert_eq!(updated.id, created.id);
     assert_eq!(updated.username, "updated");
     assert_eq!(updated.country, Some(1));

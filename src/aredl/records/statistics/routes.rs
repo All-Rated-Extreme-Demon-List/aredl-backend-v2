@@ -17,7 +17,7 @@ use utoipa::OpenApi;
 )]
 #[get("", wrap = "CacheController::public_with_max_age(900)")]
 pub async fn total(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
-    let data = web::block(move || total_records(db)).await??;
+    let data = web::block(move || total_records(&mut db.connection()?)).await??;
     Ok(HttpResponse::Ok().json(data))
 }
 

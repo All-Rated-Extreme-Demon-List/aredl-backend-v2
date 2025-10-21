@@ -1,9 +1,8 @@
 use crate::clans::Clan;
-use crate::db::{DbAppState, DbConnection};
+use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::{clan_members, clans, permissions, roles, user_roles, users};
-use actix_web::web;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::pg::Pg;
 use diesel::{
@@ -11,7 +10,6 @@ use diesel::{
     RunQueryDsl, SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -231,16 +229,11 @@ impl User {
         }
     }
 
-    pub fn upsert(
-        db: web::Data<Arc<DbAppState>>,
-        user_upsert: UserUpsert,
-    ) -> Result<Self, ApiError> {
-        let mut conn = db.connection()?;
-
+    pub fn upsert(conn: &mut DbConnection, user_upsert: UserUpsert) -> Result<Self, ApiError> {
         let existing_user = users::table
             .filter(users::discord_id.eq(user_upsert.discord_id.clone()))
             .select(Self::as_select())
-            .first::<Self>(&mut conn)
+            .first::<Self>(conn)
             .optional()?;
 
         match existing_user {
@@ -255,14 +248,14 @@ impl User {
                         last_discord_avatar_update: Some(Utc::now().naive_utc()),
                     })
                     .returning(Self::as_select())
-                    .get_result::<Self>(&mut conn)?;
+                    .get_result::<Self>(conn)?;
                 return Ok(updated_user);
             }
             None => {
                 let user = diesel::insert_into(users::table)
                     .values(&user_upsert)
                     .returning(Self::as_select())
-                    .get_result::<Self>(&mut conn)?;
+                    .get_result::<Self>(conn)?;
                 return Ok(user);
             }
         }

@@ -1,8 +1,6 @@
-use actix_web::web;
 use chrono::{NaiveTime, Timelike, Utc};
 use diesel::prelude::*;
 use serde::Deserialize;
-use std::sync::Arc;
 
 use crate::{
     arepl::{
@@ -10,7 +8,7 @@ use crate::{
         records::{Record, RecordInsert, RecordUpdate},
     },
     auth::Authenticated,
-    db::DbAppState,
+    db::DbConnection,
     error_handler::ApiError,
     schema::{
         arepl::{levels, records},
@@ -50,12 +48,10 @@ enum PemonlistResponse {
 }
 
 impl PemonlistPlayer {
-    pub async fn sync_with_pemonlist(
-        db: web::Data<Arc<DbAppState>>,
+    pub fn sync_with_pemonlist(
+        conn: &mut DbConnection,
         authenticated: Authenticated,
     ) -> Result<Vec<Record>, ApiError> {
-        let conn = &mut db.connection()?;
-
         let player_discord_id = users::table
             .filter(users::id.eq(authenticated.user_id))
             .select(users::discord_id)
@@ -67,17 +63,16 @@ impl PemonlistPlayer {
 
         let player_discord_id = player_discord_id.unwrap();
 
-        let client = reqwest::Client::new();
+        let client = reqwest::blocking::Client::new();
         let base_url = std::env::var("PEMONLIST_API_URL")
             .unwrap_or_else(|_| "https://pemonlist.com/api/player".to_string());
         let url = format!("{}/{}", base_url.trim_end_matches('/'), player_discord_id);
         let resp = client
             .get(&url)
             .send()
-            .await
             .map_err(|e| ApiError::new(500, &e.to_string()))?;
 
-        let pemonlist_response: PemonlistResponse = resp.json().await.map_err(|e| {
+        let pemonlist_response: PemonlistResponse = resp.json().map_err(|e| {
             ApiError::new(
                 500,
                 &format!(
@@ -100,80 +95,70 @@ impl PemonlistPlayer {
             PemonlistResponse::Ok(player) => player,
         };
 
-        let imported = web::block(move || -> Result<Vec<Record>, ApiError> {
-            let conn = &mut db.connection()?;
+        let mut imported = Vec::new();
 
-            let mut imported = Vec::new();
+        for pemonlist_record in pemonlist_data.records {
+            let existing_level = levels::table
+                .filter(levels::level_id.eq(pemonlist_record.level.level_id))
+                .select(ExtendedBaseLevel::as_select())
+                .first::<ExtendedBaseLevel>(conn)
+                .optional()?;
 
-            for pemonlist_record in pemonlist_data.records {
-                let existing_level = levels::table
-                    .filter(levels::level_id.eq(pemonlist_record.level.level_id))
-                    .select(ExtendedBaseLevel::as_select())
-                    .first::<ExtendedBaseLevel>(conn)
-                    .optional()?;
-
-                if existing_level.is_none() {
-                    continue;
-                }
-
-                let existing_level = existing_level.unwrap();
-
-                let existing_record: Option<Record> = records::table
-                    .filter(records::submitted_by.eq(authenticated.user_id))
-                    .filter(records::level_id.eq(existing_level.id))
-                    .select(Record::as_select())
-                    .first::<Record>(conn)
-                    .optional()?;
-
-                let now = Utc::now();
-
-                let timestamp = Self::parse_formatted_ms(&pemonlist_record.formatted_time)?;
-
-                let saved = if let Some(old) = existing_record {
-                    let update = RecordUpdate {
-                        submitted_by: None,
-                        mobile: Some(pemonlist_record.mobile),
-                        ldm_id: None,
-                        video_url: Some(format!(
-                            "https://youtu.be/{}",
-                            pemonlist_record.video_id.clone()
-                        )),
-                        hide_video: Some(false),
-                        level_id: None,
-                        completion_time: Some(timestamp),
-                        is_verification: Some(false),
-                        raw_url: None,
-                        updated_at: Some(now),
-                        created_at: None,
-                    };
-                    Record::update(db.clone(), old.id, update)?
-                } else {
-                    let ins = RecordInsert {
-                        submitted_by: authenticated.user_id,
-                        mobile: pemonlist_record.mobile,
-                        ldm_id: None,
-                        level_id: existing_level.id,
-                        video_url: format!(
-                            "https://youtu.be/{}",
-                            pemonlist_record.video_id.clone()
-                        ),
-                        hide_video: Some(false),
-                        completion_time: timestamp,
-                        is_verification: Some(false),
-                        raw_url: None,
-                        reviewer_id: None,
-                        created_at: Some(now),
-                        updated_at: Some(now),
-                    };
-                    Record::create(db.clone(), ins)?
-                };
-
-                imported.push(saved);
+            if existing_level.is_none() {
+                continue;
             }
-            Ok(imported)
-        })
-        .await??;
 
+            let existing_level = existing_level.unwrap();
+
+            let existing_record: Option<Record> = records::table
+                .filter(records::submitted_by.eq(authenticated.user_id))
+                .filter(records::level_id.eq(existing_level.id))
+                .select(Record::as_select())
+                .first::<Record>(conn)
+                .optional()?;
+
+            let now = Utc::now();
+
+            let timestamp = Self::parse_formatted_ms(&pemonlist_record.formatted_time)?;
+
+            let saved = if let Some(old) = existing_record {
+                let update = RecordUpdate {
+                    submitted_by: None,
+                    mobile: Some(pemonlist_record.mobile),
+                    ldm_id: None,
+                    video_url: Some(format!(
+                        "https://youtu.be/{}",
+                        pemonlist_record.video_id.clone()
+                    )),
+                    hide_video: Some(false),
+                    level_id: None,
+                    completion_time: Some(timestamp),
+                    is_verification: Some(false),
+                    raw_url: None,
+                    updated_at: Some(now),
+                    created_at: None,
+                };
+                Record::update(conn, old.id, update)?
+            } else {
+                let ins = RecordInsert {
+                    submitted_by: authenticated.user_id,
+                    mobile: pemonlist_record.mobile,
+                    ldm_id: None,
+                    level_id: existing_level.id,
+                    video_url: format!("https://youtu.be/{}", pemonlist_record.video_id.clone()),
+                    hide_video: Some(false),
+                    completion_time: timestamp,
+                    is_verification: Some(false),
+                    raw_url: None,
+                    reviewer_id: None,
+                    created_at: Some(now),
+                    updated_at: Some(now),
+                };
+                Record::create(conn, ins)?
+            };
+
+            imported.push(saved);
+        }
         Ok(imported)
     }
 

@@ -29,12 +29,9 @@ async fn find(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<String>,
 ) -> Result<HttpResponse, ApiError> {
-    let id = id.into_inner();
-    let result = web::block(move || {
-        let conn = &mut db.connection()?;
-        UserResolved::from_str(conn, id.as_str())
-    })
-    .await??;
+    let result =
+        web::block(move || UserResolved::from_str(&mut db.connection()?, id.into_inner().as_str()))
+            .await??;
     Ok(HttpResponse::Ok().json(result))
 }
 
@@ -60,8 +57,11 @@ async fn list(
     options: web::Query<UserListQueryOptions>,
 ) -> Result<HttpResponse, ApiError> {
     let result = web::block(move || {
-        let mut conn = db.connection()?;
-        User::find_all(&mut conn, page_query.into_inner(), options.into_inner())
+        User::find_all(
+            &mut db.connection()?,
+            page_query.into_inner(),
+            options.into_inner(),
+        )
     })
     .await??;
     Ok(HttpResponse::Ok().json(result))
@@ -90,11 +90,9 @@ async fn create_placeholder(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&options));
-    let result = web::block(move || {
-        let mut conn = db.connection()?;
-        User::create_placeholder(&mut conn, options.into_inner())
-    })
-    .await??;
+    let result =
+        web::block(move || User::create_placeholder(&mut db.connection()?, options.into_inner()))
+            .await??;
     Ok(HttpResponse::Ok().json(result))
 }
 
@@ -125,9 +123,9 @@ async fn update(
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&user));
     let result = web::block(move || {
-        check_higher_privilege(db.clone(), authenticated.user_id, id.clone())?;
-        let mut conn = db.connection()?;
-        User::update(&mut conn, id.into_inner(), user.into_inner())
+        let conn = &mut db.connection()?;
+        check_higher_privilege(conn, authenticated.user_id, id.clone())?;
+        User::update(conn, id.into_inner(), user.into_inner())
     })
     .await??;
 
@@ -169,9 +167,9 @@ async fn ban(
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&user));
     let result = web::block(move || {
-        check_higher_privilege(db.clone(), authenticated.user_id, id.clone())?;
-        let mut conn = db.connection()?;
-        User::ban(&mut conn, id.into_inner(), user.into_inner().ban_level)
+        let conn = &mut db.connection()?;
+        check_higher_privilege(conn, authenticated.user_id, id.clone())?;
+        User::ban(conn, id.into_inner(), user.into_inner().ban_level)
     })
     .await??;
 

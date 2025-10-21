@@ -38,9 +38,14 @@ pub async fn stats(
     page: web::Query<PageQuery<20>>,
     query: web::Query<StatsQuery>,
 ) -> Result<HttpResponse, ApiError> {
-    let q = query.into_inner();
-    let page_query = page.into_inner();
-    let stats = web::block(move || DailyStatsPage::find(db, page_query, q.reviewer_id)).await??;
+    let stats = web::block(move || {
+        DailyStatsPage::find(
+            &mut db.connection()?,
+            page.into_inner(),
+            query.into_inner().reviewer_id,
+        )
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(stats))
 }
 
@@ -71,9 +76,12 @@ pub async fn leaderboard_route(
     query: web::Query<LeaderboardQuery>,
 ) -> Result<HttpResponse, ApiError> {
     let query = query.into_inner();
-
     let data = web::block(move || {
-        stats_mod_leaderboard(db, query.since, query.only_active.unwrap_or(false))
+        stats_mod_leaderboard(
+            &mut db.connection()?,
+            query.since,
+            query.only_active.unwrap_or(false),
+        )
     })
     .await??;
     Ok(HttpResponse::Ok().json(data))

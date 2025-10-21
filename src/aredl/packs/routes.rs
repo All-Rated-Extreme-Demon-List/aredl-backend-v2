@@ -29,7 +29,7 @@ async fn create(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&pack));
-    let pack = web::block(|| Pack::create(db, pack.into_inner())).await??;
+    let pack = web::block(move || Pack::create(&mut db.connection()?, pack.into_inner())).await??;
     Ok(HttpResponse::Ok().json(pack))
 }
 
@@ -58,7 +58,9 @@ async fn update(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&pack));
-    let pack = web::block(|| Pack::update(db, id.into_inner(), pack.into_inner())).await??;
+    let pack =
+        web::block(move || Pack::update(&mut db.connection()?, id.into_inner(), pack.into_inner()))
+            .await??;
     Ok(HttpResponse::Ok().json(pack))
 }
 
@@ -83,7 +85,7 @@ async fn delete(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
 ) -> Result<HttpResponse, ApiError> {
-    let pack = web::block(|| Pack::delete(db, id.into_inner())).await??;
+    let pack = web::block(move || Pack::delete(&mut db.connection()?, id.into_inner())).await??;
     Ok(HttpResponse::Ok().json(pack))
 }
 

@@ -30,7 +30,8 @@ use uuid::Uuid;
 async fn find_all_recurring_shifts(
     db: web::Data<Arc<DbAppState>>,
 ) -> Result<HttpResponse, ApiError> {
-    let shifts = web::block(move || ResolvedRecurringShift::find_all(&db)).await??;
+    let shifts =
+        web::block(move || ResolvedRecurringShift::find_all(&mut db.connection()?)).await??;
     Ok(HttpResponse::Ok().json(shifts))
 }
 
@@ -54,7 +55,9 @@ async fn create_new_recurring_shift(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&body));
-    let shift = web::block(move || RecurringShift::create(&db, body.into_inner())).await??;
+    let shift =
+        web::block(move || RecurringShift::create(&mut db.connection()?, body.into_inner()))
+            .await??;
     Ok(HttpResponse::Ok().json(shift))
 }
 
@@ -80,9 +83,10 @@ async fn patch_recurring_shift(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&body));
-    let updated =
-        web::block(move || RecurringShift::patch(&db, id.into_inner(), body.into_inner()))
-            .await??;
+    let updated = web::block(move || {
+        RecurringShift::patch(&mut db.connection()?, id.into_inner(), body.into_inner())
+    })
+    .await??;
     Ok(HttpResponse::Created().json(updated))
 }
 
@@ -107,7 +111,9 @@ async fn delete_recurring_shift(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
 ) -> Result<HttpResponse, ApiError> {
-    let deleted = web::block(move || RecurringShift::delete(&db, id.into_inner())).await??;
+    let deleted =
+        web::block(move || RecurringShift::delete(&mut db.connection()?, id.into_inner()))
+            .await??;
     Ok(HttpResponse::Created().json(deleted))
 }
 

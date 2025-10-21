@@ -1,5 +1,5 @@
 use crate::{
-    db::DbAppState,
+    db::DbConnection,
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
     schema::{shifts, users},
@@ -113,18 +113,14 @@ pub struct ShiftInsert {
 }
 
 impl Shift {
-    pub fn patch(db: &DbAppState, id: Uuid, patch: ShiftPatch) -> Result<Self, ApiError> {
-        let conn = &mut db.connection()?;
-
+    pub fn patch(conn: &mut DbConnection, id: Uuid, patch: ShiftPatch) -> Result<Self, ApiError> {
         let updated = diesel::update(shifts::table.filter(shifts::id.eq(id)))
             .set(&patch)
             .get_result::<Shift>(conn)?;
         Ok(updated)
     }
 
-    pub fn delete(db: &DbAppState, id: Uuid) -> Result<Self, ApiError> {
-        let conn = &mut db.connection()?;
-
+    pub fn delete(conn: &mut DbConnection, id: Uuid) -> Result<Self, ApiError> {
         let deleted =
             diesel::delete(shifts::table.filter(shifts::id.eq(id))).get_result::<Shift>(conn)?;
         Ok(deleted)
@@ -150,12 +146,10 @@ impl ResolvedShift {
 
 impl ShiftPage {
     pub fn find_me<const D: i64>(
-        db: &DbAppState,
+        conn: &mut DbConnection,
         page_query: PageQuery<D>,
         user_id: Uuid,
     ) -> Result<Paginated<ShiftPage>, ApiError> {
-        let conn = &mut db.connection()?;
-
         let total = shifts::table
             .filter(shifts::user_id.eq(user_id))
             .count()
@@ -185,12 +179,10 @@ impl ShiftPage {
     }
 
     pub fn find_all<const D: i64>(
-        db: &DbAppState,
+        conn: &mut DbConnection,
         page_query: PageQuery<D>,
         options: ShiftFilterQuery,
     ) -> Result<Paginated<ShiftPage>, ApiError> {
-        let conn = &mut db.connection()?;
-
         let build_filtered = || {
             let mut q = shifts::table.into_boxed::<Pg>();
             if let Some(user_id) = options.user_id {

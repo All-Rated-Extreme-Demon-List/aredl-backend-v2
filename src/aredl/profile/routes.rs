@@ -23,11 +23,8 @@ async fn find(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<String>,
 ) -> Result<HttpResponse, ApiError> {
-    let profile = web::block(move || {
-        let mut conn = db.connection()?;
-        ProfileResolved::from_str(&mut conn, id.as_str())
-    })
-    .await??;
+    let profile =
+        web::block(move || ProfileResolved::from_str(&mut db.connection()?, id.as_str())).await??;
     Ok(HttpResponse::Ok().json(profile))
 }
 

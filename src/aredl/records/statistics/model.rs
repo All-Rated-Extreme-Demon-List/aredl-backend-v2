@@ -1,17 +1,15 @@
 use crate::aredl::levels::ExtendedBaseLevel;
+use crate::db::DbConnection;
 use crate::{
-    db::DbAppState,
     error_handler::ApiError,
     schema::{aredl::levels, aredl::record_totals},
 };
-use actix_web::web;
 use diesel::pg::Pg;
 use diesel::{
     ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl,
     SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -29,10 +27,8 @@ pub struct ResolvedLevelTotalRecordsRow {
 }
 
 pub fn total_records(
-    db: web::Data<Arc<DbAppState>>,
+    conn: &mut DbConnection,
 ) -> Result<Vec<ResolvedLevelTotalRecordsRow>, ApiError> {
-    let conn = &mut db.connection()?;
-
     let rows: Vec<(LevelTotalRecordsRow, Option<ExtendedBaseLevel>)> = record_totals::table
         .left_join(levels::table.on(levels::id.nullable().eq(record_totals::level_id)))
         .order_by(record_totals::records.desc())

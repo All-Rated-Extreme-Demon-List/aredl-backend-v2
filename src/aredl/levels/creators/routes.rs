@@ -27,8 +27,12 @@ async fn find_all(
     db: web::Data<Arc<DbAppState>>,
     level_id: web::Path<String>,
 ) -> Result<HttpResponse, ApiError> {
-    let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
-    let creators = web::block(move || BaseUser::aredl_find_all_creators(db, level_id)).await??;
+    let creators = web::block(move || {
+        let conn = &mut db.connection()?;
+        let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
+        BaseUser::aredl_find_all_creators(conn, level_id)
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(creators))
 }
 
@@ -56,10 +60,12 @@ async fn set(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&creators));
-    let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
-    let creators =
-        web::block(move || BaseUser::aredl_set_all_creators(db, level_id, creators.into_inner()))
-            .await??;
+    let creators = web::block(move || {
+        let conn = &mut db.connection()?;
+        let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
+        BaseUser::aredl_set_all_creators(conn, level_id, creators.into_inner())
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(creators))
 }
 
@@ -87,10 +93,12 @@ async fn add(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&creators));
-    let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
-    let creators =
-        web::block(move || BaseUser::aredl_add_all_creators(db, level_id, creators.into_inner()))
-            .await??;
+    let creators = web::block(move || {
+        let conn = &mut db.connection()?;
+        let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
+        BaseUser::aredl_add_all_creators(conn, level_id, creators.into_inner())
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(creators))
 }
 
@@ -118,9 +126,10 @@ async fn delete(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&creators));
-    let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
     let creators = web::block(move || {
-        BaseUser::aredl_delete_all_creators(db, level_id, creators.into_inner())
+        let conn = &mut db.connection()?;
+        let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
+        BaseUser::aredl_delete_all_creators(conn, level_id, creators.into_inner())
     })
     .await??;
     Ok(HttpResponse::Ok().json(creators))

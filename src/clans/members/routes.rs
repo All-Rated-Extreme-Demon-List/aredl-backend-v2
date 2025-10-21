@@ -30,8 +30,7 @@ async fn list(
     clan_id: web::Path<Uuid>,
 ) -> Result<HttpResponse, ApiError> {
     let result = web::block(move || {
-        let mut conn = db.connection()?;
-        ClanMember::find_all_clan_members(&mut conn, clan_id.into_inner())
+        ClanMember::find_all_clan_members(&mut db.connection()?, clan_id.into_inner())
     })
     .await??;
     Ok(HttpResponse::Ok().json(result))
@@ -63,8 +62,7 @@ async fn add(
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&members));
     let result = web::block(move || {
-        let mut conn = db.connection()?;
-        ClanMember::add_all(&mut conn, *clan_id, members.into_inner())
+        ClanMember::add_all(&mut db.connection()?, *clan_id, members.into_inner())
     })
     .await??;
     Ok(HttpResponse::Ok().json(result))
@@ -96,8 +94,7 @@ async fn set(
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&members));
     let result = web::block(move || {
-        let mut conn = db.connection()?;
-        ClanMember::set_all(&mut conn, *clan_id, members.into_inner())
+        ClanMember::set_all(&mut db.connection()?, *clan_id, members.into_inner())
     })
     .await??;
     Ok(HttpResponse::Ok().json(result))
@@ -133,14 +130,14 @@ async fn delete(
     root_span.record("body", &tracing::field::debug(&members));
     let clan_id = clan_id.into_inner();
     let result = web::block(move || {
-        let mut conn = db.connection()?;
-        authenticated.has_clan_permission(db.clone(), clan_id, 1)?;
+        let conn = &mut db.connection()?;
+        authenticated.has_clan_permission(conn, clan_id, 1)?;
 
         for member_id in members.iter() {
-            authenticated.has_clan_higher_permission(db.clone(), clan_id, *member_id)?;
+            authenticated.has_clan_higher_permission(conn, clan_id, *member_id)?;
         }
 
-        ClanMember::remove_all(&mut conn, clan_id, members.into_inner())
+        ClanMember::remove_all(conn, clan_id, members.into_inner())
     })
     .await??;
 
@@ -176,12 +173,10 @@ async fn invite(
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&user));
     let result = web::block(move || {
-        let mut conn = db.connection()?;
-
-        authenticated.has_clan_permission(db.clone(), *clan_id, 1)?;
-
+        let conn = &mut db.connection()?;
+        authenticated.has_clan_permission(conn, *clan_id, 1)?;
         let invite = ClanInvite::create(
-            &mut conn,
+            conn,
             ClanInviteCreate {
                 clan_id: *clan_id,
                 user_id: user.user_id,
@@ -227,13 +222,9 @@ async fn edit(
     root_span.record("body", &tracing::field::debug(&member));
     let (clan_id, user_id) = path.into_inner();
     let result = web::block(move || {
-        let mut conn = db.connection()?;
-
-        authenticated.has_clan_permission(db.clone(), clan_id, 2)?;
-
-        let member =
-            ClanMember::edit_member_role(&mut conn, clan_id, user_id, member.into_inner())?;
-
+        let conn = &mut db.connection()?;
+        authenticated.has_clan_permission(conn, clan_id, 2)?;
+        let member = ClanMember::edit_member_role(conn, clan_id, user_id, member.into_inner())?;
         Ok::<ClanMember, ApiError>(member)
     })
     .await??;

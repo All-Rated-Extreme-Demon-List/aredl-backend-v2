@@ -1,17 +1,15 @@
 use crate::{
     arepl::levels::ExtendedBaseLevel,
     auth::{Authenticated, Permission},
-    db::DbAppState,
+    db::DbConnection,
     error_handler::ApiError,
     schema::arepl::{submission_history, submissions, submissions_with_priority},
     users::BaseUser,
 };
-use actix_web::web;
 use chrono::{DateTime, Utc};
 use diesel::{pg::Pg, Connection, ExpressionMethods, RunQueryDsl, Selectable};
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -162,18 +160,19 @@ pub struct SubmissionPage {
 
 impl Submission {
     pub fn delete(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         submission_id: Uuid,
         authenticated: Authenticated,
     ) -> Result<(), ApiError> {
-        let mut conn = db.connection()?;
+        let is_staff = authenticated.has_permission(conn, Permission::SubmissionReview)?;
+
         conn.transaction(|connection| -> Result<(), ApiError> {
             // Log deletion in submission history
             let history = SubmissionHistory {
                 id: Uuid::new_v4(),
                 submission_id,
                 record_id: None,
-                status: SubmissionStatus::Denied, // Or SubmissionStatus::Deleted if you add it
+                status: SubmissionStatus::Denied, // Or SubmissionStatus::Deleted if implemented later on
                 reviewer_notes: None,
                 reviewer_id: None,
                 user_notes: Some("Submission deleted".into()),
@@ -187,7 +186,7 @@ impl Submission {
                 .filter(submissions::id.eq(submission_id))
                 .into_boxed();
 
-            if !authenticated.has_permission(db, Permission::SubmissionReview)? {
+            if !is_staff {
                 query = query
                     .filter(submissions::submitted_by.eq(authenticated.user_id))
                     .filter(submissions::status.eq(SubmissionStatus::Pending));

@@ -1,10 +1,9 @@
 use crate::arepl::levels::ExtendedBaseLevel;
-use crate::db::DbAppState;
+use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::{arepl::levels, arepl::records, users};
 use crate::users::{BaseUser, BaseUserWithCountry};
-use actix_web::web;
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::query_dsl::JoinOnDsl;
@@ -13,7 +12,6 @@ use diesel::{
     RunQueryDsl, Selectable, SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -210,16 +208,16 @@ pub struct FullResolvedRecordPage {
 }
 
 impl Record {
-    pub fn create(db: web::Data<Arc<DbAppState>>, record: RecordInsert) -> Result<Self, ApiError> {
+    pub fn create(conn: &mut DbConnection, record: RecordInsert) -> Result<Self, ApiError> {
         let record = diesel::insert_into(records::table)
             .values(record)
             .returning(Record::as_select())
-            .get_result::<Self>(&mut db.connection()?)?;
+            .get_result::<Self>(conn)?;
         Ok(record)
     }
 
     pub fn update(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         record_id: Uuid,
         record: RecordUpdate,
     ) -> Result<Self, ApiError> {
@@ -227,28 +225,26 @@ impl Record {
             .filter(records::id.eq(record_id))
             .set(record)
             .returning(Record::as_select())
-            .get_result::<Self>(&mut db.connection()?)?;
+            .get_result::<Self>(conn)?;
         Ok(record)
     }
 
-    pub fn delete(db: web::Data<Arc<DbAppState>>, record_id: Uuid) -> Result<Self, ApiError> {
+    pub fn delete(conn: &mut DbConnection, record_id: Uuid) -> Result<Self, ApiError> {
         let record = diesel::delete(records::table)
             .filter(records::id.eq(record_id))
             .returning(Record::as_select())
-            .get_result::<Self>(&mut db.connection()?)?;
+            .get_result::<Self>(conn)?;
         Ok(record)
     }
 }
 
 impl FullRecordUnresolved {
     pub fn find_all<const D: i64>(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         page_query: PageQuery<D>,
         mut options: RecordsQueryOptions,
         hide_reviewer: bool,
     ) -> Result<Paginated<FullUnresolvedRecordPage>, ApiError> {
-        let conn = &mut db.connection()?;
-
         if hide_reviewer {
             options.reviewer_filter = None;
         }
@@ -303,9 +299,7 @@ impl FullRecordUnresolved {
 }
 
 impl FullRecordResolved {
-    pub fn find(db: web::Data<Arc<DbAppState>>, record_id: Uuid) -> Result<Self, ApiError> {
-        let conn = &mut db.connection()?;
-
+    pub fn find(conn: &mut DbConnection, record_id: Uuid) -> Result<Self, ApiError> {
         let reviewers = alias!(users as reviewers);
 
         let (record, user, level, reviewer): (
@@ -338,13 +332,11 @@ impl FullRecordResolved {
     }
 
     pub fn find_all<const D: i64>(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         page_query: PageQuery<D>,
         mut options: RecordsQueryOptions,
         hide_reviewer: bool,
     ) -> Result<Paginated<FullResolvedRecordPage>, ApiError> {
-        let conn = &mut db.connection()?;
-
         if hide_reviewer {
             options.reviewer_filter = None;
         }

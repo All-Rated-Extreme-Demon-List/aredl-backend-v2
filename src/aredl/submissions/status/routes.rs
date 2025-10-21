@@ -1,11 +1,11 @@
-use actix_web::{post, web, HttpResponse, get};
-use std::sync::Arc;
 use crate::{
     aredl::submissions::status::{SubmissionsEnabled, SubmissionsEnabledFull},
-    auth::{Authenticated, Permission, UserAuth}, 
-    db::DbAppState, 
+    auth::{Authenticated, Permission, UserAuth},
+    db::DbAppState,
     error_handler::ApiError,
 };
+use actix_web::{get, post, web, HttpResponse};
+use std::sync::Arc;
 use utoipa::OpenApi;
 
 #[utoipa::path(
@@ -21,11 +21,13 @@ use utoipa::OpenApi;
         ("api_key" = []),
     ),
 )]
-#[post("/enable", wrap="UserAuth::require(Permission::ShiftManage)")]
-async fn enable(db: web::Data<Arc<DbAppState>>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
-    web::block(
-        move || SubmissionsEnabled::enable(&mut db.connection()?, authenticated.user_id)
-    ).await??;
+#[post("/enable", wrap = "UserAuth::require(Permission::ShiftManage)")]
+async fn enable(
+    db: web::Data<Arc<DbAppState>>,
+    authenticated: Authenticated,
+) -> Result<HttpResponse, ApiError> {
+    web::block(move || SubmissionsEnabled::enable(&mut db.connection()?, authenticated.user_id))
+        .await??;
     Ok(HttpResponse::Ok().finish())
 }
 
@@ -42,11 +44,13 @@ async fn enable(db: web::Data<Arc<DbAppState>>, authenticated: Authenticated) ->
         ("api_key" = []),
     ),
 )]
-#[post("/disable", wrap="UserAuth::require(Permission::ShiftManage)")]
-async fn disable(db: web::Data<Arc<DbAppState>>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
-    web::block(
-        move || SubmissionsEnabled::disable(&mut db.connection()?, authenticated.user_id)
-    ).await??;
+#[post("/disable", wrap = "UserAuth::require(Permission::ShiftManage)")]
+async fn disable(
+    db: web::Data<Arc<DbAppState>>,
+    authenticated: Authenticated,
+) -> Result<HttpResponse, ApiError> {
+    web::block(move || SubmissionsEnabled::disable(&mut db.connection()?, authenticated.user_id))
+        .await??;
     Ok(HttpResponse::Ok().finish())
 }
 
@@ -63,11 +67,10 @@ async fn disable(db: web::Data<Arc<DbAppState>>, authenticated: Authenticated) -
         ("api_key" = []),
     ),
 )]
-#[get("/full", wrap="UserAuth::require(Permission::ShiftManage)")]
+#[get("/full", wrap = "UserAuth::require(Permission::ShiftManage)")]
 async fn get_status_full(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
-    let res = web::block(
-        move || SubmissionsEnabledFull::get_status(&mut db.connection()?)
-    ).await??;
+    let res =
+        web::block(move || SubmissionsEnabledFull::get_status(&mut db.connection()?)).await??;
     return Ok(HttpResponse::Ok().json(res));
 }
 
@@ -86,9 +89,7 @@ async fn get_status_full(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse,
 )]
 #[get("")]
 async fn get_status(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
-    let res = web::block(
-        move || SubmissionsEnabled::is_enabled(&mut db.connection()?)
-    ).await??;
+    let res = web::block(move || SubmissionsEnabled::is_enabled(&mut db.connection()?)).await??;
     return Ok(HttpResponse::Ok().json(res));
 }
 
@@ -107,17 +108,14 @@ async fn get_status(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiE
 )]
 #[get("/history")]
 async fn get_history(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
-    let res = web::block(
-        move || SubmissionsEnabledFull::get_statuses(&mut db.connection()?)
-    ).await??;
+    let res =
+        web::block(move || SubmissionsEnabledFull::get_statuses(&mut db.connection()?)).await??;
     return Ok(HttpResponse::Ok().json(res));
 }
 
 #[derive(OpenApi)]
 #[openapi(
-    components(schemas(
-        SubmissionsEnabled, SubmissionsEnabledFull
-    )),
+    components(schemas(SubmissionsEnabled, SubmissionsEnabledFull)),
     paths(get_status, get_status_full, enable, disable, get_history)
 )]
 pub struct ApiDoc;
@@ -128,6 +126,6 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .service(get_status_full)
             .service(get_history)
             .service(enable)
-            .service(disable)
+            .service(disable),
     );
 }

@@ -45,7 +45,6 @@ async fn sleep_for_ratelimit(headers: &HeaderMap, default_sleep_ms: u64) {
 pub async fn start_discord_avatars_refresher(db: Arc<DbAppState>) {
     let schedule = Schedule::from_str(&get_secret("DISCORD_AVATARS_REFRESH_SCHEDULE")).unwrap();
     let schedule = Arc::new(schedule);
-    let db_clone = db.clone();
 
     let discord_base =
         std::env::var("DISCORD_BASE_URL").unwrap_or_else(|_| "https://discord.com".to_string());
@@ -61,10 +60,10 @@ pub async fn start_discord_avatars_refresher(db: Arc<DbAppState>) {
         loop {
             tracing::info!("Refreshing discord avatars");
 
-            let mut conn = match db_clone.connection() {
+            let conn = &mut match db.connection() {
                 Ok(c) => c,
                 Err(e) => {
-                    tracing::error!("DB connection failed for avatar refresh: {e}");
+                    tracing::error!("DB connection failed: {e}");
                     continue;
                 }
             };
@@ -80,7 +79,7 @@ pub async fn start_discord_avatars_refresher(db: Arc<DbAppState>) {
                 .order(users::last_discord_avatar_update.asc().nulls_first())
                 .limit(BATCH_LIMIT)
                 .select((users::id, users::discord_id))
-                .load::<(uuid::Uuid, Option<String>)>(&mut conn)
+                .load::<(uuid::Uuid, Option<String>)>(conn)
                 .expect("Failed to load users for avatar refresh");
 
             if users_to_refresh.is_empty() {
@@ -161,7 +160,7 @@ pub async fn start_discord_avatars_refresher(db: Arc<DbAppState>) {
                             users::discord_avatar.eq(updated_discord_user.avatar),
                             users::last_discord_avatar_update.eq(Utc::now().naive_utc()),
                         ))
-                        .execute(&mut conn)
+                        .execute(conn)
                     {
                         Ok(_) => {}
                         Err(e) => {

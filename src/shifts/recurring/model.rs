@@ -1,16 +1,14 @@
 use crate::{
-    db::DbAppState,
+    db::DbConnection,
     error_handler::ApiError,
-    schema::{
-        users, {recurrent_shifts, shifts},
-    },
+    schema::{recurrent_shifts, shifts, users},
     shifts::{ShiftInsert, Weekday},
     users::BaseUser,
 };
 use chrono::{DateTime, Datelike, NaiveDate, TimeZone, Utc};
 use diesel::{
-    AsChangeset, ExpressionMethods, Identifiable, Insertable, JoinOnDsl, PgConnection, QueryDsl,
-    Queryable, RunQueryDsl, SelectableHelper,
+    AsChangeset, ExpressionMethods, Identifiable, Insertable, JoinOnDsl, QueryDsl, Queryable,
+    RunQueryDsl, SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -99,9 +97,7 @@ impl ResolvedRecurringShift {
         }
     }
 
-    pub fn find_all(db: &DbAppState) -> Result<Vec<Self>, ApiError> {
-        let conn = &mut db.connection()?;
-
+    pub fn find_all(conn: &mut DbConnection) -> Result<Vec<Self>, ApiError> {
         let result_rows = recurrent_shifts::table
             .inner_join(users::table.on(recurrent_shifts::user_id.eq(users::id)))
             .order((
@@ -121,33 +117,35 @@ impl ResolvedRecurringShift {
 }
 
 impl RecurringShift {
-    pub fn create(db: &DbAppState, new_shift: RecurringShiftInsert) -> Result<Self, ApiError> {
-        let conn = &mut db.connection()?;
+    pub fn create(
+        conn: &mut DbConnection,
+        new_shift: RecurringShiftInsert,
+    ) -> Result<Self, ApiError> {
         let inserted = diesel::insert_into(recurrent_shifts::table)
             .values(&new_shift)
             .get_result(conn)?;
         Ok(inserted)
     }
 
-    pub fn patch(db: &DbAppState, id: Uuid, patch: RecurringShiftPatch) -> Result<Self, ApiError> {
-        let conn = &mut db.connection()?;
-
+    pub fn patch(
+        conn: &mut DbConnection,
+        id: Uuid,
+        patch: RecurringShiftPatch,
+    ) -> Result<Self, ApiError> {
         let updated = diesel::update(recurrent_shifts::table.filter(recurrent_shifts::id.eq(id)))
             .set(&patch)
             .get_result::<RecurringShift>(conn)?;
         Ok(updated)
     }
 
-    pub fn delete(db: &DbAppState, id: Uuid) -> Result<Self, ApiError> {
-        let conn = &mut db.connection()?;
-
+    pub fn delete(conn: &mut DbConnection, id: Uuid) -> Result<Self, ApiError> {
         let deleted = diesel::delete(recurrent_shifts::table.filter(recurrent_shifts::id.eq(id)))
             .get_result::<RecurringShift>(conn)?;
         Ok(deleted)
     }
 
     pub fn create_shifts(
-        conn: &mut PgConnection,
+        conn: &mut DbConnection,
         date: NaiveDate,
     ) -> Result<Vec<ShiftInsert>, ApiError> {
         let today = match date.weekday().number_from_monday() {

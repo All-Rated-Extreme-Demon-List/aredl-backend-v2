@@ -1,7 +1,7 @@
 use crate::{
     aredl::{levels::ExtendedBaseLevel, submissions::*},
     auth::{Authenticated, Permission},
-    db::{DbAppState, DbConnection},
+    db::DbConnection,
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
     schema::{
@@ -10,13 +10,13 @@ use crate::{
     },
     users::BaseUser,
 };
-use actix_web::web;
-use diesel::{expression_methods::NullableExpressionMethods, BoolExpressionMethods, PgTextExpressionMethods};
+use diesel::{
+    expression_methods::NullableExpressionMethods, BoolExpressionMethods, PgTextExpressionMethods,
+};
 use diesel::{
     pg::Pg, ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl, Selectable, SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -27,10 +27,14 @@ pub type ResolvedSubmissionRow = (
     Option<BaseUser>,
 );
 
-fn get_submission_ids_from_notes(note_text: String, conn: &mut DbConnection) -> Result<Vec<Uuid>, ApiError> {
+fn get_submission_ids_from_notes(
+    note_text: String,
+    conn: &mut DbConnection,
+) -> Result<Vec<Uuid>, ApiError> {
     Ok(submission_history::table
         .filter(
-            submission_history::user_notes.ilike(&note_text)
+            submission_history::user_notes
+                .ilike(&note_text)
                 .or(submission_history::reviewer_notes.ilike(&note_text)),
         )
         .select(submission_history::submission_id)
@@ -85,7 +89,7 @@ macro_rules! aredl_apply_submissions_filters {
     ($query:expr, $opts:expr, $conn:expr) => {{
         let opts = &$opts;
         let mut new_query = $query;
-        let conn = $conn;
+        let conn = &mut *$conn;
 
         if let Some(status) = opts.status_filter.clone() {
             new_query = new_query.filter(submissions_with_priority::status.eq(status));
@@ -166,18 +170,16 @@ impl SubmissionResolved {
 
     pub fn resolve_from_id(
         submission_id: Uuid,
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         authenticated: Authenticated,
     ) -> Result<SubmissionResolved, ApiError> {
-        let conn = &mut db.connection()?;
-
         let resolved_raw = aredl_base_resolved_submission_query!()
             .filter(submissions_with_priority::id.eq(submission_id))
             .first::<ResolvedSubmissionRow>(conn)?;
 
         let mut resolved = Self::from_data(resolved_raw);
 
-        if !authenticated.has_permission(db.clone(), Permission::SubmissionReview)? {
+        if !authenticated.has_permission(conn, Permission::SubmissionReview)? {
             resolved.reviewer = None;
         }
 
@@ -185,16 +187,14 @@ impl SubmissionResolved {
     }
 
     pub fn find_one(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         id: Uuid,
         authenticated: Authenticated,
     ) -> Result<SubmissionResolved, ApiError> {
-        let conn = &mut db.connection()?;
-
         let mut query =
             aredl_base_resolved_submission_query!().filter(submissions_with_priority::id.eq(id));
 
-        if !authenticated.has_permission(db.clone(), Permission::SubmissionReview)? {
+        if !authenticated.has_permission(conn, Permission::SubmissionReview)? {
             query = query.filter(submissions_with_priority::submitted_by.eq(authenticated.user_id));
         }
 
@@ -206,15 +206,13 @@ impl SubmissionResolved {
 
 impl ResolvedSubmissionPage {
     pub fn find_all<const D: i64>(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         page_query: PageQuery<D>,
         options: SubmissionQueryOptions,
         authenticated: Authenticated,
     ) -> Result<Paginated<Self>, ApiError> {
-        let conn = &mut db.connection()?;
-
         let mut query = aredl_base_resolved_submission_query!();
-        query = aredl_apply_submissions_filters!(query, options, &mut db.connection()?);
+        query = aredl_apply_submissions_filters!(query, options, conn);
 
         let submissions = query
             .limit(page_query.per_page())
@@ -228,10 +226,10 @@ impl ResolvedSubmissionPage {
             .collect::<Vec<_>>();
 
         let mut count_query = aredl_base_resolved_submission_query!();
-        count_query = aredl_apply_submissions_filters!(count_query, options, &mut db.connection()?);
+        count_query = aredl_apply_submissions_filters!(count_query, options, conn);
         let total_count: i64 = count_query.count().get_result(conn)?;
 
-        if !authenticated.has_permission(db, Permission::SubmissionReview)? {
+        if !authenticated.has_permission(conn, Permission::SubmissionReview)? {
             submissions.iter_mut().for_each(|s| s.reviewer = None);
         }
 
@@ -243,7 +241,7 @@ impl ResolvedSubmissionPage {
     }
 
     pub fn find_own<const D: i64>(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         page_query: PageQuery<D>,
         options: SubmissionQueryOptions,
         authenticated: Authenticated,
@@ -253,6 +251,6 @@ impl ResolvedSubmissionPage {
             ..options
         };
 
-        Ok(Self::find_all(db, page_query, options, authenticated)?)
+        Ok(Self::find_all(conn, page_query, options, authenticated)?)
     }
 }

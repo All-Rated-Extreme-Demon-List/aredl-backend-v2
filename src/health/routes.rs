@@ -18,9 +18,8 @@ use crate::error_handler::ApiError;
 #[get("")]
 async fn healthz(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
     let result = web::block(move || {
-        let mut conn = db.connection()?;
         diesel::sql_query("SELECT 1")
-            .execute(&mut conn)
+            .execute(&mut db.connection()?)
             .map_err(|error| ApiError::new(503, &format!("DB healthcheck failed: {}", error)))
     })
     .await;

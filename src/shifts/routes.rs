@@ -38,9 +38,14 @@ async fn find_all_shifts(
     page_query: web::Query<PageQuery<50>>,
     options: web::Query<ShiftFilterQuery>,
 ) -> Result<HttpResponse, ApiError> {
-    let shifts =
-        web::block(move || ShiftPage::find_all(&db, page_query.into_inner(), options.into_inner()))
-            .await??;
+    let shifts = web::block(move || {
+        ShiftPage::find_all(
+            &mut db.connection()?,
+            page_query.into_inner(),
+            options.into_inner(),
+        )
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(shifts))
 }
 
@@ -67,9 +72,14 @@ async fn find_all_shifts_me(
     page_query: web::Query<PageQuery<50>>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let shifts =
-        web::block(move || ShiftPage::find_me(&db, page_query.into_inner(), authenticated.user_id))
-            .await??;
+    let shifts = web::block(move || {
+        ShiftPage::find_me(
+            &mut db.connection()?,
+            page_query.into_inner(),
+            authenticated.user_id,
+        )
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(shifts))
 }
 
@@ -96,7 +106,8 @@ async fn patch_shift(
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&body));
     let updated =
-        web::block(move || Shift::patch(&db, id.into_inner(), body.into_inner())).await??;
+        web::block(move || Shift::patch(&mut db.connection()?, id.into_inner(), body.into_inner()))
+            .await??;
     Ok(HttpResponse::Created().json(updated))
 }
 
@@ -118,7 +129,8 @@ async fn delete_shift(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
 ) -> Result<HttpResponse, ApiError> {
-    let deleted = web::block(move || Shift::delete(&db, id.into_inner())).await??;
+    let deleted =
+        web::block(move || Shift::delete(&mut db.connection()?, id.into_inner())).await??;
     Ok(HttpResponse::Created().json(deleted))
 }
 

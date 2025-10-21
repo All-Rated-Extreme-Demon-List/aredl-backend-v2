@@ -1,9 +1,8 @@
 use crate::arepl::levels::BaseLevel;
-use crate::db::DbAppState;
+use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::arepl::{levels, position_history};
-use actix_web::web;
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::{
@@ -11,7 +10,6 @@ use diesel::{
     SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use utoipa::ToSchema;
 
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug)]
@@ -110,7 +108,7 @@ pub struct ChangelogPage {
 
 impl ChangelogPage {
     pub fn find<const D: i64>(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         page_query: PageQuery<D>,
     ) -> Result<Paginated<Self>, ApiError> {
         let (level_affected, level_above, level_below) = diesel::alias!(
@@ -151,7 +149,7 @@ impl ChangelogPage {
                 BaseLevel,
                 Option<BaseLevel>,
                 Option<BaseLevel>,
-            )>(&mut db.connection()?)?;
+            )>(conn)?;
 
         let records_resolved = records
             .into_iter()
@@ -167,9 +165,7 @@ impl ChangelogPage {
             })
             .collect::<Vec<_>>();
 
-        let count: i64 = position_history::table
-            .count()
-            .get_result(&mut db.connection()?)?;
+        let count: i64 = position_history::table.count().get_result(conn)?;
 
         Ok(Paginated::<Self>::from_data(
             page_query,

@@ -1,18 +1,18 @@
-use std::sync::Arc;
 use actix_web::{post, web, HttpRequest, HttpResponse};
-use chrono::{DateTime, Utc, Duration};
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use utoipa::{OpenApi, ToSchema};
 
 use crate::auth::app_state::AuthAppState;
-use crate::auth::token::{self, check_token_valid};
 use crate::auth::token::UserClaims;
+use crate::auth::token::{self, check_token_valid};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 
 #[derive(Debug, Deserialize)]
 pub struct ApiKeyOptions {
-	pub lifetime_minutes: i64,
+    pub lifetime_minutes: i64,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -43,7 +43,7 @@ pub struct ApiKeyResponse {
 pub async fn create_api_key(
     req: HttpRequest,
     data: web::Data<Arc<AuthAppState>>,
-	options: web::Query<ApiKeyOptions>,
+    options: web::Query<ApiKeyOptions>,
     db: web::Data<Arc<DbAppState>>,
 ) -> Result<HttpResponse, ApiError> {
     let access_token = req
@@ -56,60 +56,52 @@ pub async fn create_api_key(
         return Err(ApiError::new(400, "No token provided"));
     }
 
-    let decoded_token_claims = token::decode_token(
-        access_token.unwrap(),
-        &data.jwt_decoding_key,
-        &["access"]
-    )?;
+    let lifetime_minutes = options.lifetime_minutes;
 
-	let decoded_user_claims = token::decode_user_claims(&decoded_token_claims)?;
+    let response = web::block(move || {
+        let decoded_token_claims =
+            token::decode_token(access_token.unwrap(), &data.jwt_decoding_key, &["access"])?;
 
-    let mut conn = db.connection()?;
-    check_token_valid(&decoded_token_claims, &decoded_user_claims, &mut conn)?;
+        let decoded_user_claims = token::decode_user_claims(&decoded_token_claims)?;
 
-    let user_id = decoded_user_claims.user_id;
+        check_token_valid(
+            &decoded_token_claims,
+            &decoded_user_claims,
+            &mut db.connection()?,
+        )?;
 
-    let lifetime = Duration::minutes(options.lifetime_minutes);
+        let user_id = decoded_user_claims.user_id;
 
-    if lifetime > Duration::days(365) {
-        return Err(ApiError::new(400, "API key lifetime cannot exceed 1 year (525600 minutes)"));
-    }
-	
+        let lifetime = Duration::minutes(lifetime_minutes);
 
-    let (api_key, expires) = token::create_token(
-        UserClaims {
-            user_id: user_id,
-            is_api_key: true,
-        },
-        &data.jwt_encoding_key,
-        lifetime,
-        "access",
-    )?;
+        if lifetime > Duration::days(365) {
+            return Err(ApiError::new(
+                400,
+                "API key lifetime cannot exceed 1 year (525600 minutes)",
+            ));
+        }
 
-    let response = ApiKeyResponse {
-        api_key,
-        expires,
-    };
+        let (api_key, expires) = token::create_token(
+            UserClaims {
+                user_id: user_id,
+                is_api_key: true,
+            },
+            &data.jwt_encoding_key,
+            lifetime,
+            "access",
+        )?;
+
+        Ok(ApiKeyResponse { api_key, expires })
+    })
+    .await??;
 
     Ok(HttpResponse::Ok().json(response))
 }
 
 #[derive(OpenApi)]
-#[openapi(
-	components(
-		schemas(
-			ApiKeyResponse,
-		)
-	),
-	paths(
-		create_api_key,
-	)
-)]
+#[openapi(components(schemas(ApiKeyResponse,)), paths(create_api_key,))]
 pub struct ApiDoc;
 
 pub fn init_routes(config: &mut web::ServiceConfig) {
-    config.service(
-        web::scope("/auth/api-key")
-            .service(create_api_key)
-    );
+    config.service(web::scope("/auth/api-key").service(create_api_key));
 }

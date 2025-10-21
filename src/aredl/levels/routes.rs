@@ -1,6 +1,6 @@
 use crate::aredl::levels::id_resolver::resolve_level_id;
 use crate::aredl::levels::{
-    creators, history, ldms, packs, records, Level, LevelPlace, LevelUpdate, ResolvedLevel
+    creators, history, ldms, packs, records, Level, LevelPlace, LevelUpdate, ResolvedLevel,
 };
 use crate::auth::{Permission, UserAuth};
 use crate::cache_control::CacheController;
@@ -13,7 +13,7 @@ use utoipa::OpenApi;
 
 #[derive(serde::Deserialize)]
 struct LevelQueryOptions {
-    exclude_legacy: Option<bool>
+    exclude_legacy: Option<bool>,
 }
 
 #[utoipa::path(
@@ -27,10 +27,12 @@ struct LevelQueryOptions {
     responses((status = 200, body = [Level]))
 )]
 #[get("", wrap = "CacheController::public_with_max_age(900)")]
-async fn list(db: web::Data<Arc<DbAppState>>, query: web::Query<LevelQueryOptions>) -> Result<HttpResponse, ApiError> {
-    let levels = web::block(
-        move || Level::find_all(db, query.exclude_legacy)
-    ).await??;
+async fn list(
+    db: web::Data<Arc<DbAppState>>,
+    query: web::Query<LevelQueryOptions>,
+) -> Result<HttpResponse, ApiError> {
+    let levels =
+        web::block(move || Level::find_all(&mut db.connection()?, query.exclude_legacy)).await??;
     Ok(HttpResponse::Ok().json(levels))
 }
 
@@ -49,7 +51,8 @@ async fn create(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&level));
-    let level = web::block(|| Level::create(db, level.into_inner())).await??;
+    let level =
+        web::block(move || Level::create(&mut db.connection()?, level.into_inner())).await??;
     Ok(HttpResponse::Ok().json(level))
 }
 
@@ -73,8 +76,12 @@ async fn update(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&level));
-    let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
-    let level = web::block(move || Level::update(db, level_id, level.into_inner())).await??;
+    let level = web::block(move || {
+        let conn = &mut db.connection()?;
+        let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
+        Level::update(conn, level_id, level.into_inner())
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(level))
 }
 
@@ -94,8 +101,12 @@ async fn find(
     db: web::Data<Arc<DbAppState>>,
     level_id: web::Path<String>,
 ) -> Result<HttpResponse, ApiError> {
-    let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
-    let level = web::block(move || ResolvedLevel::find(db, level_id)).await??;
+    let level = web::block(move || {
+        let conn = &mut db.connection()?;
+        let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
+        ResolvedLevel::find(conn, level_id)
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(level))
 }
 

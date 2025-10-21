@@ -25,7 +25,10 @@ async fn sync_pemonlist(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let result = PemonlistPlayer::sync_with_pemonlist(db, authenticated).await?;
+    let result = web::block(move || {
+        PemonlistPlayer::sync_with_pemonlist(&mut db.connection()?, authenticated)
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(result))
 }
 

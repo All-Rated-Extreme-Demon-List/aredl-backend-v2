@@ -38,7 +38,7 @@ async fn get_history(
 ) -> Result<HttpResponse, ApiError> {
     let history = web::block(move || {
         SubmissionHistoryResolved::by_submission_id(
-            db,
+            &mut db.connection()?,
             id.into_inner(),
             options.into_inner(),
             authenticated,

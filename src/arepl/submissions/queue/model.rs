@@ -1,14 +1,12 @@
 use crate::{
     arepl::submissions::{Submission, SubmissionStatus},
-    db::DbAppState,
+    db::DbConnection,
     error_handler::ApiError,
     schema::arepl::{submissions, submissions_with_priority},
 };
-use actix_web::web;
 use chrono::{DateTime, Utc};
 use diesel::{BoolExpressionMethods, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -29,11 +27,9 @@ pub struct QueuePositionResponse {
 
 impl Submission {
     pub fn get_queue_position(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         submission_id: Uuid,
     ) -> Result<(i64, i64), ApiError> {
-        let conn = &mut db.connection()?;
-
         // Get the priority and created_at of the target submission
         let (target_priority, target_created_at): (i64, DateTime<Utc>) =
             submissions_with_priority::table
@@ -70,9 +66,7 @@ impl Submission {
 }
 
 impl SubmissionQueue {
-    pub fn get_queue(db: web::Data<Arc<DbAppState>>) -> Result<Self, ApiError> {
-        let conn = &mut db.connection()?;
-
+    pub fn get_queue(conn: &mut DbConnection) -> Result<Self, ApiError> {
         let submissions_in_queue = submissions::table
             .filter(submissions::status.eq(SubmissionStatus::Pending))
             .count()

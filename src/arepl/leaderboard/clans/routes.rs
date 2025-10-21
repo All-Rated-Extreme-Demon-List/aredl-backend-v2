@@ -30,8 +30,11 @@ async fn list(
     options: web::Query<ClansLeaderboardQueryOptions>,
 ) -> Result<HttpResponse, ApiError> {
     let result = web::block(move || {
-        let mut conn = db.connection()?;
-        ClansLeaderboardPage::find(&mut conn, page_query.into_inner(), options.into_inner())
+        ClansLeaderboardPage::find(
+            &mut db.connection()?,
+            page_query.into_inner(),
+            options.into_inner(),
+        )
     })
     .await??;
     Ok(HttpResponse::Ok().json(result))

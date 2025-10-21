@@ -1,12 +1,11 @@
 use crate::auth::{permission, Permission};
+use crate::db::DbConnection;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::{
-    db::DbAppState,
     error_handler::ApiError,
     schema::{aredl::submission_stats, users},
     users::BaseUser,
 };
-use actix_web::web;
 use chrono::NaiveDate;
 use diesel::pg::Pg;
 use diesel::{
@@ -15,7 +14,6 @@ use diesel::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -68,12 +66,10 @@ impl ResolvedDailyStats {
 }
 impl DailyStatsPage {
     pub fn find<const D: i64>(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         page_query: PageQuery<D>,
         reviewer_id: Option<Uuid>,
     ) -> Result<Paginated<Self>, ApiError> {
-        let conn = &mut db.connection()?;
-
         let build_filtered_query = || {
             let mut q = submission_stats::table
                 .left_join(users::table.on(users::id.nullable().eq(submission_stats::reviewer_id)))
@@ -110,12 +106,10 @@ impl DailyStatsPage {
 }
 
 pub fn stats_mod_leaderboard(
-    db: web::Data<Arc<DbAppState>>,
+    conn: &mut DbConnection,
     since: Option<NaiveDate>,
     only_active: bool,
 ) -> Result<Vec<ResolvedLeaderboardRow>, ApiError> {
-    let conn = &mut db.connection()?;
-
     let mut query = submission_stats::table
         .inner_join(users::table.on(users::id.nullable().eq(submission_stats::reviewer_id)))
         .select((DailyStats::as_select(), BaseUser::as_select()))
@@ -129,7 +123,7 @@ pub fn stats_mod_leaderboard(
 
     let rows = all_rows.into_iter().filter_map(|(stats, user)| {
         if only_active {
-            match permission::check_permission(db.clone(), user.id, Permission::SubmissionReview) {
+            match permission::check_permission(conn, user.id, Permission::SubmissionReview) {
                 Ok(true) => Some((stats, user)),
                 _ => None,
             }

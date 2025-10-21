@@ -1,19 +1,17 @@
 use crate::{
     arepl::submissions::SubmissionStatus,
     auth::{Authenticated, Permission},
-    db::DbAppState,
+    db::DbConnection,
     error_handler::ApiError,
     schema::{arepl::submission_history, users},
     users::BaseUser,
 };
-use actix_web::web;
 use chrono::{DateTime, Utc};
 use diesel::{
     pg::Pg, ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl,
     Selectable, SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -64,13 +62,11 @@ impl SubmissionHistoryResolved {
     }
 
     pub fn by_submission_id(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         id: Uuid,
         options: SubmissionHistoryOptions,
         authenticated: Authenticated,
     ) -> Result<Vec<SubmissionHistoryResolved>, ApiError> {
-        let conn = &mut db.connection()?;
-
         let is_record = options.is_record_id.unwrap_or(false);
 
         let mut query = submission_history::table
@@ -92,10 +88,12 @@ impl SubmissionHistoryResolved {
 
         if is_record {
             let accept_log = &history_row[0].0;
-            
+
             if accept_log.record_id.is_some() {
                 let other_logs = submission_history::table
-                    .left_join(users::table.on(submission_history::reviewer_id.eq(users::id.nullable())))
+                    .left_join(
+                        users::table.on(submission_history::reviewer_id.eq(users::id.nullable())),
+                    )
                     .filter(submission_history::submission_id.eq(accept_log.submission_id))
                     .filter(submission_history::timestamp.lt(accept_log.timestamp))
                     .order(submission_history::timestamp.desc())
@@ -104,7 +102,7 @@ impl SubmissionHistoryResolved {
                         (users::id, users::username, users::global_name).nullable(),
                     ))
                     .load::<(SubmissionHistory, Option<BaseUser>)>(conn)?;
-                
+
                 history_row.extend(other_logs);
             }
         }
@@ -114,7 +112,7 @@ impl SubmissionHistoryResolved {
             .map(SubmissionHistoryResolved::from_data)
             .collect::<Vec<_>>();
 
-        if !authenticated.has_permission(db.clone(), Permission::SubmissionReview)? {
+        if !authenticated.has_permission(conn, Permission::SubmissionReview)? {
             resolved_history.iter_mut().for_each(|h| h.reviewer = None);
         }
 

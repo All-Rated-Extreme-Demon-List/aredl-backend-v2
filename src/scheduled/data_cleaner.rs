@@ -21,7 +21,6 @@ pub async fn start_data_cleaner(
 ) {
     let schedule = Schedule::from_str(&get_secret("DATA_CLEANER_SCHEDULE")).unwrap();
     let schedule = Arc::new(schedule);
-    let db_clone = db.clone();
 
     task::spawn(async move {
         loop {
@@ -29,21 +28,20 @@ pub async fn start_data_cleaner(
 
             tracing::info!("Running data cleaner");
 
-            let conn_result = db_clone.connection();
-
-            if conn_result.is_err() {
-                tracing::error!("Failed to clean data {}", conn_result.err().unwrap());
-                continue;
-            }
-
-            let mut conn = conn_result.unwrap();
+            let conn = &mut match db.connection() {
+                Ok(c) => c,
+                Err(e) => {
+                    tracing::error!("DB connection failed: {e}");
+                    continue;
+                }
+            };
 
             tracing::info!("Cleaning old notifications");
 
             let result = diesel::sql_query(
                 "DELETE FROM notifications WHERE created_at < NOW() - INTERVAL '1 month'",
             )
-            .execute(&mut conn);
+            .execute(conn);
 
             if result.is_err() {
                 tracing::error!("Failed to clean notifications {}", result.err().unwrap())
@@ -57,7 +55,7 @@ pub async fn start_data_cleaner(
                  WHERE status = 'Claimed' \
                    AND updated_at < NOW() - INTERVAL '120 minutes';",
             )
-            .execute(&mut conn);
+            .execute(conn);
 
             if result.is_err() {
                 tracing::error!(
@@ -72,7 +70,7 @@ pub async fn start_data_cleaner(
                  WHERE status = 'Claimed' \
                    AND updated_at < NOW() - INTERVAL '120 minutes';",
             )
-            .execute(&mut conn);
+            .execute(conn);
 
             if result.is_err() {
                 tracing::error!(
@@ -86,7 +84,7 @@ pub async fn start_data_cleaner(
             let aredl_expired_shifts: Vec<Shift> = shifts::table
                 .filter(shifts::status.eq(ShiftStatus::Running))
                 .filter(shifts::end_at.lt(Utc::now()))
-                .load(&mut conn)
+                .load(conn)
                 .unwrap_or_else(|e| {
                     tracing::error!("Failed to load expired shifts: {}", e);
                     vec![]
@@ -101,7 +99,7 @@ pub async fn start_data_cleaner(
                 shifts::status.eq(ShiftStatus::Expired),
                 shifts::updated_at.eq(Utc::now()),
             ))
-            .execute(&mut conn)
+            .execute(conn)
             {
                 tracing::error!("Failed to expire shifts: {}", e);
             }

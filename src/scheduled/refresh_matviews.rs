@@ -20,7 +20,6 @@ pub struct MatviewRefreshLog {
 pub async fn start_matviews_refresher(db: Arc<DbAppState>) {
     let schedule = Schedule::from_str(&get_secret("MATVIEWS_REFRESH_SCHEDULE")).unwrap();
     let schedule = Arc::new(schedule);
-    let db_clone = db.clone();
 
     let schemas = ["aredl", "arepl"];
     let views = [
@@ -36,20 +35,19 @@ pub async fn start_matviews_refresher(db: Arc<DbAppState>) {
 
             tracing::info!("Refreshing materialized views");
 
-            let conn_result = db_clone.connection();
-
-            if conn_result.is_err() {
-                tracing::error!("Failed to refresh {}", conn_result.err().unwrap());
-                continue;
-            }
-
-            let mut conn = conn_result.unwrap();
+            let conn = &mut match db.connection() {
+                Ok(c) => c,
+                Err(e) => {
+                    tracing::error!("DB connection failed: {e}");
+                    continue;
+                }
+            };
 
             for &schema in &schemas {
                 for &view in &views {
                     let full_name = format!("{}.{}", schema, view);
                     let sql = format!("REFRESH MATERIALIZED VIEW {}", full_name);
-                    match diesel::sql_query(&sql).execute(&mut conn) {
+                    match diesel::sql_query(&sql).execute(conn) {
                         Ok(_) => {
                             tracing::info!("Refreshed {}", full_name)
                         }
@@ -70,7 +68,7 @@ pub async fn start_matviews_refresher(db: Arc<DbAppState>) {
                             matview_refresh_log::last_refresh
                                 .eq(excluded(matview_refresh_log::last_refresh)),
                         )
-                        .execute(&mut conn)
+                        .execute(conn)
                     {
                         tracing::error!("Couldn't log refresh for {}: {}", full_name, e);
                     }

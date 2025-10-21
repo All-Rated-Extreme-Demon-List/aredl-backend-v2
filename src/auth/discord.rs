@@ -136,29 +136,31 @@ async fn discord_auth(
     db: web::Data<Arc<DbAppState>>,
     options: web::Query<AuthOptions>,
 ) -> Result<HttpResponse, ApiError> {
-    let client = &data.discord_client;
-    let mut conn = db.connection()?;
+    let authorize_url = web::block(move || {
+        let client = &data.discord_client;
+        let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
 
-    let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
+        let (authorize_url, csrf_state, _) = client
+            .authorize_url(
+                CoreAuthenticationFlow::AuthorizationCode,
+                CsrfToken::new_random,
+                Nonce::new_random,
+            )
+            .add_scope(Scope::new("identify".to_string()))
+            .set_pkce_challenge(pkce_challenge.clone())
+            .url();
 
-    let (authorize_url, csrf_state, _) = client
-        .authorize_url(
-            CoreAuthenticationFlow::AuthorizationCode,
-            CsrfToken::new_random,
-            Nonce::new_random,
-        )
-        .add_scope(Scope::new("identify".to_string()))
-        .set_pkce_challenge(pkce_challenge.clone())
-        .url();
-
-    OAuthRequestData::create(
-        &mut conn,
-        OAuthRequestData {
-            csrf_state: csrf_state.secret().clone(),
-            pkce_verifier: pkce_verifier.secret().to_string(),
-            callback: options.callback.clone(),
-        },
-    )?;
+        OAuthRequestData::create(
+            &mut db.connection()?,
+            OAuthRequestData {
+                csrf_state: csrf_state.secret().clone(),
+                pkce_verifier: pkce_verifier.secret().to_string(),
+                callback: options.callback.clone(),
+            },
+        )?;
+        Ok::<_, ApiError>(authorize_url)
+    })
+    .await??;
 
     Ok(HttpResponse::Found()
         .append_header((header::LOCATION, authorize_url.to_string()))
@@ -181,12 +183,14 @@ async fn discord_callback(
     data: web::Data<Arc<AuthAppState>>,
 ) -> Result<HttpResponse, ApiError> {
     let client = &data.discord_client;
-
-    let mut conn = db.connection()?;
     let state = query.state.clone();
+
+    let db2 = db.clone();
+
     let request_data = web::block(move || {
-        let data = OAuthRequestData::find(&mut conn, state.as_str())?;
-        OAuthRequestData::delete(&mut conn, state.as_str())?;
+        let conn = &mut db.connection()?;
+        let data = OAuthRequestData::find(conn, state.as_str())?;
+        OAuthRequestData::delete(conn, state.as_str())?;
         Ok::<OAuthRequestData, ApiError>(data)
     })
     .await??;
@@ -212,9 +216,40 @@ async fn discord_callback(
         .await
         .map_err(|_| ApiError::new(500, "Failed to load discord data"))?;
 
-    let mut conn = db.connection()?;
+    let (user, roles, scopes) = web::block(move || {
+        let conn = &mut db2.connection()?;
+        let user = User::upsert(conn, UserUpsert::from(discord_user_data))?;
 
-    let user = web::block(|| User::upsert(db, UserUpsert::from(discord_user_data))).await??;
+        let roles = user_roles::table
+            .inner_join(roles::table.on(user_roles::role_id.eq(roles::id)))
+            .filter(user_roles::user_id.eq(user.id))
+            .select(Role::as_select())
+            .load::<Role>(conn)?;
+
+        let user_privilege_level: i32 = roles
+            .iter()
+            .map(|role| role.privilege_level)
+            .max()
+            .unwrap_or(0);
+
+        let all_permissions = permissions::table
+            .select((permissions::permission, permissions::privilege_level))
+            .load::<(String, i32)>(conn)?;
+
+        let scopes = all_permissions
+            .into_iter()
+            .filter_map(|(permission, privilege_level)| {
+                if user_privilege_level >= privilege_level {
+                    Some(permission)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<String>>();
+
+        Ok::<_, ApiError>((user, roles, scopes))
+    })
+    .await??;
 
     if let Some(callback) = request_data.callback {
         let (token, _expires) = token::create_token(
@@ -252,33 +287,6 @@ async fn discord_callback(
         Duration::weeks(2),
         "refresh",
     )?;
-
-    let roles = user_roles::table
-        .inner_join(roles::table.on(user_roles::role_id.eq(roles::id)))
-        .filter(user_roles::user_id.eq(user.id))
-        .select(Role::as_select())
-        .load::<Role>(&mut conn)?;
-
-    let user_privilege_level: i32 = roles
-        .iter()
-        .map(|role| role.privilege_level)
-        .max()
-        .unwrap_or(0);
-
-    let all_permissions = permissions::table
-        .select((permissions::permission, permissions::privilege_level))
-        .load::<(String, i32)>(&mut conn)?;
-
-    let scopes = all_permissions
-        .into_iter()
-        .filter_map(|(permission, privilege_level)| {
-            if user_privilege_level >= privilege_level {
-                Some(permission)
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<String>>();
 
     Ok(HttpResponse::Ok().json(AuthResponse {
         access_token,
@@ -327,8 +335,8 @@ async fn discord_refresh(
 
     let decoded_user_claims = token::decode_user_claims(&decoded_token_claims)?;
 
-    let mut conn = db.connection()?;
-    check_token_valid(&decoded_token_claims, &decoded_user_claims, &mut conn)?;
+    let conn = &mut db.connection()?;
+    check_token_valid(&decoded_token_claims, &decoded_user_claims, conn)?;
 
     let user_id = decoded_user_claims.user_id;
 

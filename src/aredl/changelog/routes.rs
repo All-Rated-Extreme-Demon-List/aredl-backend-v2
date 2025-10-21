@@ -1,11 +1,11 @@
 use crate::aredl::changelog::ChangelogPage;
+use crate::cache_control::CacheController;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
-use crate::page_helper::{ PageQuery, Paginated };
-use actix_web::{ get, web, HttpResponse };
+use crate::page_helper::{PageQuery, Paginated};
+use actix_web::{get, web, HttpResponse};
 use std::sync::Arc;
 use utoipa::OpenApi;
-use crate::cache_control::CacheController;
 
 #[utoipa::path(
     get,
@@ -23,9 +23,11 @@ use crate::cache_control::CacheController;
 #[get("", wrap = "CacheController::public_with_max_age(900)")]
 async fn list(
     db: web::Data<Arc<DbAppState>>,
-    page_query: web::Query<PageQuery<20>>
+    page_query: web::Query<PageQuery<20>>,
 ) -> Result<HttpResponse, ApiError> {
-    let result = web::block(|| ChangelogPage::find(db, page_query.into_inner())).await??;
+    let result =
+        web::block(move || ChangelogPage::find(&mut db.connection()?, page_query.into_inner()))
+            .await??;
     Ok(HttpResponse::Ok().json(result))
 }
 

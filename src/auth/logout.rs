@@ -39,20 +39,26 @@ pub async fn logout_all(
         return Err(ApiError::new(400, "No token provided"));
     }
 
-    let decoded_token_claims = token::decode_token(
-        token.unwrap(),
-        &data.jwt_decoding_key,
-        &["access", "refresh"],
-    )?;
+    web::block(move || {
+        let conn = &mut db.connection()?;
 
-    let decoded_user_claims = token::decode_user_claims(&decoded_token_claims)?;
-    let mut conn = db.connection()?;
+        let decoded_token_claims = token::decode_token(
+            token.unwrap(),
+            &data.jwt_decoding_key,
+            &["access", "refresh"],
+        )?;
 
-    check_token_valid(&decoded_token_claims, &decoded_user_claims, &mut conn)?;
+        let decoded_user_claims = token::decode_user_claims(&decoded_token_claims)?;
 
-    diesel::update(users::table.filter(users::id.eq(decoded_user_claims.user_id)))
-        .set(users::access_valid_after.eq(Utc::now()))
-        .execute(&mut conn)?;
+        check_token_valid(&decoded_token_claims, &decoded_user_claims, conn)?;
+
+        diesel::update(users::table.filter(users::id.eq(decoded_user_claims.user_id)))
+            .set(users::access_valid_after.eq(Utc::now()))
+            .execute(conn)?;
+
+        Ok::<(), ApiError>(())
+    })
+    .await??;
 
     Ok(HttpResponse::Ok().json("Logged out all sessions"))
 }
