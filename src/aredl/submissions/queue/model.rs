@@ -80,8 +80,8 @@ impl SubmissionQueue {
 
         let oldest_submission = submissions::table
             .filter(submissions::status.eq(SubmissionStatus::Pending))
-            .select(submissions::created_at)
-            .order(submissions::created_at.asc())
+            .select(submissions::updated_at)
+            .order(submissions::updated_at.asc())
             .first::<DateTime<Utc>>(conn)
             .optional()?;
 
