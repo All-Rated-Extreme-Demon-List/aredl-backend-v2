@@ -46,6 +46,21 @@ pub struct BaseUserWithCountry {
     pub country: Option<i32>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Queryable, Selectable, ToSchema)]
+#[diesel(table_name=users, check_for_backend(Pg))]
+pub struct ExtendedBaseUser {
+    /// Internal UUID of the user.
+    pub id: Uuid,
+    /// Username of the user. For non-placeholder users, this is linked to the Discord username.
+    pub username: String,
+    /// Global display name of the user. May be freely set by the user.
+    pub global_name: String,
+    /// Country of the user. Uses the ISO 3166-1 numeric country code.
+    pub country: Option<i32>,
+    /// Discord ID of the user. Updated on every login.
+    pub discord_id: Option<String>,
+}
+
 #[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
 #[diesel(table_name=users, check_for_backend(Pg))]
 pub struct BaseDiscordUser {

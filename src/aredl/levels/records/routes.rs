@@ -1,5 +1,5 @@
-use crate::aredl::levels::id_resolver::resolve_level_id;
-use crate::aredl::records::PublicRecordResolvedWithCountry;
+use crate::aredl::levels::{id_resolver::resolve_level_id, records::RecordQuery};
+use crate::aredl::records::{PublicRecordResolvedExtended, PublicRecordResolvedWithCountry};
 use crate::aredl::records::Record;
 use crate::cache_control::CacheController;
 use crate::db::DbAppState;
@@ -17,18 +17,19 @@ use utoipa::OpenApi;
         ("level_id" = String, description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
-        (status = 200, body = [PublicRecordResolvedWithCountry])
+        (status = 200, body = [PublicRecordResolvedExtended])
     ),
 )]
 #[get("", wrap = "CacheController::public_with_max_age(900)")]
 async fn find_all(
     db: web::Data<Arc<DbAppState>>,
     level_id: web::Path<String>,
+    opts: web::Query<RecordQuery>,
 ) -> Result<HttpResponse, ApiError> {
     let records = web::block(move || {
         let conn = &mut db.connection()?;
         let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
-        PublicRecordResolvedWithCountry::find_all_by_level(conn, level_id)
+        PublicRecordResolvedExtended::find_all_by_level(conn, level_id, opts.into_inner())
     })
     .await??;
     Ok(HttpResponse::Ok().json(records))
