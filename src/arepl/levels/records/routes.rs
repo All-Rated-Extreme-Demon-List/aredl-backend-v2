@@ -1,5 +1,7 @@
 use crate::arepl::levels::id_resolver::resolve_level_id;
+use crate::arepl::levels::records::RecordQuery;
 use crate::arepl::records::PublicRecordResolved;
+use crate::arepl::records::PublicRecordResolvedExtended;
 use crate::arepl::records::Record;
 use crate::cache_control::CacheController;
 use crate::db::DbAppState;
@@ -24,10 +26,11 @@ use utoipa::OpenApi;
 async fn find_all(
     db: web::Data<Arc<DbAppState>>,
     level_id: web::Path<String>,
+    opts: web::Query<RecordQuery>,
 ) -> Result<HttpResponse, ApiError> {
     let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
     let records =
-        web::block(move || PublicRecordResolved::find_all_by_level(db, level_id)).await??;
+        web::block(move || PublicRecordResolvedExtended::find_all_by_level(db, level_id, opts.into_inner())).await??;
     Ok(HttpResponse::Ok().json(records))
 }
 
