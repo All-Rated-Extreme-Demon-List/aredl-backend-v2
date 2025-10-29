@@ -6,8 +6,8 @@ use crate::schema::{clan_members, clans, permissions, roles, user_roles, users};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::pg::Pg;
 use diesel::{
-    ExpressionMethods, JoinOnDsl, OptionalExtension, PgTextExpressionMethods, QueryDsl,
-    RunQueryDsl, SelectableHelper,
+    BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension,
+    PgTextExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -225,7 +225,11 @@ impl User {
         match Uuid::parse_str(user_id) {
             Ok(uuid) => Ok(Self::from_uuid(conn, uuid)?),
             Err(_) => Ok(users::table
-                .filter(users::discord_id.eq(Some(user_id.to_owned())))
+                .filter(
+                    users::discord_id
+                        .eq(Some(user_id.to_owned()))
+                        .or(users::username.eq(user_id.to_owned())),
+                )
                 .select(User::as_select())
                 .first::<User>(conn)?),
         }
