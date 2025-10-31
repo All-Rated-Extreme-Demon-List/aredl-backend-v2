@@ -130,10 +130,10 @@ impl PemonlistPlayer {
                         "https://youtu.be/{}",
                         pemonlist_record.video_id.clone()
                     )),
-                    hide_video: Some(false),
+                    hide_video: None,
                     level_id: None,
                     completion_time: Some(timestamp),
-                    is_verification: Some(false),
+                    is_verification: None,
                     raw_url: None,
                     updated_at: Some(now),
                     created_at: None,
