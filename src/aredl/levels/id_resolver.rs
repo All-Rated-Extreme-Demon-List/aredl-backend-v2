@@ -17,7 +17,7 @@ fn resolve_gd_id(conn: &mut DbConnection, s: &str) -> Result<Uuid, ApiError> {
         .filter(levels::two_player.eq(two_player))
         .select(levels::id)
         .first::<Uuid>(conn)
-        .map_err(|_| ApiError::new(400, format!("Failed to resolve {}", s).as_str()))?;
+        .map_err(|_| ApiError::new(404, format!("Failed to resolve {}", s).as_str()))?;
     Ok(resolved_id)
 }
 
