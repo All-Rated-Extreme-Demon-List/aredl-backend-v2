@@ -319,7 +319,7 @@ dependencies = [
 
 [[package]]
 name = "aredl-backend"
-version = "2.0.1"
+version = "2.1.0"
 dependencies = [
  "actix-cors",
  "actix-governor",
