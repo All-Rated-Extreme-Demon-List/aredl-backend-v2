@@ -1,16 +1,16 @@
-use crate::aredl::records::{PublicRecordResolved, PublicRecordUnresolved, PublicRecordResolvedExtended};
-use crate::db::DbAppState;
+use crate::aredl::records::{
+    PublicRecordResolved, PublicRecordResolvedExtended, PublicRecordUnresolved,
+};
+use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::{aredl::records, users};
 use crate::users::{BaseUser, ExtendedBaseUser};
-use actix_web::web;
-use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl, SelectableHelper};
-use std::sync::Arc;
-use uuid::Uuid;
-use serde::{Deserialize, Serialize};
 use diesel::dsl::count;
+use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl, SelectableHelper};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
-#[derive(utoipa::ToSchema, Serialize, Deserialize)]
+#[derive(utoipa::ToSchema, Serialize, Deserialize, Debug)]
 pub struct RecordQuery {
     high_extremes: Option<bool>,
 }
@@ -23,32 +23,23 @@ impl PublicRecordResolved {
             mobile: record.mobile,
             video_url: record.video_url,
             created_at: record.created_at,
+            hide_video: record.hide_video,
         }
     }
 }
 
 impl PublicRecordResolvedExtended {
-    pub fn from_data(record: PublicRecordUnresolved, user: ExtendedBaseUser) -> Self {
-        Self {
-            id: record.id,
-            submitted_by: user,
-            mobile: record.mobile,
-            video_url: record.video_url,
-            created_at: record.created_at,
-        }
-    }
     pub fn find_all_by_level(
-        db : web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         level_id: Uuid,
         opts: RecordQuery,
     ) -> Result<Vec<Self>, ApiError> {
-        let mut conn = db.connection()?;
         let users_high_extremes = if let Some(true) = opts.high_extremes {
             records::table
                 .group_by(records::submitted_by)
                 .having(count(records::id).gt(50))
                 .select(records::submitted_by)
-                .load::<Uuid>(&mut conn)?
+                .load::<Uuid>(conn)?
         } else {
             Vec::<Uuid>::new()
         };
@@ -70,13 +61,23 @@ impl PublicRecordResolvedExtended {
                 PublicRecordUnresolved::as_select(),
                 ExtendedBaseUser::as_select(),
             ))
-            .load::<(PublicRecordUnresolved, ExtendedBaseUser)>(&mut conn)?;
+            .load::<(PublicRecordUnresolved, ExtendedBaseUser)>(conn)?;
 
         let records_resolved = records
             .into_iter()
             .map(|(record, user)| Self::from_data(record, user))
             .collect();
         Ok(records_resolved)
+    }
 
+    pub fn from_data(record: PublicRecordUnresolved, user: ExtendedBaseUser) -> Self {
+        Self {
+            id: record.id,
+            submitted_by: user,
+            mobile: record.mobile,
+            video_url: record.video_url,
+            created_at: record.created_at,
+            hide_video: record.hide_video,
+        }
     }
 }

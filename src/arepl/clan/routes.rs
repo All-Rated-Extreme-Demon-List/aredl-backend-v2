@@ -24,11 +24,9 @@ async fn find(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
 ) -> Result<HttpResponse, ApiError> {
-    let profile = web::block(move || {
-        let mut conn = db.connection()?;
-        ClanProfileResolved::find(&mut conn, id.into_inner())
-    })
-    .await??;
+    let profile =
+        web::block(move || ClanProfileResolved::find(&mut db.connection()?, id.into_inner()))
+            .await??;
     Ok(HttpResponse::Ok().json(profile))
 }
 

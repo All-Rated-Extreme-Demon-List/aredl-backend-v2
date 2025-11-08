@@ -1,23 +1,14 @@
-use std::collections::HashMap;
-use diesel::{QueryDsl, RunQueryDsl, SelectableHelper};
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use diesel::pg::Pg;
-use itertools::Itertools;
-use utoipa::ToSchema;
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
-use crate::users::{BaseUser, Role};
 use crate::schema::{roles, user_roles, users};
+use crate::users::{BaseUser, Role};
+use diesel::{QueryDsl, RunQueryDsl, SelectableHelper};
+use itertools::Itertools;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use utoipa::ToSchema;
 
-#[derive(Serialize, Deserialize, Queryable, Selectable, Debug)]
-#[diesel(table_name = user_roles, check_for_backend(Pg))]
-pub struct UserRole {
-    pub role_id: i32,
-    pub user_id: Uuid,
-}
-
-#[derive(Serialize, Deserialize, Debug,ToSchema)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct RoleResolved {
     #[serde(flatten)]
     pub role: Role,
@@ -44,16 +35,14 @@ impl RoleResolved {
             .into_iter()
             .chunk_by(|(role_id, _user)| role_id.clone())
             .into_iter()
-            .map(|(role, users)|
-                RoleResolved {
-                    role: Role {
-                        id: role.clone(),
-                        privilege_level: roles[&role].privilege_level,
-                        role_desc: roles[&role].role_desc.clone(),
-                    },
-                    users: users.map(|(_, users)| users).collect(),
-                }
-            )
+            .map(|(role, users)| RoleResolved {
+                role: Role {
+                    id: role.clone(),
+                    privilege_level: roles[&role].privilege_level,
+                    role_desc: roles[&role].role_desc.clone(),
+                },
+                users: users.map(|(_, users)| users).collect(),
+            })
             .sorted_by_key(|v| -v.role.privilege_level)
             .collect_vec();
 

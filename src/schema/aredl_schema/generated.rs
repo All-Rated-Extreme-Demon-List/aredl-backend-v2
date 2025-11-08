@@ -3,22 +3,48 @@
 pub mod aredl {
     pub mod sql_types {
         #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
-        #[diesel(postgres_type(name = "shift_status"))]
-        pub struct ShiftStatus;
+        #[diesel(postgres_type(name = "custom_id_status", schema = "aredl"))]
+        pub struct CustomIdStatus;
+
+        #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+        #[diesel(postgres_type(name = "custom_id_type", schema = "aredl"))]
+        pub struct CustomIdType;
 
         #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
         #[diesel(postgres_type(name = "submission_status"))]
         pub struct SubmissionStatus;
+    }
 
-        #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
-        #[diesel(postgres_type(name = "weekday"))]
-        pub struct Weekday;
+    diesel::table! {
+        aredl.guideline_updates (id) {
+            id -> Uuid,
+            moderator -> Uuid,
+            text -> Varchar,
+            created_at -> Timestamptz,
+        }
     }
 
     diesel::table! {
         aredl.last_gddl_update (id) {
             id -> Uuid,
             updated_at -> Timestamptz,
+        }
+    }
+
+    diesel::table! {
+        use diesel::sql_types::*;
+        use super::sql_types::CustomIdType;
+        use super::sql_types::CustomIdStatus;
+
+        aredl.level_ldms (id) {
+            id -> Uuid,
+            level_id -> Uuid,
+            ldm_id -> Int4,
+            added_by -> Uuid,
+            description -> Nullable<Varchar>,
+            created_at -> Timestamptz,
+            id_type -> CustomIdType,
+            status -> CustomIdStatus,
         }
     }
 
@@ -103,39 +129,7 @@ pub mod aredl {
             reviewer_notes -> Nullable<Varchar>,
             mod_menu -> Nullable<Varchar>,
             user_notes -> Nullable<Varchar>,
-        }
-    }
-
-    diesel::table! {
-        use diesel::sql_types::*;
-        use super::sql_types::Weekday;
-
-        aredl.recurrent_shifts (id) {
-            id -> Uuid,
-            user_id -> Uuid,
-            weekday -> Weekday,
-            start_hour -> Int4,
-            duration -> Int4,
-            target_count -> Int4,
-            created_at -> Timestamptz,
-            updated_at -> Timestamptz,
-        }
-    }
-
-    diesel::table! {
-        use diesel::sql_types::*;
-        use super::sql_types::ShiftStatus;
-
-        aredl.shifts (id) {
-            id -> Uuid,
-            user_id -> Uuid,
-            target_count -> Int4,
-            completed_count -> Int4,
-            start_at -> Timestamptz,
-            end_at -> Timestamptz,
-            status -> ShiftStatus,
-            created_at -> Timestamptz,
-            updated_at -> Timestamptz,
+            hide_video -> Bool,
         }
     }
 
@@ -178,8 +172,21 @@ pub mod aredl {
         }
     }
 
+    diesel::table! {
+        aredl.submissions_enabled (id) {
+            id -> Uuid,
+            enabled -> Bool,
+            moderator -> Uuid,
+            created_at -> Timestamptz,
+        }
+    }
+
+    diesel::joinable!(level_ldms -> levels (level_id));
+
     diesel::allow_tables_to_appear_in_same_query!(
+        guideline_updates,
         last_gddl_update,
+        level_ldms,
         levels,
         levels_created,
         pack_levels,
@@ -187,9 +194,8 @@ pub mod aredl {
         packs,
         position_history,
         records,
-        recurrent_shifts,
-        shifts,
         submission_history,
         submissions,
+        submissions_enabled,
     );
 }

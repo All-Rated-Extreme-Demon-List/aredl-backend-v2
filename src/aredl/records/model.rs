@@ -1,20 +1,17 @@
 use crate::aredl::levels::ExtendedBaseLevel;
-use crate::db::DbAppState;
+use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::{aredl::levels, aredl::records, users};
 use crate::users::{BaseUser, ExtendedBaseUser};
-use actix_web::web;
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::query_dsl::JoinOnDsl;
-use diesel::sql_types::Bool;
 use diesel::{
-    BoxableExpression, ExpressionMethods, Insertable, IntoSql, NullableExpressionMethods, QueryDsl,
-    RunQueryDsl, Selectable, SelectableHelper, PgExpressionMethods
+    ExpressionMethods, Insertable, NullableExpressionMethods, PgExpressionMethods, QueryDsl,
+    RunQueryDsl, Selectable, SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -33,6 +30,8 @@ pub struct Record {
     pub ldm_id: Option<i32>,
     /// Video link of the completion.
     pub video_url: String,
+    /// Whether the record's video should be hidden on the website.
+    pub hide_video: bool,
     /// Link to the raw video file of the completion.
     pub raw_url: Option<String>,
     /// Whether this record is the verification of this level or not.
@@ -66,6 +65,8 @@ pub struct RecordInsert {
     pub level_id: Uuid,
     /// Video link of the completion.
     pub video_url: String,
+    /// Whether the record's video should be hidden on the website.
+    pub hide_video: Option<bool>,
     /// Whether this record is the verification of this level or not.
     pub is_verification: Option<bool>,
     /// Link to the raw video file of the completion.
@@ -89,6 +90,8 @@ pub struct RecordUpdate {
     pub ldm_id: Option<i32>,
     /// Video link of the completion.
     pub video_url: Option<String>,
+    /// Whether the record's video should be hidden on the website.
+    pub hide_video: Option<bool>,
     /// Internal UUID of the level the record is for.
     pub level_id: Option<Uuid>,
     /// Whether this record is the verification of this level or not.
@@ -112,13 +115,14 @@ pub struct PublicRecordTemplate<T> {
     pub mobile: bool,
     /// Video link of the completion.
     pub video_url: String,
+    /// Whether the record's video should be hidden on the website.
+    pub hide_video: bool,
     /// Timestamp of when the record was created (first accepted).
     pub created_at: DateTime<Utc>,
 }
 
 pub type PublicRecordUnresolved = PublicRecordTemplate<Uuid>;
 pub type PublicRecordResolved = PublicRecordTemplate<BaseUser>;
-
 pub type PublicRecordResolvedExtended = PublicRecordTemplate<ExtendedBaseUser>;
 
 #[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
@@ -138,6 +142,8 @@ pub struct FullRecordTemplate<LevelT, UserT> {
     pub ldm_id: Option<i32>,
     /// Video link of the completion.
     pub video_url: String,
+    /// Whether the record's video should be hidden on the website.
+    pub hide_video: bool,
     /// Link to the raw video file of the completion.
     pub raw_url: Option<String>,
     /// Name of the mod menu used for this record, if any.
@@ -178,7 +184,7 @@ pub struct RecordsQueryOptions {
     pub mobile_filter: Option<bool>,
     pub level_filter: Option<Uuid>,
     pub submitter_filter: Option<Uuid>,
-    pub reviewer_filter: Option<Uuid>
+    pub reviewer_filter: Option<Uuid>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -192,16 +198,16 @@ pub struct FullResolvedRecordPage {
 }
 
 impl Record {
-    pub fn create(db: web::Data<Arc<DbAppState>>, record: RecordInsert) -> Result<Self, ApiError> {
+    pub fn create(conn: &mut DbConnection, record: RecordInsert) -> Result<Self, ApiError> {
         let record = diesel::insert_into(records::table)
             .values(record)
             .returning(Record::as_select())
-            .get_result::<Self>(&mut db.connection()?)?;
+            .get_result::<Self>(conn)?;
         Ok(record)
     }
 
     pub fn update(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         record_id: Uuid,
         record: RecordUpdate,
     ) -> Result<Self, ApiError> {
@@ -209,94 +215,50 @@ impl Record {
             .filter(records::id.eq(record_id))
             .set(record)
             .returning(Record::as_select())
-            .get_result::<Self>(&mut db.connection()?)?;
+            .get_result::<Self>(conn)?;
         Ok(record)
     }
 
-    pub fn delete(db: web::Data<Arc<DbAppState>>, record_id: Uuid) -> Result<Self, ApiError> {
+    pub fn delete(conn: &mut DbConnection, record_id: Uuid) -> Result<Self, ApiError> {
         let record = diesel::delete(records::table)
             .filter(records::id.eq(record_id))
             .returning(Record::as_select())
-            .get_result::<Self>(&mut db.connection()?)?;
+            .get_result::<Self>(conn)?;
         Ok(record)
     }
 }
 
 impl FullRecordUnresolved {
     pub fn find_all<const D: i64>(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         page_query: PageQuery<D>,
         mut options: RecordsQueryOptions,
         hide_reviewer: bool,
     ) -> Result<Paginated<FullUnresolvedRecordPage>, ApiError> {
-        let conn = &mut db.connection()?;
-
         if hide_reviewer {
             options.reviewer_filter = None;
         }
 
-        let total_count: i64 = records::table
-            .filter(options.mobile_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |mobile| Box::new(records::mobile.eq(mobile)),
-            ))
-            .filter(options.level_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |level| Box::new(records::level_id.eq(level)),
-            ))
-            .filter(options.submitter_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |submitter| Box::new(records::submitted_by.eq(submitter)),
-            ))
-            .filter(options.reviewer_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |reviewer| Box::new(records::reviewer_id.is_not_distinct_from(reviewer)),
-            ))
-            .count()
-            .get_result(conn)?;
+        let build_filtered = || {
+            let mut q = records::table.into_boxed::<Pg>();
+            if let Some(mobile) = options.mobile_filter {
+                q = q.filter(records::mobile.eq(mobile));
+            }
+            if let Some(level) = options.level_filter {
+                q = q.filter(records::level_id.eq(level));
+            }
+            if let Some(submitter) = options.submitter_filter {
+                q = q.filter(records::submitted_by.eq(submitter));
+            }
+            if let Some(reviewer) = options.reviewer_filter {
+                q = q.filter(records::reviewer_id.is_not_distinct_from(reviewer));
+            }
+            q
+        };
 
-        let query = records::table.into_boxed::<Pg>();
-        let raw_records = query
-            .filter(options.mobile_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |mobile| Box::new(records::mobile.eq(mobile)),
-            ))
-            .filter(options.level_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |level| Box::new(records::level_id.eq(level)),
-            ))
-            .filter(options.submitter_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |submitter| Box::new(records::submitted_by.eq(submitter)),
-            ))
-            .filter(options.reviewer_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |reviewer| Box::new(records::reviewer_id.is_not_distinct_from(reviewer)),
-            ))
+        let total_count: i64 = build_filtered().count().get_result(conn)?;
+
+        let raw_records = build_filtered()
             .limit(page_query.per_page())
             .offset(page_query.offset())
             .select(FullRecordUnresolved::as_select())
@@ -327,9 +289,7 @@ impl FullRecordUnresolved {
 }
 
 impl FullRecordResolved {
-    pub fn find(db: web::Data<Arc<DbAppState>>, record_id: Uuid) -> Result<Self, ApiError> {
-        let conn = &mut db.connection()?;
-
+    pub fn find(conn: &mut DbConnection, record_id: Uuid) -> Result<Self, ApiError> {
         let reviewers = alias!(users as reviewers);
 
         let (record, user, level, reviewer): (
@@ -361,81 +321,37 @@ impl FullRecordResolved {
     }
 
     pub fn find_all<const D: i64>(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         page_query: PageQuery<D>,
         mut options: RecordsQueryOptions,
         hide_reviewer: bool,
     ) -> Result<Paginated<FullResolvedRecordPage>, ApiError> {
-        let conn = &mut db.connection()?;
-
         if hide_reviewer {
             options.reviewer_filter = None;
         }
 
         let reviewers = alias!(users as reviewers);
 
-        let total_count: i64 = records::table
-            .filter(options.mobile_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |mobile| Box::new(records::mobile.eq(mobile)),
-            ))
-            .filter(options.level_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |level| Box::new(records::level_id.eq(level)),
-            ))
-            .filter(options.submitter_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |submitter| Box::new(records::submitted_by.eq(submitter)),
-            ))
-            .filter(options.reviewer_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |reviewer| Box::new(records::reviewer_id.is_not_distinct_from(reviewer)),
-            ))
-            .count()
-            .get_result(conn)?;
+        let build_filtered = || {
+            let mut q = records::table.into_boxed::<Pg>();
+            if let Some(mobile) = options.mobile_filter {
+                q = q.filter(records::mobile.eq(mobile));
+            }
+            if let Some(level) = options.level_filter {
+                q = q.filter(records::level_id.eq(level));
+            }
+            if let Some(submitter) = options.submitter_filter {
+                q = q.filter(records::submitted_by.eq(submitter));
+            }
+            if let Some(reviewer) = options.reviewer_filter {
+                q = q.filter(records::reviewer_id.is_not_distinct_from(reviewer));
+            }
+            q
+        };
 
-        let query = records::table.into_boxed::<Pg>();
-        let records = query
-            .filter(options.mobile_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |mobile| Box::new(records::mobile.eq(mobile)),
-            ))
-            .filter(options.level_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |level| Box::new(records::level_id.eq(level)),
-            ))
-            .filter(options.submitter_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |submitter| Box::new(records::submitted_by.eq(submitter)),
-            ))
-            .filter(options.reviewer_filter.map_or_else(
-                || {
-                    Box::new(true.into_sql::<Bool>())
-                        as Box<dyn BoxableExpression<_, _, SqlType = Bool>>
-                },
-                |reviewer| Box::new(records::reviewer_id.is_not_distinct_from(reviewer)),
-            ))
+        let total_count: i64 = build_filtered().count().get_result(conn)?;
+
+        let records = build_filtered()
             .inner_join(users::table.on(records::submitted_by.eq(users::id)))
             .inner_join(levels::table.on(records::level_id.eq(levels::id)))
             .left_join(
@@ -503,6 +419,7 @@ impl FullRecordResolved {
             mod_menu: record.mod_menu,
             created_at: record.created_at,
             updated_at: record.updated_at,
+            hide_video: record.hide_video,
         }
     }
 }

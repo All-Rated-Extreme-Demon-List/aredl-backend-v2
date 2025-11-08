@@ -1,26 +1,25 @@
 use crate::{
     arepl::{
         records::Record,
-        shifts::{Shift, ShiftStatus},
         submissions::{history::SubmissionHistory, *},
     },
     auth::Authenticated,
-    db::DbAppState,
+    db::DbConnection,
     error_handler::ApiError,
     notifications::WebsocketNotification,
-    schema::arepl::{
-        levels, records, shifts, submission_history, submissions, submissions_with_priority,
+    schema::{
+        arepl::{levels, records, submission_history, submissions, submissions_with_priority},
+        shifts,
     },
+    shifts::{Shift, ShiftStatus},
     users::me::notifications::{Notification, NotificationType},
 };
-use actix_web::web;
 use chrono::Utc;
 use diesel::{
     Connection, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl,
     SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use tokio::sync::broadcast;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -28,6 +27,11 @@ use uuid::Uuid;
 #[derive(Serialize, Deserialize, ToSchema, Debug)]
 pub struct ReviewerNotes {
     pub notes: Option<String>,
+}
+#[derive(Serialize, Deserialize, ToSchema, Debug)]
+pub struct AcceptParams {
+    pub notes: Option<String>,
+    pub hide_video: Option<bool>,
 }
 
 impl Submission {
@@ -73,13 +77,12 @@ impl Submission {
         Ok(())
     }
     pub fn accept(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         notify_tx: broadcast::Sender<WebsocketNotification>,
         id: Uuid,
         reviewer_id: Uuid,
-        notes: Option<String>,
+        opts: AcceptParams,
     ) -> Result<Record, ApiError> {
-        let conn = &mut db.connection()?;
         conn.transaction(|connection| -> Result<Record, ApiError> {
             let updated = submissions::table
                 .filter(submissions::id.eq(id))
@@ -102,7 +105,8 @@ impl Submission {
                 records::reviewer_id.eq(Some(reviewer_id)),
                 records::mod_menu.eq(updated.mod_menu),
                 records::user_notes.eq(updated.user_notes),
-                records::reviewer_notes.eq(notes.clone()),
+                records::reviewer_notes.eq(opts.notes.clone()),
+                records::hide_video.eq(opts.hide_video.unwrap_or(false)),
                 records::updated_at.eq(chrono::Utc::now()),
             );
 
@@ -135,7 +139,7 @@ impl Submission {
                 submission_id: updated.id,
                 record_id: Some(inserted.id),
                 status: SubmissionStatus::Accepted,
-                reviewer_notes: notes,
+                reviewer_notes: opts.notes,
                 reviewer_id: Some(reviewer_id),
                 user_notes: None,
                 timestamp: chrono::Utc::now(),
@@ -167,14 +171,12 @@ impl Submission {
     }
 
     pub fn reject(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         notify_tx: broadcast::Sender<WebsocketNotification>,
         id: Uuid,
         authenticated: Authenticated,
         notes: Option<String>,
     ) -> Result<SubmissionResolved, ApiError> {
-        let connection = &mut db.connection()?;
-
         let update_timestamp = chrono::Utc::now();
 
         let user_id = authenticated.user_id;
@@ -189,7 +191,7 @@ impl Submission {
         let current_status = submissions::table
             .filter(submissions::id.eq(id))
             .select(submissions::status)
-            .first::<SubmissionStatus>(connection)?;
+            .first::<SubmissionStatus>(conn)?;
 
         if current_status == SubmissionStatus::Denied {
             return Err(ApiError::new(
@@ -202,10 +204,10 @@ impl Submission {
             .filter(submissions::id.eq(id))
             .set(new_data)
             .returning(Submission::as_select())
-            .get_result::<Submission>(connection)?;
+            .get_result::<Submission>(conn)?;
 
         let resolved_updated_submission =
-            SubmissionResolved::resolve_from_id(updated_submission.id, db, authenticated)?;
+            SubmissionResolved::resolve_from_id(conn, updated_submission.id, authenticated)?;
 
         let notification = WebsocketNotification {
             notification_type: "SUBMISSION_DENIED".into(),
@@ -227,16 +229,16 @@ impl Submission {
         };
         diesel::insert_into(submission_history::table)
             .values(&history)
-            .execute(connection)?;
+            .execute(conn)?;
 
-        Self::increment_user_shift(connection, notify_tx, user_id)?;
+        Self::increment_user_shift(conn, notify_tx, user_id)?;
 
         let content: String = format!(
             "Your submission for {:?} has been denied.",
             resolved_updated_submission.level.name
         );
         Notification::create(
-            connection,
+            conn,
             resolved_updated_submission.submitted_by.id,
             content,
             NotificationType::Failure,
@@ -245,14 +247,12 @@ impl Submission {
     }
 
     pub fn under_consideration(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         notify_tx: broadcast::Sender<WebsocketNotification>,
         id: Uuid,
         authenticated: Authenticated,
         notes: Option<String>,
     ) -> Result<SubmissionResolved, ApiError> {
-        let connection = &mut db.connection()?;
-
         let update_timestamp = chrono::Utc::now();
 
         let user_id = authenticated.user_id;
@@ -267,7 +267,7 @@ impl Submission {
         let current_status = submissions::table
             .filter(submissions::id.eq(id))
             .select(submissions::status)
-            .first::<SubmissionStatus>(connection)?;
+            .first::<SubmissionStatus>(conn)?;
 
         if current_status == SubmissionStatus::UnderConsideration {
             return Err(ApiError::new(
@@ -280,10 +280,10 @@ impl Submission {
             .filter(submissions::id.eq(id))
             .set(new_data)
             .returning(Submission::as_select())
-            .get_result::<Submission>(connection)?;
+            .get_result::<Submission>(conn)?;
 
         let resolved_updated_submission =
-            SubmissionResolved::resolve_from_id(updated_submission.id, db, authenticated)?;
+            SubmissionResolved::resolve_from_id(conn, updated_submission.id, authenticated)?;
 
         // Log submission history
         let history = SubmissionHistory {
@@ -298,16 +298,16 @@ impl Submission {
         };
         diesel::insert_into(submission_history::table)
             .values(&history)
-            .execute(connection)?;
+            .execute(conn)?;
 
-        Self::increment_user_shift(connection, notify_tx, user_id)?;
+        Self::increment_user_shift(conn, notify_tx, user_id)?;
 
         let content = format!(
             "Your submission for {:?} has been placed under consideration.",
             resolved_updated_submission.level.name
         );
         Notification::create(
-            connection,
+            conn,
             resolved_updated_submission.submitted_by.id,
             content,
             NotificationType::Info,
@@ -316,12 +316,10 @@ impl Submission {
     }
 
     pub fn unclaim(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         id: Uuid,
         authenticated: Authenticated,
     ) -> Result<SubmissionResolved, ApiError> {
-        let connection = &mut db.connection()?;
-
         let new_data = (
             submissions::status.eq(SubmissionStatus::Pending),
             submissions::reviewer_id.eq::<Option<Uuid>>(None),
@@ -331,7 +329,7 @@ impl Submission {
         let current_status = submissions::table
             .filter(submissions::id.eq(id))
             .select(submissions::status)
-            .first::<SubmissionStatus>(connection)?;
+            .first::<SubmissionStatus>(conn)?;
 
         if current_status == SubmissionStatus::Pending {
             return Err(ApiError::new(409, "This submission is not claimed!"));
@@ -341,10 +339,10 @@ impl Submission {
             .filter(submissions::id.eq(id))
             .set(new_data)
             .returning(Submission::as_select())
-            .get_result::<Submission>(connection)?;
+            .get_result::<Submission>(conn)?;
 
         let resolved_updated_submission =
-            SubmissionResolved::resolve_from_id(updated_submission.id, db, authenticated)?;
+            SubmissionResolved::resolve_from_id(conn, updated_submission.id, authenticated)?;
 
         Ok(resolved_updated_submission)
     }
@@ -352,33 +350,34 @@ impl Submission {
 
 impl SubmissionResolved {
     pub fn claim_highest_priority(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         authenticated: Authenticated,
     ) -> Result<SubmissionResolved, ApiError> {
-        db.connection()?
-            .transaction(|conn| -> Result<SubmissionResolved, ApiError> {
-                let next_id: Uuid = submissions_with_priority::table
-                    .filter(submissions_with_priority::status.eq(SubmissionStatus::Pending))
-                    .for_update()
-                    .skip_locked()
-                    .order((
-                        submissions_with_priority::priority_value.desc(),
-                        submissions_with_priority::created_at.asc(),
-                    ))
-                    .select(submissions_with_priority::id)
-                    .first(conn)?;
+        conn.transaction(|conn| -> Result<SubmissionResolved, ApiError> {
+            let next_id: Uuid = submissions_with_priority::table
+                .filter(submissions_with_priority::status.eq(SubmissionStatus::Pending))
+                // prevent moderators from claiming their own submissions
+                .filter(submissions_with_priority::submitted_by.ne(authenticated.user_id))
+                .for_update()
+                .skip_locked()
+                .order((
+                    submissions_with_priority::priority_value.desc(),
+                    submissions_with_priority::created_at.asc(),
+                ))
+                .select(submissions_with_priority::id)
+                .first(conn)?;
 
-                diesel::update(submissions::table.filter(submissions::id.eq(next_id)))
-                    .set((
-                        submissions::status.eq(SubmissionStatus::Claimed),
-                        submissions::reviewer_id.eq(authenticated.user_id),
-                        submissions::updated_at.eq(chrono::Utc::now()),
-                    ))
-                    .execute(conn)?;
+            diesel::update(submissions::table.filter(submissions::id.eq(next_id)))
+                .set((
+                    submissions::status.eq(SubmissionStatus::Claimed),
+                    submissions::reviewer_id.eq(authenticated.user_id),
+                    submissions::updated_at.eq(chrono::Utc::now()),
+                ))
+                .execute(conn)?;
 
-                let resolved = SubmissionResolved::resolve_from_id(next_id, db, authenticated)?;
+            let resolved = SubmissionResolved::resolve_from_id(conn, next_id, authenticated)?;
 
-                Ok(resolved)
-            })
+            Ok(resolved)
+        })
     }
 }

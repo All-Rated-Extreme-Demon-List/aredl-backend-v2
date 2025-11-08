@@ -24,13 +24,20 @@ async fn find(
     db: web::Data<Arc<DbAppState>>,
     level_id: web::Path<String>,
 ) -> Result<HttpResponse, ApiError> {
-    let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
-    let entries = web::block(move || HistoryLevelFull::find(db, level_id)).await??;
-    // map history
-    let response = entries
-        .into_iter()
-        .map(|data| HistoryLevelResponse::from_data(&data, level_id))
-        .collect::<Vec<_>>();
+    let response = web::block(move || -> Result<Vec<HistoryLevelResponse>, ApiError> {
+        let conn = &mut db.connection()?;
+        let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
+        let entries = HistoryLevelFull::find(conn, level_id);
+        // map history
+        let response = entries
+            .into_iter()
+            .flatten()
+            .map(|data| HistoryLevelResponse::from_data(&data, level_id))
+            .collect::<Vec<_>>();
+
+        Ok(response)
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(response))
 }
 

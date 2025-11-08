@@ -1,11 +1,11 @@
-use std::sync::Arc;
-use actix_web::{post, web, HttpResponse};
-use utoipa::OpenApi;
-use crate::auth::{UserAuth, Authenticated};
+use crate::auth::{Authenticated, UserAuth};
+use crate::clans::Clan;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
-use crate::clans::Clan;
 use crate::users::me::clan::invites;
+use actix_web::{post, web, HttpResponse};
+use std::sync::Arc;
+use utoipa::OpenApi;
 
 #[utoipa::path(
     post,
@@ -20,15 +20,13 @@ use crate::users::me::clan::invites;
 		("api_key" = []),
 	)
 )]
-#[post("/leave", wrap="UserAuth::load()")]
+#[post("/leave", wrap = "UserAuth::load()")]
 async fn leave(
     db: web::Data<Arc<DbAppState>>,
-	authenticated: Authenticated
+    authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let result = web::block(move || {
-        let mut conn = db.connection()?;
-        Clan::leave(&mut conn, authenticated.user_id)
-    }).await??;
+    let result =
+        web::block(move || Clan::leave(&mut db.connection()?, authenticated.user_id)).await??;
     Ok(HttpResponse::Ok().json(result))
 }
 
@@ -46,7 +44,7 @@ pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/clan")
-			.configure(invites::init_routes)
-            .service(leave)
+            .configure(invites::init_routes)
+            .service(leave),
     );
 }

@@ -1,16 +1,13 @@
-use std::sync::Arc;
-
 use crate::{
-    arepl::submissions::*,
+    arepl::submissions::{status::SubmissionsEnabled, *},
     auth::{Authenticated, Permission},
-    db,
+    db::DbConnection,
     error_handler::ApiError,
     schema::{
         arepl::{levels, submission_history, submissions},
         users,
     },
 };
-use actix_web::web;
 use diesel::expression_methods::BoolExpressionMethods;
 use diesel::{
     dsl::exists, select, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl,
@@ -79,10 +76,9 @@ impl SubmissionPatchUser {
     pub fn patch(
         patch: Self,
         id: Uuid,
-        db: web::Data<Arc<db::DbAppState>>,
+        conn: &mut DbConnection,
         authenticated: Authenticated,
     ) -> Result<Submission, ApiError> {
-        let conn = &mut db.connection()?;
         let user = authenticated.user_id;
         if patch == Self::default() {
             return Err(ApiError::new(400, "No changes were provided in the patch!"));
@@ -108,13 +104,22 @@ impl SubmissionPatchUser {
         let resub = old_submission.status == SubmissionStatus::Denied;
 
         if resub {
+            if !SubmissionsEnabled::is_enabled(conn)? {
+                return Err(ApiError::new(
+                    400,
+                    "Submissions are closed, please wait to resubmit this record!",
+                ));
+            }
             let submitter_ban = users::table
                 .filter(users::id.eq(user))
                 .select(users::ban_level)
                 .first::<i32>(conn)?;
 
             if submitter_ban >= 2 {
-                return Err(ApiError::new(403, "You are banned from resubmitting records."));
+                return Err(ApiError::new(
+                    403,
+                    "You are banned from resubmitting records.",
+                ));
             }
         }
 
@@ -213,7 +218,7 @@ impl SubmissionPatchUser {
             .values(&history)
             .execute(conn)?;
 
-        if !authenticated.has_permission(db, Permission::SubmissionReview)? {
+        if !authenticated.has_permission(conn, Permission::SubmissionReview)? {
             result.reviewer_id = None;
         }
 
@@ -225,10 +230,9 @@ impl SubmissionPatchMod {
     pub fn patch_mod(
         patch: Self,
         id: Uuid,
-        db: web::Data<Arc<db::DbAppState>>,
+        conn: &mut DbConnection,
         authenticated: Authenticated,
     ) -> Result<Submission, ApiError> {
-        let conn = &mut db.connection()?;
         if patch == Self::default() {
             return Err(ApiError::new(400, "No changes were provided in the patch!"));
         }
@@ -254,7 +258,7 @@ impl SubmissionPatchMod {
             return SubmissionPatchUser::patch(
                 SubmissionPatchMod::downgrade(patch),
                 id,
-                db,
+                conn,
                 authenticated,
             );
         }

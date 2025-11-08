@@ -1,14 +1,12 @@
 use crate::arepl::records::{PublicRecordResolved, PublicRecordUnresolved};
-use crate::db::DbAppState;
+use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::arepl::{levels, records};
 use crate::schema::users;
 use crate::users::{BaseUser, BaseUserWithBanLevel};
-use actix_web::web;
 use diesel::prelude::*;
 use diesel::{ExpressionMethods, RunQueryDsl};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -157,43 +155,39 @@ pub struct ResolvedLevel {
 }
 
 impl Level {
-    pub fn find_all(db: web::Data<Arc<DbAppState>>) -> Result<Vec<Self>, ApiError> {
+    pub fn find_all(conn: &mut DbConnection) -> Result<Vec<Self>, ApiError> {
         let levels = levels::table
             .select(Level::as_select())
             .order(levels::position)
-            .load::<Self>(&mut db.connection()?)?;
+            .load::<Self>(conn)?;
         Ok(levels)
     }
 
-    pub fn create(db: web::Data<Arc<DbAppState>>, level: LevelPlace) -> Result<Self, ApiError> {
+    pub fn create(conn: &mut DbConnection, level: LevelPlace) -> Result<Self, ApiError> {
         let level = diesel::insert_into(levels::table)
             .values(level)
             .returning(Self::as_select())
-            .get_result(&mut db.connection()?)?;
+            .get_result(conn)?;
         Ok(level)
     }
 
-    pub fn update(
-        db: web::Data<Arc<DbAppState>>,
-        id: Uuid,
-        level: LevelUpdate,
-    ) -> Result<Self, ApiError> {
+    pub fn update(conn: &mut DbConnection, id: Uuid, level: LevelUpdate) -> Result<Self, ApiError> {
         let level = diesel::update(levels::table)
             .set(level)
             .filter(levels::id.eq(id))
             .returning(Self::as_select())
-            .get_result(&mut db.connection()?)?;
+            .get_result(conn)?;
         Ok(level)
     }
 }
 
 impl ResolvedLevel {
-    pub fn find(db: web::Data<Arc<DbAppState>>, id: Uuid) -> Result<Self, ApiError> {
+    pub fn find(conn: &mut DbConnection, id: Uuid) -> Result<Self, ApiError> {
         let (level, publisher) = levels::table
             .filter(levels::id.eq(id))
             .inner_join(users::table.on(levels::publisher_id.eq(users::id)))
             .select((Level::as_select(), BaseUserWithBanLevel::as_select()))
-            .first::<(Level, BaseUserWithBanLevel)>(&mut db.connection()?)?;
+            .first::<(Level, BaseUserWithBanLevel)>(conn)?;
 
         let verifications_rows = records::table
             .filter(records::level_id.eq(id))
@@ -204,7 +198,7 @@ impl ResolvedLevel {
                 PublicRecordUnresolved::as_select(),
                 BaseUserWithBanLevel::as_select(),
             ))
-            .load::<(PublicRecordUnresolved, BaseUserWithBanLevel)>(&mut db.connection()?)?;
+            .load::<(PublicRecordUnresolved, BaseUserWithBanLevel)>(conn)?;
 
         let verifications = verifications_rows
             .into_iter()

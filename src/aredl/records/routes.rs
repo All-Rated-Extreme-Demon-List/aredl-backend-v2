@@ -1,7 +1,7 @@
 use crate::aredl::records::model::{RecordInsert, RecordUpdate};
 use crate::aredl::records::{
-    FullRecordResolved, FullRecordUnresolved, FullRecordUnresolvedDto, FullResolvedRecordPage,
-    FullUnresolvedRecordPage, Record, RecordsQueryOptions,
+    statistics, FullRecordResolved, FullRecordUnresolved, FullRecordUnresolvedDto,
+    FullResolvedRecordPage, FullUnresolvedRecordPage, Record, RecordsQueryOptions,
 };
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::db::DbAppState;
@@ -31,7 +31,9 @@ async fn find(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
 ) -> Result<HttpResponse, ApiError> {
-    let record = web::block(move || FullRecordResolved::find(db, id.into_inner())).await??;
+    let record =
+        web::block(move || FullRecordResolved::find(&mut db.connection()?, id.into_inner()))
+            .await??;
     Ok(HttpResponse::Ok().json(record))
 }
 
@@ -56,7 +58,8 @@ async fn create(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&record));
-    let record = web::block(move || Record::create(db, record.into_inner())).await??;
+    let record =
+        web::block(move || Record::create(&mut db.connection()?, record.into_inner())).await??;
     Ok(HttpResponse::Ok().json(record))
 }
 
@@ -85,8 +88,10 @@ async fn update(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&record));
-    let id = id.into_inner();
-    let record = web::block(move || Record::update(db, id, record.into_inner())).await??;
+    let record = web::block(move || {
+        Record::update(&mut db.connection()?, id.into_inner(), record.into_inner())
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(record))
 }
 
@@ -111,8 +116,8 @@ async fn delete(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
 ) -> Result<HttpResponse, ApiError> {
-    let id = id.into_inner();
-    let record = web::block(move || Record::delete(db, id)).await??;
+    let record =
+        web::block(move || Record::delete(&mut db.connection()?, id.into_inner())).await??;
     Ok(HttpResponse::Ok().json(record))
 }
 
@@ -143,7 +148,12 @@ async fn find_all(
     options: web::Query<RecordsQueryOptions>,
 ) -> Result<HttpResponse, ApiError> {
     let records = web::block(move || {
-        FullRecordUnresolved::find_all(db, page_query.into_inner(), options.into_inner(), false)
+        FullRecordUnresolved::find_all(
+            &mut db.connection()?,
+            page_query.into_inner(),
+            options.into_inner(),
+            false,
+        )
     })
     .await??;
     Ok(HttpResponse::Ok().json(records))
@@ -176,7 +186,12 @@ async fn find_all_full(
     options: web::Query<RecordsQueryOptions>,
 ) -> Result<HttpResponse, ApiError> {
     let records = web::block(move || {
-        FullRecordResolved::find_all(db, page_query.into_inner(), options.into_inner(), false)
+        FullRecordResolved::find_all(
+            &mut db.connection()?,
+            page_query.into_inner(),
+            options.into_inner(),
+            false,
+        )
     })
     .await??;
     Ok(HttpResponse::Ok().json(records))
@@ -205,14 +220,18 @@ async fn find_me(
     page_query: web::Query<PageQuery<100>>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let options = RecordsQueryOptions {
-        level_filter: None,
-        mobile_filter: None,
-        submitter_filter: Some(authenticated.user_id),
-        reviewer_filter: None
-    };
     let records = web::block(move || {
-        FullRecordResolved::find_all(db, page_query.into_inner(), options, true)
+        FullRecordResolved::find_all(
+            &mut db.connection()?,
+            page_query.into_inner(),
+            RecordsQueryOptions {
+                level_filter: None,
+                mobile_filter: None,
+                submitter_filter: Some(authenticated.user_id),
+                reviewer_filter: None,
+            },
+            true,
+        )
     })
     .await??;
     Ok(HttpResponse::Ok().json(records))
@@ -231,6 +250,9 @@ async fn find_me(
             FullRecordUnresolvedDto
         )
     ),
+    nest(
+        (path = "/statistics", api=statistics::ApiDoc)
+    ),
     paths(
         create,
         update,
@@ -246,12 +268,13 @@ pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/records")
+            .configure(statistics::init_routes)
             .service(create)
             .service(update)
             .service(delete)
             .service(find_all)
             .service(find_all_full)
             .service(find_me)
-            .service(find)
+            .service(find),
     );
 }

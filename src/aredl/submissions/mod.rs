@@ -6,9 +6,13 @@ mod post;
 mod queue;
 mod resolved;
 mod routes;
+mod statistics;
+mod status;
 
 #[cfg(test)]
-mod tests;
+pub mod test_utils;
+#[cfg(test)]
+pub mod tests;
 
 pub use model::*;
 pub use routes::{init_routes, ApiDoc};

@@ -6,6 +6,10 @@ extern crate diesel_migrations;
 mod db;
 mod error_handler;
 mod schema;
+
+#[cfg(test)]
+mod tests;
+
 #[cfg(test)]
 mod test_utils;
 
@@ -20,13 +24,15 @@ mod notifications;
 mod page_helper;
 mod roles;
 mod scheduled;
+mod shifts;
 mod users;
 
 use crate::cache_control::CacheController;
 use crate::docs::ApiDoc;
 use crate::scheduled::data_cleaner::start_data_cleaner;
-use crate::scheduled::refresh_leaderboard::start_leaderboard_refresher;
+use crate::scheduled::refresh_discord_avatars::start_discord_avatars_refresher;
 use crate::scheduled::refresh_level_data::start_level_data_refresher;
+use crate::scheduled::refresh_matviews::start_matviews_refresher;
 use crate::scheduled::shifts_creator::start_recurrent_shift_creator;
 use actix_cors::Cors;
 use actix_governor::GovernorConfigBuilder;
@@ -103,13 +109,15 @@ async fn main() -> std::io::Result<()> {
 
     db_app_state.run_pending_migrations();
 
-    start_leaderboard_refresher(db_app_state.clone()).await;
+    start_matviews_refresher(db_app_state.clone()).await;
 
     start_data_cleaner(db_app_state.clone(), notify_tx.clone()).await;
 
     start_level_data_refresher(db_app_state.clone()).await;
 
     start_recurrent_shift_creator(db_app_state.clone(), notify_tx.clone()).await;
+
+    start_discord_avatars_refresher(db_app_state.clone()).await;
 
     let auth_app_state = auth::init_app_state().await;
 
@@ -140,7 +148,7 @@ async fn main() -> std::io::Result<()> {
                 nav-accent-color = #ff6f00 \
              >\
                 <header style=\"color:white; font-weight: lighter; font-size: 1.5rem;\" slot=\"header\">All Rated Extreme Demons List | API v2 Documentation</header>\
-                <img style=\"padding: 0.5rem; height: 3rem;\" slot=\"logo\"  src=\"https://aredl.net/logo.png\"/>
+                <img style=\"padding: 0.5rem; height: 3rem;\" slot=\"logo\"  src=\"https://aredl.net/assets/logo.png\"/>
             </rapi-doc></body></html>";
 
         let _governor_conf = GovernorConfigBuilder::default()
@@ -168,7 +176,8 @@ async fn main() -> std::io::Result<()> {
                     .configure(roles::init_routes)
                     .configure(clans::init_routes)
                     .configure(notifications::init_routes)
-                    .configure(health::init_routes),
+                    .configure(health::init_routes)
+                    .configure(shifts::init_routes),
             )
             .service(
                 RapiDoc::with_openapi("/openapi.json", ApiDoc::openapi())

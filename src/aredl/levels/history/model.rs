@@ -1,14 +1,12 @@
 use crate::aredl::levels::BaseLevel;
-use crate::db::DbAppState;
+use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::aredl::levels;
 use crate::schema::aredl::position_history_full_view;
-use actix_web::web;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -86,7 +84,7 @@ pub struct HistoryLevelFull {
 }
 
 impl HistoryLevelFull {
-    pub fn find(db: web::Data<Arc<DbAppState>>, id: Uuid) -> Result<Vec<Self>, ApiError> {
+    pub fn find(conn: &mut DbConnection, id: Uuid) -> Result<Vec<Self>, ApiError> {
         let entries = position_history_full_view::table
             .filter(position_history_full_view::affected_level.eq(id))
             .inner_join(levels::table.on(levels::id.eq(position_history_full_view::cause)))
@@ -100,7 +98,7 @@ impl HistoryLevelFull {
                 position_history_full_view::cause,
                 levels::name,
             ))
-            .load::<HistoryLevelFull>(&mut db.connection()?)?;
+            .load::<HistoryLevelFull>(conn)?;
         Ok(entries)
     }
 }

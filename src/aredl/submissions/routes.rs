@@ -6,7 +6,7 @@ use utoipa::OpenApi;
 use crate::{
     aredl::{
         records::Record, submissions::{
-            actions, patch::{SubmissionPatchMod, SubmissionPatchUser}, post::SubmissionInsert, Submission, SubmissionPage,  SubmissionResolved, SubmissionStatus
+            actions, patch::{SubmissionPatchMod, SubmissionPatchUser}, post::SubmissionInsert, statistics, status, Submission, SubmissionPage, SubmissionResolved, SubmissionStatus
         }
     },
     auth::{Authenticated, Permission, UserAuth}, 
@@ -33,12 +33,11 @@ use super::{history, queue, resolved};
 #[post("", wrap="UserAuth::load()")]
 async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionInsert>, authenticated: Authenticated, root_span: RootSpan) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&body));
-
-    authenticated.check_is_banned(db.clone())?;
-
-    let created = web::block(
-        move || Submission::create(db, body.into_inner(), authenticated)
-    ).await??;
+    let created = web::block(move || {
+        let conn = &mut db.connection()?;
+        authenticated.check_is_banned(conn)?;
+        Submission::create(conn, body.into_inner(), authenticated)
+    }).await??;
     Ok(HttpResponse::Created().json(created))
 }
 
@@ -67,23 +66,17 @@ async fn patch(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&body));
-    let has_auth = authenticated.has_permission(db.clone(), Permission::SubmissionReview)?;
-
-    match has_auth {
-        true => {
-            let patched = web::block(
-                move || SubmissionPatchMod::patch_mod(body.into_inner(), id.into_inner(), db, authenticated)
-            ).await??;
-            return Ok(HttpResponse::Ok().json(patched))
+    let patched = web::block(move || {
+        let conn = &mut db.connection()?;
+        match authenticated.has_permission( conn, Permission::SubmissionReview)? {
+            true => SubmissionPatchMod::patch_mod(body.into_inner(), id.into_inner(), conn, authenticated),
+            false => {
+                let user_patch = SubmissionPatchMod::downgrade(body.into_inner());
+                SubmissionPatchUser::patch(user_patch, id.into_inner(), conn, authenticated)
+            }
         }
-        false => {
-            let user_patch = SubmissionPatchMod::downgrade(body.into_inner());
-            let patched = web::block(
-                move || SubmissionPatchUser::patch(user_patch, id.into_inner(), db, authenticated)
-            ).await??;
-            return Ok(HttpResponse::Ok().json(patched))
-        }
-    }
+    }).await??;
+    Ok(HttpResponse::Ok().json(patched))
 }
 
 #[utoipa::path(
@@ -105,7 +98,7 @@ async fn patch(
 #[delete("/{id}", wrap="UserAuth::load()")]
 async fn delete(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
     web::block(
-        move || Submission::delete(db, id.into_inner(), authenticated)
+        move || Submission::delete(&mut db.connection()?, id.into_inner(), authenticated)
     ).await??;
     Ok(HttpResponse::NoContent().finish())
 }
@@ -115,13 +108,15 @@ async fn delete(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticat
 #[derive(OpenApi)]
 #[openapi(
     tags(
-        (name = "AREDL - Levels (Submissions)", description = "Endpoints for fetching and managing submissions")
+        (name = "AREDL - Submissions", description = "Endpoints for fetching and managing submissions")
     ),
     nest(
         (path = "/", api=actions::ApiDoc),
         (path = "/", api=history::ApiDoc),
         (path = "/", api=queue::ApiDoc),
         (path = "/", api=resolved::ApiDoc),
+        (path = "/status", api=status::ApiDoc),
+        (path = "/statistics", api=statistics::ApiDoc)
     ),
     components(
         schemas(
@@ -145,7 +140,9 @@ pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/submissions")
+            .configure(statistics::init_routes)
             .configure(actions::init_routes)
+            .configure(status::init_routes)
             .configure(history::init_routes)
             .configure(queue::init_routes)
             .configure(resolved::init_routes)

@@ -1,10 +1,9 @@
 use crate::arepl::levels::ExtendedBaseLevel;
-use crate::db::DbAppState;
+use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::{
     arepl::levels, arepl::pack_levels, arepl::pack_tiers, arepl::packs_points, arepl::records,
 };
-use actix_web::web;
 use diesel::pg::Pg;
 use diesel::{
     BelongingToDsl, BoolExpressionMethods, ExpressionMethods, GroupedBy, JoinOnDsl,
@@ -12,7 +11,6 @@ use diesel::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -111,18 +109,13 @@ pub struct PackTierUpdate {
 }
 
 impl PackTierResolved {
-    pub fn find_all(
-        db: web::Data<Arc<DbAppState>>,
-        user_id: Option<Uuid>,
-    ) -> Result<Vec<Self>, ApiError> {
-        let connection = &mut db.connection()?;
-
+    pub fn find_all(conn: &mut DbConnection, user_id: Option<Uuid>) -> Result<Vec<Self>, ApiError> {
         let pack_tiers = pack_tiers::table
             .order(pack_tiers::placement)
             .select(PackTier::as_select())
-            .load::<PackTier>(connection)?;
+            .load::<PackTier>(conn)?;
         let packs = PackWithTier::belonging_to(&pack_tiers)
-            .load::<PackWithTier>(connection)?
+            .load::<PackWithTier>(conn)?
             .grouped_by(&pack_tiers);
 
         let levels_base_query =
@@ -144,7 +137,7 @@ impl PackTierResolved {
                         ExtendedBaseLevel::as_select(),
                         records::placement_order.nullable(),
                     ))
-                    .load::<(Uuid, ExtendedBaseLevel, Option<i32>)>(connection)?
+                    .load::<(Uuid, ExtendedBaseLevel, Option<i32>)>(conn)?
                     // map Option<i32> into Option<bool> which is always Some.
                     // It will be Some(true) if user has completed the level and Some(false) otherwise.
                     // That's because None is used for non-authenticated queries.
@@ -156,7 +149,7 @@ impl PackTierResolved {
             }
             None => levels_base_query
                 .select((pack_levels::pack_id, ExtendedBaseLevel::as_select()))
-                .load::<(Uuid, ExtendedBaseLevel)>(connection)?
+                .load::<(Uuid, ExtendedBaseLevel)>(conn)?
                 // map to add None to signify that the completed_by_user field is missing
                 .into_iter()
                 .map(|(uuid, pack_level)| (uuid, pack_level, None))
@@ -199,32 +192,29 @@ impl PackTierResolved {
 }
 
 impl PackTier {
-    pub fn create(
-        db: web::Data<Arc<DbAppState>>,
-        pack_tier: PackTierCreate,
-    ) -> Result<Self, ApiError> {
+    pub fn create(conn: &mut DbConnection, pack_tier: PackTierCreate) -> Result<Self, ApiError> {
         let tier = diesel::insert_into(pack_tiers::table)
             .values(pack_tier)
-            .get_result(&mut db.connection()?)?;
+            .get_result(conn)?;
         Ok(tier)
     }
 
     pub fn update(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         id: Uuid,
         pack_tier: PackTierUpdate,
     ) -> Result<Self, ApiError> {
         let tier = diesel::update(pack_tiers::table)
             .set(pack_tier)
             .filter(pack_tiers::id.eq(id))
-            .get_result(&mut db.connection()?)?;
+            .get_result(conn)?;
         Ok(tier)
     }
 
-    pub fn delete(db: web::Data<Arc<DbAppState>>, id: Uuid) -> Result<Self, ApiError> {
+    pub fn delete(conn: &mut DbConnection, id: Uuid) -> Result<Self, ApiError> {
         let tier = diesel::delete(pack_tiers::table)
             .filter(pack_tiers::id.eq(id))
-            .get_result(&mut db.connection()?)?;
+            .get_result(conn)?;
         Ok(tier)
     }
 }

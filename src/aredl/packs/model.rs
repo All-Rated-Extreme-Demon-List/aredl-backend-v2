@@ -1,12 +1,10 @@
 use crate::aredl::packtiers::BasePackTier;
-use crate::db::DbAppState;
+use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::aredl::packs;
-use actix_web::web;
 use diesel::pg::Pg;
 use diesel::{ExpressionMethods, RunQueryDsl};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -57,29 +55,25 @@ pub struct PackUpdate {
 }
 
 impl Pack {
-    pub fn create(db: web::Data<Arc<DbAppState>>, pack: PackCreate) -> Result<Self, ApiError> {
+    pub fn create(conn: &mut DbConnection, pack: PackCreate) -> Result<Self, ApiError> {
         let pack = diesel::insert_into(packs::table)
             .values(pack)
-            .get_result(&mut db.connection()?)?;
+            .get_result(conn)?;
         Ok(pack)
     }
 
-    pub fn update(
-        db: web::Data<Arc<DbAppState>>,
-        id: Uuid,
-        pack: PackUpdate,
-    ) -> Result<Self, ApiError> {
+    pub fn update(conn: &mut DbConnection, id: Uuid, pack: PackUpdate) -> Result<Self, ApiError> {
         let pack = diesel::update(packs::table)
             .filter(packs::id.eq(id))
             .set(pack)
-            .get_result(&mut db.connection()?)?;
+            .get_result(conn)?;
         Ok(pack)
     }
 
-    pub fn delete(db: web::Data<Arc<DbAppState>>, id: Uuid) -> Result<Self, ApiError> {
+    pub fn delete(conn: &mut DbConnection, id: Uuid) -> Result<Self, ApiError> {
         let pack = diesel::delete(packs::table)
             .filter(packs::id.eq(id))
-            .get_result(&mut db.connection()?)?;
+            .get_result(conn)?;
         Ok(pack)
     }
 }

@@ -35,9 +35,9 @@ async fn get_queue_position(
     id: web::Path<Uuid>,
     _auth: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let id = id.into_inner();
-
-    let (position, total) = web::block(move || Submission::get_queue_position(db, id)).await??;
+    let (position, total) =
+        web::block(move || Submission::get_queue_position(&mut db.connection()?, id.into_inner()))
+            .await??;
 
     Ok(HttpResponse::Ok().json(QueuePositionResponse { position, total }))
 }
@@ -53,7 +53,8 @@ async fn get_queue_position(
 )]
 #[get("queue")]
 async fn get_queue(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
-    let submission = web::block(move || SubmissionQueue::get_queue(db)).await??;
+    let submission =
+        web::block(move || SubmissionQueue::get_queue(&mut db.connection()?)).await??;
     Ok(HttpResponse::Ok().json(submission))
 }
 

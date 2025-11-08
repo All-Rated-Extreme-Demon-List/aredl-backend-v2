@@ -1,7 +1,10 @@
 use crate::{
     arepl::{
         records::Record,
-        submissions::{actions::ReviewerNotes, Submission, SubmissionResolved},
+        submissions::{
+            actions::{AcceptParams, ReviewerNotes},
+            Submission, SubmissionResolved,
+        },
     },
     auth::{Authenticated, Permission, UserAuth},
     db::DbAppState,
@@ -33,8 +36,10 @@ async fn claim(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let patched =
-        web::block(move || SubmissionResolved::claim_highest_priority(db, authenticated)).await??;
+    let patched = web::block(move || {
+        SubmissionResolved::claim_highest_priority(&mut db.connection()?, authenticated)
+    })
+    .await??;
 
     Ok(HttpResponse::Ok().json(patched))
 }
@@ -64,8 +69,10 @@ async fn unclaim(
     id: web::Path<Uuid>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let patched =
-        web::block(move || Submission::unclaim(db, id.into_inner(), authenticated)).await??;
+    let patched = web::block(move || {
+        Submission::unclaim(&mut db.connection()?, id.into_inner(), authenticated)
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(patched))
 }
 
@@ -77,7 +84,7 @@ async fn unclaim(
     responses(
         (status = 202, body = Record)
     ),
-    request_body = ReviewerNotes,
+    request_body = AcceptParams,
     security(
         ("access_token" = []),
         ("api_key" = []),
@@ -95,18 +102,18 @@ async fn accept(
 
     id: web::Path<Uuid>,
     authenticated: Authenticated,
-    notes: web::Json<ReviewerNotes>,
+    opts: web::Json<AcceptParams>,
     root_span: RootSpan,
     notify_tx: web::Data<broadcast::Sender<WebsocketNotification>>,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&notes));
+    root_span.record("body", &tracing::field::debug(&opts));
     let new_record = web::block(move || {
         Submission::accept(
-            db,
+            &mut db.connection()?,
             notify_tx.get_ref().clone(),
             id.into_inner(),
             authenticated.user_id,
-            notes.into_inner().notes,
+            opts.into_inner(),
         )
     })
     .await??;
@@ -147,7 +154,7 @@ async fn deny(
 
     let new_record = web::block(move || {
         Submission::reject(
-            db,
+            &mut db.connection()?,
             notify_tx.get_ref().clone(),
             id.into_inner(),
             authenticated,
@@ -194,7 +201,7 @@ async fn under_consideration(
 
     let new_record = web::block(move || {
         Submission::under_consideration(
-            db,
+            &mut db.connection()?,
             notify_tx.get_ref().clone(),
             id.into_inner(),
             authenticated,

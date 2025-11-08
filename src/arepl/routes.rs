@@ -4,7 +4,6 @@ use crate::arepl::{
 use actix_web::web;
 use utoipa::OpenApi;
 
-use super::shifts;
 #[derive(OpenApi)]
 #[openapi(
     tags(
@@ -21,7 +20,6 @@ use super::shifts;
         (path = "/clan", api=clan::ApiDoc),
         (path = "/submissions", api=submissions::ApiDoc),
         (path = "/records", api=records::ApiDoc),
-        (path = "/shifts", api=shifts::ApiDoc),
     ),
 )]
 
@@ -38,7 +36,6 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .configure(profile::init_routes)
             .configure(country::init_routes)
             .configure(clan::init_routes)
-            .configure(records::init_routes)
-            .configure(shifts::init_routes),
+            .configure(records::init_routes),
     );
 }

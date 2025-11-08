@@ -34,7 +34,9 @@ async fn set(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&users));
-    let users = web::block(move || BaseUser::role_set_all(db, *id, users.into_inner())).await??;
+    let users =
+        web::block(move || BaseUser::role_set_all(&mut db.connection()?, *id, users.into_inner()))
+            .await??;
     Ok(HttpResponse::Ok().json(users))
 }
 
@@ -64,7 +66,9 @@ async fn add(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&users));
-    let users = web::block(move || BaseUser::role_add_all(db, *id, users.into_inner())).await??;
+    let users =
+        web::block(move || BaseUser::role_add_all(&mut db.connection()?, *id, users.into_inner()))
+            .await??;
     Ok(HttpResponse::Ok().json(users))
 }
 
@@ -94,8 +98,10 @@ async fn delete(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&users));
-    let users =
-        web::block(move || BaseUser::role_delete_all(db, *id, users.into_inner())).await??;
+    let users = web::block(move || {
+        BaseUser::role_delete_all(&mut db.connection()?, *id, users.into_inner())
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(users))
 }
 

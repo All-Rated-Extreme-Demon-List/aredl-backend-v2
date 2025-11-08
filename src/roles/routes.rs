@@ -18,7 +18,7 @@ use utoipa::OpenApi;
 )]
 #[get("")]
 async fn find_all(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
-    let roles = web::block(|| Role::find_all(db)).await??;
+    let roles = web::block(move || Role::find_all(&mut db.connection()?)).await??;
     Ok(HttpResponse::Ok().json(roles))
 }
 
@@ -43,7 +43,7 @@ async fn create(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&role));
-    let role = web::block(|| Role::create(db, role.into_inner())).await??;
+    let role = web::block(move || Role::create(&mut db.connection()?, role.into_inner())).await??;
     Ok(HttpResponse::Ok().json(role))
 }
 
@@ -72,7 +72,9 @@ async fn update(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&role));
-    let role = web::block(|| Role::update(db, id.into_inner(), role.into_inner())).await??;
+    let role =
+        web::block(move || Role::update(&mut db.connection()?, id.into_inner(), role.into_inner()))
+            .await??;
     Ok(HttpResponse::Ok().json(role))
 }
 
@@ -97,7 +99,7 @@ async fn delete(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<i32>,
 ) -> Result<HttpResponse, ApiError> {
-    let role = web::block(|| Role::delete(db, id.into_inner())).await??;
+    let role = web::block(move || Role::delete(&mut db.connection()?, id.into_inner())).await??;
     Ok(HttpResponse::Ok().json(role))
 }
 

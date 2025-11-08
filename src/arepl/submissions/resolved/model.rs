@@ -1,7 +1,7 @@
 use crate::{
     arepl::{levels::ExtendedBaseLevel, submissions::*},
     auth::{Authenticated, Permission},
-    db::DbAppState,
+    db::DbConnection,
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
     schema::{
@@ -10,13 +10,12 @@ use crate::{
     },
     users::BaseUser,
 };
-use actix_web::web;
 use diesel::expression_methods::NullableExpressionMethods;
 use diesel::{
     pg::Pg, ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl, Selectable, SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -148,19 +147,17 @@ impl SubmissionResolved {
     }
 
     pub fn resolve_from_id(
+        conn: &mut DbConnection,
         submission_id: Uuid,
-        db: web::Data<Arc<DbAppState>>,
         authenticated: Authenticated,
     ) -> Result<SubmissionResolved, ApiError> {
-        let conn = &mut db.connection()?;
-
         let resolved_raw = arepl_base_resolved_submission_query!()
             .filter(submissions_with_priority::id.eq(submission_id))
             .first::<ResolvedSubmissionRow>(conn)?;
 
         let mut resolved = Self::from_data(resolved_raw);
 
-        if !authenticated.has_permission(db.clone(), Permission::SubmissionReview)? {
+        if !authenticated.has_permission(conn, Permission::SubmissionReview)? {
             resolved.reviewer = None;
         }
 
@@ -168,16 +165,14 @@ impl SubmissionResolved {
     }
 
     pub fn find_one(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         id: Uuid,
         authenticated: Authenticated,
     ) -> Result<SubmissionResolved, ApiError> {
-        let conn = &mut db.connection()?;
-
         let mut query =
             arepl_base_resolved_submission_query!().filter(submissions_with_priority::id.eq(id));
 
-        if !authenticated.has_permission(db.clone(), Permission::SubmissionReview)? {
+        if !authenticated.has_permission(conn, Permission::SubmissionReview)? {
             query = query.filter(submissions_with_priority::submitted_by.eq(authenticated.user_id));
         }
 
@@ -189,13 +184,11 @@ impl SubmissionResolved {
 
 impl ResolvedSubmissionPage {
     pub fn find_all<const D: i64>(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         page_query: PageQuery<D>,
         options: SubmissionQueryOptions,
         authenticated: Authenticated,
     ) -> Result<Paginated<Self>, ApiError> {
-        let conn = &mut db.connection()?;
-
         let mut query = arepl_base_resolved_submission_query!();
         query = arepl_apply_submissions_filters!(query, options);
 
@@ -210,7 +203,7 @@ impl ResolvedSubmissionPage {
             .map(|resolved_row| SubmissionResolved::from_data(resolved_row))
             .collect::<Vec<_>>();
 
-        if !authenticated.has_permission(db, Permission::SubmissionReview)? {
+        if !authenticated.has_permission(conn, Permission::SubmissionReview)? {
             submissions.iter_mut().for_each(|s| s.reviewer = None);
         }
 
@@ -226,7 +219,7 @@ impl ResolvedSubmissionPage {
     }
 
     pub fn find_own<const D: i64>(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         page_query: PageQuery<D>,
         options: SubmissionQueryOptions,
         authenticated: Authenticated,
@@ -236,6 +229,6 @@ impl ResolvedSubmissionPage {
             ..options
         };
 
-        Ok(Self::find_all(db, page_query, options, authenticated)?)
+        Ok(Self::find_all(conn, page_query, options, authenticated)?)
     }
 }

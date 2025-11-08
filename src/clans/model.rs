@@ -4,12 +4,10 @@ use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::{clan_invites, clan_members, clans};
 use chrono::{DateTime, Utc};
-use diesel::expression::AsExpression;
 use diesel::pg::Pg;
-use diesel::sql_types::Bool;
 use diesel::{
-    BoxableExpression, ExpressionMethods, OptionalExtension, PgTextExpressionMethods, QueryDsl,
-    RunQueryDsl, SelectableHelper,
+    ExpressionMethods, OptionalExtension, PgTextExpressionMethods, QueryDsl, RunQueryDsl,
+    SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -192,31 +190,26 @@ impl Clan {
         options: ClanListQueryOptions,
         page_query: PageQuery<D>,
     ) -> Result<Paginated<ClanPage>, ApiError> {
-        let name_filter: Box<dyn BoxableExpression<_, _, SqlType = Bool>> =
-            match options.name_filter.clone() {
-                Some(filter) => Box::new(clans::global_name.ilike(filter)),
-                None => Box::new(<bool as AsExpression<Bool>>::as_expression(true)),
-            };
+        let build_query = || {
+            let mut q = clans::table.into_boxed::<Pg>();
+            if let Some(ref name_like) = options.name_filter {
+                q = q.filter(clans::global_name.ilike(name_like));
+            }
+            q
+        };
 
-        let entries = clans::table
-            .filter(name_filter)
-            .order(clans::global_name)
+        let total_count: i64 = build_query().count().get_result(conn)?;
+
+        let entries: Vec<Clan> = build_query()
+            .order(clans::global_name.asc())
             .limit(page_query.per_page())
             .offset(page_query.offset())
             .select(Clan::as_select())
-            .load::<Clan>(conn)?;
+            .load(conn)?;
 
-        let name_filter: Box<dyn BoxableExpression<_, _, SqlType = Bool>> =
-            match options.name_filter.clone() {
-                Some(filter) => Box::new(clans::global_name.ilike(filter)),
-                None => Box::new(<bool as AsExpression<Bool>>::as_expression(true)),
-            };
-
-        let count = clans::table.filter(name_filter).count().get_result(conn)?;
-
-        Ok(Paginated::<ClanPage>::from_data(
+        Ok(Paginated::from_data(
             page_query,
-            count,
+            total_count,
             ClanPage { data: entries },
         ))
     }

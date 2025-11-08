@@ -31,22 +31,21 @@ pub async fn start_level_data_refresher(db: Arc<DbAppState>) {
 
             tracing::info!("Refreshing level data");
 
-            let conn = db_clone.connection();
+            let conn = &mut match db.connection() {
+                Ok(c) => c,
+                Err(e) => {
+                    tracing::error!("DB connection failed: {e}");
+                    continue;
+                }
+            };
 
-            if conn.is_err() {
-                tracing::error!("Failed to refresh {}", conn.err().unwrap());
-                continue;
-            }
-
-            let mut conn = conn.unwrap();
-
-            let edel_result = update_edel_data(&mut conn, &google_api_key, &edel_sheet_id).await;
+            let edel_result = update_edel_data(conn, &google_api_key, &edel_sheet_id).await;
 
             if edel_result.is_err() {
                 tracing::error!("Failed to refresh edel {}", edel_result.err().unwrap());
             }
 
-            let nlw_result = update_nlw_data(&mut conn, &google_api_key, &nlw_sheet_id).await;
+            let nlw_result = update_nlw_data(conn, &google_api_key, &nlw_sheet_id).await;
 
             if nlw_result.is_err() {
                 tracing::error!("Failed to refresh nlw {}", nlw_result.err().unwrap());
@@ -69,14 +68,13 @@ pub async fn start_level_data_refresher(db: Arc<DbAppState>) {
 
             tracing::info!("Running gddl updater");
 
-            let conn = db.connection();
-
-            if conn.is_err() {
-                tracing::error!("Failed to refresh {}", conn.err().unwrap());
-                continue;
-            }
-
-            let mut conn = conn.unwrap();
+            let conn = &mut match db_clone.connection() {
+                Ok(c) => c,
+                Err(e) => {
+                    tracing::error!("DB connection failed: {e}");
+                    continue;
+                }
+            };
 
             let one_day_ago = Utc::now() - chrono::Duration::days(1);
 
@@ -95,37 +93,12 @@ pub async fn start_level_data_refresher(db: Arc<DbAppState>) {
                     aredl::levels::level_id,
                     aredl::levels::two_player,
                 ))
-                .load::<(Uuid, i32, bool)>(&mut conn)
+                .load::<(Uuid, i32, bool)>(conn)
             {
                 for (id, level_id, two_p) in list {
                     tokio::time::sleep(Duration::from_secs(5)).await;
-                    if let Err(e) = aredl_update_gddl_data(&mut conn, id, level_id, two_p).await {
+                    if let Err(e) = aredl_update_gddl_data(conn, id, level_id, two_p).await {
                         tracing::error!("AREDL GDDL {} failed: {}", level_id, e);
-                    }
-                }
-            }
-
-            if let Ok(list) = arepl::levels::table
-                .left_join(
-                    arepl::last_gddl_update::table
-                        .on(arepl::last_gddl_update::id.eq(arepl::levels::id)),
-                )
-                .filter(
-                    arepl::last_gddl_update::updated_at
-                        .is_null()
-                        .or(arepl::last_gddl_update::updated_at.lt(one_day_ago)),
-                )
-                .select((
-                    arepl::levels::id,
-                    arepl::levels::level_id,
-                    arepl::levels::two_player,
-                ))
-                .load::<(Uuid, i32, bool)>(&mut conn)
-            {
-                for (id, level_id, two_p) in list {
-                    tokio::time::sleep(Duration::from_secs(5)).await;
-                    if let Err(e) = arepl_update_gddl_data(&mut conn, id, level_id, two_p).await {
-                        tracing::error!("AREPL GDDL {} failed: {}", level_id, e);
                     }
                 }
             }
@@ -143,6 +116,8 @@ pub async fn start_level_data_refresher(db: Arc<DbAppState>) {
 struct GDDLResponse {
     #[serde(rename = "Rating")]
     rating: Option<f64>,
+    #[serde(rename = "DefaultRating")]
+    default_rating: Option<f64>,
     #[serde(rename = "TwoPlayerRating")]
     two_player_rating: Option<f64>,
 }
@@ -154,17 +129,35 @@ async fn aredl_update_gddl_data(
     two_player: bool,
 ) -> Result<(), ApiError> {
     let url = format!("https://gdladder.com/api/level/{}", level_id);
-    let response = reqwest::get(&url)
+
+    let client = reqwest::Client::builder()
+        .user_agent("AredlBackend/2.0 (+https://api.aredl.net)")
+        .build()
+        .map_err(|e| {
+            ApiError::new(
+                400,
+                format!("Failed to build HTTP client: {:?}", e).as_str(),
+            )
+        })?;
+
+    let response = client
+        .get(&url)
+        .send()
         .await
-        .map_err(|e| ApiError::new(400, format!("Failed to request gddl: {}", e).as_str()))?;
+        .map_err(|e| ApiError::new(400, &format!("Request failed: {:?}", e)))?
+        .error_for_status()
+        .map_err(|e| ApiError::new(400, &format!("HTTP error: {:?}", e)))?;
+
     let data: GDDLResponse = response
         .json()
         .await
-        .map_err(|e| ApiError::new(400, format!("Failed to request gddl: {}", e).as_str()))?;
+        .map_err(|e| ApiError::new(400, format!("Failed to request gddl: {:?}", e).as_str()))?;
 
-    let rating = match (two_player, data.two_player_rating) {
-        (false, _) => data.rating,
-        (true, rating) => rating,
+    let rating = match (two_player, data.two_player_rating, data.rating) {
+        (true, Some(two_player_rating), _) => Some(two_player_rating),
+        (true, None, _) => data.default_rating,
+        (false, _, Some(rating)) => Some(rating),
+        (false, _, None) => data.default_rating,
     };
 
     diesel::update(aredl::levels::table)
@@ -180,44 +173,6 @@ async fn aredl_update_gddl_data(
         .on_conflict(aredl::last_gddl_update::id)
         .do_update()
         .set(aredl::last_gddl_update::updated_at.eq(Utc::now()))
-        .execute(conn)?;
-
-    Ok(())
-}
-
-async fn arepl_update_gddl_data(
-    conn: &mut DbConnection,
-    id: Uuid,
-    level_id: i32,
-    two_player: bool,
-) -> Result<(), ApiError> {
-    let url = format!("https://gdladder.com/api/level/{}", level_id);
-    let response = reqwest::get(&url)
-        .await
-        .map_err(|e| ApiError::new(400, format!("Failed to request gddl: {}", e).as_str()))?;
-    let data: GDDLResponse = response
-        .json()
-        .await
-        .map_err(|e| ApiError::new(400, format!("Failed to request gddl: {}", e).as_str()))?;
-
-    let rating = match (two_player, data.two_player_rating) {
-        (false, _) => data.rating,
-        (true, rating) => rating,
-    };
-
-    diesel::update(arepl::levels::table)
-        .filter(arepl::levels::id.eq(id))
-        .set(arepl::levels::gddl_tier.eq(rating))
-        .execute(conn)?;
-
-    diesel::insert_into(arepl::last_gddl_update::table)
-        .values((
-            arepl::last_gddl_update::id.eq(id),
-            arepl::last_gddl_update::updated_at.eq(Utc::now()),
-        ))
-        .on_conflict(arepl::last_gddl_update::id)
-        .do_update()
-        .set(arepl::last_gddl_update::updated_at.eq(Utc::now()))
         .execute(conn)?;
 
     Ok(())

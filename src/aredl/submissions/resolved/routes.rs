@@ -37,7 +37,7 @@ async fn find_all(
 ) -> Result<HttpResponse, ApiError> {
     let submissions = web::block(move || {
         ResolvedSubmissionPage::find_all(
-            db,
+            &mut db.connection()?,
             page_query.into_inner(),
             options.into_inner(),
             authenticated,
@@ -69,9 +69,10 @@ async fn find_one(
     id: web::Path<Uuid>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let submission =
-        web::block(move || SubmissionResolved::find_one(db, id.into_inner(), authenticated))
-            .await??;
+    let submission = web::block(move || {
+        SubmissionResolved::find_one(&mut db.connection()?, id.into_inner(), authenticated)
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(submission))
 }
 
@@ -97,7 +98,7 @@ async fn me(
 ) -> Result<HttpResponse, ApiError> {
     let submissions = web::block(move || {
         ResolvedSubmissionPage::find_own(
-            db,
+            &mut db.connection()?,
             page_query.into_inner(),
             options.into_inner(),
             authenticated,

@@ -1,11 +1,10 @@
 #[cfg(test)]
-use crate::test_utils::*;
+use crate::aredl::leaderboard::test_utils::refresh_test_leaderboards;
+use crate::aredl::levels::test_utils::create_test_level_with_record;
 #[cfg(test)]
-use crate::{
-    aredl::records::tests::create_test_record, 
-    schema::{aredl::levels, users, clans, clan_members},
-    db::DbConnection
-};
+use crate::schema::{aredl::levels, clan_members, clans, users};
+#[cfg(test)]
+use crate::{test_utils::*, users::test_utils::create_test_user};
 #[cfg(test)]
 use actix_web::test::{self, read_body_json};
 #[cfg(test)]
@@ -13,46 +12,11 @@ use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 #[cfg(test)]
 use uuid::Uuid;
 
-#[cfg(test)]
-async fn refresh_test_leaderboards(conn: &mut DbConnection) {
-    diesel::sql_query("REFRESH MATERIALIZED VIEW aredl.user_leaderboard")
-        .execute(conn)
-        .expect("Failed to update leaderboard");
-
-    diesel::sql_query("REFRESH MATERIALIZED VIEW aredl.country_leaderboard")
-        .execute(conn)
-        .expect("Failed to update country leaderboard");
-
-    diesel::sql_query("REFRESH MATERIALIZED VIEW aredl.clans_leaderboard")
-        .execute(conn)
-        .expect("Failed to update clans leaderboard");
-
-    diesel::sql_query("REFRESH MATERIALIZED VIEW aredl.position_history_full_view")
-        .execute(conn)
-        .expect("Failed to update position history");
-
-    diesel::sql_query("REFRESH MATERIALIZED VIEW arepl.user_leaderboard")
-        .execute(conn)
-        .expect("Failed to update platformer leaderboard");
-
-    diesel::sql_query("REFRESH MATERIALIZED VIEW arepl.country_leaderboard")
-        .execute(conn)
-        .expect("Failed to update platformer country leaderboard");
-
-    diesel::sql_query("REFRESH MATERIALIZED VIEW arepl.clans_leaderboard")
-        .execute(conn)
-        .expect("Failed to update platformer clans leaderboard");
-
-    diesel::sql_query("REFRESH MATERIALIZED VIEW arepl.position_history_full_view")
-        .execute(conn)
-        .expect("Failed to update platformer position history");
-}
-
 #[actix_web::test]
-async fn list_leaderboard() {
-    let (app, mut conn, _) = init_test_app().await;
+async fn get_leaderboard() {
+    let (app, mut conn, _, _) = init_test_app().await;
     let (user, _) = create_test_user(&mut conn, None).await;
-    let record = create_test_record(&mut conn, user).await;
+    let (level_id, _) = create_test_level_with_record(&mut conn, user).await;
 
     refresh_test_leaderboards(&mut conn).await;
 
@@ -62,7 +26,7 @@ async fn list_leaderboard() {
 
     let level_score = i64::from(
         levels::table
-            .filter(levels::id.eq(record.level_id))
+            .filter(levels::id.eq(level_id))
             .select(levels::points)
             .get_result::<i32>(&mut conn)
             .expect("hi"),
@@ -88,7 +52,7 @@ async fn list_leaderboard() {
 
     assert_eq!(
         user_entry["hardest"]["id"].as_str().unwrap().to_string(),
-        record.level_id.to_string(),
+        level_id.to_string(),
         "Hardest does not match this user's hardest (and only) record!"
     );
     assert_eq!(
@@ -104,11 +68,10 @@ async fn list_leaderboard() {
 }
 
 #[actix_web::test]
-async fn get_country_lb() {
-
-    let (app, mut conn, _) = init_test_app().await;
+async fn get_country_leaderboard() {
+    let (app, mut conn, _, _) = init_test_app().await;
     let (user, _) = create_test_user(&mut conn, None).await;
-    create_test_record(&mut conn, user).await;
+    create_test_level_with_record(&mut conn, user).await;
 
     let us_id = 840;
 
@@ -133,24 +96,19 @@ async fn get_country_lb() {
     assert_ne!(arr.len(), 0, "No countries were returned!");
 
     assert!(
-        arr.iter().any(
-            |x| x["country"] == i64::from(us_id)
-        ),
+        arr.iter().any(|x| x["country"] == i64::from(us_id)),
         "Country codes do not match!"
     );
 }
 
 #[actix_web::test]
-async fn get_clans_lb() {
-    let (app, mut conn, _) = init_test_app().await;
+async fn get_clans_leaderboard() {
+    let (app, mut conn, _, _) = init_test_app().await;
     let (user, _) = create_test_user(&mut conn, None).await;
-    create_test_record(&mut conn, user).await;
+    create_test_level_with_record(&mut conn, user).await;
 
     let clan_id = diesel::insert_into(clans::table)
-        .values((
-            clans::global_name.eq("Test Clan"),
-            clans::tag.eq("TS")
-        ))
+        .values((clans::global_name.eq("Test Clan"), clans::tag.eq("TS")))
         .returning(clans::id)
         .get_result::<Uuid>(&mut conn)
         .expect("Failed to create clan");
@@ -158,7 +116,7 @@ async fn get_clans_lb() {
     diesel::insert_into(clan_members::table)
         .values((
             clan_members::clan_id.eq(clan_id),
-            clan_members::user_id.eq(user)
+            clan_members::user_id.eq(user),
         ))
         .execute(&mut conn)
         .expect("Failed to add user to clan");
@@ -178,10 +136,123 @@ async fn get_clans_lb() {
     assert_ne!(arr.len(), 0, "No countries were returned!");
 
     assert!(
-        arr.iter().any(
-            |x| x["clan"]["id"] == clan_id.to_string()
-        ),
+        arr.iter().any(|x| x["clan"]["id"] == clan_id.to_string()),
         "Country codes do not match!"
     );
+}
 
+#[actix_web::test]
+async fn leaderboard_filters() {
+    let (app, mut conn, _, _) = init_test_app().await;
+    let (u1, name1) = create_test_user(&mut conn, None).await;
+    let (u2, _name2) = create_test_user(&mut conn, None).await;
+    create_test_level_with_record(&mut conn, u1).await;
+    create_test_level_with_record(&mut conn, u2).await;
+    create_test_level_with_record(&mut conn, u2).await;
+
+    let us_id = 840;
+    diesel::update(users::table)
+        .filter(users::id.eq(u1))
+        .set(users::country.eq(us_id))
+        .execute(&mut conn)
+        .unwrap();
+
+    let clan_id = diesel::insert_into(clans::table)
+        .values((clans::global_name.eq("Clan"), clans::tag.eq("CL")))
+        .returning(clans::id)
+        .get_result::<Uuid>(&mut conn)
+        .unwrap();
+    diesel::insert_into(clan_members::table)
+        .values((
+            clan_members::clan_id.eq(clan_id),
+            clan_members::user_id.eq(u1),
+        ))
+        .execute(&mut conn)
+        .unwrap();
+
+    refresh_test_leaderboards(&mut conn).await;
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/aredl/leaderboard/?name_filter={name1}"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["data"].as_array().unwrap().len(), 1);
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/aredl/leaderboard/?country_filter={us_id}"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert!(body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|e| e["user"]["id"] == u1.to_string()));
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/aredl/leaderboard/?clan_filter={clan_id}"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert!(body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|e| e["user"]["id"] == u1.to_string()));
+
+    let req = test::TestRequest::get()
+        .uri("/aredl/leaderboard/?order=ExtremeCount")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["data"][0]["user"]["id"], u2.to_string());
+}
+
+#[actix_web::test]
+async fn country_clan_leaderboard_orders() {
+    let (app, mut conn, _, _) = init_test_app().await;
+    let (u1, _) = create_test_user(&mut conn, None).await;
+    let (u2, _) = create_test_user(&mut conn, None).await;
+    let _level1 = create_test_level_with_record(&mut conn, u1).await;
+    create_test_level_with_record(&mut conn, u2).await;
+    create_test_level_with_record(&mut conn, u2).await;
+
+    diesel::update(users::table.filter(users::id.eq(u1)))
+        .set(users::country.eq(840))
+        .execute(&mut conn)
+        .unwrap();
+    diesel::update(users::table.filter(users::id.eq(u2)))
+        .set(users::country.eq(124))
+        .execute(&mut conn)
+        .unwrap();
+
+    let clan_id = diesel::insert_into(clans::table)
+        .values((clans::global_name.eq("Clan"), clans::tag.eq("CL")))
+        .returning(clans::id)
+        .get_result::<Uuid>(&mut conn)
+        .unwrap();
+    diesel::insert_into(clan_members::table)
+        .values((
+            clan_members::clan_id.eq(clan_id),
+            clan_members::user_id.eq(u1),
+        ))
+        .execute(&mut conn)
+        .unwrap();
+
+    refresh_test_leaderboards(&mut conn).await;
+
+    let req = test::TestRequest::get()
+        .uri("/aredl/leaderboard/countries?order=ExtremeCount")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["data"][0]["country"], 124);
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/aredl/leaderboard/clans?order=ExtremeCount"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["data"][0]["clan"]["id"], clan_id.to_string());
 }

@@ -1,22 +1,18 @@
 use crate::arepl::levels::BaseLevel;
-use crate::db::{DbAppState, DbConnection};
+use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::{arepl::levels, arepl::pack_levels};
-use actix_web::web;
 use diesel::{
     insert_into, Connection, ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl, SelectableHelper,
 };
-use std::sync::Arc;
 use uuid::Uuid;
 
 impl BaseLevel {
     pub fn pack_add_all(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         pack_id: Uuid,
         levels: Vec<Uuid>,
     ) -> Result<Vec<Self>, ApiError> {
-        let conn = &mut db.connection()?;
-
         conn.transaction(move |connection| -> Result<Vec<Self>, ApiError> {
             Self::add_levels(pack_id, levels.as_ref(), connection)?;
 
@@ -30,12 +26,10 @@ impl BaseLevel {
     }
 
     pub fn pack_set_all(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         pack_id: Uuid,
         levels: Vec<Uuid>,
     ) -> Result<Vec<Self>, ApiError> {
-        let conn = &mut db.connection()?;
-
         conn.transaction(move |connection| -> Result<Vec<Self>, ApiError> {
             diesel::delete(pack_levels::table.filter(pack_levels::pack_id.eq(pack_id)))
                 .execute(connection)?;
@@ -52,12 +46,10 @@ impl BaseLevel {
     }
 
     pub fn pack_delete_all(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         pack_id: Uuid,
         levels: Vec<Uuid>,
     ) -> Result<Vec<Self>, ApiError> {
-        let conn = &mut db.connection()?;
-
         conn.transaction(move |connection| -> Result<Vec<Self>, ApiError> {
             Self::delete_levels(pack_id, &levels, connection)?;
 

@@ -1,11 +1,8 @@
-use crate::aredl::shifts::Shift as AredlShift;
-use crate::aredl::shifts::ShiftStatus as AredlShiftStatus;
-use crate::arepl::shifts::Shift as AreplShift;
-use crate::arepl::shifts::ShiftStatus as AreplShiftStatus;
 use crate::db::DbAppState;
 use crate::notifications::WebsocketNotification;
-use crate::schema::aredl::shifts as aredl_shifts;
-use crate::schema::arepl::shifts as arepl_shifts;
+use crate::schema::shifts;
+use crate::shifts::Shift;
+use crate::shifts::ShiftStatus;
 
 use crate::get_secret;
 use chrono::Utc;
@@ -24,7 +21,6 @@ pub async fn start_data_cleaner(
 ) {
     let schedule = Schedule::from_str(&get_secret("DATA_CLEANER_SCHEDULE")).unwrap();
     let schedule = Arc::new(schedule);
-    let db_clone = db.clone();
 
     task::spawn(async move {
         loop {
@@ -32,21 +28,20 @@ pub async fn start_data_cleaner(
 
             tracing::info!("Running data cleaner");
 
-            let conn_result = db_clone.connection();
-
-            if conn_result.is_err() {
-                tracing::error!("Failed to clean data {}", conn_result.err().unwrap());
-                continue;
-            }
-
-            let mut conn = conn_result.unwrap();
+            let conn = &mut match db.connection() {
+                Ok(c) => c,
+                Err(e) => {
+                    tracing::error!("DB connection failed: {e}");
+                    continue;
+                }
+            };
 
             tracing::info!("Cleaning old notifications");
 
             let result = diesel::sql_query(
                 "DELETE FROM notifications WHERE created_at < NOW() - INTERVAL '1 month'",
             )
-            .execute(&mut conn);
+            .execute(conn);
 
             if result.is_err() {
                 tracing::error!("Failed to clean notifications {}", result.err().unwrap())
@@ -56,11 +51,11 @@ pub async fn start_data_cleaner(
 
             let result = diesel::sql_query(
                 "UPDATE aredl.submissions \
-                 SET status = 'Pending' \
+                 SET status = 'Pending', reviewer_id = NULL \
                  WHERE status = 'Claimed' \
                    AND updated_at < NOW() - INTERVAL '120 minutes';",
             )
-            .execute(&mut conn);
+            .execute(conn);
 
             if result.is_err() {
                 tracing::error!(
@@ -71,11 +66,11 @@ pub async fn start_data_cleaner(
 
             let result = diesel::sql_query(
                 "UPDATE arepl.submissions \
-                 SET status = 'Pending' \
+                 SET status = 'Pending', reviewer_id = NULL \
                  WHERE status = 'Claimed' \
                    AND updated_at < NOW() - INTERVAL '120 minutes';",
             )
-            .execute(&mut conn);
+            .execute(conn);
 
             if result.is_err() {
                 tracing::error!(
@@ -86,55 +81,31 @@ pub async fn start_data_cleaner(
 
             tracing::info!("Expiring overdue shifts");
 
-            let aredl_expired_shifts: Vec<AredlShift> = aredl_shifts::table
-                .filter(aredl_shifts::status.eq(AredlShiftStatus::Running))
-                .filter(aredl_shifts::end_at.lt(Utc::now()))
-                .load(&mut conn)
+            let aredl_expired_shifts: Vec<Shift> = shifts::table
+                .filter(shifts::status.eq(ShiftStatus::Running))
+                .filter(shifts::end_at.lt(Utc::now()))
+                .load(conn)
                 .unwrap_or_else(|e| {
                     tracing::error!("Failed to load expired shifts: {}", e);
                     vec![]
                 });
 
             if let Err(e) = diesel::update(
-                aredl_shifts::table
-                    .filter(aredl_shifts::status.eq(AredlShiftStatus::Running))
-                    .filter(aredl_shifts::end_at.lt(Utc::now())),
+                shifts::table
+                    .filter(shifts::status.eq(ShiftStatus::Running))
+                    .filter(shifts::end_at.lt(Utc::now())),
             )
             .set((
-                aredl_shifts::status.eq(AredlShiftStatus::Expired),
-                aredl_shifts::updated_at.eq(Utc::now()),
+                shifts::status.eq(ShiftStatus::Expired),
+                shifts::updated_at.eq(Utc::now()),
             ))
-            .execute(&mut conn)
+            .execute(conn)
             {
-                tracing::error!("Failed to expire AREDL shifts: {}", e);
-            }
-
-            let arepl_expired_shifts: Vec<AreplShift> = arepl_shifts::table
-                .filter(arepl_shifts::status.eq(AreplShiftStatus::Running))
-                .filter(arepl_shifts::end_at.lt(Utc::now()))
-                .load(&mut conn)
-                .unwrap_or_else(|e| {
-                    tracing::error!("Failed to load expired shifts: {}", e);
-                    vec![]
-                });
-
-            if let Err(e) = diesel::update(
-                arepl_shifts::table
-                    .filter(arepl_shifts::status.eq(AreplShiftStatus::Running))
-                    .filter(arepl_shifts::end_at.lt(Utc::now())),
-            )
-            .set((
-                arepl_shifts::status.eq(AreplShiftStatus::Expired),
-                arepl_shifts::updated_at.eq(Utc::now()),
-            ))
-            .execute(&mut conn)
-            {
-                tracing::error!("Failed to expire AREPL shifts: {}", e);
+                tracing::error!("Failed to expire shifts: {}", e);
             }
 
             let missed_shifts_payload = serde_json::json!({
                 "aredl": aredl_expired_shifts,
-                "arepl": arepl_expired_shifts,
             });
 
             let notification = WebsocketNotification {

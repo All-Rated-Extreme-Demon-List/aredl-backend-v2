@@ -1,17 +1,14 @@
-
+use actix_web::web;
 use actix_web::{get, HttpResponse};
-use actix_web::{web};
 use diesel::RunQueryDsl;
-use utoipa::OpenApi;
 use std::sync::Arc;
+use utoipa::OpenApi;
 
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 
-
 #[utoipa::path(
     get,
-    path = "/healthcheck",
     responses(
         (status = 200, description = "API and DB healthy"),
         (status = 503, description = "Service unavailable"),
@@ -21,9 +18,8 @@ use crate::error_handler::ApiError;
 #[get("")]
 async fn healthz(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
     let result = web::block(move || {
-        let mut conn = db.connection()?;
         diesel::sql_query("SELECT 1")
-            .execute(&mut conn)
+            .execute(&mut db.connection()?)
             .map_err(|error| ApiError::new(503, &format!("DB healthcheck failed: {}", error)))
     })
     .await;
@@ -35,9 +31,7 @@ async fn healthz(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiErro
 }
 
 #[derive(OpenApi)]
-#[openapi(
-    paths(healthz)
-)]
+#[openapi(paths(healthz))]
 pub struct ApiDoc;
 
 pub fn init_routes(config: &mut web::ServiceConfig) {

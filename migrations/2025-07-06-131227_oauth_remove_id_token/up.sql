@@ -1,0 +1,2 @@
+ALTER TABLE oauth_requests
+DROP COLUMN IF EXISTS nonce;

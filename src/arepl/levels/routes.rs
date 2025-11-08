@@ -1,6 +1,6 @@
-use crate::arepl::levels::id_resolver::resolve_level_id;
 use crate::arepl::levels::{
-    creators, history, packs, records, Level, LevelPlace, LevelUpdate, ResolvedLevel,
+    creators, history, id_resolver::resolve_level_id, ldms, packs, records, Level, LevelPlace,
+    LevelUpdate, ResolvedLevel,
 };
 use crate::auth::{Permission, UserAuth};
 use crate::cache_control::CacheController;
@@ -22,7 +22,7 @@ use utoipa::OpenApi;
 )]
 #[get("", wrap = "CacheController::public_with_max_age(900)")]
 async fn list(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
-    let levels = web::block(|| Level::find_all(db)).await??;
+    let levels = web::block(move || Level::find_all(&mut db.connection()?)).await??;
     Ok(HttpResponse::Ok().json(levels))
 }
 
@@ -46,7 +46,8 @@ async fn create(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&level));
-    let level = web::block(|| Level::create(db, level.into_inner())).await??;
+    let level =
+        web::block(move || Level::create(&mut db.connection()?, level.into_inner())).await??;
     Ok(HttpResponse::Ok().json(level))
 }
 
@@ -74,8 +75,12 @@ async fn update(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&level));
-    let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
-    let level = web::block(move || Level::update(db, level_id, level.into_inner())).await??;
+    let level = web::block(move || {
+        let conn = &mut db.connection()?;
+        let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
+        Level::update(conn, level_id, level.into_inner())
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(level))
 }
 
@@ -96,8 +101,12 @@ async fn find(
     db: web::Data<Arc<DbAppState>>,
     level_id: web::Path<String>,
 ) -> Result<HttpResponse, ApiError> {
-    let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
-    let level = web::block(move || ResolvedLevel::find(db, level_id)).await??;
+    let level = web::block(move || {
+        let conn = &mut db.connection()?;
+        let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
+        ResolvedLevel::find(conn, level_id)
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(level))
 }
 
@@ -107,7 +116,8 @@ async fn find(
         (path = "/{level_id}/creators", api = creators::ApiDoc),
         (path = "/{level_id}/history", api = history::ApiDoc),
         (path = "/{level_id}/records", api = records::ApiDoc),
-        (path = "/{level_id}/packs", api = packs::ApiDoc)
+        (path = "/{level_id}/packs", api = packs::ApiDoc),
+        (path = "/ldms", api = ldms::ApiDoc),
     ),
     tags(
         (name = "AREDL (P) - Levels", description="Endpoints for fetching and managing platformer levels on the AREDL")
@@ -128,13 +138,14 @@ pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/levels")
-            .service(list)
-            .service(create)
-            .service(update)
-            .service(find)
             .configure(history::init_routes)
             .configure(packs::init_routes)
             .configure(records::init_routes)
-            .configure(creators::init_routes),
+            .configure(creators::init_routes)
+            .configure(ldms::init_routes)
+            .service(list)
+            .service(create)
+            .service(update)
+            .service(find),
     );
 }

@@ -1,19 +1,19 @@
-use crate::arepl::leaderboard::{LeaderboardOrder, MatviewRefreshLog};
+use crate::arepl::leaderboard::LeaderboardOrder;
 use crate::arepl::levels::BaseLevel;
 use crate::clans::Clan;
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
+use crate::scheduled::refresh_matviews::MatviewRefreshLog;
 use crate::schema::{
     arepl::{clans_leaderboard, levels},
     clans, matview_refresh_log,
 };
 use chrono::Utc;
-use diesel::expression::expression_types::NotSelectable;
 use diesel::pg::Pg;
 use diesel::{
-    BoxableExpression, ExpressionMethods, JoinOnDsl, NullableExpressionMethods,
-    PgTextExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper,
+    ExpressionMethods, JoinOnDsl, NullableExpressionMethods, PgTextExpressionMethods, QueryDsl,
+    RunQueryDsl, SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -69,48 +69,48 @@ impl ClansLeaderboardPage {
         page_query: PageQuery<D>,
         options: ClansLeaderboardQueryOptions,
     ) -> Result<Paginated<Self>, ApiError> {
-        let selection = (
-            ClansLeaderboardEntry::as_select(),
-            Clan::as_select(),
-            (levels::id, levels::name).nullable(),
-        );
+        let build_filtered_query = || {
+            let mut q = clans_leaderboard::table
+                .inner_join(clans::table.on(clans::id.eq(clans_leaderboard::clan_id)))
+                .left_join(levels::table.on(clans_leaderboard::hardest.eq(levels::id.nullable())))
+                .into_boxed::<Pg>();
 
-        let order = options.order.unwrap_or(LeaderboardOrder::TotalPoints);
+            if let Some(ref filter) = options.name_filter {
+                q = q.filter(clans::global_name.ilike(filter));
+            }
 
-        let ordering: Box<dyn BoxableExpression<_, _, SqlType = NotSelectable>> = match order {
-            LeaderboardOrder::TotalPoints => Box::new(clans_leaderboard::rank.asc()),
-            LeaderboardOrder::ExtremeCount => Box::new(clans_leaderboard::extremes_rank.asc()),
-            LeaderboardOrder::RawPoints => Box::new(clans_leaderboard::rank.asc()),
+            q
         };
 
-        let mut query = clans_leaderboard::table
-            .inner_join(clans::table.on(clans::id.eq(clans_leaderboard::clan_id)))
-            .left_join(levels::table.on(clans_leaderboard::hardest.eq(levels::id.nullable())))
-            .into_boxed();
+        let total_count: i64 = build_filtered_query().count().get_result(conn)?;
 
-        if let Some(ref filter) = options.name_filter {
-            query = query.filter(clans::global_name.ilike(filter));
+        let mut query = build_filtered_query();
+
+        match options.order.unwrap_or(LeaderboardOrder::TotalPoints) {
+            LeaderboardOrder::TotalPoints => {
+                query = query.order(clans_leaderboard::rank.asc());
+            }
+            LeaderboardOrder::ExtremeCount => {
+                query = query.order(clans_leaderboard::extremes_rank.asc());
+            }
+            LeaderboardOrder::RawPoints => {
+                query = query.order(clans_leaderboard::rank.asc());
+            }
         }
 
-        let entries = query
+        query = query.then_order_by(clans_leaderboard::clan_id.asc());
+
+        let raw_entries: Vec<(ClansLeaderboardEntry, Clan, Option<BaseLevel>)> = query
             .limit(page_query.per_page())
             .offset(page_query.offset())
-            .order((ordering, clans_leaderboard::clan_id.asc()))
-            .select(selection)
-            .load::<(ClansLeaderboardEntry, Clan, Option<BaseLevel>)>(conn)?;
+            .select((
+                ClansLeaderboardEntry::as_select(),
+                Clan::as_select(),
+                (levels::id, levels::name).nullable(),
+            ))
+            .load(conn)?;
 
-        let mut count_query = clans_leaderboard::table
-            .inner_join(clans::table.on(clans::id.eq(clans_leaderboard::clan_id)))
-            .left_join(levels::table.on(clans_leaderboard::hardest.eq(levels::id.nullable())))
-            .into_boxed();
-
-        if let Some(ref filter) = options.name_filter {
-            count_query = count_query.filter(clans::global_name.ilike(filter));
-        }
-
-        let count = count_query.count().get_result(conn)?;
-
-        let entries_resolved = entries
+        let entries_resolved = raw_entries
             .into_iter()
             .map(|(entry, clan, hardest)| ClansLeaderboardEntryResolved {
                 rank: entry.rank,
@@ -133,7 +133,7 @@ impl ClansLeaderboardPage {
 
         Ok(Paginated::<Self>::from_data(
             page_query,
-            count,
+            total_count,
             Self {
                 last_refreshed: refresh_log.last_refresh,
                 data: entries_resolved,

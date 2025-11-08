@@ -1,7 +1,7 @@
 use crate::{
-    arepl::submissions::*,
+    arepl::submissions::{history::SubmissionHistory, status::SubmissionsEnabled, *},
     auth::Authenticated,
-    db::DbAppState,
+    db::DbConnection,
     error_handler::ApiError,
     roles::Role,
     schema::{
@@ -9,18 +9,14 @@ use crate::{
         roles, user_roles,
     },
 };
-use actix_web::web;
 use diesel::{
     Connection, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl,
     SelectableHelper,
 };
 use is_url::is_url;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
-
-use super::history::SubmissionHistory;
 
 #[derive(Serialize, Deserialize, Debug, Insertable, ToSchema)]
 #[diesel(table_name=submissions, check_for_backend(Pg))]
@@ -49,12 +45,10 @@ pub struct SubmissionInsert {
 
 impl Submission {
     pub fn create(
-        db: web::Data<Arc<DbAppState>>,
+        conn: &mut DbConnection,
         inserted_submission: SubmissionInsert,
         authenticated: Authenticated,
     ) -> Result<Self, ApiError> {
-        let mut conn = db.connection()?;
-
         if !is_url(&inserted_submission.video_url) {
             return Err(ApiError::new(400, "Your completion link is not a URL!"));
         }
@@ -67,6 +61,11 @@ impl Submission {
 
         conn.transaction(|connection| -> Result<Self, ApiError> {
             // a bunch of validation yay
+
+            // check if submissions are disabled
+            if !(SubmissionsEnabled::is_enabled(connection)?) {
+                return Err(ApiError::new(400, "Submissions are currently disabled"));
+            }
 
             // check if any submissions exist already
             let exists_submission = submissions::table

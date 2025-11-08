@@ -1,6 +1,5 @@
-use crate::aredl::levels::id_resolver::resolve_level_id;
+use crate::aredl::levels::{id_resolver::resolve_level_id, records::RecordQuery};
 use crate::aredl::records::PublicRecordResolvedExtended;
-use crate::aredl::levels::records::RecordQuery;
 use crate::aredl::records::Record;
 use crate::cache_control::CacheController;
 use crate::db::DbAppState;
@@ -27,9 +26,12 @@ async fn find_all(
     level_id: web::Path<String>,
     opts: web::Query<RecordQuery>,
 ) -> Result<HttpResponse, ApiError> {
-    let level_id = resolve_level_id(&db, level_id.into_inner().as_str())?;
-    let records =
-        web::block(move || PublicRecordResolvedExtended::find_all_by_level(db, level_id, opts.into_inner())).await??;
+    let records = web::block(move || {
+        let conn = &mut db.connection()?;
+        let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
+        PublicRecordResolvedExtended::find_all_by_level(conn, level_id, opts.into_inner())
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(records))
 }
 

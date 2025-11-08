@@ -1,13 +1,13 @@
-use std::sync::Arc;
-use actix_web::web;
+use crate::db::DbConnection;
+use crate::error_handler::ApiError;
+use crate::schema::roles;
 use diesel::{ExpressionMethods, RunQueryDsl};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
-use crate::db::DbAppState;
-use crate::error_handler::ApiError;
-use crate::schema::roles;
 
-#[derive(Serialize, Deserialize, Queryable, Selectable, Identifiable, PartialEq, Debug, ToSchema)]
+#[derive(
+    Serialize, Deserialize, Queryable, Selectable, Identifiable, PartialEq, Debug, ToSchema,
+)]
 #[diesel(table_name = roles)]
 pub struct Role {
     /// Internal ID of the role.
@@ -37,32 +37,30 @@ pub struct RoleUpdate {
 }
 
 impl Role {
-	pub fn find_all(db: web::Data<Arc<DbAppState>>) -> Result<Vec<Self>, ApiError> {
-		let roles = roles::table
-			.load(&mut db.connection()?)?;
-		Ok(roles)
-	}
-	
-    pub fn create(db: web::Data<Arc<DbAppState>>, role: RoleCreate) -> Result<Self, ApiError> {
+    pub fn find_all(conn: &mut DbConnection) -> Result<Vec<Self>, ApiError> {
+        let roles = roles::table.load(conn)?;
+        Ok(roles)
+    }
+
+    pub fn create(conn: &mut DbConnection, role: RoleCreate) -> Result<Self, ApiError> {
         let role = diesel::insert_into(roles::table)
             .values(role)
-            .get_result(&mut db.connection()?)?;
+            .get_result(conn)?;
         Ok(role)
     }
 
-    pub fn update(db: web::Data<Arc<DbAppState>>, id: i32, role: RoleUpdate) -> Result<Self, ApiError> {
+    pub fn update(conn: &mut DbConnection, id: i32, role: RoleUpdate) -> Result<Self, ApiError> {
         let role = diesel::update(roles::table)
             .filter(roles::id.eq(id))
             .set(role)
-            .get_result(&mut db.connection()?)?;
+            .get_result(conn)?;
         Ok(role)
     }
 
-    pub fn delete(db: web::Data<Arc<DbAppState>>, id: i32) -> Result<Self, ApiError> {
+    pub fn delete(conn: &mut DbConnection, id: i32) -> Result<Self, ApiError> {
         let role = diesel::delete(roles::table)
             .filter(roles::id.eq(id))
-            .get_result(&mut db.connection()?)?;
+            .get_result(conn)?;
         Ok(role)
     }
 }
-

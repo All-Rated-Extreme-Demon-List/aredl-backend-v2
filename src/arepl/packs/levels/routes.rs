@@ -34,8 +34,10 @@ async fn set(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&levels));
-    let levels =
-        web::block(move || BaseLevel::pack_set_all(db, *pack_id, levels.into_inner())).await??;
+    let levels = web::block(move || {
+        BaseLevel::pack_set_all(&mut db.connection()?, *pack_id, levels.into_inner())
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(levels))
 }
 
@@ -65,8 +67,10 @@ async fn add(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&levels));
-    let levels =
-        web::block(move || BaseLevel::pack_add_all(db, *pack_id, levels.into_inner())).await??;
+    let levels = web::block(move || {
+        BaseLevel::pack_add_all(&mut db.connection()?, *pack_id, levels.into_inner())
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(levels))
 }
 
@@ -96,8 +100,10 @@ async fn delete(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&levels));
-    let levels =
-        web::block(move || BaseLevel::pack_delete_all(db, *pack_id, levels.into_inner())).await??;
+    let levels = web::block(move || {
+        BaseLevel::pack_delete_all(&mut db.connection()?, *pack_id, levels.into_inner())
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(levels))
 }
 

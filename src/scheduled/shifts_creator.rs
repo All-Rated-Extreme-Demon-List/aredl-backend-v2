@@ -1,5 +1,5 @@
 use crate::{
-    aredl::shifts::RecurringShift, db::DbAppState, get_secret, notifications::WebsocketNotification,
+    db::DbAppState, get_secret, notifications::WebsocketNotification, shifts::RecurringShift,
 };
 use chrono::{NaiveDate, Utc};
 use cron::Schedule;
@@ -12,23 +12,22 @@ pub async fn start_recurrent_shift_creator(
 ) {
     let schedule = Schedule::from_str(&get_secret("RECURRING_SHIFTS_SCHEDULE")).unwrap();
     let schedule = Arc::new(schedule);
-    let db_clone = db.clone();
 
     task::spawn(async move {
         loop {
             tokio::time::sleep(Duration::from_secs(5)).await;
             tracing::info!("Creating today’s recurring shifts");
 
-            let mut conn = match db_clone.connection() {
+            let conn = &mut match db.connection() {
                 Ok(c) => c,
                 Err(e) => {
-                    tracing::error!("DB connect failed: {}", e);
+                    tracing::error!("DB connection failed: {e}");
                     continue;
                 }
             };
 
             let today: NaiveDate = Utc::now().date_naive();
-            match RecurringShift::create_shifts(&mut conn, today) {
+            match RecurringShift::create_shifts(conn, today) {
                 Ok(new_shifts) => {
                     let notification = WebsocketNotification {
                         notification_type: "SHIFTS_CREATED".into(),

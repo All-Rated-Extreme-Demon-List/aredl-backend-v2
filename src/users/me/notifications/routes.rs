@@ -1,11 +1,10 @@
-use std::sync::Arc;
-use actix_web::{get, post, web, HttpResponse};
-use utoipa::OpenApi;
-use crate::auth::{UserAuth, Authenticated};
+use crate::auth::{Authenticated, UserAuth};
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::users::me::notifications::Notification;
-
+use actix_web::{get, post, web, HttpResponse};
+use std::sync::Arc;
+use utoipa::OpenApi;
 
 #[utoipa::path(
     get,
@@ -20,15 +19,15 @@ use crate::users::me::notifications::Notification;
 		("api_key" = []),
 	)
 )]
-#[get("", wrap="UserAuth::load()")]
+#[get("", wrap = "UserAuth::load()")]
 async fn list(
     db: web::Data<Arc<DbAppState>>,
-	authenticated: Authenticated
+    authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let result = web::block(move || {
-        let mut conn = db.connection()?;
-        Notification::find_all_me_notifications(&mut conn, authenticated.user_id)
-    }).await??;
+        Notification::find_all_me_notifications(&mut db.connection()?, authenticated.user_id)
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(result))
 }
 
@@ -45,36 +44,22 @@ async fn list(
         ("api_key" = []),
     )
 )]
-#[post("/clear", wrap="UserAuth::load()")]
+#[post("/clear", wrap = "UserAuth::load()")]
 async fn clear(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let result = web::block(move || {
-        let mut conn = db.connection()?;
-        Notification::clear_me_notifications(&mut conn, authenticated.user_id)
-    }).await??;
+        Notification::clear_me_notifications(&mut db.connection()?, authenticated.user_id)
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(result))
 }
 
 #[derive(OpenApi)]
-#[openapi(
-    components(
-        schemas(
-            Notification
-        )
-    ),
-    paths(
-        list,
-		clear
-    )
-)]
+#[openapi(components(schemas(Notification)), paths(list, clear))]
 pub struct ApiDoc;
 
 pub fn init_routes(config: &mut web::ServiceConfig) {
-    config.service(
-        web::scope("/notifications")
-            .service(list)
-            .service(clear)
-    );
+    config.service(web::scope("/notifications").service(list).service(clear));
 }

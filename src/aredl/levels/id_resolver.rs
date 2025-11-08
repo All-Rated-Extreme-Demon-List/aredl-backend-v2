@@ -1,12 +1,10 @@
-use crate::db::DbAppState;
+use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::aredl::levels;
-use actix_web::web;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
-use std::sync::Arc;
 use uuid::Uuid;
 
-fn resolve_gd_id(db: &web::Data<Arc<DbAppState>>, s: &str) -> Result<Uuid, ApiError> {
+fn resolve_gd_id(conn: &mut DbConnection, s: &str) -> Result<Uuid, ApiError> {
     let (parsed_id, two_player) = if s.ends_with("_2p") {
         (s[..s.len() - 3].parse::<i32>(), true)
     } else {
@@ -18,18 +16,14 @@ fn resolve_gd_id(db: &web::Data<Arc<DbAppState>>, s: &str) -> Result<Uuid, ApiEr
         .filter(levels::level_id.eq(id))
         .filter(levels::two_player.eq(two_player))
         .select(levels::id)
-        .first::<Uuid>(
-            &mut db
-                .connection()
-                .map_err(|_| ApiError::new(400, format!("Failed to resolve {}", s).as_str()))?,
-        )
-        .map_err(|_| ApiError::new(400, format!("Failed to resolve {}", s).as_str()))?;
+        .first::<Uuid>(conn)
+        .map_err(|_| ApiError::new(404, format!("Failed to resolve {}", s).as_str()))?;
     Ok(resolved_id)
 }
 
-pub fn resolve_level_id(db: &web::Data<Arc<DbAppState>>, v: &str) -> Result<Uuid, ApiError> {
+pub fn resolve_level_id(conn: &mut DbConnection, v: &str) -> Result<Uuid, ApiError> {
     match Uuid::parse_str(v) {
         Ok(uuid) => Ok(uuid),
-        Err(_) => resolve_gd_id(db, v),
+        Err(_) => resolve_gd_id(conn, v),
     }
 }

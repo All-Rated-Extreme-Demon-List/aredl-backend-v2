@@ -2,8 +2,8 @@
 // diesel won't autogenerate in schema.rs
 
 use crate::schema::aredl::{
-    levels, levels_created, pack_levels, pack_tiers, packs, records, recurrent_shifts, shifts,
-    submission_history, submissions,
+    level_ldms, levels, levels_created, pack_levels, pack_tiers, packs, records,
+    submission_history, submissions, submissions_enabled,
 };
 use crate::schema::{clan_members, clans, users};
 
@@ -12,8 +12,6 @@ use crate::schema::{clan_members, clans, users};
 diesel::joinable!(levels -> users (publisher_id));
 diesel::joinable!(levels_created -> users (user_id));
 diesel::joinable!(records -> users (submitted_by));
-diesel::joinable!(recurrent_shifts -> users (user_id));
-diesel::joinable!(shifts -> users (user_id));
 diesel::joinable!(submission_history -> users (reviewer_id));
 
 diesel::allow_tables_to_appear_in_same_query!(levels, users);
@@ -25,8 +23,6 @@ diesel::allow_tables_to_appear_in_same_query!(levels_created, clan_members);
 diesel::allow_tables_to_appear_in_same_query!(records, users);
 diesel::allow_tables_to_appear_in_same_query!(records, clans);
 diesel::allow_tables_to_appear_in_same_query!(records, clan_members);
-diesel::allow_tables_to_appear_in_same_query!(recurrent_shifts, users);
-diesel::allow_tables_to_appear_in_same_query!(shifts, users);
 diesel::allow_tables_to_appear_in_same_query!(submission_history, users);
 
 diesel::table! {
@@ -210,7 +206,44 @@ diesel::table! {
 }
 
 diesel::joinable!(submissions -> submissions_with_priority (id));
+diesel::joinable!(users -> level_ldms (id));
 
 diesel::allow_tables_to_appear_in_same_query!(submissions, submissions_with_priority);
 diesel::allow_tables_to_appear_in_same_query!(levels, submissions_with_priority);
 diesel::allow_tables_to_appear_in_same_query!(users, submissions_with_priority);
+diesel::allow_tables_to_appear_in_same_query!(users, submissions_enabled);
+diesel::allow_tables_to_appear_in_same_query!(users, level_ldms);
+
+diesel::table! {
+    aredl.submission_stats (day, reviewer_id) {
+        day -> Date,
+        reviewer_id -> Nullable<Uuid>,
+        submitted -> Int8,
+        accepted -> Int8,
+        denied -> Int8,
+        under_consideration -> Int8,
+    }
+}
+
+diesel::joinable!(submission_stats -> users (reviewer_id));
+diesel::allow_tables_to_appear_in_same_query!(submission_stats, users);
+
+diesel::table! {
+    aredl.submission_stats_leaderboard (reviewer_id) {
+        reviewer_id -> Uuid,
+        accepted -> Int8,
+        denied -> Int8,
+        under_consideration -> Int8,
+        total -> Int8,
+    }
+}
+
+diesel::table! {
+    aredl.record_totals (level_id) {
+        level_id -> Nullable<Uuid>,
+        records -> Int8,
+    }
+}
+
+diesel::joinable!(record_totals -> levels (level_id));
+diesel::allow_tables_to_appear_in_same_query!(record_totals, levels);

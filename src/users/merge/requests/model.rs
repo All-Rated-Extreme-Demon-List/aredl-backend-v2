@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use diesel::dsl::now;
 use diesel::pg::Pg;
 use diesel::prelude::*;
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper, sql_types::Bool};
+use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -105,55 +105,60 @@ impl MergeRequestPage {
     pub fn find_all<const D: i64>(
         conn: &mut DbConnection,
         page_query: PageQuery<D>,
-        options: MergeRequestQueryOptions
+        options: MergeRequestQueryOptions,
     ) -> Result<Paginated<Self>, ApiError> {
         let users2 = alias!(users as users2);
-        let data_rows = merge_requests::table
-            .inner_join(users::table.on(merge_requests::primary_user.eq(users::id)))
-            .inner_join(users2.on(merge_requests::secondary_user.eq(users2.field(users::id))))
+        let build_filtered = || {
+            let mut q = merge_requests::table
+                .inner_join(users::table.on(merge_requests::primary_user.eq(users::id)))
+                .inner_join(users2.on(merge_requests::secondary_user.eq(users2.field(users::id))))
+                .into_boxed::<Pg>();
+
+            if let Some(claimed) = options.claimed_filter {
+                q = q.filter(
+                    merge_requests::is_claimed
+                        .eq(claimed)
+                        .and(merge_requests::is_rejected.eq(false)),
+                );
+            }
+
+            if let Some(rejected) = options.rejected_filter {
+                q = q.filter(merge_requests::is_rejected.eq(rejected));
+            }
+
+            if let Some(user) = options.user_filter {
+                q = q.filter(
+                    merge_requests::primary_user
+                        .eq(user)
+                        .or(merge_requests::secondary_user.eq(user)),
+                );
+            }
+
+            q
+        };
+
+        let total_count: i64 = build_filtered().count().get_result(conn)?;
+
+        let data_rows: Vec<(MergeRequest, BaseUser, BaseUser)> = build_filtered()
+            .order(merge_requests::updated_at.desc())
             .limit(page_query.per_page())
             .offset(page_query.offset())
-            .filter(
-                options.claimed_filter.map_or_else(
-                    || Box::new(true.into_sql::<Bool>()) as Box<dyn BoxableExpression<_, _, SqlType = Bool>>,
-                    |claimed| Box::new(merge_requests::is_claimed.eq(claimed).and(
-                        merge_requests::is_rejected.eq(false)
-                    ))
-                )
-            )
-            .filter(
-                options.rejected_filter.map_or_else(
-                    || Box::new(true.into_sql::<Bool>()) as Box<dyn BoxableExpression<_, _, SqlType = Bool>>,
-                    |rejected| Box::new(merge_requests::is_rejected.eq(rejected))
-                )
-            )
-            .filter(
-                options.user_filter.map_or_else(
-                    || Box::new(true.into_sql::<Bool>()) as Box<dyn BoxableExpression<_, _, SqlType = Bool>>,
-                    |user| Box::new(merge_requests::primary_user.eq(user).or(
-                        merge_requests::secondary_user.eq(user)
-                    ))
-                )
-            )
             .select((
                 MergeRequest::as_select(),
                 BaseUser::as_select(),
                 users2.fields(<BaseUser as Selectable<Pg>>::construct_selection()),
             ))
-            .order(merge_requests::updated_at.desc())
-            .load::<(MergeRequest, BaseUser, BaseUser)>(conn)?;
-
-        let count: i64 = merge_requests::table.count().get_result::<i64>(conn)?;
+            .load(conn)?;
 
         let data = data_rows
             .into_iter()
-            .map(|row| ResolvedMergeRequest::from_data(row))
-            .collect::<Vec<_>>();
+            .map(ResolvedMergeRequest::from_data)
+            .collect();
 
-        Ok(Paginated::<Self>::from_data(
+        Ok(Paginated::from_data(
             page_query,
-            count,
-            Self { data },
+            total_count,
+            MergeRequestPage { data },
         ))
     }
 }

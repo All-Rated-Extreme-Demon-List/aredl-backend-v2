@@ -1,13 +1,12 @@
-use std::sync::Arc;
-use uuid::Uuid;
-use actix_web::{get, post, web, HttpResponse};
-use utoipa::OpenApi;
-use crate::auth::{UserAuth, Authenticated};
+use crate::auth::{Authenticated, UserAuth};
+use crate::clans::ClanInvite;
 use crate::db::DbAppState;
 use crate::error_handler::ApiError;
-use crate::clans::ClanInvite;
 use crate::users::me::clan::invites::ClanInviteResolved;
-
+use actix_web::{get, post, web, HttpResponse};
+use std::sync::Arc;
+use utoipa::OpenApi;
+use uuid::Uuid;
 
 #[utoipa::path(
     get,
@@ -22,15 +21,15 @@ use crate::users::me::clan::invites::ClanInviteResolved;
 		("api_key" = []),
 	)
 )]
-#[get("", wrap="UserAuth::load()")]
+#[get("", wrap = "UserAuth::load()")]
 async fn list(
     db: web::Data<Arc<DbAppState>>,
-	authenticated: Authenticated
+    authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let result = web::block(move || {
-        let mut conn = db.connection()?;
-        ClanInvite::find_all_me_invites(&mut conn, authenticated.user_id)
-    }).await??;
+        ClanInvite::find_all_me_invites(&mut db.connection()?, authenticated.user_id)
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(result))
 }
 
@@ -50,19 +49,18 @@ async fn list(
         ("api_key" = []),
     )
 )]
-#[post("/{invite_id}/accept", wrap="UserAuth::load()")]
+#[post("/{invite_id}/accept", wrap = "UserAuth::load()")]
 async fn accept(
     db: web::Data<Arc<DbAppState>>,
     invite_id: web::Path<Uuid>,
-	authenticated: Authenticated
+    authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let result = web::block(move || {
-        let mut conn = db.connection()?;
-        ClanInvite::accept_invite(&mut conn, *invite_id, authenticated)
-    }).await??;
+        ClanInvite::accept_invite(&mut db.connection()?, *invite_id, authenticated)
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(result))
 }
-
 
 #[utoipa::path(
     post,
@@ -80,32 +78,21 @@ async fn accept(
         ("api_key" = []),
     )
 )]
-#[post("/{invite_id}/reject", wrap="UserAuth::load()")]
+#[post("/{invite_id}/reject", wrap = "UserAuth::load()")]
 async fn reject(
     db: web::Data<Arc<DbAppState>>,
     invite_id: web::Path<Uuid>,
-	authenticated: Authenticated
+    authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let result = web::block(move || {
-        let mut conn = db.connection()?;
-        ClanInvite::reject_invite(&mut conn, *invite_id, authenticated)
-    }).await??;
+        ClanInvite::reject_invite(&mut db.connection()?, *invite_id, authenticated)
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(result))
 }
 
 #[derive(OpenApi)]
-#[openapi(
-    components(
-        schemas(
-            ClanInviteResolved
-        )
-    ),
-    paths(
-        list,
-		accept,
-		reject
-    )
-)]
+#[openapi(components(schemas(ClanInviteResolved)), paths(list, accept, reject))]
 pub struct ApiDoc;
 
 pub fn init_routes(config: &mut web::ServiceConfig) {
@@ -113,6 +100,6 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
         web::scope("/invites")
             .service(list)
             .service(accept)
-			.service(reject)
+            .service(reject),
     );
 }
