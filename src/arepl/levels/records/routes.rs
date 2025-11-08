@@ -24,6 +24,7 @@ use utoipa::OpenApi;
 async fn find_all(
     db: web::Data<Arc<DbAppState>>,
     level_id: web::Path<String>,
+    opts: web::Query<RecordQuery>,
 ) -> Result<HttpResponse, ApiError> {
     let records = web::block(move || {
         let conn = &mut db.connection()?;

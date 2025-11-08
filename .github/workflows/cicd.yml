@@ -147,9 +147,9 @@ jobs:
     needs: build-api
     uses: ./.github/workflows/db-backup.yml
     secrets:
+      DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-      DEPLOY_KEY:  ${{ secrets.DEPLOY_KEY }}
       GDRIVE_RCLONE_CONFIG: ${{ secrets.GDRIVE_RCLONE_CONFIG }}
   
   deploy:

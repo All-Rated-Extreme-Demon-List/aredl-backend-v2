@@ -133,6 +133,8 @@ pub type PublicRecordUnresolved = PublicRecordTemplate<Uuid>;
 pub type PublicRecordResolved = PublicRecordTemplate<BaseUser>;
 pub type PublicRecordResolvedWithCountry = PublicRecordTemplate<BaseUserWithCountry>;
 
+pub type PublicRecordResolvedExtended = PublicRecordTemplate<ExtendedBaseUser>;
+
 #[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
 #[diesel(table_name=records, check_for_backend(Pg))]
 #[schema(bound = "LevelT: utoipa::ToSchema, UserT: utoipa::ToSchema")]

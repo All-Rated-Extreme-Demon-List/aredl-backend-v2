@@ -7,6 +7,13 @@ use crate::schema::{arepl::records, users};
 use crate::users::{BaseUser, BaseUserWithCountry};
 use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl, SelectableHelper};
 use uuid::Uuid;
+use serde::{Deserialize, Serialize};
+use diesel::dsl::count;
+
+#[derive(utoipa::ToSchema, Serialize, Deserialize)]
+pub struct RecordQuery {
+    high_extremes: Option<bool>,
+}
 
 impl PublicRecordResolved {
     pub fn from_data(record: PublicRecordUnresolved, user: BaseUser) -> Self {
@@ -26,26 +33,43 @@ impl PublicRecordResolvedWithCountry {
     pub fn find_all_by_level(
         conn: &mut DbConnection,
         level_id: Uuid,
+        opts: RecordQuery,
     ) -> Result<Vec<Self>, ApiError> {
-        let records = records::table
+        let mut conn = db.connection()?;
+        let users_high_extremes = if let Some(true) = opts.high_extremes {
+            records::table
+                .group_by(records::submitted_by)
+                .having(count(records::id).gt(50))
+                .select(records::submitted_by)
+                .load::<Uuid>(&mut conn)?
+        } else {
+            Vec::<Uuid>::new()
+        };
+
+        let mut query = records::table
             .filter(records::level_id.eq(level_id))
             .filter(records::is_verification.eq(false))
             .inner_join(users::table.on(records::submitted_by.eq(users::id)))
             .filter(users::ban_level.le(1))
-            .order(records::completion_time.asc())
+            .into_boxed();
+
+        if !users_high_extremes.is_empty() {
+            query = query.filter(records::submitted_by.eq_any(users_high_extremes));
+        }
+
+        let records = query
+            .order(records::placement_order.asc())
             .select((
                 PublicRecordUnresolved::as_select(),
-                BaseUserWithCountry::as_select(),
+                ExtendedBaseUser::as_select(),
             ))
-            .load::<(PublicRecordUnresolved, BaseUserWithCountry)>(conn)?;
+            .load::<(PublicRecordUnresolved, ExtendedBaseUser)>(&mut conn)?;
 
         let records_resolved = records
             .into_iter()
             .map(|(record, user)| Self::from_data(record, user))
             .collect();
-
         Ok(records_resolved)
-    }
 
     pub fn from_data(record: PublicRecordUnresolved, user: BaseUserWithCountry) -> Self {
         Self {

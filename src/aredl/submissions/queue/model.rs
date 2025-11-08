@@ -32,24 +32,32 @@ impl Submission {
         submission_id: Uuid,
     ) -> Result<(i64, i64), ApiError> {
         // Get the priority and created_at of the target submission
-        let (target_priority, target_created_at): (i64, DateTime<Utc>) =
-            submissions_with_priority::table
-                .filter(submissions_with_priority::id.eq(submission_id))
-                .filter(submissions_with_priority::status.eq(SubmissionStatus::Pending))
-                .select((
-                    submissions_with_priority::priority_value,
-                    submissions_with_priority::created_at,
-                ))
-                .first(conn)?;
+        let (target_priority, target_priority_value, target_created_at): (
+            bool,
+            i64,
+            DateTime<Utc>,
+        ) = submissions_with_priority::table
+            .filter(submissions_with_priority::id.eq(submission_id))
+            .filter(submissions_with_priority::status.eq(SubmissionStatus::Pending))
+            .select((
+                submissions_with_priority::priority,
+                submissions_with_priority::priority_value,
+                submissions_with_priority::created_at,
+            ))
+            .first(conn)?;
 
         // Count how many pending submissions come before this one
         let position = submissions_with_priority::table
             .filter(submissions_with_priority::status.eq(SubmissionStatus::Pending))
             .filter(
-                submissions_with_priority::priority_value
+                submissions_with_priority::priority
                     .gt(target_priority)
-                    .or(submissions_with_priority::priority_value
+                    .or(submissions_with_priority::priority
                         .eq(target_priority)
+                        .and(submissions_with_priority::priority_value.gt(target_priority_value)))
+                    .or(submissions_with_priority::priority
+                        .eq(target_priority)
+                        .and(submissions_with_priority::priority_value.eq(target_priority_value))
                         .and(submissions_with_priority::created_at.lt(target_created_at))),
             )
             .count()

@@ -68,9 +68,7 @@ impl PublicRecordResolvedExtended {
             .into_iter()
             .map(|(record, user)| Self::from_data(record, user))
             .collect();
-
         Ok(records_resolved)
-    }
 
     pub fn from_data(record: PublicRecordUnresolved, user: ExtendedBaseUser) -> Self {
         Self {

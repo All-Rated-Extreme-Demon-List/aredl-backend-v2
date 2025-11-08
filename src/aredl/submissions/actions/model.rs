@@ -362,6 +362,7 @@ impl SubmissionResolved {
                 .for_update()
                 .skip_locked()
                 .order((
+                    submissions_with_priority::priority.desc(),
                     submissions_with_priority::priority_value.desc(),
                     submissions_with_priority::created_at.asc(),
                 ))
