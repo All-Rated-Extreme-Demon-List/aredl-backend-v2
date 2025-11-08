@@ -3,7 +3,7 @@ use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::{aredl::levels, aredl::records, users};
-use crate::users::{BaseUser, BaseUserWithCountry, ExtendedBaseUser};
+use crate::users::{BaseUser, ExtendedBaseUser};
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::query_dsl::JoinOnDsl;
@@ -123,9 +123,6 @@ pub struct PublicRecordTemplate<T> {
 
 pub type PublicRecordUnresolved = PublicRecordTemplate<Uuid>;
 pub type PublicRecordResolved = PublicRecordTemplate<BaseUser>;
-pub type PublicRecordResolvedWithCountry = PublicRecordTemplate<BaseUserWithCountry>;
-pub type PublicRecordResolvedExtended = PublicRecordTemplate<ExtendedBaseUser>;
-
 pub type PublicRecordResolvedExtended = PublicRecordTemplate<ExtendedBaseUser>;
 
 #[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]

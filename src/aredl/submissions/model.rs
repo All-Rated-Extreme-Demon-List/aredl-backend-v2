@@ -24,18 +24,6 @@ pub enum SubmissionStatus {
     Accepted,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct BaseSubmission {
-    /// Internal UUID of the submission.
-    pub id: Uuid,
-    /// Name of the level this submission is for.
-    pub level: String,
-    /// The submitter's name
-    pub submitter: String,
-    /// The status of this submission
-    pub status: SubmissionStatus,
-}
-
 #[derive(Serialize, Deserialize, Queryable, Insertable, Selectable, Debug, ToSchema, Clone)]
 #[diesel(table_name = submissions, check_for_backend(Pg))]
 pub struct Submission {

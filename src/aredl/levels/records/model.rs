@@ -1,14 +1,14 @@
 use crate::aredl::records::{
-    PublicRecordResolved, PublicRecordResolvedExtended, PublicRecordUnresolved
+    PublicRecordResolved, PublicRecordResolvedExtended, PublicRecordUnresolved,
 };
 use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::{aredl::records, users};
 use crate::users::{BaseUser, ExtendedBaseUser};
+use diesel::dsl::count;
 use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl, SelectableHelper};
-use uuid::Uuid;
 use serde::{Deserialize, Serialize};
-use diesel::dsl::{count};
+use uuid::Uuid;
 
 #[derive(utoipa::ToSchema, Serialize, Deserialize, Debug)]
 pub struct RecordQuery {
@@ -34,7 +34,6 @@ impl PublicRecordResolvedExtended {
         level_id: Uuid,
         opts: RecordQuery,
     ) -> Result<Vec<Self>, ApiError> {
-
         let users_high_extremes = if let Some(true) = opts.high_extremes {
             records::table
                 .group_by(records::submitted_by)
@@ -69,6 +68,7 @@ impl PublicRecordResolvedExtended {
             .map(|(record, user)| Self::from_data(record, user))
             .collect();
         Ok(records_resolved)
+    }
 
     pub fn from_data(record: PublicRecordUnresolved, user: ExtendedBaseUser) -> Self {
         Self {

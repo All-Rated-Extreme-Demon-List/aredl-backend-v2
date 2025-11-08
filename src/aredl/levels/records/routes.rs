@@ -1,5 +1,5 @@
 use crate::aredl::levels::{id_resolver::resolve_level_id, records::RecordQuery};
-use crate::aredl::records::{PublicRecordResolvedExtended, PublicRecordResolvedWithCountry};
+use crate::aredl::records::PublicRecordResolvedExtended;
 use crate::aredl::records::Record;
 use crate::cache_control::CacheController;
 use crate::db::DbAppState;
@@ -43,7 +43,7 @@ async fn find_all(
     components(
         schemas(
             Record,
-            PublicRecordResolvedWithCountry,
+            PublicRecordResolvedExtended,
         )
     ),
     paths(
