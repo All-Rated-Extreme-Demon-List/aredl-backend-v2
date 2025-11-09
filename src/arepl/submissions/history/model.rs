@@ -86,7 +86,8 @@ impl SubmissionHistoryResolved {
 
         let mut history_row = query.load::<(SubmissionHistory, Option<BaseUser>)>(conn)?;
 
-        if is_record {
+        // migrated records have no history
+        if is_record && history_row.len() > 0 {
             let accept_log = &history_row[0].0;
 
             if accept_log.record_id.is_some() {
