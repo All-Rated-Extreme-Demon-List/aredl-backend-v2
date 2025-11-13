@@ -91,7 +91,7 @@ jobs:
             --timeout 120 \
             --ignore-tests \
             --rustflags="-C opt-level=0" \
-            --exclude-files "tools/*" "src/schema/*" "src/scheduled/*" "src/main.rs" "src/docs.rs"
+            --exclude-files "src/schema/*" "src/scheduled/*" "src/main.rs" "src/docs.rs" "src/utils/probe/*"
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3

@@ -2,7 +2,7 @@
 use uuid::Uuid;
 
 #[cfg(test)]
-use crate::db::DbConnection;
+use crate::app_data::db::DbConnection;
 #[cfg(test)]
 use crate::schema::arepl::{pack_tiers, packs};
 #[cfg(test)]

@@ -4,7 +4,7 @@ use crate::aredl::levels::{
 };
 use crate::auth::{Permission, UserAuth};
 use crate::cache_control::CacheController;
-use crate::db::DbAppState;
+use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
 use actix_web::{get, patch, post, web, HttpResponse};
 use std::sync::Arc;

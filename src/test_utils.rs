@@ -1,5 +1,7 @@
-use crate::auth::{init_app_state, AuthAppState};
-use crate::db::{DbAppState, DbConnection};
+use crate::app_data::{
+    auth::{init_app_state, AuthAppState},
+    db::{DbAppState, DbConnection},
+};
 use crate::schema::permissions;
 use actix_http::Request;
 

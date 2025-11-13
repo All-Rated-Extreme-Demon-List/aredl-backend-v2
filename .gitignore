@@ -1,4 +1,5 @@
 target
+secrets
 .idea
 .env
 .vscode

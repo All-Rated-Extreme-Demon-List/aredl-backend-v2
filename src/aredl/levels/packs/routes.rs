@@ -1,7 +1,7 @@
 use crate::aredl::levels::id_resolver::resolve_level_id;
 use crate::aredl::packs::PackWithTierResolved;
 use crate::cache_control::CacheController;
-use crate::db::DbAppState;
+use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
 use actix_web::{get, web, HttpResponse};
 use std::sync::Arc;

@@ -1,6 +1,6 @@
 use crate::{
     auth::{Permission, UserAuth},
-    db::DbAppState,
+    app_data::db::DbAppState,
     error_handler::ApiError,
     shifts::{
         recurring::{RecurringShift, RecurringShiftInsert, RecurringShiftPatch},

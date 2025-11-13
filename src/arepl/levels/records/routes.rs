@@ -3,7 +3,7 @@ use crate::arepl::levels::records::RecordQuery;
 use crate::arepl::records::PublicRecordResolvedExtended;
 use crate::arepl::records::Record;
 use crate::cache_control::CacheController;
-use crate::db::DbAppState;
+use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
 use actix_web::{get, web, HttpResponse};
 use std::sync::Arc;

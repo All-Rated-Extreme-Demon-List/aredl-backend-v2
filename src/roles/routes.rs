@@ -1,5 +1,5 @@
 use crate::auth::{Permission, UserAuth};
-use crate::db::DbAppState;
+use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::roles::{users, Role, RoleCreate, RoleUpdate};
 use actix_web::{delete, get, patch, post, web, HttpResponse};

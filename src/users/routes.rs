@@ -1,5 +1,5 @@
+use crate::app_data::db::DbAppState;
 use crate::auth::{check_higher_privilege, Authenticated, Permission, UserAuth};
-use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::users::{

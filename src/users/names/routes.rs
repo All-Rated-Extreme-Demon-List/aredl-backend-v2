@@ -1,5 +1,5 @@
+use crate::app_data::db::DbAppState;
 use crate::cache_control::CacheController;
-use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::users::names::RoleResolved;
 use actix_web::{get, web, HttpResponse};

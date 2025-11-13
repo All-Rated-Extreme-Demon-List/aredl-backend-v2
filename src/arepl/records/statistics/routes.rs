@@ -1,6 +1,6 @@
 use crate::{
     arepl::records::statistics::{total_records, ResolvedLevelTotalRecordsRow},
-    db::DbAppState,
+    app_data::db::DbAppState,
     error_handler::ApiError,
 };
 use actix_web::{get, web, HttpResponse};

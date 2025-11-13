@@ -4,7 +4,7 @@ use crate::{
         submissions::{history::SubmissionHistory, *},
     },
     auth::Authenticated,
-    db::DbConnection,
+    app_data::db::DbConnection,
     error_handler::ApiError,
     notifications::WebsocketNotification,
     schema::{

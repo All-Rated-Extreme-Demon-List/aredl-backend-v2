@@ -1,5 +1,5 @@
 use crate::{
-    db::DbConnection,
+    app_data::db::DbConnection,
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
     schema::{shifts, users},

@@ -1,7 +1,7 @@
 use crate::{
     aredl::records::statistics::{total_records, ResolvedLevelTotalRecordsRow},
     cache_control::CacheController,
-    db::DbAppState,
+    app_data::db::DbAppState,
     error_handler::ApiError,
 };
 use actix_web::{get, web, HttpResponse};

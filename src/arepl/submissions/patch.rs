@@ -1,7 +1,7 @@
 use crate::{
+    app_data::db::DbConnection,
     arepl::submissions::{status::SubmissionsEnabled, *},
     auth::{Authenticated, Permission},
-    db::DbConnection,
     error_handler::ApiError,
     schema::{
         arepl::{levels, submission_history, submissions},

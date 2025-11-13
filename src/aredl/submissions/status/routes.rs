@@ -1,7 +1,7 @@
 use crate::{
     aredl::submissions::status::{SubmissionsEnabled, SubmissionsEnabledFull},
     auth::{Authenticated, Permission, UserAuth},
-    db::DbAppState,
+    app_data::db::DbAppState,
     error_handler::ApiError,
 };
 use actix_web::{get, post, web, HttpResponse};

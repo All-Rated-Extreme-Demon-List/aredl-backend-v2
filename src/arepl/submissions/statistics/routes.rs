@@ -3,7 +3,7 @@ use crate::{
         stats_mod_leaderboard, DailyStatsPage, ResolvedLeaderboardRow,
     },
     auth::{Permission, UserAuth},
-    db::DbAppState,
+    app_data::db::DbAppState,
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
 };

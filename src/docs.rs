@@ -1,4 +1,6 @@
-use crate::{aredl, arepl, auth, clans, get_secret, health, notifications, roles, shifts, users};
+use crate::{
+    aredl, arepl, auth, clans, get_secret, health, notifications, roles, shifts, users, utils,
+};
 use serde_json::json;
 use utoipa::openapi::extensions::Extensions;
 use utoipa::openapi::path::Operation;
@@ -18,6 +20,7 @@ use utoipa::{Modify, OpenApi};
         (path = "/notifications", api = notifications::ApiDoc),
 		(path = "/health", api = health::ApiDoc),
         (path = "/shifts", api=shifts::ApiDoc),
+        (path = "/utils", api=utils::ApiDoc),
 	)
 )]
 

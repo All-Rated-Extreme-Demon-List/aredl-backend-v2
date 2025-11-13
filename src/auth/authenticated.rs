@@ -1,7 +1,7 @@
+use crate::app_data::db::DbConnection;
 use crate::auth::token::UserClaims;
 use crate::auth::{permission, Permission};
 use crate::clans::ClanMember;
-use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::clan_members;
 use crate::users::User;

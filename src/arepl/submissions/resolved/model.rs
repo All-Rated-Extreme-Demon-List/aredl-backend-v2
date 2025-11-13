@@ -1,7 +1,7 @@
 use crate::{
     arepl::{levels::ExtendedBaseLevel, submissions::*},
     auth::{Authenticated, Permission},
-    db::DbConnection,
+    app_data::db::DbConnection,
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
     schema::{

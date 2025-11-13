@@ -8,7 +8,7 @@ use crate::{
         records::{Record, RecordInsert, RecordUpdate},
     },
     auth::Authenticated,
-    db::DbConnection,
+    app_data::db::DbConnection,
     error_handler::ApiError,
     schema::{
         arepl::{levels, records},

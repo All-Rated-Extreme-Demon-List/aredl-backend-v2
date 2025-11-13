@@ -1,4 +1,4 @@
-use crate::db::DbAppState;
+use crate::app_data::db::DbAppState;
 use crate::notifications::WebsocketNotification;
 use crate::schema::shifts;
 use crate::shifts::Shift;

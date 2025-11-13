@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::{
     arepl::submissions::history::SubmissionHistoryResolved,
     auth::{Authenticated, UserAuth},
-    db::DbAppState,
+    app_data::db::DbAppState,
     error_handler::ApiError,
 };
 

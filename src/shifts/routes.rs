@@ -1,6 +1,6 @@
 use crate::{
+    app_data::db::DbAppState,
     auth::{Authenticated, Permission, UserAuth},
-    db::DbAppState,
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
     shifts::{

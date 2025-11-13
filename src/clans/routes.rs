@@ -1,6 +1,6 @@
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::clans::{members, Clan, ClanCreate, ClanListQueryOptions, ClanPage, ClanUpdate};
-use crate::db::DbAppState;
+use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::clan_members;

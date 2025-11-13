@@ -1,6 +1,6 @@
+use crate::app_data::db::DbAppState;
 use crate::auth::Authenticated;
 use crate::auth::{Permission, UserAuth};
-use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::users::merge::requests::{

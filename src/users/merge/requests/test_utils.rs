@@ -1,5 +1,5 @@
 #[cfg(test)]
-use crate::{db::DbConnection, schema::merge_requests};
+use crate::{app_data::db::DbConnection, schema::merge_requests};
 #[cfg(test)]
 use diesel::{ExpressionMethods, RunQueryDsl};
 #[cfg(test)]

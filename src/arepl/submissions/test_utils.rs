@@ -1,9 +1,9 @@
+#[cfg(test)]
+use crate::{app_data::db::DbConnection, schema::arepl::submissions};
 use crate::{
     arepl::submissions::{history::SubmissionHistory, SubmissionStatus},
     schema::arepl::submission_history,
 };
-#[cfg(test)]
-use crate::{db::DbConnection, schema::arepl::submissions};
 
 use chrono::Utc;
 #[cfg(test)]

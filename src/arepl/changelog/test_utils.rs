@@ -1,4 +1,4 @@
-use crate::db::DbConnection;
+use crate::app_data::db::DbConnection;
 use crate::schema::arepl::position_history;
 use chrono::Utc;
 use diesel::{ExpressionMethods, RunQueryDsl};

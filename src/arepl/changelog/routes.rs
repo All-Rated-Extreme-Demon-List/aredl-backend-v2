@@ -1,6 +1,6 @@
 use crate::arepl::changelog::ChangelogPage;
 use crate::cache_control::CacheController;
-use crate::db::DbAppState;
+use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use actix_web::{get, web, HttpResponse};

@@ -6,10 +6,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use crate::auth::app_state::AuthAppState;
+use crate::app_data::auth::AuthAppState;
+use crate::app_data::db::DbAppState;
 use crate::auth::token::{decode_token, decode_user_claims, UserClaims};
 use crate::auth::{permission, Permission};
-use crate::db::DbAppState;
 
 use crate::auth::token::check_token_valid;
 use crate::error_handler::ApiError;

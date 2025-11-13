@@ -1,5 +1,5 @@
+use crate::app_data::db::DbConnection;
 use crate::auth::Permission;
-use crate::db::DbConnection;
 use crate::schema::permissions;
 use crate::schema::{roles, user_roles, users};
 

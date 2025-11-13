@@ -13,10 +13,10 @@ use openidconnect::{
 use serde::{Deserialize, Serialize};
 use utoipa::{OpenApi, ToSchema};
 
-use crate::auth::app_state::AuthAppState;
+use crate::app_data::auth::AuthAppState;
+use crate::app_data::db::{DbAppState, DbConnection};
 use crate::auth::token::UserClaims;
 use crate::auth::token::{self, check_token_valid};
-use crate::db::{DbAppState, DbConnection};
 use crate::error_handler::ApiError;
 use crate::get_secret;
 use crate::schema::{oauth_requests, permissions, roles, user_roles};

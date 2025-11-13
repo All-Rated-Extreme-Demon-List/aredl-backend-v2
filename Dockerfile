@@ -31,29 +31,15 @@ RUN if [ "$BUILD_PROFILE" = "release" ]; then \
       cargo build; \
     fi
 
-FROM gcr.io/distroless/cc-debian12
+FROM mwader/static-ffmpeg:8.0 AS ffbin
+
+FROM debian:12-slim
 
 ARG BUILD_PROFILE=debug
-COPY --from=build /usr/src/aredl-backend/target/${BUILD_PROFILE}/aredl-backend /usr/local/bin/aredl-backend
 
-COPY --from=build /usr/lib/libdir/libpq.so* /usr/lib/
-COPY --from=build /usr/lib/libdir/libgssapi_krb5* /usr/lib/
-COPY --from=build /usr/lib/libdir/libldap* /usr/lib/
-COPY --from=build /usr/lib/libdir/libkrb5* /usr/lib/
-COPY --from=build /usr/lib/libdir/libk5crypto* /usr/lib/
-COPY --from=build /usr/lib/libdir/libkrb5support* /usr/lib/
-COPY --from=build /usr/lib/libdir/liblber* /usr/lib/
-COPY --from=build /usr/lib/libdir/libsasl* /usr/lib/
-COPY --from=build /usr/lib/libdir/libgnutls* /usr/lib/
-COPY --from=build /usr/lib/libdir/libp11* /usr/lib/
-COPY --from=build /usr/lib/libdir/libidn* /usr/lib/
-COPY --from=build /usr/lib/libdir/libunistring* /usr/lib/
-COPY --from=build /usr/lib/libdir/libtasn1* /usr/lib/
-COPY --from=build /usr/lib/libdir/libnettle* /usr/lib/
-COPY --from=build /usr/lib/libdir/libhogweed* /usr/lib/
-COPY --from=build /usr/lib/libdir/libgmp* /usr/lib/
-COPY --from=build /usr/lib/libdir/libffi* /usr/lib/
-COPY --from=build /lib/libdir/libcom_err* /lib/
-COPY --from=build /lib/libdir/libkeyutils* /lib/
+RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev exiftool ca-certificates
+
+COPY --from=build /usr/src/aredl-backend/target/${BUILD_PROFILE}/aredl-backend /usr/local/bin/aredl-backend
+COPY --from=ffbin /ffprobe /usr/local/bin/ffprobe
 
 CMD ["aredl-backend"]

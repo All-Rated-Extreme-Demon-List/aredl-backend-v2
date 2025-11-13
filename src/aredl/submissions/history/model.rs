@@ -1,7 +1,7 @@
 use crate::{
     aredl::submissions::SubmissionStatus,
     auth::{Authenticated, Permission},
-    db::DbConnection,
+    app_data::db::DbConnection,
     error_handler::ApiError,
     schema::{aredl::submission_history, users},
     users::BaseUser,

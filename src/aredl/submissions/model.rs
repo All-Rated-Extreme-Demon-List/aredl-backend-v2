@@ -1,7 +1,7 @@
 use crate::{
     aredl::{levels::ExtendedBaseLevel, submissions::history::SubmissionHistory},
     auth::{Authenticated, Permission},
-    db::DbConnection,
+    app_data::db::DbConnection,
     error_handler::ApiError,
     schema::aredl::{submission_history, submissions, submissions_with_priority},
     users::BaseUser,

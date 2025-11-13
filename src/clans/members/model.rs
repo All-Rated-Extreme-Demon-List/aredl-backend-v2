@@ -1,5 +1,5 @@
 use crate::clans::{Clan, ClanInvite, ClanMember};
-use crate::db::DbConnection;
+use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::{clan_invites, clan_members, clans, users};
 use crate::users::me::notifications::{Notification, NotificationType};

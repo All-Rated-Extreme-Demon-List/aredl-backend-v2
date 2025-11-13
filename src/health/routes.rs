@@ -4,7 +4,7 @@ use diesel::RunQueryDsl;
 use std::sync::Arc;
 use utoipa::OpenApi;
 
-use crate::db::DbAppState;
+use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
 
 #[utoipa::path(

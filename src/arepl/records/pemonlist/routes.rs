@@ -1,7 +1,7 @@
 use crate::arepl::records::pemonlist::PemonlistPlayer;
 use crate::arepl::records::Record;
 use crate::auth::{Authenticated, UserAuth};
-use crate::db::DbAppState;
+use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
 use actix_web::{post, web, HttpResponse};
 use std::sync::Arc;

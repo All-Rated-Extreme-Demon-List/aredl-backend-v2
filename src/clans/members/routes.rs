@@ -4,7 +4,7 @@ use crate::clans::members::{ClanInviteCreate, ClanMemberInvite, ClanMemberUpdate
 use crate::clans::{
     Clan, ClanCreate, ClanInvite, ClanListQueryOptions, ClanMember, ClanPage, ClanUpdate,
 };
-use crate::db::DbAppState;
+use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;

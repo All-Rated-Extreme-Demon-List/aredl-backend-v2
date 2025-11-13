@@ -1,7 +1,7 @@
 #[cfg(test)]
 use crate::arepl::records::test_utils::create_test_record;
 #[cfg(test)]
-use crate::db::DbConnection;
+use crate::app_data::db::DbConnection;
 #[cfg(test)]
 use crate::schema::arepl::levels;
 #[cfg(test)]

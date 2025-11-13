@@ -4,10 +4,10 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::{OpenApi, ToSchema};
 
-use crate::auth::app_state::AuthAppState;
+use crate::app_data::auth::AuthAppState;
+use crate::app_data::db::DbAppState;
 use crate::auth::token::UserClaims;
 use crate::auth::token::{self, check_token_valid};
-use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 
 #[derive(Debug, Deserialize)]

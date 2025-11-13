@@ -1,6 +1,6 @@
-use crate::auth::app_state::AuthAppState;
+use crate::app_data::auth::AuthAppState;
+use crate::app_data::db::DbAppState;
 use crate::auth::token::{self, check_token_valid};
-use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::schema::users;
 use actix_web::{post, web, HttpRequest, HttpResponse};

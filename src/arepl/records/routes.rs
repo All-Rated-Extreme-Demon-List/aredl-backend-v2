@@ -4,7 +4,7 @@ use crate::arepl::records::{
     FullResolvedRecordPage, FullUnresolvedRecordPage, Record, RecordsQueryOptions,
 };
 use crate::auth::{Authenticated, Permission, UserAuth};
-use crate::db::DbAppState;
+use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use actix_web::{delete, get, patch, post, web, HttpResponse};

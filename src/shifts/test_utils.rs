@@ -1,6 +1,6 @@
 #[cfg(test)]
 use crate::{
-    db::DbConnection,
+    app_data::db::DbConnection,
     schema::{recurrent_shifts, shifts},
     shifts::Weekday,
 };

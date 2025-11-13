@@ -1,5 +1,5 @@
 #[cfg(test)]
-use crate::db::DbConnection;
+use crate::app_data::db::DbConnection;
 #[cfg(test)]
 use crate::schema::arepl::level_ldms;
 #[cfg(test)]

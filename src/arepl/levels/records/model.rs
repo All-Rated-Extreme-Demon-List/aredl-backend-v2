@@ -1,7 +1,7 @@
 use crate::arepl::records::{
     PublicRecordResolved, PublicRecordResolvedExtended, PublicRecordUnresolved,
 };
-use crate::db::DbConnection;
+use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::{arepl::records, users};
 use crate::users::{BaseUser, ExtendedBaseUser};

@@ -1,7 +1,7 @@
 use crate::arepl::leaderboard::LeaderboardOrder;
 use crate::arepl::levels::BaseLevel;
 use crate::clans::Clan;
-use crate::db::DbConnection;
+use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::scheduled::refresh_matviews::MatviewRefreshLog;

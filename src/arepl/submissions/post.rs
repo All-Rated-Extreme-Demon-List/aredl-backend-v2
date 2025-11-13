@@ -1,7 +1,7 @@
 use crate::{
+    app_data::db::DbConnection,
     arepl::submissions::{history::SubmissionHistory, status::SubmissionsEnabled, *},
     auth::Authenticated,
-    db::DbConnection,
     error_handler::ApiError,
     roles::Role,
     schema::{

@@ -1,4 +1,4 @@
-use crate::db::{DbAppState, DbConnection};
+use crate::app_data::db::{DbAppState, DbConnection};
 use crate::error_handler::ApiError;
 use crate::get_secret;
 use crate::schema::aredl;

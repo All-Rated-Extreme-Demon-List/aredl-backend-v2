@@ -1,6 +1,6 @@
 use crate::arepl::packs::{levels, Pack, PackCreate, PackUpdate};
 use crate::auth::{Permission, UserAuth};
-use crate::db::DbAppState;
+use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
 use actix_web::{delete, patch, post, web, HttpResponse};
 use std::sync::Arc;

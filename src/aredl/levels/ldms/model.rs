@@ -4,7 +4,7 @@ use utoipa::ToSchema;
 use chrono::{DateTime, Utc};
 use crate::{
     auth::Authenticated,
-    db::DbConnection,
+    app_data::db::DbConnection,
     error_handler::ApiError,
     schema::{
         aredl::level_ldms,

@@ -1,6 +1,6 @@
 use crate::arepl::levels::ExtendedBaseLevel;
 use crate::clans::Clan;
-use crate::db::DbConnection;
+use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::{
     arepl::{clans_leaderboard, levels, min_placement_clans_records},

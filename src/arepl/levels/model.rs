@@ -1,5 +1,5 @@
 use crate::arepl::records::{PublicRecordResolved, PublicRecordUnresolved};
-use crate::db::DbConnection;
+use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::arepl::{levels, records};
 use crate::schema::users;

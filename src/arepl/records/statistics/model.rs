@@ -1,5 +1,5 @@
 use crate::arepl::levels::ExtendedBaseLevel;
-use crate::db::DbConnection;
+use crate::app_data::db::DbConnection;
 use crate::{
     error_handler::ApiError,
     schema::{arepl::levels, arepl::record_totals},

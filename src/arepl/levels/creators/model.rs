@@ -1,4 +1,4 @@
-use crate::db::DbConnection;
+use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::arepl::levels_created;
 use crate::schema::users;

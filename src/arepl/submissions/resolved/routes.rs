@@ -10,7 +10,7 @@ use crate::{
         SubmissionPage, SubmissionResolved,
     },
     auth::{Authenticated, Permission, UserAuth},
-    db::DbAppState,
+    app_data::db::DbAppState,
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
 };

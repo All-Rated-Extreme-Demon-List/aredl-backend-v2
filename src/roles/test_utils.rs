@@ -1,6 +1,6 @@
 #[cfg(test)]
 use crate::{
-    db::DbConnection,
+    app_data::db::DbConnection,
     schema::{roles, user_roles},
 };
 #[cfg(test)]

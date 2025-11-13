@@ -1,5 +1,5 @@
 use crate::arepl::levels::ExtendedBaseLevel;
-use crate::db::DbConnection;
+use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::{
     arepl::{country_leaderboard, levels, min_placement_country_records},
