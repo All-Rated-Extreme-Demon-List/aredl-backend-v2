@@ -1,15 +1,18 @@
-use crate::arepl::levels::ExtendedBaseLevel;
 use crate::app_data::db::DbConnection;
+use crate::arepl::levels::ExtendedBaseLevel;
+use crate::arepl::submissions::patch::SubmissionPatchMod;
+use crate::arepl::submissions::post::SubmissionInsert;
+use crate::arepl::submissions::{Submission, SubmissionStatus};
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
-use crate::schema::{arepl::levels, arepl::records, users};
+use crate::schema::{arepl::levels, arepl::records, arepl::submissions, users};
 use crate::users::{BaseUser, ExtendedBaseUser};
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::query_dsl::JoinOnDsl;
 use diesel::{
-    ExpressionMethods, Insertable, NullableExpressionMethods, PgExpressionMethods, QueryDsl,
-    RunQueryDsl, Selectable, SelectableHelper,
+    Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl,
+    Selectable, SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -26,43 +29,27 @@ pub struct Record {
     pub submitted_by: Uuid,
     /// Whether the record was completed on mobile or not.
     pub mobile: bool,
-    /// ID of the LDM used for the record, if any.
-    pub ldm_id: Option<i32>,
     /// Video link of the completion.
     pub video_url: String,
     /// Whether the record's video should be hidden on the website.
     pub hide_video: bool,
     /// Completion time of the record in milliseconds.
     pub completion_time: i64,
-    /// Link to the raw video file of the completion.
-    pub raw_url: Option<String>,
     /// Whether this record is the verification of this level or not.
     pub is_verification: bool,
-    /// Placement order of the record in the records list of this level.
-    pub placement_order: i32,
-    /// Name of the mod menu used for this record, if any.
-    pub mod_menu: Option<String>,
-    /// Internal UUID of the user who reviewed the record.
-    pub reviewer_id: Option<Uuid>,
-    /// Notes set by the reviewer when they accepted the record.
-    pub reviewer_notes: Option<String>,
-    /// Notes given by the user when they submitted the record.
-    pub user_notes: Option<String>,
     /// Timestamp of when the record was created (first accepted).
     pub created_at: DateTime<Utc>,
     /// Timestamp of when the record was last updated.
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Serialize, Deserialize, Insertable, Debug, ToSchema)]
+#[derive(Serialize, Deserialize, Insertable, Debug, ToSchema, Clone, Default)]
 #[diesel(table_name=records, check_for_backend(Pg))]
 pub struct RecordInsert {
     /// Internal UUID of the user who submitted the record.
     pub submitted_by: Uuid,
     /// Whether the record was completed on mobile or not.
     pub mobile: bool,
-    /// ID of the LDM used for the record, if any.
-    pub ldm_id: Option<i32>,
     /// Internal UUID of the level the record is for.
     pub level_id: Uuid,
     /// Video link of the completion.
@@ -73,25 +60,19 @@ pub struct RecordInsert {
     pub completion_time: i64,
     /// Whether this record is the verification of this level or not.
     pub is_verification: Option<bool>,
-    /// Link to the raw video file of the completion.
-    pub raw_url: Option<String>,
-    /// Internal UUID of the user who reviewed the record.
-    pub reviewer_id: Option<Uuid>,
     /// Timestamp of when the record was created (first accepted).
     pub created_at: Option<DateTime<Utc>>,
     /// Timestamp of when the record was last updated.
     pub updated_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Serialize, Deserialize, AsChangeset, Debug, ToSchema)]
+#[derive(Serialize, Deserialize, AsChangeset, Debug, ToSchema, Clone)]
 #[diesel(table_name=records, check_for_backend(Pg))]
-pub struct RecordUpdate {
+pub struct RecordPatch {
     /// Internal UUID of the user who submitted the record.
     pub submitted_by: Option<Uuid>,
     /// Whether the record was completed on mobile or not.
     pub mobile: Option<bool>,
-    /// ID of the LDM used for the record, if any.
-    pub ldm_id: Option<i32>,
     /// Video link of the completion.
     pub video_url: Option<String>,
     /// Whether the record's video should be hidden on the website.
@@ -102,12 +83,19 @@ pub struct RecordUpdate {
     pub completion_time: Option<i64>,
     /// Whether this record is the verification of this level or not.
     pub is_verification: Option<bool>,
-    /// Link to the raw video file of the completion.
-    pub raw_url: Option<String>,
     /// Timestamp of when the record was created (first accepted).
     pub created_at: Option<DateTime<Utc>>,
     /// Timestamp of when the record was last updated.
     pub updated_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Serialize, Deserialize, AsChangeset, Debug, ToSchema, Default, PartialEq)]
+#[diesel(table_name=records, check_for_backend(Pg))]
+pub struct RecordUpdate {
+    /// Whether the record's video should be hidden on the website.
+    pub hide_video: Option<bool>,
+    /// Whether this record is the verification of this level or not.
+    pub is_verification: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
@@ -148,29 +136,12 @@ pub struct FullRecordTemplate<LevelT, UserT> {
     pub mobile: bool,
     /// Completion time of the record in milliseconds.
     pub completion_time: i64,
-    /// ID of the LDM used for the record, if any.
-    pub ldm_id: Option<i32>,
     /// Video link of the completion.
     pub video_url: String,
     /// Whether the record's video should be hidden on the website.
     pub hide_video: bool,
-    /// Link to the raw video file of the completion.
-    pub raw_url: Option<String>,
-    /// Name of the mod menu used for this record, if any.
-    pub mod_menu: Option<String>,
     /// Whether this record is the verification of this level or not.
     pub is_verification: bool,
-    /// Placement order of the record in the records list of this level.
-    #[serde(skip_serializing)]
-    pub placement_order: i32,
-    /// Internal UUID of the user who reviewed the record.
-    #[serde(rename = "reviewer")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reviewer_id: Option<UserT>,
-    /// Notes set by the reviewer when they accepted the record.
-    pub reviewer_notes: Option<String>,
-    /// Notes given by the user when they submitted the record.
-    pub user_notes: Option<String>,
     /// Timestamp of when the record was created (first accepted).
     pub created_at: DateTime<Utc>,
     /// Timestamp of when the record was last updated.
@@ -194,7 +165,6 @@ pub struct RecordsQueryOptions {
     pub mobile_filter: Option<bool>,
     pub level_filter: Option<Uuid>,
     pub submitter_filter: Option<Uuid>,
-    pub reviewer_filter: Option<Uuid>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -207,34 +177,168 @@ pub struct FullResolvedRecordPage {
     data: Vec<FullRecordResolved>,
 }
 
+impl SubmissionInsert {
+    pub fn from_record_insert(record: RecordInsert) -> Self {
+        Self {
+            submitted_by: record.submitted_by,
+            level_id: record.level_id,
+            mobile: record.mobile,
+            video_url: record.video_url,
+            status: SubmissionStatus::Accepted,
+            ..Default::default()
+        }
+    }
+}
+
+impl SubmissionPatchMod {
+    pub fn from_record_insert(record: RecordInsert) -> Self {
+        Self {
+            mobile: Some(record.mobile),
+            video_url: Some(record.video_url),
+            reviewer_notes: Some("Added by a moderator".to_string()),
+            status: Some(SubmissionStatus::Accepted),
+            ..Default::default()
+        }
+    }
+
+    pub fn from_record_update(record: RecordPatch) -> Self {
+        Self {
+            mobile: record.mobile,
+            video_url: record.video_url,
+            reviewer_notes: Some("Updated by a moderator".to_string()),
+            status: Some(SubmissionStatus::Accepted),
+            ..Default::default()
+        }
+    }
+}
+
+impl RecordUpdate {
+    pub fn from_record_insert(record: RecordInsert) -> Self {
+        Self {
+            hide_video: record.hide_video,
+            is_verification: record.is_verification,
+        }
+    }
+
+    pub fn from_record_patch(record: RecordPatch) -> Self {
+        Self {
+            hide_video: record.hide_video,
+            is_verification: record.is_verification,
+        }
+    }
+}
+
+impl Submission {
+    pub fn upsert_from_record_insert(
+        conn: &mut DbConnection,
+        record: RecordInsert,
+    ) -> Result<Self, ApiError> {
+        let existing_submission_id = submissions::table
+            .filter(submissions::submitted_by.eq(record.submitted_by))
+            .filter(submissions::level_id.eq(record.level_id))
+            .select(submissions::id)
+            .first::<Uuid>(conn)
+            .optional()?;
+
+        match existing_submission_id {
+            Some(submission_id) => {
+                let submission_update = SubmissionPatchMod::from_record_insert(record);
+                return Ok(diesel::update(
+                    submissions::table.filter(submissions::id.eq(submission_id)),
+                )
+                .set(&submission_update)
+                .returning(Submission::as_select())
+                .get_result::<Self>(conn)?);
+            }
+            None => {
+                let submission_insert = SubmissionInsert::from_record_insert(record);
+                return Ok(diesel::insert_into(submissions::table)
+                    .values(&submission_insert)
+                    .returning(Submission::as_select())
+                    .get_result::<Self>(conn)?);
+            }
+        }
+    }
+}
+
 impl Record {
     pub fn create(conn: &mut DbConnection, record: RecordInsert) -> Result<Self, ApiError> {
-        let record = diesel::insert_into(records::table)
-            .values(record)
-            .returning(Record::as_select())
-            .get_result::<Self>(conn)?;
-        Ok(record)
+        conn.transaction(|conn| -> Result<Self, ApiError> {
+            // Create the corresponding submission first and let triggers initialize the record
+            Submission::upsert_from_record_insert(conn, record.clone())?;
+
+            // Then update the record-specific fields
+            let record_patch = RecordUpdate::from_record_insert(record.clone());
+
+            println!("Record patch: {:?}", record_patch);
+
+            let result = diesel::update(records::table)
+                .filter(records::submitted_by.eq(record.submitted_by))
+                .filter(records::level_id.eq(record.level_id))
+                .set(&record_patch)
+                .returning(Record::as_select())
+                .get_result::<Self>(conn)?;
+
+            Ok(result)
+        })
     }
 
     pub fn update(
         conn: &mut DbConnection,
         record_id: Uuid,
-        record: RecordUpdate,
+        record: RecordPatch,
     ) -> Result<Self, ApiError> {
-        let record = diesel::update(records::table)
-            .filter(records::id.eq(record_id))
-            .set(record)
-            .returning(Record::as_select())
-            .get_result::<Self>(conn)?;
-        Ok(record)
+        conn.transaction(|conn| -> Result<Self, ApiError> {
+            // Update the corresponding submission first and let triggers update the record
+            let submission_patch = SubmissionPatchMod::from_record_update(record.clone());
+
+            let (levelid, submitted_by): (Uuid, Uuid) = records::table
+                .filter(records::id.eq(record_id))
+                .select((records::level_id, records::submitted_by))
+                .first(conn)?;
+
+            diesel::update(submissions::table)
+                .filter(submissions::submitted_by.eq(submitted_by))
+                .filter(submissions::level_id.eq(levelid))
+                .set(&submission_patch)
+                .execute(conn)?;
+
+            // Then update the record-specific fields
+            let record_update = RecordUpdate::from_record_patch(record.clone());
+
+            let result = match record_update == RecordUpdate::default() {
+                true => records::table
+                    .filter(records::id.eq(record_id))
+                    .select(Record::as_select())
+                    .first::<Self>(conn)?,
+                false => diesel::update(records::table.filter(records::id.eq(record_id)))
+                    .set(&record_update)
+                    .returning(Record::as_select())
+                    .get_result::<Self>(conn)?,
+            };
+
+            Ok(result)
+        })
     }
 
-    pub fn delete(conn: &mut DbConnection, record_id: Uuid) -> Result<Self, ApiError> {
-        let record = diesel::delete(records::table)
-            .filter(records::id.eq(record_id))
-            .returning(Record::as_select())
-            .get_result::<Self>(conn)?;
-        Ok(record)
+    pub fn delete(conn: &mut DbConnection, record_id: Uuid) -> Result<(), ApiError> {
+        conn.transaction(|conn| -> Result<(), ApiError> {
+            let (levelid, submitted_by): (Uuid, Uuid) = records::table
+                .filter(records::id.eq(record_id))
+                .select((records::level_id, records::submitted_by))
+                .first(conn)?;
+
+            diesel::update(submissions::table)
+                .filter(submissions::submitted_by.eq(submitted_by))
+                .filter(submissions::level_id.eq(levelid))
+                .set((
+                    submissions::status.eq(SubmissionStatus::Denied),
+                    submissions::reviewer_notes
+                        .eq(Some("Record deleted by a moderator".to_string())),
+                ))
+                .execute(conn)?;
+            Ok(())
+        })
     }
 }
 
@@ -242,13 +346,8 @@ impl FullRecordUnresolved {
     pub fn find_all<const D: i64>(
         conn: &mut DbConnection,
         page_query: PageQuery<D>,
-        mut options: RecordsQueryOptions,
-        hide_reviewer: bool,
+        options: RecordsQueryOptions,
     ) -> Result<Paginated<FullUnresolvedRecordPage>, ApiError> {
-        if hide_reviewer {
-            options.reviewer_filter = None;
-        }
-
         let build_filtered = || {
             let mut q = records::table.into_boxed::<Pg>();
             if let Some(mobile) = options.mobile_filter {
@@ -259,9 +358,6 @@ impl FullRecordUnresolved {
             }
             if let Some(submitter) = options.submitter_filter {
                 q = q.filter(records::submitted_by.eq(submitter));
-            }
-            if let Some(reviewer) = options.reviewer_filter {
-                q = q.filter(records::reviewer_id.is_not_distinct_from(reviewer));
             }
             q
         };
@@ -276,18 +372,7 @@ impl FullRecordUnresolved {
 
         let records: Vec<FullRecordUnresolvedDto> = raw_records
             .into_iter()
-            .map(|record| FullRecordUnresolvedDto {
-                record: {
-                    if hide_reviewer {
-                        Self {
-                            reviewer_id: None,
-                            ..record
-                        }
-                    } else {
-                        record
-                    }
-                },
-            })
+            .map(|record| FullRecordUnresolvedDto { record })
             .collect();
 
         Ok(Paginated::from_data(
@@ -300,49 +385,27 @@ impl FullRecordUnresolved {
 
 impl FullRecordResolved {
     pub fn find(conn: &mut DbConnection, record_id: Uuid) -> Result<Self, ApiError> {
-        let reviewers = alias!(users as reviewers);
+        let (record, user, level): (FullRecordTemplate<Uuid, Uuid>, BaseUser, ExtendedBaseLevel) =
+            records::table
+                .filter(records::id.eq(record_id))
+                .inner_join(users::table.on(records::submitted_by.eq(users::id)))
+                .inner_join(levels::table.on(records::level_id.eq(levels::id)))
+                .order_by(records::completion_time.asc())
+                .select((
+                    FullRecordTemplate::<Uuid, Uuid>::as_select(),
+                    BaseUser::as_select(),
+                    ExtendedBaseLevel::as_select(),
+                ))
+                .first(conn)?;
 
-        let (record, user, level, reviewer): (
-            FullRecordTemplate<Uuid, Uuid>,
-            BaseUser,
-            ExtendedBaseLevel,
-            Option<BaseUser>,
-        ) = records::table
-            .filter(records::id.eq(record_id))
-            .inner_join(users::table.on(records::submitted_by.eq(users::id)))
-            .inner_join(levels::table.on(records::level_id.eq(levels::id)))
-            .order_by(records::completion_time.asc())
-            .left_join(
-                reviewers.on(reviewers
-                    .field(users::id)
-                    .nullable()
-                    .eq(records::reviewer_id.nullable())),
-            )
-            .select((
-                FullRecordTemplate::<Uuid, Uuid>::as_select(),
-                BaseUser::as_select(),
-                ExtendedBaseLevel::as_select(),
-                reviewers
-                    .fields(<BaseUser as Selectable<Pg>>::construct_selection())
-                    .nullable(),
-            ))
-            .first(conn)?;
-
-        Ok(Self::from_data(record, user, level, reviewer))
+        Ok(Self::from_data(record, user, level))
     }
 
     pub fn find_all<const D: i64>(
         conn: &mut DbConnection,
         page_query: PageQuery<D>,
-        mut options: RecordsQueryOptions,
-        hide_reviewer: bool,
+        options: RecordsQueryOptions,
     ) -> Result<Paginated<FullResolvedRecordPage>, ApiError> {
-        if hide_reviewer {
-            options.reviewer_filter = None;
-        }
-
-        let reviewers = alias!(users as reviewers);
-
         let build_filtered = || {
             let mut q = records::table.into_boxed::<Pg>();
             if let Some(mobile) = options.mobile_filter {
@@ -354,9 +417,6 @@ impl FullRecordResolved {
             if let Some(submitter) = options.submitter_filter {
                 q = q.filter(records::submitted_by.eq(submitter));
             }
-            if let Some(reviewer) = options.reviewer_filter {
-                q = q.filter(records::reviewer_id.is_not_distinct_from(reviewer));
-            }
             q
         };
 
@@ -365,12 +425,6 @@ impl FullRecordResolved {
         let records = build_filtered()
             .inner_join(users::table.on(records::submitted_by.eq(users::id)))
             .inner_join(levels::table.on(records::level_id.eq(levels::id)))
-            .left_join(
-                reviewers.on(reviewers
-                    .field(users::id)
-                    .nullable()
-                    .eq(records::reviewer_id.nullable())),
-            )
             .order_by(records::completion_time.asc())
             .limit(page_query.per_page())
             .offset(page_query.offset())
@@ -378,27 +432,13 @@ impl FullRecordResolved {
                 FullRecordUnresolved::as_select(),
                 BaseUser::as_select(),
                 ExtendedBaseLevel::as_select(),
-                reviewers
-                    .fields(<BaseUser as Selectable<Pg>>::construct_selection())
-                    .nullable(),
             ))
-            .load::<(
-                FullRecordUnresolved,
-                BaseUser,
-                ExtendedBaseLevel,
-                Option<BaseUser>,
-            )>(conn)?;
+            .load::<(FullRecordUnresolved, BaseUser, ExtendedBaseLevel)>(conn)?;
 
-        let mut records_resolved: Vec<Self> = records
+        let records_resolved: Vec<Self> = records
             .into_iter()
-            .map(|(record, user, level, reviewer)| Self::from_data(record, user, level, reviewer))
+            .map(|(record, user, level)| Self::from_data(record, user, level))
             .collect();
-
-        if hide_reviewer {
-            for record in records_resolved.iter_mut() {
-                record.reviewer_id = None;
-            }
-        }
 
         Ok(Paginated::from_data(
             page_query,
@@ -409,27 +449,15 @@ impl FullRecordResolved {
         ))
     }
 
-    fn from_data(
-        record: FullRecordUnresolved,
-        user: BaseUser,
-        level: ExtendedBaseLevel,
-        reviewer: Option<BaseUser>,
-    ) -> Self {
+    fn from_data(record: FullRecordUnresolved, user: BaseUser, level: ExtendedBaseLevel) -> Self {
         Self {
             id: record.id,
             submitted_by: user,
             level_id: level,
             mobile: record.mobile,
-            ldm_id: record.ldm_id,
             video_url: record.video_url,
-            raw_url: record.raw_url,
             completion_time: record.completion_time,
             is_verification: record.is_verification,
-            placement_order: record.placement_order,
-            reviewer_id: reviewer,
-            reviewer_notes: record.reviewer_notes,
-            user_notes: record.user_notes,
-            mod_menu: record.mod_menu,
             created_at: record.created_at,
             updated_at: record.updated_at,
             hide_video: record.hide_video,

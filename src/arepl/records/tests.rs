@@ -239,31 +239,6 @@ async fn get_records_submitter_filter() {
 }
 
 #[actix_web::test]
-async fn get_records_reviewer_filter() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
-    let (reviewer_id, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
-    let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
-
-    let (_, reviewed_record) = create_test_level_with_record(&mut conn, user_id).await;
-    create_test_level_with_record(&mut conn, user_id).await;
-    diesel::update(records::table.filter(records::id.eq(reviewed_record)))
-        .set(records::reviewer_id.eq(Some(reviewer_id)))
-        .execute(&mut conn)
-        .unwrap();
-
-    let req = test::TestRequest::get()
-        .uri(&format!("/arepl/records?reviewer_filter={reviewer_id}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
-        .to_request();
-    let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success());
-    let body: serde_json::Value = test::read_body_json(resp).await;
-    assert_eq!(body["data"].as_array().unwrap().len(), 1);
-    assert_eq!(body["data"][0]["id"], reviewed_record.to_string());
-}
-
-#[actix_web::test]
 async fn get_records_mobile_filter_full() {
     let (app, mut conn, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
@@ -327,31 +302,4 @@ async fn get_records_submitter_filter_full() {
     let body: serde_json::Value = test::read_body_json(resp).await;
     assert_eq!(body["data"].as_array().unwrap().len(), 1);
     assert_eq!(body["data"][0]["id"], record_one.to_string());
-}
-
-#[actix_web::test]
-async fn get_records_reviewer_filter_full() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
-    let (reviewer_id, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
-    let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
-
-    let (_, reviewed_record) = create_test_level_with_record(&mut conn, user_id).await;
-    create_test_level_with_record(&mut conn, user_id).await;
-    diesel::update(records::table.filter(records::id.eq(reviewed_record)))
-        .set(records::reviewer_id.eq(Some(reviewer_id)))
-        .execute(&mut conn)
-        .unwrap();
-
-    let req = test::TestRequest::get()
-        .uri(&format!(
-            "/arepl/records/full?reviewer_filter={reviewer_id}"
-        ))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
-        .to_request();
-    let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success());
-    let body: serde_json::Value = test::read_body_json(resp).await;
-    assert_eq!(body["data"].as_array().unwrap().len(), 1);
-    assert_eq!(body["data"][0]["id"], reviewed_record.to_string());
 }

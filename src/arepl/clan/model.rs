@@ -1,6 +1,6 @@
+use crate::app_data::db::DbConnection;
 use crate::arepl::levels::ExtendedBaseLevel;
 use crate::clans::Clan;
-use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::{
     arepl::{clans_leaderboard, levels, min_placement_clans_records},
@@ -43,16 +43,12 @@ pub struct ClanProfileRecord {
     pub submitted_by: Uuid,
     /// Whether the record was completed on mobile or not.
     pub mobile: bool,
-    /// ID of the LDM used for the record, if any.
-    pub ldm_id: Option<i32>,
     /// Video link of the completion.
     pub video_url: String,
     /// Completion time of the record in milliseconds.
     pub completion_time: i64,
     #[serde(skip_serializing)]
     pub is_verification: bool,
-    /// Internal UUID of the user who reviewed the record.
-    pub reviewer_id: Option<Uuid>,
     /// Timestamp of when the record was created (first accepted).
     pub created_at: DateTime<Utc>,
     /// Timestamp of when the record was last updated.

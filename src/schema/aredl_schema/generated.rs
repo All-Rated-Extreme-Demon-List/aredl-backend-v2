@@ -118,17 +118,10 @@ pub mod aredl {
             level_id -> Uuid,
             submitted_by -> Uuid,
             mobile -> Bool,
-            ldm_id -> Nullable<Int4>,
             video_url -> Varchar,
-            raw_url -> Nullable<Varchar>,
-            placement_order -> Int4,
-            reviewer_id -> Nullable<Uuid>,
             created_at -> Timestamptz,
             updated_at -> Timestamptz,
             is_verification -> Bool,
-            reviewer_notes -> Nullable<Varchar>,
-            mod_menu -> Nullable<Varchar>,
-            user_notes -> Nullable<Varchar>,
             hide_video -> Bool,
         }
     }
@@ -140,12 +133,17 @@ pub mod aredl {
         aredl.submission_history (id) {
             id -> Uuid,
             submission_id -> Uuid,
-            record_id -> Nullable<Uuid>,
             reviewer_notes -> Nullable<Text>,
             status -> SubmissionStatus,
             timestamp -> Timestamptz,
             user_notes -> Nullable<Text>,
             reviewer_id -> Nullable<Uuid>,
+            mobile -> Nullable<Bool>,
+            ldm_id -> Nullable<Int4>,
+            video_url -> Nullable<Varchar>,
+            raw_url -> Nullable<Varchar>,
+            mod_menu -> Nullable<Varchar>,
+            priority -> Nullable<Bool>,
         }
     }
 
@@ -182,6 +180,7 @@ pub mod aredl {
     }
 
     diesel::joinable!(level_ldms -> levels (level_id));
+    diesel::joinable!(submission_history -> submissions (submission_id));
 
     diesel::allow_tables_to_appear_in_same_query!(
         guideline_updates,

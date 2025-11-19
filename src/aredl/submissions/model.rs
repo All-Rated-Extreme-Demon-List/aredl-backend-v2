@@ -1,27 +1,29 @@
 use crate::{
-    aredl::{levels::ExtendedBaseLevel, submissions::history::SubmissionHistory},
-    auth::{Authenticated, Permission},
     app_data::db::DbConnection,
+    aredl::levels::ExtendedBaseLevel,
+    auth::{Authenticated, Permission},
     error_handler::ApiError,
-    schema::aredl::{submission_history, submissions, submissions_with_priority},
+    schema::aredl::{submissions, submissions_with_priority},
     users::BaseUser,
 };
 use chrono::{DateTime, Utc};
-use diesel::{pg::Pg, Connection, ExpressionMethods, RunQueryDsl, Selectable};
+use diesel::{pg::Pg, Connection, ExpressionMethods, QueryDsl, RunQueryDsl, Selectable};
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq, Default)]
 #[ExistingTypePath = "crate::schema::aredl::sql_types::SubmissionStatus"]
 #[DbValueStyle = "PascalCase"]
 pub enum SubmissionStatus {
+    #[default]
     Pending,
     Claimed,
     UnderConsideration,
     Denied,
     Accepted,
+    UnderReview,
 }
 
 #[derive(Serialize, Deserialize, Queryable, Insertable, Selectable, Debug, ToSchema, Clone)]
@@ -139,26 +141,45 @@ pub struct SubmissionPage {
 }
 
 impl Submission {
+    pub fn claim_highest_priority(
+        conn: &mut DbConnection,
+        authenticated: Authenticated,
+    ) -> Result<SubmissionResolved, ApiError> {
+        conn.transaction(|conn| -> Result<SubmissionResolved, ApiError> {
+            let next_id: Uuid = submissions_with_priority::table
+                .filter(submissions_with_priority::status.eq(SubmissionStatus::Pending))
+                // prevent moderators from claiming their own submissions
+                .filter(submissions_with_priority::submitted_by.ne(authenticated.user_id))
+                .for_update()
+                .skip_locked()
+                .order((
+                    submissions_with_priority::priority.desc(),
+                    submissions_with_priority::priority_value.desc(),
+                    submissions_with_priority::created_at.asc(),
+                ))
+                .select(submissions_with_priority::id)
+                .first(conn)?;
+
+            diesel::update(submissions::table.filter(submissions::id.eq(next_id)))
+                .set((
+                    submissions::status.eq(SubmissionStatus::Claimed),
+                    submissions::reviewer_id.eq(authenticated.user_id),
+                    submissions::updated_at.eq(chrono::Utc::now()),
+                ))
+                .execute(conn)?;
+
+            let resolved = SubmissionResolved::resolve_from_id(next_id, conn, authenticated)?;
+
+            Ok(resolved)
+        })
+    }
+
     pub fn delete(
         conn: &mut DbConnection,
         submission_id: Uuid,
         authenticated: Authenticated,
     ) -> Result<(), ApiError> {
         conn.transaction(|connection| -> Result<(), ApiError> {
-            let history = SubmissionHistory {
-                id: Uuid::new_v4(),
-                submission_id,
-                record_id: None,
-                status: SubmissionStatus::Denied, // Or SubmissionStatus::Deleted if implemented
-                reviewer_notes: None,
-                reviewer_id: None,
-                user_notes: Some("Submission deleted".into()),
-                timestamp: chrono::Utc::now(),
-            };
-            diesel::insert_into(submission_history::table)
-                .values(&history)
-                .execute(connection)?;
-
             let mut query = diesel::delete(submissions::table)
                 .filter(submissions::id.eq(submission_id))
                 .into_boxed();
@@ -170,6 +191,7 @@ impl Submission {
             }
 
             query.execute(connection)?;
+
             Ok(())
         })?;
         Ok(())

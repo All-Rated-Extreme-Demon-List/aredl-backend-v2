@@ -1,29 +1,29 @@
 use crate::{
+    app_data::db::DbConnection,
     arepl::levels::ExtendedBaseLevel,
     auth::{Authenticated, Permission},
-    app_data::db::DbConnection,
     error_handler::ApiError,
-    schema::arepl::{submission_history, submissions, submissions_with_priority},
+    schema::arepl::{submissions, submissions_with_priority},
     users::BaseUser,
 };
 use chrono::{DateTime, Utc};
-use diesel::{pg::Pg, Connection, ExpressionMethods, RunQueryDsl, Selectable};
+use diesel::{pg::Pg, Connection, ExpressionMethods, QueryDsl, RunQueryDsl, Selectable};
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use super::history::SubmissionHistory;
-
-#[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq, Default)]
 #[ExistingTypePath = "crate::schema::arepl::sql_types::SubmissionStatus"]
 #[DbValueStyle = "PascalCase"]
 pub enum SubmissionStatus {
+    #[default]
     Pending,
     Claimed,
     UnderConsideration,
     Denied,
     Accepted,
+    UnderReview,
 }
 
 #[derive(Serialize, Deserialize, Queryable, Insertable, Selectable, Debug, ToSchema, Clone)]
@@ -147,40 +147,57 @@ pub struct SubmissionPage {
 }
 
 impl Submission {
+    pub fn claim_highest_priority(
+        conn: &mut DbConnection,
+        authenticated: Authenticated,
+    ) -> Result<SubmissionResolved, ApiError> {
+        conn.transaction(|conn| -> Result<SubmissionResolved, ApiError> {
+            let next_id: Uuid = submissions_with_priority::table
+                .filter(submissions_with_priority::status.eq(SubmissionStatus::Pending))
+                // prevent moderators from claiming their own submissions
+                .filter(submissions_with_priority::submitted_by.ne(authenticated.user_id))
+                .for_update()
+                .skip_locked()
+                .order((
+                    submissions_with_priority::priority.desc(),
+                    submissions_with_priority::priority_value.desc(),
+                    submissions_with_priority::created_at.asc(),
+                ))
+                .select(submissions_with_priority::id)
+                .first(conn)?;
+
+            diesel::update(submissions::table.filter(submissions::id.eq(next_id)))
+                .set((
+                    submissions::status.eq(SubmissionStatus::Claimed),
+                    submissions::reviewer_id.eq(authenticated.user_id),
+                    submissions::updated_at.eq(chrono::Utc::now()),
+                ))
+                .execute(conn)?;
+
+            let resolved = SubmissionResolved::resolve_from_id(conn, next_id, authenticated)?;
+
+            Ok(resolved)
+        })
+    }
+
     pub fn delete(
         conn: &mut DbConnection,
         submission_id: Uuid,
         authenticated: Authenticated,
     ) -> Result<(), ApiError> {
-        let is_staff = authenticated.has_permission(conn, Permission::SubmissionReview)?;
-
         conn.transaction(|connection| -> Result<(), ApiError> {
-            // Log deletion in submission history
-            let history = SubmissionHistory {
-                id: Uuid::new_v4(),
-                submission_id,
-                record_id: None,
-                status: SubmissionStatus::Denied, // Or SubmissionStatus::Deleted if implemented later on
-                reviewer_notes: None,
-                reviewer_id: None,
-                user_notes: Some("Submission deleted".into()),
-                timestamp: chrono::Utc::now(),
-            };
-            diesel::insert_into(submission_history::table)
-                .values(&history)
-                .execute(connection)?;
-
             let mut query = diesel::delete(submissions::table)
                 .filter(submissions::id.eq(submission_id))
                 .into_boxed();
 
-            if !is_staff {
+            if !authenticated.has_permission(connection, Permission::SubmissionReview)? {
                 query = query
                     .filter(submissions::submitted_by.eq(authenticated.user_id))
                     .filter(submissions::status.eq(SubmissionStatus::Pending));
             }
 
             query.execute(connection)?;
+
             Ok(())
         })?;
         Ok(())

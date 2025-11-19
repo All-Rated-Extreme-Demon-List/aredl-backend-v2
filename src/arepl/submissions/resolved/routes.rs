@@ -5,12 +5,12 @@ use utoipa::OpenApi;
 use uuid::Uuid;
 
 use crate::{
+    app_data::db::DbAppState,
     arepl::submissions::{
         resolved::{ResolvedSubmissionPage, SubmissionQueryOptions},
-        SubmissionPage, SubmissionResolved,
+        SubmissionPage, SubmissionResolved, SubmissionStatus,
     },
     auth::{Authenticated, Permission, UserAuth},
-    app_data::db::DbAppState,
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
 };
@@ -27,7 +27,17 @@ use crate::{
         ("access_token" = []),
         ("api_key" = []),
     ),
-)]
+    params(
+        ("page" = Option<i64>, Query, description = "The page of the list to fetch"),
+        ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page"),
+        ("level_filter" = Option<Uuid>, Query, description = "Filter submissions to a specific level UUID"),
+        ("status_filter" = Option<SubmissionStatus>, Query, description = "Filter submissions to specific statuses"),
+        ("mobile_filter" = Option<bool>, Query, description = "Filter submissions to mobile/desktop submissions only"),
+        ("submitter_filter" = Option<Uuid>, Query, description = "Filter submissions to a specific submitter UUID"),
+        ("priority_filter" = Option<bool>, Query, description = "Filter submissions to priority/non-priority submissions"),
+        ("reviewer_filter" = Option<Uuid>, Query, description = "Filter submissions to a specific reviewer UUID"),
+        ("note_filter" = Option<String>, Query, description = "Filter submissions that contain a specific note substring"),
+))]
 #[get("", wrap = "UserAuth::require(Permission::SubmissionReview)")]
 async fn find_all(
     db: web::Data<Arc<DbAppState>>,
@@ -87,8 +97,14 @@ async fn find_one(
     security(
         ("access_token" = []),
         ("api_key" = []),
-    )
-)]
+    ),
+    params(
+        ("page" = Option<i64>, Query, description = "The page of the list to fetch"),
+        ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page"),
+        ("level_filter" = Option<Uuid>, Query, description = "Filter submissions to a specific level UUID"),
+        ("status_filter" = Option<SubmissionStatus>, Query, description = "Filter submissions to specific statuses"),
+        ("mobile_filter" = Option<bool>, Query, description = "Filter submissions to mobile/desktop submissions only"),
+))]
 #[get("@me", wrap = "UserAuth::load()")]
 async fn me(
     db: web::Data<Arc<DbAppState>>,

@@ -1,7 +1,7 @@
 use crate::{
+    app_data::db::DbConnection,
     arepl::submissions::SubmissionStatus,
     auth::{Authenticated, Permission},
-    app_data::db::DbConnection,
     error_handler::ApiError,
     schema::{arepl::submission_history, users},
     users::BaseUser,
@@ -20,7 +20,6 @@ use uuid::Uuid;
 pub struct SubmissionHistory {
     pub id: Uuid,
     pub submission_id: Uuid,
-    pub record_id: Option<Uuid>,
     pub status: SubmissionStatus,
     pub reviewer_notes: Option<String>,
     pub reviewer_id: Option<Uuid>,
@@ -32,7 +31,6 @@ pub struct SubmissionHistory {
 pub struct SubmissionHistoryResolved {
     pub id: Uuid,
     pub submission_id: Uuid,
-    pub record_id: Option<Uuid>,
     pub status: SubmissionStatus,
     pub reviewer_notes: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -41,18 +39,12 @@ pub struct SubmissionHistoryResolved {
     pub timestamp: DateTime<Utc>,
 }
 
-#[derive(Serialize, Deserialize, ToSchema)]
-pub struct SubmissionHistoryOptions {
-    is_record_id: Option<bool>,
-}
-
 impl SubmissionHistoryResolved {
     pub fn from_data(history_row: (SubmissionHistory, Option<BaseUser>)) -> Self {
         let (history, user) = history_row;
         Self {
             id: history.id,
             submission_id: history.submission_id,
-            record_id: history.record_id,
             status: history.status,
             reviewer_notes: history.reviewer_notes,
             reviewer: user,
@@ -64,50 +56,20 @@ impl SubmissionHistoryResolved {
     pub fn by_submission_id(
         conn: &mut DbConnection,
         id: Uuid,
-        options: SubmissionHistoryOptions,
         authenticated: Authenticated,
     ) -> Result<Vec<SubmissionHistoryResolved>, ApiError> {
-        let is_record = options.is_record_id.unwrap_or(false);
-
-        let mut query = submission_history::table
+        let history = submission_history::table
+            .filter(submission_history::submission_id.eq(id))
             .left_join(users::table.on(submission_history::reviewer_id.eq(users::id.nullable())))
             .into_boxed::<Pg>()
             .select((
                 SubmissionHistory::as_select(),
                 (users::id, users::username, users::global_name).nullable(),
             ))
-            .order(submission_history::timestamp.desc());
+            .order(submission_history::timestamp.desc())
+            .load::<(SubmissionHistory, Option<BaseUser>)>(conn)?;
 
-        if is_record {
-            query = query.filter(submission_history::record_id.eq(id));
-        } else {
-            query = query.filter(submission_history::submission_id.eq(id));
-        }
-
-        let mut history_row = query.load::<(SubmissionHistory, Option<BaseUser>)>(conn)?;
-
-        if is_record {
-            let accept_log = &history_row[0].0;
-
-            if accept_log.record_id.is_some() {
-                let other_logs = submission_history::table
-                    .left_join(
-                        users::table.on(submission_history::reviewer_id.eq(users::id.nullable())),
-                    )
-                    .filter(submission_history::submission_id.eq(accept_log.submission_id))
-                    .filter(submission_history::timestamp.lt(accept_log.timestamp))
-                    .order(submission_history::timestamp.desc())
-                    .select((
-                        SubmissionHistory::as_select(),
-                        (users::id, users::username, users::global_name).nullable(),
-                    ))
-                    .load::<(SubmissionHistory, Option<BaseUser>)>(conn)?;
-
-                history_row.extend(other_logs);
-            }
-        }
-
-        let mut resolved_history = history_row
+        let mut resolved_history = history
             .into_iter()
             .map(SubmissionHistoryResolved::from_data)
             .collect::<Vec<_>>();

@@ -1,7 +1,7 @@
-use crate::arepl::records::pemonlist::PemonlistPlayer;
-use crate::arepl::records::Record;
-use crate::auth::{Authenticated, UserAuth};
 use crate::app_data::db::DbAppState;
+use crate::arepl::submissions::pemonlist::PemonlistPlayer;
+use crate::arepl::submissions::Submission;
+use crate::auth::{Authenticated, UserAuth};
 use crate::error_handler::ApiError;
 use actix_web::{post, web, HttpResponse};
 use std::sync::Arc;
@@ -10,10 +10,10 @@ use utoipa::OpenApi;
 #[utoipa::path(
     post,
     summary = "[Auth]Sync with Pemonlist",
-    description = "Import and/or update platformer records from a Pemonlist account. The pemonlist account must be linked to the same discord account as the authenticated user.",
-    tag = "AREDL (P) - Records",
+    description = "Import and/or update platformer submissions from a Pemonlist account. The pemonlist account must be linked to the same discord account as the authenticated user.",
+    tag = "AREDL (P) - Submissions",
     responses(
-        (status = 200, body = Vec<Record>)
+        (status = 200, body = Vec<Submission>)
     ),
     security(
         ("access_token" = []),
@@ -35,7 +35,7 @@ async fn sync_pemonlist(
 #[derive(OpenApi)]
 #[openapi(
     tags(
-        (name = "AREDL (P) - Records", description = "Endpoints for fetching and managing platformer records")
+        (name = "AREDL (P) - Submissions", description = "Endpoints for fetching and managing platformer submissions")
     ),
     paths(
 		sync_pemonlist

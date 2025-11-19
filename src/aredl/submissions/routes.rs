@@ -1,17 +1,15 @@
-use actix_web::{delete, patch, post, web, HttpResponse};
+use actix_web::{HttpResponse, delete, get, patch, post, web};
 use tracing_actix_web::RootSpan;
 use std::sync::Arc;
 use uuid::Uuid;
 use utoipa::OpenApi;
+use tokio::sync::broadcast;
 use crate::{
-    aredl::{
+    app_data::db::DbAppState, aredl::{
         records::Record, submissions::{
-            actions, patch::{SubmissionPatchMod, SubmissionPatchUser}, post::SubmissionInsert, statistics, status, Submission, SubmissionPage, SubmissionResolved, SubmissionStatus
+            Submission, SubmissionPage, SubmissionResolved, SubmissionStatus, patch::{SubmissionPatchMod, SubmissionPatchUser}, post::{SubmissionInsert, SubmissionInsertBody}, statistics, status
         }
-    },
-    auth::{Authenticated, Permission, UserAuth}, 
-    app_data::db::DbAppState, 
-    error_handler::ApiError,
+    }, auth::{Authenticated, Permission, UserAuth}, error_handler::ApiError, notifications::WebsocketNotification
 };
 
 use super::{history, queue, resolved};
@@ -28,10 +26,11 @@ use super::{history, queue, resolved};
     security(
         ("access_token" = []),
         ("api_key" = []),
-    )
+    ),
+    request_body = SubmissionInsertBody,
 )]
 #[post("", wrap="UserAuth::load()")]
-async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionInsert>, authenticated: Authenticated, root_span: RootSpan) -> Result<HttpResponse, ApiError> {
+async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionInsertBody>, authenticated: Authenticated, root_span: RootSpan) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&body));
     let created = web::block(move || {
         let conn = &mut db.connection()?;
@@ -44,7 +43,7 @@ async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionInsert
 #[utoipa::path(
     patch,
     summary = "[Auth]Edit a submission",
-    description = "Edit a submission. If you aren't staff, the submission must be yours and in the pending/denied state.",
+    description = "Edit a submission. If you aren't staff, the submission must be yours and not being actively reviewed.",
     tag = "AREDL - Submissions",
     responses(
         (status = 200, body = Submission)
@@ -56,6 +55,7 @@ async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionInsert
     params(
         ("id" = Uuid, description = "The ID of the submission")
     ),
+    request_body = SubmissionPatchMod,
 )]
 #[patch("/{id}", wrap="UserAuth::load()")]
 async fn patch(
@@ -64,18 +64,46 @@ async fn patch(
     body: web::Json<SubmissionPatchMod>, 
     authenticated: Authenticated,
     root_span: RootSpan,
+    notify_tx: web::Data<broadcast::Sender<WebsocketNotification>>,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&body));
     let patched = web::block(move || {
         let conn = &mut db.connection()?;
         match authenticated.has_permission( conn, Permission::SubmissionReview)? {
-            true => SubmissionPatchMod::patch_mod(body.into_inner(), id.into_inner(), conn, authenticated),
+            true => SubmissionPatchMod::patch(body.into_inner(), id.into_inner(), conn, authenticated, notify_tx.get_ref().clone()),
             false => {
                 let user_patch = SubmissionPatchMod::downgrade(body.into_inner());
                 SubmissionPatchUser::patch(user_patch, id.into_inner(), conn, authenticated)
             }
         }
     }).await??;
+    Ok(HttpResponse::Ok().json(patched))
+}
+
+
+#[utoipa::path(
+    get,
+    summary = "[Staff]Claim a submission",
+    description = "Claim the submission with the highest priority to be checked.",
+    tag = "AREDL - Submissions",
+    responses(
+        (status = 200, body = SubmissionResolved)
+    ),
+    security(
+        ("access_token" = []),
+        ("api_key" = []),
+    ),
+)]
+#[get("/claim", wrap = "UserAuth::require(Permission::SubmissionReview)")]
+async fn claim(
+    db: web::Data<Arc<DbAppState>>,
+    authenticated: Authenticated,
+) -> Result<HttpResponse, ApiError> {
+    let patched = web::block(move || {
+        Submission::claim_highest_priority(&mut db.connection()?, authenticated)
+    })
+    .await??;
+
     Ok(HttpResponse::Ok().json(patched))
 }
 
@@ -111,7 +139,6 @@ async fn delete(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticat
         (name = "AREDL - Submissions", description = "Endpoints for fetching and managing submissions")
     ),
     nest(
-        (path = "/", api=actions::ApiDoc),
         (path = "/", api=history::ApiDoc),
         (path = "/", api=queue::ApiDoc),
         (path = "/", api=resolved::ApiDoc),
@@ -131,6 +158,7 @@ async fn delete(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticat
         )
     ),
     paths(
+        claim,
         create,
         patch,
         delete,
@@ -140,8 +168,8 @@ pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/submissions")
+            .service(claim)
             .configure(statistics::init_routes)
-            .configure(actions::init_routes)
             .configure(status::init_routes)
             .configure(history::init_routes)
             .configure(queue::init_routes)

@@ -1,10 +1,10 @@
-use crate::arepl::records::model::{RecordInsert, RecordUpdate};
+use crate::app_data::db::DbAppState;
+use crate::arepl::records::model::RecordInsert;
 use crate::arepl::records::{
     statistics, FullRecordResolved, FullRecordUnresolved, FullRecordUnresolvedDto,
-    FullResolvedRecordPage, FullUnresolvedRecordPage, Record, RecordsQueryOptions,
+    FullResolvedRecordPage, FullUnresolvedRecordPage, Record, RecordPatch, RecordsQueryOptions,
 };
 use crate::auth::{Authenticated, Permission, UserAuth};
-use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use actix_web::{delete, get, patch, post, web, HttpResponse};
@@ -12,8 +12,6 @@ use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
 use uuid::Uuid;
-
-use super::pemonlist;
 
 #[utoipa::path(
     get,
@@ -70,7 +68,7 @@ async fn create(
     summary = "[Staff]Edit record",
     description = "Edit a specific record",
     tag = "AREDL (P) - Records",
-    request_body = RecordUpdate,
+    request_body = RecordPatch,
     params(
         ("id" = Uuid, description = "Internal record UUID")
     ),
@@ -86,7 +84,7 @@ async fn create(
 async fn update(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
-    record: web::Json<RecordUpdate>,
+    record: web::Json<RecordPatch>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&record));
@@ -154,7 +152,6 @@ async fn find_all(
             &mut db.connection()?,
             page_query.into_inner(),
             options.into_inner(),
-            false,
         )
     })
     .await??;
@@ -192,7 +189,6 @@ async fn find_all_full(
             &mut db.connection()?,
             page_query.into_inner(),
             options.into_inner(),
-            false,
         )
     })
     .await??;
@@ -230,9 +226,7 @@ async fn find_me(
                 level_filter: None,
                 mobile_filter: None,
                 submitter_filter: Some(authenticated.user_id),
-                reviewer_filter: None,
             },
-            true,
         )
     })
     .await??;
@@ -245,13 +239,12 @@ async fn find_me(
         (name = "AREDL (P) - Records", description = "Endpoints for fetching and managing platformer records")
     ),
     nest(
-        (path = "/pemonlist", api=pemonlist::ApiDoc),
         (path = "/statistics", api=statistics::ApiDoc),
     ),
     components(
         schemas(
             Record,
-            RecordUpdate,
+            RecordPatch,
             FullRecordResolved,
             FullRecordUnresolvedDto
         )
@@ -271,7 +264,6 @@ pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/records")
-            .configure(pemonlist::init_routes)
             .configure(statistics::init_routes)
             .service(create)
             .service(update)

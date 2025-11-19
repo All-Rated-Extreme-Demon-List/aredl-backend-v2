@@ -1,5 +1,5 @@
-use crate::arepl::levels::ExtendedBaseLevel;
 use crate::app_data::db::DbConnection;
+use crate::arepl::levels::ExtendedBaseLevel;
 use crate::error_handler::ApiError;
 use crate::schema::{
     arepl::levels, arepl::pack_levels, arepl::pack_tiers, arepl::packs_points, arepl::records,
@@ -135,9 +135,9 @@ impl PackTierResolved {
                     .select((
                         pack_levels::pack_id,
                         ExtendedBaseLevel::as_select(),
-                        records::placement_order.nullable(),
+                        records::id.nullable(),
                     ))
-                    .load::<(Uuid, ExtendedBaseLevel, Option<i32>)>(conn)?
+                    .load::<(Uuid, ExtendedBaseLevel, Option<Uuid>)>(conn)?
                     // map Option<i32> into Option<bool> which is always Some.
                     // It will be Some(true) if user has completed the level and Some(false) otherwise.
                     // That's because None is used for non-authenticated queries.

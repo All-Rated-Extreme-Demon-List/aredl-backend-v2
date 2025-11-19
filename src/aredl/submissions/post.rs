@@ -1,17 +1,12 @@
 use crate::{
-    aredl::submissions::{history::SubmissionHistory, status::SubmissionsEnabled, *},
-    auth::Authenticated,
     app_data::db::DbConnection,
+    aredl::submissions::{status::SubmissionsEnabled, *},
+    auth::{Authenticated, Permission},
     error_handler::ApiError,
-    roles::Role,
-    schema::{
-        aredl::{levels, submission_history, submissions},
-        roles, user_roles,
-    },
+    schema::aredl::{levels, submissions},
 };
 use diesel::{
-    Connection, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl,
-    SelectableHelper,
+    Connection, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
 };
 use is_url::is_url;
 use serde::{Deserialize, Serialize};
@@ -20,17 +15,14 @@ use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, Insertable, ToSchema)]
 #[diesel(table_name=submissions, check_for_backend(Pg))]
-// this struct does not contain the player's ID, which is computed to
-// be the logged in user. thus, this struct cannot be and is not inserted directly
-// into the query. if a new property is added here, remember to update Submission::create()
-// to insert that property into the database!
 
-// TODO: rework this probably
-pub struct SubmissionInsert {
+pub struct SubmissionInsertBody {
+    /// UUID of the user submitting the record.
+    pub submitted_by: Option<Uuid>,
     /// UUID of the level this record is on.
     pub level_id: Uuid,
     /// Set to `true` if this completion is on a mobile device.
-    pub mobile: Option<bool>,
+    pub mobile: bool,
     /// ID of the LDM used for the record, if any.
     pub ldm_id: Option<i32>,
     /// Video link of the completion.
@@ -43,33 +35,96 @@ pub struct SubmissionInsert {
     pub user_notes: Option<String>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Insertable, ToSchema, Default)]
+#[diesel(table_name=submissions, check_for_backend(Pg))]
+
+pub struct SubmissionInsert {
+    /// UUID of the user submitting the record.
+    pub submitted_by: Uuid,
+    /// UUID of the level this record is on.
+    pub level_id: Uuid,
+    /// Set to `true` if this completion is on a mobile device.
+    pub mobile: bool,
+    /// ID of the LDM used for the record, if any.
+    pub ldm_id: Option<i32>,
+    /// Video link of the completion.
+    pub video_url: String,
+    /// Link to the raw video file of the completion.
+    pub raw_url: Option<String>,
+    /// The mod menu used in this record
+    pub mod_menu: Option<String>,
+    /// Any additional notes left by the submitter.
+    pub user_notes: Option<String>,
+    /// Whether this submission has priority in the review queue.
+    pub priority: bool,
+    /// Status of the submission
+    pub status: SubmissionStatus,
+}
+
+impl SubmissionInsert {
+    pub fn from_body(
+        conn: &mut DbConnection,
+        body: SubmissionInsertBody,
+        authenticated: &Authenticated,
+    ) -> Result<Self, ApiError> {
+        let submitted_by = body.submitted_by.unwrap_or(authenticated.user_id);
+
+        if authenticated.user_id != submitted_by
+            && !authenticated.has_permission(conn, Permission::SubmissionReview)?
+        {
+            return Err(ApiError::new(
+                403,
+                "You do not have permission to submit on behalf of other users",
+            ));
+        }
+
+        Ok(SubmissionInsert {
+            submitted_by,
+            level_id: body.level_id,
+            mobile: body.mobile,
+            ldm_id: body.ldm_id,
+            video_url: body.video_url,
+            raw_url: body.raw_url,
+            mod_menu: body.mod_menu,
+            user_notes: body.user_notes,
+            priority: authenticated.is_aredl_plus(conn)?,
+            status: SubmissionStatus::Pending,
+        })
+    }
+}
+
 impl Submission {
     pub fn create(
         conn: &mut DbConnection,
-        inserted_submission: SubmissionInsert,
+        submission_body: SubmissionInsertBody,
         authenticated: Authenticated,
     ) -> Result<Self, ApiError> {
-        if !is_url(&inserted_submission.video_url) {
-            return Err(ApiError::new(400, "Your completion link is not a URL"));
+        if !is_url(&submission_body.video_url) {
+            return Err(ApiError::new(
+                400,
+                "Completion video link is not a valid URL!",
+            ));
         }
 
-        if let Some(raw_url) = inserted_submission.raw_url.as_ref() {
+        if let Some(raw_url) = submission_body.raw_url.as_ref() {
             if !is_url(raw_url) {
-                return Err(ApiError::new(400, "Your raw footage is not a URL"));
+                return Err(ApiError::new(400, "Raw footage link is not a valid URL!"));
             }
         }
 
         conn.transaction(|connection| -> Result<Self, ApiError> {
-            // a bunch of validation yay
+            let inserted_submission =
+                SubmissionInsert::from_body(connection, submission_body, &authenticated)?;
 
-            // check if submissions are disabled
-            if !(SubmissionsEnabled::is_enabled(connection)?) {
+            if authenticated.user_id == inserted_submission.submitted_by
+                && !(SubmissionsEnabled::is_enabled(connection)?)
+            {
                 return Err(ApiError::new(400, "Submissions are currently disabled"));
             }
 
             // check if any submissions exist already
             let exists_submission = submissions::table
-                .filter(submissions::submitted_by.eq(authenticated.user_id))
+                .filter(submissions::submitted_by.eq(inserted_submission.submitted_by))
                 .filter(submissions::level_id.eq(inserted_submission.level_id))
                 .select(submissions::id)
                 .first::<Uuid>(connection)
@@ -108,47 +163,12 @@ impl Submission {
                 }
             }
 
-            let roles = user_roles::table
-                .inner_join(roles::table.on(user_roles::role_id.eq(roles::id)))
-                .filter(user_roles::user_id.eq(authenticated.user_id))
-                .select(Role::as_select())
-                .load::<Role>(connection)?;
-
-            let has_role = roles.iter().any(|role| role.privilege_level == 5);
+            println!("Creating submission: {:?}", &inserted_submission);
 
             let submission = diesel::insert_into(submissions::table)
-                .values((
-                    submissions::submitted_by.eq(authenticated.user_id),
-                    submissions::level_id.eq(inserted_submission.level_id),
-                    inserted_submission.mobile.map_or_else(
-                        || submissions::mobile.eq(false),
-                        |mobile| submissions::mobile.eq(mobile),
-                    ),
-                    submissions::ldm_id.eq(inserted_submission.ldm_id),
-                    submissions::video_url.eq(inserted_submission.video_url),
-                    submissions::raw_url.eq(inserted_submission.raw_url),
-                    submissions::mod_menu.eq(inserted_submission.mod_menu),
-                    submissions::user_notes.eq(inserted_submission.user_notes),
-                    submissions::priority.eq(has_role),
-                ))
+                .values(&inserted_submission)
                 .returning(Self::as_select())
                 .get_result(connection)?;
-
-            // Log submission creation history
-            let history = SubmissionHistory {
-                id: Uuid::new_v4(),
-                submission_id: submission.id,
-                record_id: None,
-                status: SubmissionStatus::Pending,
-                user_notes: submission.user_notes.clone(),
-                reviewer_id: None,
-                reviewer_notes: None,
-                timestamp: chrono::Utc::now(),
-            };
-
-            diesel::insert_into(submission_history::table)
-                .values(&history)
-                .execute(connection)?;
 
             Ok(submission)
         })

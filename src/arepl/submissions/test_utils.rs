@@ -44,7 +44,6 @@ pub async fn insert_history_entry(
     let history = SubmissionHistory {
         id: Uuid::new_v4(),
         submission_id,
-        record_id: None,
         reviewer_notes: None,
         status,
         timestamp: Utc::now(),

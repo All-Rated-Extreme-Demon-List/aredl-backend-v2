@@ -1,3 +1,4 @@
+use actix_http::header;
 use actix_web::body::BoxBody;
 use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
 use actix_web::{web, Error, HttpMessage, HttpRequest, HttpResponse, ResponseError};
@@ -90,7 +91,7 @@ where
         let (http_req, payload) = req.into_parts();
         let token = http_req
             .headers()
-            .get(openidconnect::http::header::AUTHORIZATION)
+            .get(header::AUTHORIZATION)
             .map(|h| h.to_str().unwrap().split_at(7).1.to_string());
 
         if token.is_none() {

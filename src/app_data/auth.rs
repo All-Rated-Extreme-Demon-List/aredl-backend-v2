@@ -1,11 +1,20 @@
 use jsonwebtoken::{DecodingKey, EncodingKey};
-use openidconnect::core::CoreClient;
+use openidconnect::{core::CoreClient, EndpointNotSet, EndpointSet};
 use std::sync::Arc;
 
 use crate::{auth::discord::create_discord_client, get_secret};
 
+pub type DiscordClient = CoreClient<
+    EndpointSet,
+    EndpointNotSet,
+    EndpointNotSet,
+    EndpointNotSet,
+    EndpointSet,
+    EndpointNotSet,
+>;
+
 pub struct AuthAppState {
-    pub discord_client: CoreClient,
+    pub discord_client: DiscordClient,
     pub jwt_encoding_key: EncodingKey,
     pub jwt_decoding_key: DecodingKey,
 }

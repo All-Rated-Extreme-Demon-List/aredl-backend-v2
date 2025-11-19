@@ -1,25 +1,82 @@
-DROP TRIGGER IF EXISTS update_record_placement_on_insert ON aredl.records;
-DROP TRIGGER IF EXISTS update_record_placement_on_update ON aredl.records;
-DROP TRIGGER IF EXISTS update_record_time ON aredl.records;
-
-DROP FUNCTION IF EXISTS aredl.update_record_placement() CASCADE;
-DROP FUNCTION IF EXISTS aredl.update_record_time() CASCADE;
-
-DROP TRIGGER IF EXISTS update_record_placement_on_insert ON arepl.records;
-DROP TRIGGER IF EXISTS update_record_placement_on_update ON arepl.records;
-DROP TRIGGER IF EXISTS update_record_time ON arepl.records;
-
-DROP FUNCTION IF EXISTS arepl.update_record_placement() CASCADE;
-DROP FUNCTION IF EXISTS arepl.update_record_time() CASCADE;
-
 DROP VIEW aredl.min_placement_clans_records;
 DROP VIEW arepl.min_placement_clans_records;
 DROP VIEW aredl.min_placement_country_records;
 DROP VIEW arepl.min_placement_country_records;
 
 
-ALTER TABLE aredl.records DROP COLUMN IF EXISTS hide_video;
-ALTER TABLE arepl.records DROP COLUMN IF EXISTS hide_video;
+DROP TRIGGER submission_sync_record_ins ON aredl.submissions;
+DROP TRIGGER submission_sync_record_upd ON aredl.submissions;
+DROP FUNCTION aredl.submission_sync_record();
+
+DROP TRIGGER submission_sync_record_ins ON arepl.submissions;
+DROP TRIGGER submission_sync_record_upd ON arepl.submissions;
+DROP FUNCTION arepl.submission_sync_record();
+
+
+
+DROP TRIGGER submission_log_history_ins ON aredl.submissions;
+DROP TRIGGER submission_log_history_upd ON aredl.submissions;
+DROP FUNCTION aredl.submission_log_history();
+
+DROP TRIGGER submission_log_history_ins ON arepl.submissions;
+DROP TRIGGER submission_log_history_upd ON arepl.submissions;
+DROP FUNCTION arepl.submission_log_history();
+
+
+
+DROP TRIGGER submission_updated_at ON aredl.submissions;
+DROP FUNCTION aredl.submission_updated_at();
+
+DROP TRIGGER submission_updated_at ON arepl.submissions;
+DROP FUNCTION arepl.submission_updated_at();
+
+
+
+ALTER TABLE aredl.submission_history DROP CONSTRAINT aredl_submission_history_submission_fk;
+ALTER TABLE arepl.submission_history DROP CONSTRAINT arepl_submission_history_submission_fk;
+
+ALTER TABLE aredl.submission_history ADD COLUMN record_id uuid;
+ALTER TABLE arepl.submission_history ADD COLUMN record_id uuid;
+
+ALTER TABLE aredl.submission_history
+    DROP COLUMN mobile,
+    DROP COLUMN ldm_id,
+    DROP COLUMN video_url,
+    DROP COLUMN raw_url,
+    DROP COLUMN mod_menu,
+    DROP COLUMN priority;
+
+ALTER TABLE arepl.submission_history
+    DROP COLUMN mobile,
+    DROP COLUMN ldm_id,
+    DROP COLUMN video_url,
+    DROP COLUMN raw_url,
+    DROP COLUMN mod_menu,
+    DROP COLUMN priority,
+    DROP COLUMN completion_time;
+
+
+
+ALTER TABLE aredl.records
+    ADD COLUMN ldm_id int,
+    ADD COLUMN raw_url varchar,
+    ADD COLUMN user_notes text,
+    ADD COLUMN reviewer_notes text,
+    ADD COLUMN reviewer_id uuid,
+    ADD COLUMN placement_order int,
+    ADD COLUMN mod_menu varchar;
+
+ALTER TABLE arepl.records
+    ADD COLUMN ldm_id int,
+    ADD COLUMN raw_url varchar,
+    ADD COLUMN user_notes text,
+    ADD COLUMN reviewer_notes text,
+    ADD COLUMN reviewer_id uuid,
+    ADD COLUMN placement_order int,
+    ADD COLUMN mod_menu varchar;
+
+
+
 
 CREATE FUNCTION aredl.update_record_placement()
 RETURNS TRIGGER AS $$
@@ -62,7 +119,6 @@ REFERENCING NEW TABLE as new_table
 FOR EACH STATEMENT
 WHEN (pg_trigger_depth() < 1)
 EXECUTE FUNCTION aredl.update_record_placement();
-
 CREATE TRIGGER update_record_placement_on_insert
 AFTER INSERT ON aredl.records
 REFERENCING NEW TABLE as new_table
@@ -112,6 +168,8 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+
 
 CREATE TRIGGER update_record_time
 BEFORE UPDATE ON aredl.records

@@ -1,10 +1,10 @@
-use crate::aredl::records::model::{RecordInsert, RecordUpdate};
+use crate::app_data::db::DbAppState;
+use crate::aredl::records::model::{RecordInsert, RecordPatch};
 use crate::aredl::records::{
     statistics, FullRecordResolved, FullRecordUnresolved, FullRecordUnresolvedDto,
     FullResolvedRecordPage, FullUnresolvedRecordPage, Record, RecordsQueryOptions,
 };
 use crate::auth::{Authenticated, Permission, UserAuth};
-use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use actix_web::{delete, get, patch, post, web, HttpResponse};
@@ -68,7 +68,7 @@ async fn create(
     summary = "[Staff]Edit record",
     description = "Edit a specific record",
     tag = "AREDL - Records",
-    request_body = RecordUpdate,
+    request_body = RecordPatch,
     params(
         ("id" = Uuid, description = "Internal record UUID")
     ),
@@ -84,7 +84,7 @@ async fn create(
 async fn update(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
-    record: web::Json<RecordUpdate>,
+    record: web::Json<RecordPatch>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&record));
@@ -152,7 +152,6 @@ async fn find_all(
             &mut db.connection()?,
             page_query.into_inner(),
             options.into_inner(),
-            false,
         )
     })
     .await??;
@@ -190,7 +189,6 @@ async fn find_all_full(
             &mut db.connection()?,
             page_query.into_inner(),
             options.into_inner(),
-            false,
         )
     })
     .await??;
@@ -228,9 +226,7 @@ async fn find_me(
                 level_filter: None,
                 mobile_filter: None,
                 submitter_filter: Some(authenticated.user_id),
-                reviewer_filter: None,
             },
-            true,
         )
     })
     .await??;
@@ -245,7 +241,7 @@ async fn find_me(
     components(
         schemas(
             Record,
-            RecordUpdate,
+            RecordPatch,
             FullRecordResolved,
             FullRecordUnresolvedDto
         )

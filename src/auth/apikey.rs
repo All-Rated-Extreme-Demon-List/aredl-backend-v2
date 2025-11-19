@@ -1,3 +1,4 @@
+use actix_http::header;
 use actix_web::{post, web, HttpRequest, HttpResponse};
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
@@ -48,7 +49,7 @@ pub async fn create_api_key(
 ) -> Result<HttpResponse, ApiError> {
     let access_token = req
         .headers()
-        .get(openidconnect::http::header::AUTHORIZATION)
+        .get(header::AUTHORIZATION)
         .and_then(|h| h.to_str().ok())
         .map(|h| h.strip_prefix("Bearer ").unwrap_or("").to_string());
 

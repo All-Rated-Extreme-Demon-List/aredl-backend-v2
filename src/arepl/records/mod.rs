@@ -1,5 +1,4 @@
 mod model;
-mod pemonlist;
 mod routes;
 mod statistics;
 

@@ -3,11 +3,14 @@ use crate::auth::token::UserClaims;
 use crate::auth::{permission, Permission};
 use crate::clans::ClanMember;
 use crate::error_handler::ApiError;
-use crate::schema::clan_members;
+use crate::roles::Role;
+use crate::schema::{clan_members, roles, user_roles};
 use crate::users::User;
 use actix_web::dev::Payload;
 use actix_web::{FromRequest, HttpMessage, HttpRequest};
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::{
+    ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
+};
 use serde::{Deserialize, Serialize};
 use std::future::{ready, Ready};
 use uuid::Uuid;
@@ -92,6 +95,18 @@ impl Authenticated {
         }
 
         Ok(())
+    }
+
+    pub fn is_aredl_plus(&self, conn: &mut DbConnection) -> Result<bool, ApiError> {
+        let roles = user_roles::table
+            .inner_join(roles::table.on(user_roles::role_id.eq(roles::id)))
+            .filter(user_roles::user_id.eq(self.user_id))
+            .select(Role::as_select())
+            .load::<Role>(conn)?;
+
+        let has_role = roles.iter().any(|role| role.privilege_level == 5);
+
+        Ok(has_role)
     }
 }
 

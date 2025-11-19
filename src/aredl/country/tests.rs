@@ -18,7 +18,7 @@ async fn get_country() {
 
     diesel::update(users::table)
         .filter(users::id.eq(user))
-        .set(users::country.eq(us_id)) // united states
+        .set(users::country.eq(us_id))
         .execute(&mut conn)
         .expect("Failed to assign country to user!");
 

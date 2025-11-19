@@ -3,15 +3,15 @@ use diesel::prelude::*;
 use serde::Deserialize;
 
 use crate::{
+    app_data::db::DbConnection,
     arepl::{
         levels::ExtendedBaseLevel,
-        records::{Record, RecordInsert, RecordUpdate},
+        submissions::{Submission, SubmissionStatus},
     },
     auth::Authenticated,
-    app_data::db::DbConnection,
     error_handler::ApiError,
     schema::{
-        arepl::{levels, records},
+        arepl::{levels, submissions},
         users,
     },
 };
@@ -46,12 +46,11 @@ enum PemonlistResponse {
     Err(PemonlistError),
     Ok(PemonlistPlayer),
 }
-
 impl PemonlistPlayer {
     pub fn sync_with_pemonlist(
         conn: &mut DbConnection,
         authenticated: Authenticated,
-    ) -> Result<Vec<Record>, ApiError> {
+    ) -> Result<Vec<Submission>, ApiError> {
         let player_discord_id = users::table
             .filter(users::id.eq(authenticated.user_id))
             .select(users::discord_id)
@@ -110,55 +109,59 @@ impl PemonlistPlayer {
 
             let existing_level = existing_level.unwrap();
 
-            let existing_record: Option<Record> = records::table
-                .filter(records::submitted_by.eq(authenticated.user_id))
-                .filter(records::level_id.eq(existing_level.id))
-                .select(Record::as_select())
-                .first::<Record>(conn)
+            // find existing submission for this user/level in arepl.submissions
+            let existing_submission: Option<Submission> = submissions::table
+                .filter(submissions::submitted_by.eq(authenticated.user_id))
+                .filter(submissions::level_id.eq(existing_level.id))
+                .select(Submission::as_select())
+                .first::<Submission>(conn)
                 .optional()?;
 
             let now = Utc::now();
-
             let timestamp = Self::parse_formatted_ms(&pemonlist_record.formatted_time)?;
 
-            let saved = if let Some(old) = existing_record {
-                let update = RecordUpdate {
-                    submitted_by: None,
-                    mobile: Some(pemonlist_record.mobile),
-                    ldm_id: None,
-                    video_url: Some(format!(
-                        "https://youtu.be/{}",
-                        pemonlist_record.video_id.clone()
-                    )),
-                    hide_video: None,
-                    level_id: None,
-                    completion_time: Some(timestamp),
-                    is_verification: None,
-                    raw_url: None,
-                    updated_at: Some(now),
-                    created_at: None,
-                };
-                Record::update(conn, old.id, update)?
+            let video_url = format!("https://youtu.be/{}", pemonlist_record.video_id);
+
+            // ensure there is an Accepted submission with the correct data
+            let submission = if let Some(old) = existing_submission {
+                diesel::update(submissions::table.filter(submissions::id.eq(old.id)))
+                    .set((
+                        submissions::mobile.eq(pemonlist_record.mobile),
+                        submissions::video_url.eq(video_url),
+                        submissions::completion_time.eq(timestamp),
+                        submissions::status.eq(SubmissionStatus::Accepted),
+                        submissions::reviewer_id.eq::<Option<uuid::Uuid>>(None),
+                        submissions::reviewer_notes.eq::<Option<String>>(None),
+                        submissions::updated_at.eq(now),
+                    ))
+                    .returning(Submission::as_select())
+                    .get_result::<Submission>(conn)?
             } else {
-                let ins = RecordInsert {
-                    submitted_by: authenticated.user_id,
-                    mobile: pemonlist_record.mobile,
-                    ldm_id: None,
-                    level_id: existing_level.id,
-                    video_url: format!("https://youtu.be/{}", pemonlist_record.video_id.clone()),
-                    hide_video: Some(false),
-                    completion_time: timestamp,
-                    is_verification: Some(false),
-                    raw_url: None,
-                    reviewer_id: None,
-                    created_at: Some(now),
-                    updated_at: Some(now),
-                };
-                Record::create(conn, ins)?
+                diesel::insert_into(submissions::table)
+                    .values((
+                        submissions::submitted_by.eq(authenticated.user_id),
+                        submissions::level_id.eq(existing_level.id),
+                        submissions::mobile.eq(pemonlist_record.mobile),
+                        submissions::ldm_id.eq::<Option<i32>>(None),
+                        submissions::video_url.eq(video_url),
+                        submissions::raw_url.eq::<Option<String>>(None),
+                        submissions::mod_menu.eq::<Option<String>>(None),
+                        submissions::user_notes.eq::<Option<String>>(None),
+                        submissions::priority.eq(false),
+                        submissions::status.eq(SubmissionStatus::Accepted),
+                        submissions::completion_time.eq(timestamp),
+                        submissions::reviewer_id.eq::<Option<uuid::Uuid>>(None),
+                        submissions::reviewer_notes.eq::<Option<String>>(None),
+                        submissions::created_at.eq(now),
+                        submissions::updated_at.eq(now),
+                    ))
+                    .returning(Submission::as_select())
+                    .get_result::<Submission>(conn)?
             };
 
-            imported.push(saved);
+            imported.push(submission);
         }
+
         Ok(imported)
     }
 

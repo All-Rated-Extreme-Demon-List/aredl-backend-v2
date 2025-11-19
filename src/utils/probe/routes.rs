@@ -16,6 +16,7 @@ use crate::{
     responses(
         (status = 200, body = ProbeResponse)
     ),
+    tag = "Utils",
     security(
         ("access_token" = ["SubmissionReview"]),
         ("api_key" = ["SubmissionReview"]),

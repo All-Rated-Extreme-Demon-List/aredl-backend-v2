@@ -1,8 +1,7 @@
-mod actions;
 mod history;
 mod model;
-mod patch;
-mod post;
+pub mod patch;
+pub mod post;
 mod queue;
 mod resolved;
 mod routes;

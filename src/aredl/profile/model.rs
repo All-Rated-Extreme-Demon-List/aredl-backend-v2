@@ -1,8 +1,8 @@
+use crate::app_data::db::DbConnection;
 use crate::aredl::levels::ExtendedBaseLevel;
 use crate::aredl::packs::{BasePack, PackWithTierResolved};
 use crate::aredl::packtiers::BasePackTier;
 use crate::clans::Clan;
-use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::{
     aredl::{
@@ -51,8 +51,6 @@ pub struct ProfileRecord {
     pub mobile: bool,
     #[serde(skip_serializing)]
     pub is_verification: bool,
-    /// ID of the LDM used for the record, if any.
-    pub ldm_id: Option<i32>,
     /// Video link of the completion.
     pub video_url: String,
     /// Timestamp of when the record was created (first accepted).
