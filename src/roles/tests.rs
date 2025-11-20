@@ -12,9 +12,9 @@ use serde_json::json;
 
 #[actix_web::test]
 async fn list_roles() {
-    let (app, mut conn, _, _) = init_test_app().await;
-    let role1 = create_test_role(&mut conn, 10).await;
-    let role2 = create_test_role(&mut conn, 20).await;
+    let (app, db, _, _) = init_test_app().await;
+    let role1 = create_test_role(&db, 10).await;
+    let role2 = create_test_role(&db, 20).await;
 
     let req = test::TestRequest::get().uri("/roles").to_request();
     let resp = test::call_service(&app, req).await;
@@ -28,8 +28,8 @@ async fn list_roles() {
 
 #[actix_web::test]
 async fn create_role() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (staff_id, _) = create_test_user(&mut conn, Some(Permission::RoleManage)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
 
     let create_data = json!({"privilege_level": 30, "role_desc": "Tester"});
@@ -46,10 +46,10 @@ async fn create_role() {
 
 #[actix_web::test]
 async fn update_role() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (staff_id, _) = create_test_user(&mut conn, Some(Permission::RoleManage)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
-    let role_id = create_test_role(&mut conn, 30).await;
+    let role_id = create_test_role(&db, 30).await;
 
     let update_data = json!({"role_desc": "Updated"});
     let req = test::TestRequest::patch()
@@ -68,10 +68,10 @@ async fn update_role() {
 
 #[actix_web::test]
 async fn delete_role() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (staff_id, _) = create_test_user(&mut conn, Some(Permission::RoleManage)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
-    let role_id: i32 = create_test_role(&mut conn, 30).await;
+    let role_id: i32 = create_test_role(&db, 30).await;
 
     let req = test::TestRequest::delete()
         .uri(&format!("/roles/{}", role_id))

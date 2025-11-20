@@ -16,17 +16,17 @@ use uuid::Uuid;
 
 #[actix_web::test]
 async fn get_submission_history() {
-    let (app, mut conn, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&mut conn, None).await;
-    let (moderator_id, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let (moderator_id, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let user_token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let moderator_token =
         create_test_token(moderator_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let level_id = create_test_level(&mut conn).await;
+    let level_id = create_test_level(&db).await;
 
-    let submission: Uuid = create_test_submission(level_id, user_id, &mut conn).await;
+    let submission: Uuid = create_test_submission(level_id, user_id, &db).await;
 
     let under_consideration_data = json!({"status": "UnderConsideration", "reviewer_notes": "No way SpaceUK is hacking right guys"});
 
@@ -76,15 +76,15 @@ async fn get_submission_history() {
 
 #[actix_web::test]
 async fn get_full_submission_history() {
-    let (app, mut conn, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&mut conn, None).await;
-    let (moderator_id, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let (moderator_id, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let token =
         create_test_token(moderator_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let level_id = create_test_level(&mut conn).await;
+    let level_id = create_test_level(&db).await;
 
-    let submission: Uuid = create_test_submission(level_id, user_id, &mut conn).await;
+    let submission: Uuid = create_test_submission(level_id, user_id, &db).await;
 
     let under_consideration_data =
         json!({"status": "UnderConsideration", "reviewer_notes": "Under Consideration note"});

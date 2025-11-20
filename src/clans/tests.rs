@@ -13,8 +13,8 @@ use uuid::Uuid;
 
 #[actix_web::test]
 async fn create_and_join() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
 
     let payload = json!({"global_name": "Test Clan", "tag": "TC"});
@@ -31,15 +31,15 @@ async fn create_and_join() {
         .filter(clan_members::clan_id.eq(clan_id))
         .filter(clan_members::user_id.eq(user_id))
         .count()
-        .get_result(&mut conn)
+        .get_result(&mut db.connection().unwrap())
         .unwrap();
     assert_eq!(count, 1);
 }
 
 #[actix_web::test]
 async fn list_clans() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
 
     let payload = json!({"global_name": "List Clan", "tag": "LC"});
@@ -59,8 +59,8 @@ async fn list_clans() {
 
 #[actix_web::test]
 async fn create_empty_clan() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (staff_id, _) = create_test_user(&mut conn, Some(Permission::ClanModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::ClanModify)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
 
     let payload = json!({"global_name": "Empty Clan", "tag": "EC"});
@@ -76,10 +76,10 @@ async fn create_empty_clan() {
 #[actix_web::test]
 async fn update_clan() {
     use crate::clans::test_utils::create_test_clan_member;
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let clan_id = create_test_clan(&mut conn).await;
-    let (owner_id, _) = create_test_user(&mut conn, None).await;
-    create_test_clan_member(&mut conn, clan_id, owner_id, 2).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let clan_id = create_test_clan(&db).await;
+    let (owner_id, _) = create_test_user(&db, None).await;
+    create_test_clan_member(&db, clan_id, owner_id, 2).await;
     let token = create_test_token(owner_id, &auth.jwt_encoding_key).unwrap();
 
     let payload = json!({"global_name": "Updated"});
@@ -97,10 +97,10 @@ async fn update_clan() {
 #[actix_web::test]
 async fn delete_clan() {
     use crate::clans::test_utils::create_test_clan_member;
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let clan_id = create_test_clan(&mut conn).await;
-    let (staff_id, _) = create_test_user(&mut conn, Some(Permission::ClanModify)).await;
-    create_test_clan_member(&mut conn, clan_id, staff_id, 2).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let clan_id = create_test_clan(&db).await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::ClanModify)).await;
+    create_test_clan_member(&db, clan_id, staff_id, 2).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
 
     let req = test::TestRequest::delete()
@@ -113,8 +113,8 @@ async fn delete_clan() {
 
 #[actix_web::test]
 async fn create_clan_name_too_long() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
 
     let name = "a".repeat(101);
@@ -130,8 +130,8 @@ async fn create_clan_name_too_long() {
 
 #[actix_web::test]
 async fn create_clan_tag_too_long() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
 
     let payload = json!({"global_name": "TagLong", "tag": "TOOLONG"});
@@ -146,8 +146,8 @@ async fn create_clan_tag_too_long() {
 
 #[actix_web::test]
 async fn create_clan_description_too_long() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
 
     let desc = "d".repeat(301);
@@ -164,10 +164,10 @@ async fn create_clan_description_too_long() {
 #[actix_web::test]
 async fn create_clan_already_in_clan() {
     use crate::clans::test_utils::create_test_clan_member;
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let clan_id = create_test_clan(&mut conn).await;
-    let (user_id, _) = create_test_user(&mut conn, None).await;
-    create_test_clan_member(&mut conn, clan_id, user_id, 0).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let clan_id = create_test_clan(&db).await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    create_test_clan_member(&db, clan_id, user_id, 0).await;
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
 
     let payload = json!({"global_name": "NewClan", "tag": "NC"});
@@ -183,10 +183,10 @@ async fn create_clan_already_in_clan() {
 #[actix_web::test]
 async fn update_clan_name_too_long() {
     use crate::clans::test_utils::create_test_clan_member;
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let clan_id = create_test_clan(&mut conn).await;
-    let (owner_id, _) = create_test_user(&mut conn, None).await;
-    create_test_clan_member(&mut conn, clan_id, owner_id, 2).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let clan_id = create_test_clan(&db).await;
+    let (owner_id, _) = create_test_user(&db, None).await;
+    create_test_clan_member(&db, clan_id, owner_id, 2).await;
     let token = create_test_token(owner_id, &auth.jwt_encoding_key).unwrap();
 
     let name = "n".repeat(101);
@@ -203,10 +203,10 @@ async fn update_clan_name_too_long() {
 #[actix_web::test]
 async fn update_clan_tag_too_long() {
     use crate::clans::test_utils::create_test_clan_member;
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let clan_id = create_test_clan(&mut conn).await;
-    let (owner_id, _) = create_test_user(&mut conn, None).await;
-    create_test_clan_member(&mut conn, clan_id, owner_id, 2).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let clan_id = create_test_clan(&db).await;
+    let (owner_id, _) = create_test_user(&db, None).await;
+    create_test_clan_member(&db, clan_id, owner_id, 2).await;
     let token = create_test_token(owner_id, &auth.jwt_encoding_key).unwrap();
 
     let payload = json!({"tag": "LONGER"});
@@ -222,10 +222,10 @@ async fn update_clan_tag_too_long() {
 #[actix_web::test]
 async fn update_clan_description_too_long() {
     use crate::clans::test_utils::create_test_clan_member;
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let clan_id = create_test_clan(&mut conn).await;
-    let (owner_id, _) = create_test_user(&mut conn, None).await;
-    create_test_clan_member(&mut conn, clan_id, owner_id, 2).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let clan_id = create_test_clan(&db).await;
+    let (owner_id, _) = create_test_user(&db, None).await;
+    create_test_clan_member(&db, clan_id, owner_id, 2).await;
     let token = create_test_token(owner_id, &auth.jwt_encoding_key).unwrap();
 
     let desc = "x".repeat(301);
@@ -241,8 +241,8 @@ async fn update_clan_description_too_long() {
 
 #[actix_web::test]
 async fn find_clan_with_filter() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (staff_id, _) = create_test_user(&mut conn, Some(Permission::ClanModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::ClanModify)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
 
     let payload = json!({"global_name": "Alpha Clan", "tag": "ALP"});

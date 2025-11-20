@@ -6,6 +6,7 @@ use {
         users::test_utils::create_test_user,
     },
     actix_web::{http::header, test},
+    serial_test::serial,
 };
 
 #[actix_web::test]
@@ -38,8 +39,8 @@ async fn discord_auth_redirects_to_discord() {
 
 #[actix_web::test]
 async fn discord_refresh_returns_new_token() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
 
     let (refresh, _) = token::create_token(
         token::UserClaims {
@@ -65,8 +66,8 @@ async fn discord_refresh_returns_new_token() {
 
 #[actix_web::test]
 async fn discord_refresh_returns_both_tokens_when_about_to_expire() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
 
     let (refresh, _) = token::create_token(
         token::UserClaims {
@@ -134,8 +135,8 @@ async fn discord_refresh_fails_with_invalid_token() {
 
 #[actix_web::test]
 async fn discord_refresh_fails_with_access_token() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
 
     let (access_token, _) = token::create_token(
         token::UserClaims {
@@ -159,8 +160,8 @@ async fn discord_refresh_fails_with_access_token() {
 
 #[actix_web::test]
 async fn discord_refresh_fails_with_expired_token() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
 
     let (expired_token, _) = token::create_token(
         token::UserClaims {
@@ -185,8 +186,8 @@ async fn discord_refresh_fails_with_expired_token() {
 #[actix_web::test]
 async fn create_api_key_generates_token() {
     std::env::set_var("DISCORD_SKIP_DISCOVERY", "1");
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
 
     let req = test::TestRequest::post()
@@ -206,8 +207,8 @@ async fn create_api_key_generates_token() {
 
 #[actix_web::test]
 async fn logout_all_updates_timestamp() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
 
     use crate::schema::users::dsl::{access_valid_after, id as user_id_col, users};
@@ -216,7 +217,7 @@ async fn logout_all_updates_timestamp() {
     let before: chrono::DateTime<chrono::Utc> = users
         .filter(user_id_col.eq(user_id))
         .select(access_valid_after)
-        .first(&mut conn)
+        .first(&mut db.connection().unwrap())
         .unwrap();
 
     let req = test::TestRequest::post()
@@ -229,13 +230,14 @@ async fn logout_all_updates_timestamp() {
     let after: chrono::DateTime<chrono::Utc> = users
         .filter(user_id_col.eq(user_id))
         .select(access_valid_after)
-        .first(&mut conn)
+        .first(&mut db.connection().unwrap())
         .unwrap();
 
     assert!(after > before);
 }
 
 #[actix_web::test]
+#[serial]
 async fn discord_callback_returns_auth() {
     use crate::schema::oauth_requests;
     use diesel::prelude::*;
@@ -277,7 +279,7 @@ async fn discord_callback_returns_auth() {
 
     std::env::set_var("DISCORD_BASE_URL", server.base_url());
 
-    let (app, mut conn, _, _) = init_test_app().await;
+    let (app, db, _, _) = init_test_app().await;
 
     diesel::insert_into(oauth_requests::table)
         .values((
@@ -285,7 +287,7 @@ async fn discord_callback_returns_auth() {
             oauth_requests::pkce_verifier.eq("verifier"),
             oauth_requests::callback.eq::<Option<String>>(None),
         ))
-        .execute(&mut conn)
+        .execute(&mut db.connection().unwrap())
         .unwrap();
 
     let req = test::TestRequest::get()
@@ -303,6 +305,7 @@ async fn discord_callback_returns_auth() {
 }
 
 #[actix_web::test]
+#[serial]
 async fn discord_callback_with_callback_url_redirects() {
     use crate::schema::oauth_requests;
     use diesel::prelude::*;
@@ -344,7 +347,7 @@ async fn discord_callback_with_callback_url_redirects() {
 
     std::env::set_var("DISCORD_BASE_URL", server.base_url());
 
-    let (app, mut conn, _, _) = init_test_app().await;
+    let (app, db, _, _) = init_test_app().await;
 
     diesel::insert_into(oauth_requests::table)
         .values((
@@ -352,7 +355,7 @@ async fn discord_callback_with_callback_url_redirects() {
             oauth_requests::pkce_verifier.eq("callback_verifier"),
             oauth_requests::callback.eq(Some("https://example.com/auth/success".to_string())),
         ))
-        .execute(&mut conn)
+        .execute(&mut db.connection().unwrap())
         .unwrap();
 
     let req = test::TestRequest::get()
@@ -376,7 +379,7 @@ async fn discord_callback_fails_with_invalid_state() {
     use crate::schema::oauth_requests;
     use diesel::prelude::*;
 
-    let (app, mut conn, _, _) = init_test_app().await;
+    let (app, db, _, _) = init_test_app().await;
 
     diesel::insert_into(oauth_requests::table)
         .values((
@@ -384,7 +387,7 @@ async fn discord_callback_fails_with_invalid_state() {
             oauth_requests::pkce_verifier.eq("verifier"),
             oauth_requests::callback.eq::<Option<String>>(None),
         ))
-        .execute(&mut conn)
+        .execute(&mut db.connection().unwrap())
         .unwrap();
 
     let req = test::TestRequest::get()

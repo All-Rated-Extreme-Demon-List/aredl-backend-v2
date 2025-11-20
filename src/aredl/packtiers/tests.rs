@@ -10,8 +10,8 @@ use serde_json::json;
 
 #[actix_web::test]
 async fn create_pack_tier() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::PackTierModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::PackTierModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -49,11 +49,11 @@ async fn get_pack_tiers() {
 
 #[actix_web::test]
 async fn update_pack_tier() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::PackTierModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::PackTierModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let tier_id = create_test_pack_tier(&mut conn).await;
+    let tier_id = create_test_pack_tier(&db).await;
     let update_data = json!({
         "name": "Updated Tier Name"
     });
@@ -75,11 +75,11 @@ async fn update_pack_tier() {
 
 #[actix_web::test]
 async fn delete_pack_tier() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::PackTierModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::PackTierModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let tier_id = create_test_pack_tier(&mut conn).await;
+    let tier_id = create_test_pack_tier(&db).await;
     let req = test::TestRequest::delete()
         .uri(&format!("/aredl/pack-tiers/{}", tier_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))

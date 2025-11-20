@@ -15,9 +15,9 @@ use serde_json::json;
 
 #[actix_web::test]
 async fn create_placeholder_user() {
-    let (app, mut conn, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (staff_user_id, _) = create_test_user(&mut conn, Some(Permission::PlaceholderCreate)).await;
+    let (staff_user_id, _) = create_test_user(&db, Some(Permission::PlaceholderCreate)).await;
     let staff_token =
         create_test_token(staff_user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -40,9 +40,9 @@ async fn create_placeholder_user() {
 
 #[actix_web::test]
 async fn update_user_info() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::UserModify)).await;
-    let (staff_user_id, _) = create_test_user(&mut conn, Some(Permission::UserBan)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::UserModify)).await;
+    let (staff_user_id, _) = create_test_user(&db, Some(Permission::UserBan)).await;
     let staff_token =
         create_test_token(staff_user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -67,11 +67,11 @@ async fn update_user_info() {
 
 #[actix_web::test]
 async fn update_user_info_less_privilege() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::UserModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::UserModify)).await;
     let user_token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let (staff_user_id, _) = create_test_user(&mut conn, Some(Permission::UserBan)).await;
+    let (staff_user_id, _) = create_test_user(&db, Some(Permission::UserBan)).await;
 
     let update_payload = json!({
         "global_name": "Updated Name",
@@ -90,9 +90,9 @@ async fn update_user_info_less_privilege() {
 
 #[actix_web::test]
 async fn ban_user() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, username) = create_test_user(&mut conn, None).await;
-    let (staff_user_id, _) = create_test_user(&mut conn, Some(Permission::UserBan)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, username) = create_test_user(&db, None).await;
+    let (staff_user_id, _) = create_test_user(&db, Some(Permission::UserBan)).await;
     let staff_token =
         create_test_token(staff_user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -122,8 +122,8 @@ async fn ban_user() {
 
 #[actix_web::test]
 async fn find_user() {
-    let (app, mut conn, _, _) = init_test_app().await;
-    let (user_id, username) = create_test_user(&mut conn, None).await;
+    let (app, db, _, _) = init_test_app().await;
+    let (user_id, username) = create_test_user(&db, None).await;
 
     let req = test::TestRequest::get()
         .uri(&format!("/users/{}", user_id))
@@ -138,13 +138,13 @@ async fn find_user() {
 
 #[actix_web::test]
 async fn find_user_by_discord_id() {
-    let (app, mut conn, _, _) = init_test_app().await;
-    let (user_id, username) = create_test_user(&mut conn, None).await;
+    let (app, db, _, _) = init_test_app().await;
+    let (user_id, username) = create_test_user(&db, None).await;
     let discord_id = "1234567890";
 
     diesel::update(users::table.filter(users::id.eq(user_id)))
         .set(users::discord_id.eq(Some(discord_id)))
-        .execute(&mut conn)
+        .execute(&mut db.connection().unwrap())
         .expect("Failed to update discord id");
 
     let req = test::TestRequest::get()
@@ -160,9 +160,9 @@ async fn find_user_by_discord_id() {
 
 #[actix_web::test]
 async fn list_users() {
-    let (app, mut conn, _, _) = init_test_app().await;
-    let (_, username) = create_test_user(&mut conn, None).await;
-    create_test_user(&mut conn, None).await;
+    let (app, db, _, _) = init_test_app().await;
+    let (_, username) = create_test_user(&db, None).await;
+    create_test_user(&db, None).await;
 
     let req = test::TestRequest::get().uri("/users").to_request();
 
@@ -189,9 +189,9 @@ async fn list_users() {
 
 #[actix_web::test]
 async fn user_character_limit() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::UserModify)).await;
-    let (staff_user_id, _) = create_test_user(&mut conn, Some(Permission::UserBan)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::UserModify)).await;
+    let (staff_user_id, _) = create_test_user(&db, Some(Permission::UserBan)).await;
     let user_token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let staff_token =
@@ -222,10 +222,10 @@ async fn user_character_limit() {
 
 #[actix_web::test]
 async fn list_users_with_filters() {
-    let (app, mut conn, _, _) = init_test_app().await;
-    let (_, name) = create_test_user(&mut conn, None).await;
+    let (app, db, _, _) = init_test_app().await;
+    let (_, name) = create_test_user(&db, None).await;
     let (placeholder_id, _) =
-        crate::users::test_utils::create_test_placeholder_user(&mut conn, None).await;
+        crate::users::test_utils::create_test_placeholder_user(&db, None).await;
 
     let req = test::TestRequest::get()
         .uri("/users?placeholder=true")
@@ -250,7 +250,7 @@ async fn list_users_with_filters() {
 
 #[actix_web::test]
 async fn upsert_creates_and_updates_user() {
-    let (_, mut conn, _, _) = init_test_app().await;
+    let (_, db, _, _) = init_test_app().await;
 
     let user_upsert = UserUpsert {
         username: "new_user".to_string(),
@@ -264,14 +264,14 @@ async fn upsert_creates_and_updates_user() {
         last_discord_avatar_update: Some(Utc::now().naive_utc()),
     };
 
-    let created = User::upsert(&mut conn, user_upsert).expect("insert");
+    let created = User::upsert(&mut db.connection().unwrap(), user_upsert).expect("insert");
     assert_eq!(created.username, "new_user");
     assert_eq!(created.discord_id.as_deref(), Some("123"));
 
     let fetched = users::table
         .filter(users::id.eq(created.id))
         .select(User::as_select())
-        .first::<User>(&mut conn)
+        .first::<User>(&mut db.connection().unwrap())
         .unwrap();
     assert_eq!(fetched.username, "new_user");
 
@@ -287,7 +287,7 @@ async fn upsert_creates_and_updates_user() {
         last_discord_avatar_update: Some(Utc::now().naive_utc()),
     };
 
-    let updated = User::upsert(&mut conn, update_upsert).expect("update");
+    let updated = User::upsert(&mut db.connection().unwrap(), update_upsert).expect("update");
     assert_eq!(updated.id, created.id);
     assert_eq!(updated.username, "updated");
     assert_eq!(updated.country, Some(1));
@@ -296,9 +296,9 @@ async fn upsert_creates_and_updates_user() {
 
 #[actix_web::test]
 async fn placeholder_random_username() {
-    let (app, mut conn, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (staff_user_id, _) = create_test_user(&mut conn, Some(Permission::PlaceholderCreate)).await;
+    let (staff_user_id, _) = create_test_user(&db, Some(Permission::PlaceholderCreate)).await;
     let staff_token =
         create_test_token(staff_user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 

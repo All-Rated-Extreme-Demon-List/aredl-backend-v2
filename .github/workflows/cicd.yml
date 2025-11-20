@@ -6,7 +6,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_TEST_THREADS: 1
   TEST_DATABASE_URL: postgres://postgres:password@localhost:5432/aredl_test
   JWT_SECRET: ${{ secrets.JWT_SECRET }}
   DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}

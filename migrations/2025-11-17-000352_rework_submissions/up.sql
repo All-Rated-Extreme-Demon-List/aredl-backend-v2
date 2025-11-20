@@ -1,4 +1,4 @@
-ALTER TYPE submission_status ADD VALUE 'UnderReview';
+ALTER TYPE submission_status ADD VALUE IF NOT EXISTS 'UnderReview';
 
 
 -- Remove objects that depend on records
@@ -326,7 +326,7 @@ DECLARE
 BEGIN
     IF TG_OP = 'INSERT' THEN
         INSERT INTO aredl.submission_history (id, submission_id, status, user_notes, reviewer_id, reviewer_notes, mobile, ldm_id, video_url, raw_url, mod_menu, priority, timestamp)
-        VALUES (uuid_generate_v4(), NEW.id, NEW.status, NEW.user_notes, NEW.reviewer_id, NEW.reviewer_notes, NEW.mobile, NEW.ldm_id, NEW.video_url, NEW.raw_url, NEW.mod_menu, NEW.priority, NOW());
+        VALUES (uuid_generate_v4(), NEW.id, NEW.status, NEW.user_notes, NEW.reviewer_id, NEW.reviewer_notes, NEW.mobile, NEW.ldm_id, NEW.video_url, NEW.raw_url, NEW.mod_menu, NEW.priority, CLOCK_TIMESTAMP());
         RETURN NEW;
     END IF;
 
@@ -353,7 +353,7 @@ BEGIN
         END IF;
 
         INSERT INTO aredl.submission_history (id, submission_id, status, user_notes, reviewer_id, reviewer_notes, mobile, ldm_id, video_url, raw_url, mod_menu, priority, timestamp)
-        VALUES (uuid_generate_v4(), NEW.id, NEW.status, NEW.user_notes, NEW.reviewer_id, NEW.reviewer_notes, NEW.mobile, NEW.ldm_id, NEW.video_url, NEW.raw_url, NEW.mod_menu, NEW.priority, NOW());
+        VALUES (uuid_generate_v4(), NEW.id, NEW.status, NEW.user_notes, NEW.reviewer_id, NEW.reviewer_notes, NEW.mobile, NEW.ldm_id, NEW.video_url, NEW.raw_url, NEW.mod_menu, NEW.priority, CLOCK_TIMESTAMP());
 
         RETURN NEW;
     END IF;
@@ -373,7 +373,7 @@ DECLARE
 BEGIN
     IF TG_OP = 'INSERT' THEN
         INSERT INTO arepl.submission_history (id, submission_id, status, user_notes, reviewer_id, reviewer_notes, mobile, ldm_id, video_url, raw_url, mod_menu, priority, completion_time, timestamp)
-        VALUES (uuid_generate_v4(), NEW.id, NEW.status, NEW.user_notes, NEW.reviewer_id, NEW.reviewer_notes, NEW.mobile, NEW.ldm_id, NEW.video_url, NEW.raw_url, NEW.mod_menu, NEW.priority, NEW.completion_time, NOW());
+        VALUES (uuid_generate_v4(), NEW.id, NEW.status, NEW.user_notes, NEW.reviewer_id, NEW.reviewer_notes, NEW.mobile, NEW.ldm_id, NEW.video_url, NEW.raw_url, NEW.mod_menu, NEW.priority, NEW.completion_time, CLOCK_TIMESTAMP());
         RETURN NEW;
     END IF;
 
@@ -400,7 +400,7 @@ BEGIN
         END IF;
 
         INSERT INTO arepl.submission_history (id, submission_id, status, user_notes, reviewer_id, reviewer_notes, mobile, ldm_id, video_url, raw_url, mod_menu, priority, completion_time, timestamp)
-        VALUES (uuid_generate_v4(), NEW.id, NEW.status, NEW.user_notes, NEW.reviewer_id, NEW.reviewer_notes, NEW.mobile, NEW.ldm_id, NEW.video_url, NEW.raw_url, NEW.mod_menu, NEW.priority, NEW.completion_time, NOW());
+        VALUES (uuid_generate_v4(), NEW.id, NEW.status, NEW.user_notes, NEW.reviewer_id, NEW.reviewer_notes, NEW.mobile, NEW.ldm_id, NEW.video_url, NEW.raw_url, NEW.mod_menu, NEW.priority, NEW.completion_time, CLOCK_TIMESTAMP());
 
         RETURN NEW;
     END IF;
@@ -421,7 +421,7 @@ RETURNS TRIGGER AS
 $$
 BEGIN
     IF NEW IS DISTINCT FROM OLD THEN
-        NEW.updated_at = NOW();
+        NEW.updated_at = CLOCK_TIMESTAMP();
     END IF;
     RETURN NEW;
 END;
@@ -434,7 +434,7 @@ RETURNS TRIGGER AS
 $$
 BEGIN
     IF NEW IS DISTINCT FROM OLD THEN
-        NEW.updated_at = NOW();
+        NEW.updated_at = CLOCK_TIMESTAMP();
     END IF;
     RETURN NEW;
 END;

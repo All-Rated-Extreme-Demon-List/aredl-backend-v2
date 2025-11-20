@@ -14,13 +14,13 @@ use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 #[cfg(test)]
 #[actix_web::test]
 async fn list_invites() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (owner_id, _) = create_test_user(&mut conn, None).await;
-    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (owner_id, _) = create_test_user(&db, None).await;
+    let (user_id, _) = create_test_user(&db, None).await;
 
-    let clan_id = create_test_clan(&mut conn).await;
-    create_test_clan_member(&mut conn, clan_id, owner_id, 2).await;
-    let invite_id = create_test_clan_invite(&mut conn, clan_id, user_id, owner_id).await;
+    let clan_id = create_test_clan(&db).await;
+    create_test_clan_member(&db, clan_id, owner_id, 2).await;
+    let invite_id = create_test_clan_invite(&db, clan_id, user_id, owner_id).await;
 
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::get()
@@ -38,13 +38,13 @@ async fn list_invites() {
 
 #[actix_web::test]
 async fn accept_invite() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (owner_id, _) = create_test_user(&mut conn, None).await;
-    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (owner_id, _) = create_test_user(&db, None).await;
+    let (user_id, _) = create_test_user(&db, None).await;
 
-    let clan_id = create_test_clan(&mut conn).await;
-    create_test_clan_member(&mut conn, clan_id, owner_id, 2).await;
-    let invite_id = create_test_clan_invite(&mut conn, clan_id, user_id, owner_id).await;
+    let clan_id = create_test_clan(&db).await;
+    create_test_clan_member(&db, clan_id, owner_id, 2).await;
+    let invite_id = create_test_clan_invite(&db, clan_id, user_id, owner_id).await;
 
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::post()
@@ -59,34 +59,34 @@ async fn accept_invite() {
         .filter(clan_members::clan_id.eq(clan_id))
         .filter(clan_members::user_id.eq(user_id))
         .count()
-        .get_result(&mut conn)
+        .get_result(&mut db.connection().unwrap())
         .unwrap();
     assert_eq!(member_count, 1);
 
     let invite_count: i64 = clan_invites::table
         .filter(clan_invites::user_id.eq(user_id))
         .count()
-        .get_result(&mut conn)
+        .get_result(&mut db.connection().unwrap())
         .unwrap();
     assert_eq!(invite_count, 0);
 
     let notif_count: i64 = notifications::table
         .filter(notifications::user_id.eq(owner_id))
         .count()
-        .get_result(&mut conn)
+        .get_result(&mut db.connection().unwrap())
         .unwrap();
     assert_eq!(notif_count, 1);
 }
 
 #[actix_web::test]
 async fn reject_invite() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (owner_id, _) = create_test_user(&mut conn, None).await;
-    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (owner_id, _) = create_test_user(&db, None).await;
+    let (user_id, _) = create_test_user(&db, None).await;
 
-    let clan_id = create_test_clan(&mut conn).await;
-    create_test_clan_member(&mut conn, clan_id, owner_id, 2).await;
-    let invite_id = create_test_clan_invite(&mut conn, clan_id, user_id, owner_id).await;
+    let clan_id = create_test_clan(&db).await;
+    create_test_clan_member(&db, clan_id, owner_id, 2).await;
+    let invite_id = create_test_clan_invite(&db, clan_id, user_id, owner_id).await;
 
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::post()
@@ -100,7 +100,7 @@ async fn reject_invite() {
     let invite_count: i64 = clan_invites::table
         .filter(clan_invites::user_id.eq(user_id))
         .count()
-        .get_result(&mut conn)
+        .get_result(&mut db.connection().unwrap())
         .unwrap();
     assert_eq!(invite_count, 0);
 
@@ -108,20 +108,20 @@ async fn reject_invite() {
         .filter(clan_members::clan_id.eq(clan_id))
         .filter(clan_members::user_id.eq(user_id))
         .count()
-        .get_result(&mut conn)
+        .get_result(&mut db.connection().unwrap())
         .unwrap();
     assert_eq!(member_count, 0);
 }
 
 #[actix_web::test]
 async fn leave_clan() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (owner_id, _) = create_test_user(&mut conn, None).await;
-    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (owner_id, _) = create_test_user(&db, None).await;
+    let (user_id, _) = create_test_user(&db, None).await;
 
-    let clan_id = create_test_clan(&mut conn).await;
-    create_test_clan_member(&mut conn, clan_id, owner_id, 2).await;
-    create_test_clan_member(&mut conn, clan_id, user_id, 1).await;
+    let clan_id = create_test_clan(&db).await;
+    create_test_clan_member(&db, clan_id, owner_id, 2).await;
+    create_test_clan_member(&db, clan_id, user_id, 1).await;
 
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::post()
@@ -136,15 +136,15 @@ async fn leave_clan() {
         .filter(clan_members::clan_id.eq(clan_id))
         .filter(clan_members::user_id.eq(user_id))
         .count()
-        .get_result(&mut conn)
+        .get_result(&mut db.connection().unwrap())
         .unwrap();
     assert_eq!(member_count, 0);
 }
 
 #[actix_web::test]
 async fn leave_clan_not_member() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
 
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::post()
@@ -158,11 +158,11 @@ async fn leave_clan_not_member() {
 
 #[actix_web::test]
 async fn leave_clan_owner_forbidden() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (owner_id, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (owner_id, _) = create_test_user(&db, None).await;
 
-    let clan_id = create_test_clan(&mut conn).await;
-    create_test_clan_member(&mut conn, clan_id, owner_id, 2).await;
+    let clan_id = create_test_clan(&db).await;
+    create_test_clan_member(&db, clan_id, owner_id, 2).await;
 
     let token = create_test_token(owner_id, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::post()
@@ -176,14 +176,14 @@ async fn leave_clan_owner_forbidden() {
 
 #[actix_web::test]
 async fn accept_invite_not_mine() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (owner_id, _) = create_test_user(&mut conn, None).await;
-    let (user_id, _) = create_test_user(&mut conn, None).await;
-    let (other_id, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (owner_id, _) = create_test_user(&db, None).await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let (other_id, _) = create_test_user(&db, None).await;
 
-    let clan_id = create_test_clan(&mut conn).await;
-    create_test_clan_member(&mut conn, clan_id, owner_id, 2).await;
-    let invite_id = create_test_clan_invite(&mut conn, clan_id, other_id, owner_id).await;
+    let clan_id = create_test_clan(&db).await;
+    create_test_clan_member(&db, clan_id, owner_id, 2).await;
+    let invite_id = create_test_clan_invite(&db, clan_id, other_id, owner_id).await;
 
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::post()
@@ -197,14 +197,14 @@ async fn accept_invite_not_mine() {
 
 #[actix_web::test]
 async fn reject_invite_not_mine() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (owner_id, _) = create_test_user(&mut conn, None).await;
-    let (user_id, _) = create_test_user(&mut conn, None).await;
-    let (other_id, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (owner_id, _) = create_test_user(&db, None).await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let (other_id, _) = create_test_user(&db, None).await;
 
-    let clan_id = create_test_clan(&mut conn).await;
-    create_test_clan_member(&mut conn, clan_id, owner_id, 2).await;
-    let invite_id = create_test_clan_invite(&mut conn, clan_id, other_id, owner_id).await;
+    let clan_id = create_test_clan(&db).await;
+    create_test_clan_member(&db, clan_id, owner_id, 2).await;
+    let invite_id = create_test_clan_invite(&db, clan_id, other_id, owner_id).await;
 
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::post()

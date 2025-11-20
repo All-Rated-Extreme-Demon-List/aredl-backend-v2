@@ -14,12 +14,12 @@ use uuid::Uuid;
 
 #[actix_web::test]
 async fn add_role_users() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (staff_id, _) = create_test_user(&mut conn, Some(Permission::RoleManage)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
-    let role_id = create_test_role(&mut conn, 10).await;
-    let (u1, _) = create_test_user(&mut conn, None).await;
-    let (u2, _) = create_test_user(&mut conn, None).await;
+    let role_id = create_test_role(&db, 10).await;
+    let (u1, _) = create_test_user(&db, None).await;
+    let (u2, _) = create_test_user(&db, None).await;
 
     let req = test::TestRequest::patch()
         .uri(&format!("/roles/{}/users", role_id))
@@ -35,13 +35,13 @@ async fn add_role_users() {
 
 #[actix_web::test]
 async fn set_role_users() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (staff_id, _) = create_test_user(&mut conn, Some(Permission::RoleManage)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
-    let role_id = create_test_role(&mut conn, 10).await;
-    let (u1, _) = create_test_user(&mut conn, None).await;
-    add_user_to_role(&mut conn, role_id, u1).await;
-    let (u2, _) = create_test_user(&mut conn, None).await;
+    let role_id = create_test_role(&db, 10).await;
+    let (u1, _) = create_test_user(&db, None).await;
+    add_user_to_role(&db, role_id, u1).await;
+    let (u2, _) = create_test_user(&db, None).await;
 
     let req = test::TestRequest::post()
         .uri(&format!("/roles/{}/users", role_id))
@@ -57,14 +57,14 @@ async fn set_role_users() {
 
 #[actix_web::test]
 async fn delete_role_users() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (staff_id, _) = create_test_user(&mut conn, Some(Permission::RoleManage)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
-    let role_id = create_test_role(&mut conn, 10).await;
-    let (u1, _) = create_test_user(&mut conn, None).await;
-    let (u2, _) = create_test_user(&mut conn, None).await;
-    add_user_to_role(&mut conn, role_id, u1).await;
-    add_user_to_role(&mut conn, role_id, u2).await;
+    let role_id = create_test_role(&db, 10).await;
+    let (u1, _) = create_test_user(&db, None).await;
+    let (u2, _) = create_test_user(&db, None).await;
+    add_user_to_role(&db, role_id, u1).await;
+    add_user_to_role(&db, role_id, u2).await;
 
     let req = test::TestRequest::delete()
         .uri(&format!("/roles/{}/users", role_id))

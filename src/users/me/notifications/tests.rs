@@ -13,11 +13,23 @@ use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 #[cfg(test)]
 #[actix_web::test]
 async fn list_notifications() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
 
-    Notification::create(&mut conn, user_id, "One".into(), NotificationType::Info).unwrap();
-    Notification::create(&mut conn, user_id, "Two".into(), NotificationType::Success).unwrap();
+    Notification::create(
+        &mut db.connection().unwrap(),
+        user_id,
+        "One".into(),
+        NotificationType::Info,
+    )
+    .unwrap();
+    Notification::create(
+        &mut db.connection().unwrap(),
+        user_id,
+        "Two".into(),
+        NotificationType::Success,
+    )
+    .unwrap();
 
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::get()
@@ -34,11 +46,23 @@ async fn list_notifications() {
 
 #[actix_web::test]
 async fn clear_notifications() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
 
-    Notification::create(&mut conn, user_id, "One".into(), NotificationType::Info).unwrap();
-    Notification::create(&mut conn, user_id, "Two".into(), NotificationType::Failure).unwrap();
+    Notification::create(
+        &mut db.connection().unwrap(),
+        user_id,
+        "One".into(),
+        NotificationType::Info,
+    )
+    .unwrap();
+    Notification::create(
+        &mut db.connection().unwrap(),
+        user_id,
+        "Two".into(),
+        NotificationType::Failure,
+    )
+    .unwrap();
 
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::post()
@@ -51,7 +75,7 @@ async fn clear_notifications() {
     let remaining: i64 = notifications::table
         .filter(notifications::user_id.eq(user_id))
         .count()
-        .get_result(&mut conn)
+        .get_result(&mut db.connection().unwrap())
         .unwrap();
     assert_eq!(remaining, 0);
 }

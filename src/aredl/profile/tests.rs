@@ -7,8 +7,8 @@ use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 
 #[actix_web::test]
 async fn get_profile() {
-    let (app, mut conn, _, _) = init_test_app().await;
-    let (user, _) = create_test_user(&mut conn, None).await;
+    let (app, db, _, _) = init_test_app().await;
+    let (user, _) = create_test_user(&db, None).await;
     let req = test::TestRequest::get()
         .uri(format!("/aredl/profile/{user}").as_str())
         .to_request();
@@ -21,13 +21,13 @@ async fn get_profile() {
 
 #[actix_web::test]
 async fn get_profile_by_discord_id() {
-    let (app, mut conn, _, _) = init_test_app().await;
-    let (user, _) = create_test_user(&mut conn, None).await;
+    let (app, db, _, _) = init_test_app().await;
+    let (user, _) = create_test_user(&db, None).await;
     let discord_id = "1234567890";
 
     diesel::update(users::table.filter(users::id.eq(user)))
         .set(users::discord_id.eq(Some(discord_id)))
-        .execute(&mut conn)
+        .execute(&mut db.connection().unwrap())
         .expect("Failed to set discord id");
 
     let req = test::TestRequest::get()

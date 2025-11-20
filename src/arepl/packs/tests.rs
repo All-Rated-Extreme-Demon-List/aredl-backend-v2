@@ -12,11 +12,11 @@ use serde_json::json;
 
 #[actix_web::test]
 async fn create_pack() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::PackModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::PackModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let tier_id = create_test_pack_tier(&mut conn).await;
+    let tier_id = create_test_pack_tier(&db).await;
     let pack_data = json!({
         "name": "Test Pack",
         "tier": tier_id.to_string()
@@ -39,11 +39,11 @@ async fn create_pack() {
 
 #[actix_web::test]
 async fn update_pack() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::PackModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::PackModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let pack_id = create_test_pack(&mut conn).await;
+    let pack_id = create_test_pack(&db).await;
     let update_data = json!({
         "name": "Updated Pack Name"
     });
@@ -65,11 +65,11 @@ async fn update_pack() {
 
 #[actix_web::test]
 async fn remove_pack() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::PackModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::PackModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let pack_id = create_test_pack(&mut conn).await;
+    let pack_id = create_test_pack(&db).await;
     let req = test::TestRequest::delete()
         .uri(&format!("/arepl/packs/{}", pack_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
@@ -80,12 +80,12 @@ async fn remove_pack() {
 
 #[actix_web::test]
 async fn add_level_to_pack() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::PackModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::PackModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let pack_id = create_test_pack(&mut conn).await;
-    let level = create_test_level(&mut conn).await;
+    let pack_id = create_test_pack(&db).await;
+    let level = create_test_level(&db).await;
 
     let level_data = json!([level]);
 
@@ -107,12 +107,12 @@ async fn add_level_to_pack() {
 
 #[actix_web::test]
 async fn set_pack_levels() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::PackModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::PackModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let pack_id = create_test_pack(&mut conn).await;
-    let level = create_test_level(&mut conn).await;
+    let pack_id = create_test_pack(&db).await;
+    let level = create_test_level(&db).await;
 
     let level_data = json!([level]);
 
@@ -134,12 +134,12 @@ async fn set_pack_levels() {
 
 #[actix_web::test]
 async fn remove_level_from_pack() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::PackModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::PackModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let pack_id = create_test_pack(&mut conn).await;
-    let level = create_test_level(&mut conn).await;
+    let pack_id = create_test_pack(&db).await;
+    let level = create_test_level(&db).await;
 
     let level_data = json!([level]);
 

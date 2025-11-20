@@ -31,12 +31,12 @@ use uuid::Uuid;
 
 #[actix_web::test]
 async fn create_submission() {
-    let (app, mut conn, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let (user_id, _) = create_test_user(&db, None).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let level_id = create_test_level(&mut conn).await;
+    let level_id = create_test_level(&db).await;
 
     let submission_data = json!({
         "level_id": level_id,
@@ -65,12 +65,12 @@ async fn create_submission() {
 
 #[actix_web::test]
 async fn submission_without_raw() {
-    let (app, mut conn, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let (user_id, _) = create_test_user(&db, None).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let level_id = create_test_level(&mut conn).await;
+    let level_id = create_test_level(&db).await;
 
     let submission_data = json!({
         "level_id": level_id,
@@ -95,12 +95,12 @@ async fn submission_without_raw() {
 
 #[actix_web::test]
 async fn submission_malformed_url() {
-    let (app, mut conn, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let (user_id, _) = create_test_user(&db, None).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let level_id = create_test_level(&mut conn).await;
+    let level_id = create_test_level(&db).await;
 
     // video_url
     let submission_data = json!({
@@ -150,23 +150,23 @@ async fn submission_malformed_url() {
 
 #[actix_web::test]
 async fn submission_edit_no_perms() {
-    let (app, mut conn, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id_1, _) = create_test_user(&mut conn, None).await;
+    let (user_id_1, _) = create_test_user(&db, None).await;
     let token_1 =
         create_test_token(user_id_1, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    let (user_id_2, _) = create_test_user(&mut conn, None).await;
+    let (user_id_2, _) = create_test_user(&db, None).await;
     let token_2 =
         create_test_token(user_id_2, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    let (user_id_mod, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
+    let (user_id_mod, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let token_mod =
         create_test_token(user_id_mod, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    let level_id = create_test_level(&mut conn).await;
+    let level_id = create_test_level(&db).await;
 
-    let submission_id = create_test_submission(level_id, user_id_1, &mut conn).await;
+    let submission_id = create_test_submission(level_id, user_id_1, &db).await;
 
     let submission_edit_json = json!({
         "video_url": "https://new_video.com"
@@ -217,11 +217,11 @@ async fn submission_edit_no_perms() {
 
 #[actix_web::test]
 async fn submission_aredlplus_boost() {
-    let (app, mut conn, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&mut conn, None).await;
-    let (user_id_2, _) = create_test_user(&mut conn, None).await;
-    let (user_id_mod, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let (user_id_2, _) = create_test_user(&db, None).await;
+    let (user_id_mod, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
 
     let role_id: i32 = diesel::insert_into(roles::table)
         .values((
@@ -229,7 +229,7 @@ async fn submission_aredlplus_boost() {
             roles::role_desc.eq(format!("Test Role - AREDL+")),
         ))
         .returning(roles::id)
-        .get_result(&mut conn)
+        .get_result(&mut db.connection().unwrap())
         .expect("Failed to create test role");
 
     diesel::insert_into(user_roles::table)
@@ -237,7 +237,7 @@ async fn submission_aredlplus_boost() {
             user_roles::role_id.eq(role_id),
             user_roles::user_id.eq(user_id_2),
         ))
-        .execute(&mut conn)
+        .execute(&mut db.connection().unwrap())
         .expect("Failed to assign role to user");
 
     let token =
@@ -246,7 +246,7 @@ async fn submission_aredlplus_boost() {
         create_test_token(user_id_2, &auth.jwt_encoding_key).expect("Failed to generate token");
     let token_mod =
         create_test_token(user_id_mod, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let level_id = create_test_level(&mut conn).await;
+    let level_id = create_test_level(&db).await;
 
     // video_url
     let submission_data = json!({
@@ -317,19 +317,19 @@ async fn submission_aredlplus_boost() {
 
 #[actix_web::test]
 async fn submission_banned_player() {
-    let (app, mut conn, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (not_banned, _) = create_test_user(&mut conn, None).await;
+    let (not_banned, _) = create_test_user(&db, None).await;
     let not_banned_token =
         create_test_token(not_banned, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let level_id = create_test_level(&mut conn).await;
+    let level_id = create_test_level(&db).await;
 
-    let (banned, _) = create_test_user(&mut conn, None).await;
+    let (banned, _) = create_test_user(&db, None).await;
 
     diesel::update(users::table)
         .filter(users::id.eq(banned))
         .set(users::ban_level.eq(2))
-        .execute(&mut conn)
+        .execute(&mut db.connection().unwrap())
         .expect("Failed to ban user!");
 
     let banned_token =
@@ -372,14 +372,14 @@ async fn submission_banned_player() {
 
 #[actix_web::test]
 async fn delete_submission() {
-    let (app, mut conn, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let level_id = create_test_level(&mut conn).await;
+    let level_id = create_test_level(&db).await;
 
-    let submission: Uuid = create_test_submission(level_id, user_id, &mut conn).await;
+    let submission: Uuid = create_test_submission(level_id, user_id, &db).await;
 
     let req = test::TestRequest::delete()
         .uri(format!("/arepl/submissions/{submission}").as_str())
@@ -396,10 +396,10 @@ async fn delete_submission() {
 
 #[actix_web::test]
 async fn get_global_queue() {
-    let (app, mut conn, _, _) = init_test_app().await;
-    let (user, _) = create_test_user(&mut conn, None).await;
-    let level = create_test_level(&mut conn).await;
-    create_test_submission(level, user, &mut conn).await;
+    let (app, db, _, _) = init_test_app().await;
+    let (user, _) = create_test_user(&db, None).await;
+    let level = create_test_level(&db).await;
+    create_test_submission(level, user, &db).await;
 
     let req = test::TestRequest::get()
         .uri("/arepl/submissions/queue")
@@ -413,11 +413,11 @@ async fn get_global_queue() {
 
 #[actix_web::test]
 async fn get_submission_queue() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user, _) = create_test_user(&db, None).await;
     let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
-    let level = create_test_level(&mut conn).await;
-    let submission = create_test_submission(level, user, &mut conn).await;
+    let level = create_test_level(&db).await;
+    let submission = create_test_submission(level, user, &db).await;
 
     let req = test::TestRequest::get()
         .uri(&format!("/arepl/submissions/{submission}/queue"))
@@ -431,11 +431,11 @@ async fn get_submission_queue() {
 
 #[actix_web::test]
 async fn patch_submission_no_changes() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user, _) = create_test_user(&db, None).await;
     let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
-    let level = create_test_level(&mut conn).await;
-    let submission = create_test_submission(level, user, &mut conn).await;
+    let level = create_test_level(&db).await;
+    let submission = create_test_submission(level, user, &db).await;
 
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission}"))
@@ -448,11 +448,11 @@ async fn patch_submission_no_changes() {
 
 #[actix_web::test]
 async fn patch_submission_invalid_urls() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user, _) = create_test_user(&db, None).await;
     let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
-    let level = create_test_level(&mut conn).await;
-    let submission = create_test_submission(level, user, &mut conn).await;
+    let level = create_test_level(&db).await;
+    let submission = create_test_submission(level, user, &db).await;
 
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission}"))
@@ -473,11 +473,11 @@ async fn patch_submission_invalid_urls() {
 
 #[actix_web::test]
 async fn patch_submission_mod_errors() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (moderator, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (moderator, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let token = create_test_token(moderator, &auth.jwt_encoding_key).unwrap();
-    let level = create_test_level(&mut conn).await;
-    let submission = create_test_submission(level, moderator, &mut conn).await;
+    let level = create_test_level(&db).await;
+    let submission = create_test_submission(level, moderator, &db).await;
 
     // no changes
     let req = test::TestRequest::patch()
@@ -489,8 +489,8 @@ async fn patch_submission_mod_errors() {
     assert!(resp.status().is_client_error());
 
     // duplicate submission
-    let dup_level = create_test_level(&mut conn).await;
-    let _other = create_test_submission(dup_level, moderator, &mut conn).await;
+    let dup_level = create_test_level(&db).await;
+    let _other = create_test_submission(dup_level, moderator, &db).await;
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission}"))
         .insert_header(("Authorization", format!("Bearer {}", token)))
@@ -502,22 +502,22 @@ async fn patch_submission_mod_errors() {
 
 #[actix_web::test]
 async fn banned_player_resubmission() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user, _) = create_test_user(&db, None).await;
     let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
-    let level = create_test_level(&mut conn).await;
-    let submission = create_test_submission(level, user, &mut conn).await;
+    let level = create_test_level(&db).await;
+    let submission = create_test_submission(level, user, &db).await;
 
     diesel::update(submissions::table)
         .filter(submissions::id.eq(submission))
         .set(submissions::status.eq(SubmissionStatus::Denied))
-        .execute(&mut conn)
+        .execute(&mut db.connection().unwrap())
         .unwrap();
 
     diesel::update(users::table)
         .filter(users::id.eq(user))
         .set(users::ban_level.eq(2))
-        .execute(&mut conn)
+        .execute(&mut db.connection().unwrap())
         .unwrap();
 
     let req = test::TestRequest::patch()
@@ -531,15 +531,15 @@ async fn banned_player_resubmission() {
 
 #[actix_web::test]
 async fn accept_submission() {
-    let (app, mut conn, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&mut conn, None).await;
-    let (moderator_id, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let (moderator_id, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let token =
         create_test_token(moderator_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let level_id = create_test_level(&mut conn).await;
+    let level_id = create_test_level(&db).await;
 
-    let submission: Uuid = create_test_submission(level_id, user_id, &mut conn).await;
+    let submission: Uuid = create_test_submission(level_id, user_id, &db).await;
 
     let accept_data = json!({"status": "Accepted", "reviewer_notes": "GG!"});
 
@@ -560,13 +560,13 @@ async fn accept_submission() {
         .filter(records::level_id.eq(level_id))
         .filter(records::submitted_by.eq(user_id))
         .select(records::id)
-        .first::<Uuid>(&mut conn)
+        .first::<Uuid>(&mut db.connection().unwrap())
         .expect("Failed to get new record!");
 
     let accepted_submission = submissions::table
         .filter(submissions::id.eq(submission))
         .select(Submission::as_select())
-        .first::<Submission>(&mut conn)
+        .first::<Submission>(&mut db.connection().unwrap())
         .expect("Failed to get accepted submission!");
 
     assert_eq!(
@@ -585,7 +585,7 @@ async fn accept_submission() {
         .filter(submission_history::submission_id.eq(submission))
         .order(submission_history::timestamp.desc())
         .select(SubmissionHistory::as_select())
-        .first::<SubmissionHistory>(&mut conn)
+        .first::<SubmissionHistory>(&mut db.connection().unwrap())
         .expect("Failed to get submission history!");
 
     assert_eq!(
@@ -603,15 +603,15 @@ async fn accept_submission() {
 
 #[actix_web::test]
 async fn deny_submission() {
-    let (app, mut conn, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&mut conn, None).await;
-    let (moderator_id, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let (moderator_id, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let token =
         create_test_token(moderator_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let level_id = create_test_level(&mut conn).await;
+    let level_id = create_test_level(&db).await;
 
-    let submission: Uuid = create_test_submission(level_id, user_id, &mut conn).await;
+    let submission: Uuid = create_test_submission(level_id, user_id, &db).await;
 
     let deny_data = json!({"status": "Denied", "reviewer_notes": "No Cheat Indicator:tm:"});
 
@@ -631,7 +631,7 @@ async fn deny_submission() {
     let denied_submission = submissions::table
         .filter(submissions::id.eq(submission))
         .select(Submission::as_select())
-        .first::<Submission>(&mut conn)
+        .first::<Submission>(&mut db.connection().unwrap())
         .expect("Failed to get denied submission!");
     assert_eq!(
         denied_submission.status,
@@ -649,7 +649,7 @@ async fn deny_submission() {
         .filter(submission_history::submission_id.eq(submission))
         .order(submission_history::timestamp.desc())
         .select(SubmissionHistory::as_select())
-        .first::<SubmissionHistory>(&mut conn)
+        .first::<SubmissionHistory>(&mut db.connection().unwrap())
         .expect("Failed to get submission history!");
 
     assert_eq!(
@@ -667,15 +667,15 @@ async fn deny_submission() {
 
 #[actix_web::test]
 async fn submission_under_consideration() {
-    let (app, mut conn, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&mut conn, None).await;
-    let (moderator_id, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let (moderator_id, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let token =
         create_test_token(moderator_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let level_id = create_test_level(&mut conn).await;
+    let level_id = create_test_level(&db).await;
 
-    let submission: Uuid = create_test_submission(level_id, user_id, &mut conn).await;
+    let submission: Uuid = create_test_submission(level_id, user_id, &db).await;
 
     let under_consideration_data = json!({"status": "UnderConsideration", "reviewer_notes": "No way SpaceUK is hacking right guys"});
 
@@ -695,7 +695,7 @@ async fn submission_under_consideration() {
     let uc_submission = submissions::table
         .filter(submissions::id.eq(submission))
         .select(Submission::as_select())
-        .first::<Submission>(&mut conn)
+        .first::<Submission>(&mut db.connection().unwrap())
         .expect("Failed to get UC submission!");
 
     assert_eq!(
@@ -714,7 +714,7 @@ async fn submission_under_consideration() {
         .filter(submission_history::submission_id.eq(submission))
         .order(submission_history::timestamp.desc())
         .select(SubmissionHistory::as_select())
-        .first::<SubmissionHistory>(&mut conn)
+        .first::<SubmissionHistory>(&mut db.connection().unwrap())
         .expect("Failed to get submission history!");
 
     assert_eq!(
@@ -732,13 +732,13 @@ async fn submission_under_consideration() {
 
 #[actix_web::test]
 async fn increment_shift() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (submitter_id, _) = create_test_user(&mut conn, None).await;
-    let (mod_id, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (submitter_id, _) = create_test_user(&db, None).await;
+    let (mod_id, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let token_mod = create_test_token(mod_id, &auth.jwt_encoding_key).unwrap();
-    let shift_id = create_test_shift(&mut conn, mod_id, true).await;
-    let level = create_test_level(&mut conn).await;
-    create_test_submission(level, submitter_id, &mut conn).await;
+    let shift_id = create_test_shift(&db, mod_id, true).await;
+    let level = create_test_level(&db).await;
+    create_test_submission(level, submitter_id, &db).await;
 
     let req = test::TestRequest::get()
         .uri("/arepl/submissions/claim")
@@ -761,7 +761,7 @@ async fn increment_shift() {
     let count: i32 = shifts::table
         .find(shift_id)
         .select(shifts::completed_count)
-        .first(&mut conn)
+        .first(&mut db.connection().unwrap())
         .unwrap();
     assert_eq!(count, 1);
 }
@@ -770,17 +770,17 @@ async fn increment_shift() {
 async fn shift_completes() {
     use diesel::{ExpressionMethods, RunQueryDsl};
 
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (submitter_id, _) = create_test_user(&mut conn, None).await;
-    let (mod_id, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (submitter_id, _) = create_test_user(&db, None).await;
+    let (mod_id, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let token = create_test_token(mod_id, &auth.jwt_encoding_key).unwrap();
-    let shift_id = create_test_shift(&mut conn, mod_id, true).await;
+    let shift_id = create_test_shift(&db, mod_id, true).await;
     diesel::update(shifts::table.filter(shifts::id.eq(shift_id)))
         .set(shifts::target_count.eq(1))
-        .execute(&mut conn)
+        .execute(&mut db.connection().unwrap())
         .unwrap();
-    let level = create_test_level(&mut conn).await;
-    create_test_submission(level, submitter_id, &mut conn).await;
+    let level = create_test_level(&db).await;
+    create_test_submission(level, submitter_id, &db).await;
 
     let req = test::TestRequest::get()
         .uri("/arepl/submissions/claim")
@@ -802,7 +802,7 @@ async fn shift_completes() {
     let status: ShiftStatus = shifts::table
         .find(shift_id)
         .select(shifts::status)
-        .first(&mut conn)
+        .first(&mut db.connection().unwrap())
         .unwrap();
     assert_eq!(status, ShiftStatus::Completed);
 }

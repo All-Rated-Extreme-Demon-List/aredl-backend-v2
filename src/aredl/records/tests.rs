@@ -18,11 +18,11 @@ use serde_json::json;
 
 #[actix_web::test]
 async fn create_record() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let level = create_test_level(&mut conn).await;
+    let level = create_test_level(&db).await;
 
     let record_data = json!({
         "submitted_by": user_id.to_string(),
@@ -51,12 +51,12 @@ async fn create_record() {
 
 #[actix_web::test]
 async fn get_record_list() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    create_test_level_with_record(&mut conn, user_id).await;
+    create_test_level_with_record(&db, user_id).await;
 
     let req = test::TestRequest::get()
         .uri("/aredl/records")
@@ -73,12 +73,12 @@ async fn get_record_list() {
 
 #[actix_web::test]
 async fn update_record() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    let (_, record_id) = create_test_level_with_record(&mut conn, user_id).await;
+    let (_, record_id) = create_test_level_with_record(&db, user_id).await;
     let update_data = json!({
         "video_url": "https://updated.com"
     });
@@ -99,14 +99,14 @@ async fn update_record() {
 
 #[actix_web::test]
 async fn get_own_records() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
-    let (user_id_2, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
+    let (user_id_2, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let level_id = create_test_level(&mut conn).await;
-    create_test_record(&mut conn, user_id, level_id).await;
-    create_test_record(&mut conn, user_id_2, level_id).await;
+    let level_id = create_test_level(&db).await;
+    create_test_record(&db, user_id, level_id).await;
+    create_test_record(&db, user_id_2, level_id).await;
 
     let req = test::TestRequest::get()
         .uri("/aredl/records/@me")
@@ -140,11 +140,11 @@ async fn get_own_records() {
 
 #[actix_web::test]
 async fn delete_record() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let (_, record_id) = create_test_level_with_record(&mut conn, user_id).await;
+    let (_, record_id) = create_test_level_with_record(&db, user_id).await;
     let req = test::TestRequest::delete()
         .uri(&format!("/aredl/records/{}", record_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
@@ -155,11 +155,11 @@ async fn delete_record() {
 
 #[actix_web::test]
 async fn get_one_record() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let (_, record_id) = create_test_level_with_record(&mut conn, user_id).await;
+    let (_, record_id) = create_test_level_with_record(&db, user_id).await;
     let req = test::TestRequest::get()
         .uri(&format!("/aredl/records/{}", record_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
@@ -176,15 +176,15 @@ async fn get_one_record() {
 
 #[actix_web::test]
 async fn get_records_mobile_filter() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
 
-    create_test_level_with_record(&mut conn, user_id).await;
-    let (_, mobile_record) = create_test_level_with_record(&mut conn, user_id).await;
+    create_test_level_with_record(&db, user_id).await;
+    let (_, mobile_record) = create_test_level_with_record(&db, user_id).await;
     diesel::update(records::table.filter(records::id.eq(mobile_record)))
         .set(records::mobile.eq(true))
-        .execute(&mut conn)
+        .execute(&mut db.connection().unwrap())
         .unwrap();
 
     let req = test::TestRequest::get()
@@ -200,12 +200,12 @@ async fn get_records_mobile_filter() {
 
 #[actix_web::test]
 async fn get_records_level_filter() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
 
-    let (level_one, record_one) = create_test_level_with_record(&mut conn, user_id).await;
-    create_test_level_with_record(&mut conn, user_id).await;
+    let (level_one, record_one) = create_test_level_with_record(&db, user_id).await;
+    create_test_level_with_record(&db, user_id).await;
 
     let req = test::TestRequest::get()
         .uri(&format!("/aredl/records?level_filter={level_one}"))
@@ -220,13 +220,13 @@ async fn get_records_level_filter() {
 
 #[actix_web::test]
 async fn get_records_submitter_filter() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (submitter_one, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
-    let (submitter_two, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (submitter_one, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
+    let (submitter_two, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
     let token = create_test_token(submitter_one, &auth.jwt_encoding_key).unwrap();
 
-    let (level_id, record_one) = create_test_level_with_record(&mut conn, submitter_one).await;
-    create_test_record(&mut conn, submitter_two, level_id).await;
+    let (level_id, record_one) = create_test_level_with_record(&db, submitter_one).await;
+    create_test_record(&db, submitter_two, level_id).await;
 
     let req = test::TestRequest::get()
         .uri(&format!("/aredl/records?submitter_filter={submitter_one}"))
@@ -241,15 +241,15 @@ async fn get_records_submitter_filter() {
 
 #[actix_web::test]
 async fn get_records_mobile_filter_full() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
-    let (_, mobile_record) = create_test_level_with_record(&mut conn, user_id).await;
+    let (_, mobile_record) = create_test_level_with_record(&db, user_id).await;
 
-    create_test_level_with_record(&mut conn, user_id).await;
+    create_test_level_with_record(&db, user_id).await;
     diesel::update(records::table.filter(records::id.eq(mobile_record)))
         .set(records::mobile.eq(true))
-        .execute(&mut conn)
+        .execute(&mut db.connection().unwrap())
         .unwrap();
 
     let req = test::TestRequest::get()
@@ -265,11 +265,11 @@ async fn get_records_mobile_filter_full() {
 
 #[actix_web::test]
 async fn get_records_level_filter_full() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
-    let (level_one, record_one) = create_test_level_with_record(&mut conn, user_id).await;
-    create_test_level_with_record(&mut conn, user_id).await;
+    let (level_one, record_one) = create_test_level_with_record(&db, user_id).await;
+    create_test_level_with_record(&db, user_id).await;
 
     let req = test::TestRequest::get()
         .uri(&format!("/aredl/records/full?level_filter={level_one}"))
@@ -284,13 +284,13 @@ async fn get_records_level_filter_full() {
 
 #[actix_web::test]
 async fn get_records_submitter_filter_full() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (submitter_one, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
-    let (submitter_two, _) = create_test_user(&mut conn, Some(Permission::RecordModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (submitter_one, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
+    let (submitter_two, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
     let token = create_test_token(submitter_one, &auth.jwt_encoding_key).unwrap();
 
-    let (level_id, record_one) = create_test_level_with_record(&mut conn, submitter_one).await;
-    create_test_record(&mut conn, submitter_two, level_id).await;
+    let (level_id, record_one) = create_test_level_with_record(&db, submitter_one).await;
+    create_test_record(&db, submitter_two, level_id).await;
 
     let req = test::TestRequest::get()
         .uri(&format!(

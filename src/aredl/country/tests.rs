@@ -10,16 +10,16 @@ use diesel::{ExpressionMethods, RunQueryDsl};
 
 #[actix_web::test]
 async fn get_country() {
-    let (app, mut conn, _, _) = init_test_app().await;
-    let (user, _) = create_test_user(&mut conn, None).await;
-    let (_, record_id) = create_test_level_with_record(&mut conn, user).await;
-
+    let (app, db, _, _) = init_test_app().await;
     let us_id = 840;
+
+    let (user, _) = create_test_user(&db, None).await;
+    let (_, record_id) = create_test_level_with_record(&db, user).await;
 
     diesel::update(users::table)
         .filter(users::id.eq(user))
         .set(users::country.eq(us_id))
-        .execute(&mut conn)
+        .execute(&mut db.connection().unwrap())
         .expect("Failed to assign country to user!");
 
     let req = test::TestRequest::get()

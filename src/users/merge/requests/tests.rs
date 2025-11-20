@@ -20,10 +20,10 @@ use serde_json::json;
 
 #[actix_web::test]
 async fn create_merge_request() {
-    let (app, mut conn, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (user_1_id, _) = create_test_user(&mut conn, Some(Permission::MergeReview)).await;
-    let (user_2_id, _) = create_test_placeholder_user(&mut conn, None).await;
+    let (user_1_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
+    let (user_2_id, _) = create_test_placeholder_user(&db, None).await;
     let token =
         create_test_token(user_1_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -66,18 +66,18 @@ async fn create_merge_request() {
 
 #[actix_web::test]
 async fn accept_merge_request() {
-    let (app, mut conn, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (user_1_id, _) = create_test_user(&mut conn, None).await;
-    let (user_2_id, _) = create_test_placeholder_user(&mut conn, None).await;
-    let (mod_id, _) = create_test_user(&mut conn, Some(Permission::MergeReview)).await;
+    let (user_1_id, _) = create_test_user(&db, None).await;
+    let (user_2_id, _) = create_test_placeholder_user(&db, None).await;
+    let (mod_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
     let token =
         create_test_token(mod_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    let (_, user_1_record_id) = create_test_level_with_record(&mut conn, user_1_id).await;
-    let (_, user_2_record_id) = create_test_level_with_record(&mut conn, user_2_id).await;
+    let (_, user_1_record_id) = create_test_level_with_record(&db, user_1_id).await;
+    let (_, user_2_record_id) = create_test_level_with_record(&db, user_2_id).await;
 
-    let merge = create_test_merge_req(&mut conn, user_1_id, user_2_id).await;
+    let merge = create_test_merge_req(&db, user_1_id, user_2_id).await;
 
     let req = test::TestRequest::post()
         .uri(format!("/users/merge/requests/{merge}/accept").as_str())
@@ -90,7 +90,7 @@ async fn accept_merge_request() {
     let records = records::table
         .filter(records::submitted_by.eq(user_1_id))
         .select(Record::as_select())
-        .get_results::<Record>(&mut conn)
+        .get_results::<Record>(&mut db.connection().unwrap())
         .expect("Failed to collect records!");
 
     assert_eq!(records.len(), 2, "User does not have exactly 2 records!");
@@ -106,7 +106,7 @@ async fn accept_merge_request() {
     let merge_exists = select(exists(
         merge_requests::table.filter(merge_requests::id.eq(merge)),
     ))
-    .get_result::<bool>(&mut conn)
+    .get_result::<bool>(&mut db.connection().unwrap())
     .expect("Failed to check for merge!");
 
     assert_ne!(merge_exists, true, "Merge request exists!")
@@ -114,18 +114,18 @@ async fn accept_merge_request() {
 
 #[actix_web::test]
 async fn reject_merge_request() {
-    let (app, mut conn, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (user_1_id, _) = create_test_user(&mut conn, None).await;
-    let (user_2_id, _) = create_test_placeholder_user(&mut conn, None).await;
-    let (mod_id, _) = create_test_user(&mut conn, Some(Permission::DirectMerge)).await;
+    let (user_1_id, _) = create_test_user(&db, None).await;
+    let (user_2_id, _) = create_test_placeholder_user(&db, None).await;
+    let (mod_id, _) = create_test_user(&db, Some(Permission::DirectMerge)).await;
     let token =
         create_test_token(mod_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    create_test_level_with_record(&mut conn, user_1_id).await;
-    create_test_level_with_record(&mut conn, user_2_id).await;
+    create_test_level_with_record(&db, user_1_id).await;
+    create_test_level_with_record(&db, user_2_id).await;
 
-    let merge = create_test_merge_req(&mut conn, user_1_id, user_2_id).await;
+    let merge = create_test_merge_req(&db, user_1_id, user_2_id).await;
 
     let req = test::TestRequest::post()
         .uri(format!("/users/merge/requests/{merge}/reject").as_str())
@@ -139,7 +139,7 @@ async fn reject_merge_request() {
     let records = records::table
         .filter(records::submitted_by.eq(user_1_id))
         .count()
-        .get_result::<i64>(&mut conn)
+        .get_result::<i64>(&mut db.connection().unwrap())
         .expect("Failed to get records!");
 
     assert_eq!(records, 1, "User does not have exactly 2 records!");
@@ -153,15 +153,15 @@ async fn reject_merge_request() {
 
 #[actix_web::test]
 async fn list_merge_requests() {
-    let (app, mut conn, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (user_1_id, _) = create_test_user(&mut conn, None).await;
-    let (user_2_id, _) = create_test_placeholder_user(&mut conn, None).await;
-    let (mod_id, _) = create_test_user(&mut conn, Some(Permission::MergeReview)).await;
+    let (user_1_id, _) = create_test_user(&db, None).await;
+    let (user_2_id, _) = create_test_placeholder_user(&db, None).await;
+    let (mod_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
     let token =
         create_test_token(mod_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    let merge = create_test_merge_req(&mut conn, user_1_id, user_2_id).await;
+    let merge = create_test_merge_req(&db, user_1_id, user_2_id).await;
 
     let req = test::TestRequest::get()
         .uri("/users/merge/requests")
@@ -180,15 +180,15 @@ async fn list_merge_requests() {
 
 #[actix_web::test]
 async fn find_merge_request() {
-    let (app, mut conn, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (user_1_id, _) = create_test_user(&mut conn, None).await;
-    let (user_2_id, _) = create_test_placeholder_user(&mut conn, None).await;
-    let (mod_id, _) = create_test_user(&mut conn, Some(Permission::MergeReview)).await;
+    let (user_1_id, _) = create_test_user(&db, None).await;
+    let (user_2_id, _) = create_test_placeholder_user(&db, None).await;
+    let (mod_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
     let token =
         create_test_token(mod_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    let merge = create_test_merge_req(&mut conn, user_1_id, user_2_id).await;
+    let merge = create_test_merge_req(&db, user_1_id, user_2_id).await;
 
     let req = test::TestRequest::get()
         .uri(&format!("/users/merge/requests/{merge}"))
@@ -203,17 +203,17 @@ async fn find_merge_request() {
 
 #[actix_web::test]
 async fn claim_merge_request() {
-    let (app, mut conn, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (user_1_id, _) = create_test_user(&mut conn, None).await;
-    let (user_2_id, _) = create_test_placeholder_user(&mut conn, None).await;
-    let (user_3_id, _) = create_test_user(&mut conn, None).await;
-    let (mod_id, _) = create_test_user(&mut conn, Some(Permission::MergeReview)).await;
+    let (user_1_id, _) = create_test_user(&db, None).await;
+    let (user_2_id, _) = create_test_placeholder_user(&db, None).await;
+    let (user_3_id, _) = create_test_user(&db, None).await;
+    let (mod_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
     let token =
         create_test_token(mod_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    let merge_1 = create_test_merge_req(&mut conn, user_1_id, user_2_id).await;
-    create_test_merge_req(&mut conn, user_3_id, user_2_id).await;
+    let merge_1 = create_test_merge_req(&db, user_1_id, user_2_id).await;
+    create_test_merge_req(&db, user_3_id, user_2_id).await;
 
     let req = test::TestRequest::get()
         .uri("/users/merge/requests/claim")
@@ -232,20 +232,20 @@ async fn claim_merge_request() {
 
 #[actix_web::test]
 async fn unclaim_merge_request() {
-    let (app, mut conn, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (user_1_id, _) = create_test_user(&mut conn, None).await;
-    let (user_2_id, _) = create_test_placeholder_user(&mut conn, None).await;
-    let (mod_id, _) = create_test_user(&mut conn, Some(Permission::MergeReview)).await;
+    let (user_1_id, _) = create_test_user(&db, None).await;
+    let (user_2_id, _) = create_test_placeholder_user(&db, None).await;
+    let (mod_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
     let token =
         create_test_token(mod_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    let merge = create_test_merge_req(&mut conn, user_1_id, user_2_id).await;
+    let merge = create_test_merge_req(&db, user_1_id, user_2_id).await;
 
     diesel::update(merge_requests::table)
         .filter(merge_requests::id.eq(merge))
         .set(merge_requests::is_claimed.eq(true))
-        .execute(&mut conn)
+        .execute(&mut db.connection().unwrap())
         .expect("Failed to claim merge request");
 
     let req = test::TestRequest::post()
@@ -260,7 +260,7 @@ async fn unclaim_merge_request() {
     let claimed: bool = merge_requests::table
         .filter(merge_requests::id.eq(merge))
         .select(merge_requests::is_claimed)
-        .first(&mut conn)
+        .first(&mut db.connection().unwrap())
         .expect("Failed to fetch merge request");
     assert!(!claimed, "Request should be unclaimed");
 }

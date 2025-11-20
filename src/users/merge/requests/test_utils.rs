@@ -1,12 +1,15 @@
 #[cfg(test)]
-use crate::{app_data::db::DbConnection, schema::merge_requests};
+use std::sync::Arc;
+
+#[cfg(test)]
+use crate::{app_data::db::DbAppState, schema::merge_requests};
 #[cfg(test)]
 use diesel::{ExpressionMethods, RunQueryDsl};
 #[cfg(test)]
 use uuid::Uuid;
 
 #[cfg(test)]
-pub async fn create_test_merge_req(conn: &mut DbConnection, user_1: Uuid, user_2_id: Uuid) -> Uuid {
+pub async fn create_test_merge_req(db: &Arc<DbAppState>, user_1: Uuid, user_2_id: Uuid) -> Uuid {
     diesel::insert_into(merge_requests::table)
         .values((
             // this becomes the new user
@@ -16,6 +19,6 @@ pub async fn create_test_merge_req(conn: &mut DbConnection, user_1: Uuid, user_2
             merge_requests::is_claimed.eq(false),
         ))
         .returning(merge_requests::id)
-        .get_result::<Uuid>(conn)
+        .get_result::<Uuid>(&mut db.connection().unwrap())
         .expect("Failed to create test merge request!")
 }

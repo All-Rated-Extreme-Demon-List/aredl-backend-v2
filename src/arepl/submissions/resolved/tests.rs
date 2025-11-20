@@ -12,11 +12,11 @@ use actix_web::test::{self, read_body_json};
 
 #[actix_web::test]
 async fn resolved_find_me_and_filters() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user, _) = create_test_user(&db, None).await;
     let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
-    let level = create_test_level(&mut conn).await;
-    let submission = create_test_submission(level, user, &mut conn).await;
+    let level = create_test_level(&db).await;
+    let submission = create_test_submission(level, user, &db).await;
     let req = test::TestRequest::get()
         .uri("/arepl/submissions/@me?status_filter=Pending")
         .insert_header(("Authorization", format!("Bearer {}", token)))
@@ -30,12 +30,12 @@ async fn resolved_find_me_and_filters() {
 
 #[actix_web::test]
 async fn resolved_find_one_unauthorized() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user1, _) = create_test_user(&mut conn, None).await;
-    let (user2, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user1, _) = create_test_user(&db, None).await;
+    let (user2, _) = create_test_user(&db, None).await;
     let token2 = create_test_token(user2, &auth.jwt_encoding_key).unwrap();
-    let level = create_test_level(&mut conn).await;
-    let submission = create_test_submission(level, user1, &mut conn).await;
+    let level = create_test_level(&db).await;
+    let submission = create_test_submission(level, user1, &db).await;
 
     let req = test::TestRequest::get()
         .uri(&format!("/arepl/submissions/resolved/{submission}"))
@@ -57,11 +57,11 @@ async fn resolved_find_all_requires_auth() {
 
 #[actix_web::test]
 async fn resolved_find_all() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (mod_user, _) = create_test_user(&mut conn, Some(Permission::SubmissionReview)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (mod_user, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let token = create_test_token(mod_user, &auth.jwt_encoding_key).unwrap();
-    let level = create_test_level(&mut conn).await;
-    create_test_submission(level, mod_user, &mut conn).await;
+    let level = create_test_level(&db).await;
+    create_test_submission(level, mod_user, &db).await;
 
     let req = test::TestRequest::get()
         .uri("/arepl/submissions")
@@ -73,11 +73,11 @@ async fn resolved_find_all() {
 
 #[actix_web::test]
 async fn resolved_find_own() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user, _) = create_test_user(&db, None).await;
     let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
-    let level = create_test_level(&mut conn).await;
-    let submission = create_test_submission(level, user, &mut conn).await;
+    let level = create_test_level(&db).await;
+    let submission = create_test_submission(level, user, &db).await;
 
     let req = test::TestRequest::get()
         .uri("/arepl/submissions/@me")

@@ -1,5 +1,8 @@
 #[cfg(test)]
-use crate::{app_data::db::DbConnection, schema::merge_logs};
+use std::sync::Arc;
+
+#[cfg(test)]
+use crate::{app_data::db::DbAppState, schema::merge_logs};
 use chrono::Utc;
 #[cfg(test)]
 use diesel::{ExpressionMethods, RunQueryDsl};
@@ -8,7 +11,7 @@ use uuid::Uuid;
 
 #[cfg(test)]
 pub async fn create_test_merge_log(
-    conn: &mut DbConnection,
+    db: &Arc<DbAppState>,
     primary_user: Uuid,
     secondary_user: Uuid,
 ) -> Uuid {
@@ -22,6 +25,6 @@ pub async fn create_test_merge_log(
             merge_logs::merged_at.eq(Utc::now()),
         ))
         .returning(merge_logs::id)
-        .get_result::<Uuid>(conn)
+        .get_result::<Uuid>(&mut db.connection().unwrap())
         .expect("Failed to create test merge log")
 }

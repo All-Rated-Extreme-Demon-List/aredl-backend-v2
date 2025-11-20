@@ -1,4 +1,8 @@
-use crate::app_data::db::DbConnection;
+#[cfg(test)]
+use std::sync::Arc;
+
+#[cfg(test)]
+use crate::app_data::db::DbAppState;
 use crate::schema::arepl::position_history;
 use chrono::Utc;
 use diesel::{ExpressionMethods, RunQueryDsl};
@@ -6,7 +10,7 @@ use uuid::Uuid;
 
 #[cfg(test)]
 pub fn insert_history_entry(
-    conn: &mut DbConnection,
+    db: &Arc<DbAppState>,
     new_position: Option<i32>,
     old_position: Option<i32>,
     legacy: Option<bool>,
@@ -24,6 +28,6 @@ pub fn insert_history_entry(
             position_history::level_below.eq(level_below),
             position_history::created_at.eq(Utc::now()),
         ))
-        .execute(conn)
+        .execute(&mut db.connection().unwrap())
         .expect("Failed to insert history entry");
 }

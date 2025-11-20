@@ -12,14 +12,15 @@ use uuid::Uuid;
 
 #[actix_web::test]
 async fn get_clan() {
-    let (app, mut conn, _, _) = init_test_app().await;
-    let (user, _) = create_test_user(&mut conn, None).await;
-    let (_, record_id) = create_test_level_with_record(&mut conn, user).await;
+    let (app, db, _, _) = init_test_app().await;
+
+    let (user, _) = create_test_user(&db, None).await;
+    let (_, record_id) = create_test_level_with_record(&db, user).await;
 
     let clan_id = diesel::insert_into(clans::table)
         .values((clans::global_name.eq("Test Clan"), clans::tag.eq("PMO")))
         .returning(clans::id)
-        .get_result::<Uuid>(&mut conn)
+        .get_result::<Uuid>(&mut db.connection().unwrap())
         .expect("Failed to create clan");
 
     diesel::insert_into(clan_members::table)
@@ -27,7 +28,7 @@ async fn get_clan() {
             clan_members::clan_id.eq(clan_id),
             clan_members::user_id.eq(user),
         ))
-        .execute(&mut conn)
+        .execute(&mut db.connection().unwrap())
         .expect("Failed to add user to clan");
 
     let req = test::TestRequest::get()

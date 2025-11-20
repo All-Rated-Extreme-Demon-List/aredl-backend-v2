@@ -9,9 +9,11 @@ use {
     diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
     httpmock::prelude::*,
     serde_json::json,
+    serial_test::serial,
 };
 
 #[actix_web::test]
+#[serial]
 async fn sync_pemonlist() {
     let server = MockServer::start_async().await;
     let response_body = json!({
@@ -40,18 +42,18 @@ async fn sync_pemonlist() {
         format!("{}/api/player", server.base_url()),
     );
 
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
 
     diesel::update(users::table.filter(users::id.eq(user_id)))
         .set(users::discord_id.eq(Some("550348841396994048".to_string())))
-        .execute(&mut conn)
+        .execute(&mut db.connection().unwrap())
         .unwrap();
 
-    let level_uuid = create_test_level(&mut conn).await;
+    let level_uuid = create_test_level(&db).await;
     diesel::update(levels::table.filter(levels::id.eq(level_uuid)))
         .set(levels::level_id.eq(12345))
-        .execute(&mut conn)
+        .execute(&mut db.connection().unwrap())
         .unwrap();
 
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
@@ -67,6 +69,7 @@ async fn sync_pemonlist() {
 }
 
 #[actix_web::test]
+#[serial]
 async fn sync_pemonlist_preserves_verification_flag() {
     // Mock pemonlist response
     let server = MockServer::start_async().await;
@@ -96,24 +99,24 @@ async fn sync_pemonlist_preserves_verification_flag() {
         format!("{}/api/player", server.base_url()),
     );
 
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
 
     diesel::update(users::table.filter(users::id.eq(user_id)))
         .set(users::discord_id.eq(Some("550348841396994048".to_string())))
-        .execute(&mut conn)
+        .execute(&mut db.connection().unwrap())
         .unwrap();
 
-    let level_uuid = create_test_level(&mut conn).await;
+    let level_uuid = create_test_level(&db).await;
     diesel::update(levels::table.filter(levels::id.eq(level_uuid)))
         .set(levels::level_id.eq(54321))
-        .execute(&mut conn)
+        .execute(&mut db.connection().unwrap())
         .unwrap();
 
-    let record_id = create_test_record(&mut conn, user_id, level_uuid).await;
+    let record_id = create_test_record(&db, user_id, level_uuid).await;
     diesel::update(records::table.filter(records::id.eq(record_id)))
         .set(records::is_verification.eq(true))
-        .execute(&mut conn)
+        .execute(&mut db.connection().unwrap())
         .unwrap();
 
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
@@ -127,7 +130,7 @@ async fn sync_pemonlist_preserves_verification_flag() {
     let is_verification_after: bool = records::table
         .filter(records::id.eq(record_id))
         .select(records::is_verification)
-        .first(&mut conn)
+        .first(&mut db.connection().unwrap())
         .unwrap();
     assert!(
         is_verification_after,

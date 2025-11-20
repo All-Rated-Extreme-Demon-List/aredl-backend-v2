@@ -1,5 +1,8 @@
 #[cfg(test)]
-use crate::{app_data::db::DbConnection, schema::aredl::submissions};
+use std::sync::Arc;
+
+#[cfg(test)]
+use crate::{app_data::db::DbAppState, schema::aredl::submissions};
 use crate::{
     aredl::submissions::{history::SubmissionHistory, SubmissionStatus},
     schema::aredl::submission_history,
@@ -13,11 +16,7 @@ use diesel::{ExpressionMethods, RunQueryDsl};
 use uuid::Uuid;
 
 #[cfg(test)]
-pub async fn create_test_submission(
-    level_id: Uuid,
-    user_id: Uuid,
-    conn: &mut DbConnection,
-) -> Uuid {
+pub async fn create_test_submission(level_id: Uuid, user_id: Uuid, db: &Arc<DbAppState>) -> Uuid {
     diesel::insert_into(submissions::table)
         .values((
             submissions::level_id.eq(level_id),
@@ -30,7 +29,7 @@ pub async fn create_test_submission(
             submissions::mod_menu.eq("Mega hack"),
         ))
         .returning(submissions::id)
-        .get_result::<Uuid>(conn)
+        .get_result::<Uuid>(&mut db.connection().unwrap())
         .expect("Failed to create test submission!")
 }
 
@@ -38,7 +37,7 @@ pub async fn insert_history_entry(
     submission_id: Uuid,
     reviewer_id: Option<Uuid>,
     status: SubmissionStatus,
-    conn: &mut DbConnection,
+    db: &Arc<DbAppState>,
 ) {
     let history = SubmissionHistory {
         id: Uuid::new_v4(),
@@ -51,6 +50,6 @@ pub async fn insert_history_entry(
     };
     diesel::insert_into(submission_history::table)
         .values(&history)
-        .execute(conn)
+        .execute(&mut db.connection().unwrap())
         .expect("Failed to insert submission history");
 }

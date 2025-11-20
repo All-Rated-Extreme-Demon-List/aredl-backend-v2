@@ -8,10 +8,10 @@ use actix_web::{self, test};
 
 #[actix_web::test]
 async fn list_names() {
-    let (app, mut conn, _, _) = init_test_app().await;
+    let (app, db, _, _) = init_test_app().await;
 
-    let (role_id_1, user_id_1) = create_test_role_with_user(&mut conn, 0).await;
-    let (role_id_2, user_id_2) = create_test_role_with_user(&mut conn, 0).await;
+    let (role_id_1, user_id_1) = create_test_role_with_user(&db, 0).await;
+    let (role_id_2, user_id_2) = create_test_role_with_user(&db, 0).await;
 
     let req = test::TestRequest::get().uri("/users/names").to_request();
 

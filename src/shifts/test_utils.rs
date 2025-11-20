@@ -1,6 +1,9 @@
 #[cfg(test)]
+use std::sync::Arc;
+
+#[cfg(test)]
 use crate::{
-    app_data::db::DbConnection,
+    app_data::db::DbAppState,
     schema::{recurrent_shifts, shifts},
     shifts::Weekday,
 };
@@ -13,7 +16,7 @@ use uuid::Uuid;
 
 #[cfg(test)]
 pub async fn create_test_shift(
-    conn: &mut DbConnection,
+    db: &Arc<DbAppState>,
     user_id: Uuid,
     should_start_immediately: bool,
 ) -> Uuid {
@@ -30,11 +33,11 @@ pub async fn create_test_shift(
             shifts::end_at.eq(start_time + chrono::Duration::hours(4)),
         ))
         .returning(shifts::id)
-        .get_result::<Uuid>(conn)
+        .get_result::<Uuid>(&mut db.connection().unwrap())
         .expect("Failed to create test shift")
 }
 #[cfg(test)]
-pub async fn create_test_recurring_shift(conn: &mut DbConnection, user_id: Uuid) -> Uuid {
+pub async fn create_test_recurring_shift(db: &Arc<DbAppState>, user_id: Uuid) -> Uuid {
     diesel::insert_into(recurrent_shifts::table)
         .values((
             recurrent_shifts::user_id.eq(user_id),
@@ -44,6 +47,6 @@ pub async fn create_test_recurring_shift(conn: &mut DbConnection, user_id: Uuid)
             recurrent_shifts::weekday.eq(Weekday::Friday),
         ))
         .returning(recurrent_shifts::id)
-        .get_result::<Uuid>(conn)
+        .get_result::<Uuid>(&mut db.connection().unwrap())
         .expect("Failed to create test shift")
 }

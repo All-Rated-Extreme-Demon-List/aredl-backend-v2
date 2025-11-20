@@ -1,4 +1,8 @@
-use crate::app_data::db::DbConnection;
+#[cfg(test)]
+use std::sync::Arc;
+
+#[cfg(test)]
+use crate::app_data::db::DbAppState;
 use crate::auth::Permission;
 use crate::schema::permissions;
 use crate::schema::{roles, user_roles, users};
@@ -9,9 +13,10 @@ use uuid::Uuid;
 
 #[cfg(test)]
 pub async fn create_test_user(
-    conn: &mut DbConnection,
+    db: &Arc<DbAppState>,
     required_permission: Option<Permission>,
 ) -> (Uuid, String) {
+    let conn = &mut db.connection().unwrap();
     let user_id = Uuid::new_v4();
     let username = format!("test_user_{}", user_id);
 
@@ -60,9 +65,11 @@ pub async fn create_test_user(
 
 #[cfg(test)]
 pub async fn create_test_placeholder_user(
-    conn: &mut DbConnection,
+    db: &Arc<DbAppState>,
     required_permission: Option<Permission>,
 ) -> (Uuid, String) {
+    let conn = &mut db.connection().unwrap();
+
     let user_id = Uuid::new_v4();
     let username = format!("test_user_{}", user_id);
 

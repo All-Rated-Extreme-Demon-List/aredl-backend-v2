@@ -1,5 +1,10 @@
 #[cfg(test)]
-use crate::app_data::db::DbConnection;
+use std::sync::Arc;
+
+#[cfg(test)]
+use super::{LevelLDMStatus, LevelLDMType};
+#[cfg(test)]
+use crate::app_data::db::DbAppState;
 #[cfg(test)]
 use crate::schema::aredl::level_ldms;
 #[cfg(test)]
@@ -8,11 +13,9 @@ use diesel::{ExpressionMethods, RunQueryDsl};
 use rand::Rng;
 #[cfg(test)]
 use uuid::Uuid;
-#[cfg(test)]
-use super::{LevelLDMStatus, LevelLDMType};
 
 #[cfg(test)]
-pub async fn create_test_ldm(conn: &mut DbConnection, level_id: Uuid, user: Uuid) -> Uuid {
+pub async fn create_test_ldm(db: &Arc<DbAppState>, level_id: Uuid, user: Uuid) -> Uuid {
     let mut rng = rand::rng();
     let ldm_id = rng.random_range(1..=100000000);
     let level_uuid = Uuid::new_v4();
@@ -26,9 +29,8 @@ pub async fn create_test_ldm(conn: &mut DbConnection, level_id: Uuid, user: Uuid
             level_ldms::description.eq("Test"),
             level_ldms::status.eq(LevelLDMStatus::Allowed),
             level_ldms::id_type.eq(LevelLDMType::Bugfix),
-
         ))
-        .execute(conn)
+        .execute(&mut db.connection().unwrap())
         .expect("Failed to create test LDM id");
 
     level_uuid

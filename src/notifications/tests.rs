@@ -27,8 +27,8 @@ async fn websocket_requires_auth() {
 
 #[actix_web::test]
 async fn websocket_success() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::NotificationsSubscribe)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::NotificationsSubscribe)).await;
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
 
     let req = ws_request("/notifications/websocket")

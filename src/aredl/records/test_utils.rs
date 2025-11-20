@@ -1,5 +1,8 @@
 #[cfg(test)]
-use crate::app_data::db::DbConnection;
+use std::sync::Arc;
+
+#[cfg(test)]
+use crate::app_data::db::DbAppState;
 #[cfg(test)]
 use crate::aredl::submissions::SubmissionStatus;
 #[cfg(test)]
@@ -10,7 +13,8 @@ use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 use uuid::Uuid;
 
 #[cfg(test)]
-pub async fn create_test_record(conn: &mut DbConnection, user_id: Uuid, level_id: Uuid) -> Uuid {
+pub async fn create_test_record(db: &Arc<DbAppState>, user_id: Uuid, level_id: Uuid) -> Uuid {
+    let conn = &mut db.connection().unwrap();
     let (level_id, submitted_by) = diesel::insert_into(submissions::table)
         .values((
             submissions::submitted_by.eq(user_id),

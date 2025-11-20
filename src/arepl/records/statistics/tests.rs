@@ -14,20 +14,20 @@ use diesel::{sql_query, RunQueryDsl};
 
 #[actix_web::test]
 async fn total_records_counts_and_ordering() {
-    let (app, mut conn, auth, _db) = init_test_app().await;
-    let (user_1, _) = create_test_user(&mut conn, None).await;
-    let (user_2, _) = create_test_user(&mut conn, None).await;
-    let (user_3, _) = create_test_user(&mut conn, None).await;
+    let (app, db, auth, _db) = init_test_app().await;
+    let (user_1, _) = create_test_user(&db, None).await;
+    let (user_2, _) = create_test_user(&db, None).await;
+    let (user_3, _) = create_test_user(&db, None).await;
     let token = create_test_token(user_1, &auth.jwt_encoding_key).unwrap();
 
-    let (level1, _) = create_test_level_with_record(&mut conn, user_1).await;
-    let (level2, _) = create_test_level_with_record(&mut conn, user_1).await;
+    let (level1, _) = create_test_level_with_record(&db, user_1).await;
+    let (level2, _) = create_test_level_with_record(&db, user_1).await;
 
-    create_test_record(&mut conn, user_2, level1).await;
-    create_test_record(&mut conn, user_3, level1).await;
+    create_test_record(&db, user_2, level1).await;
+    create_test_record(&db, user_3, level1).await;
 
     sql_query("REFRESH MATERIALIZED VIEW arepl.record_totals")
-        .execute(&mut conn)
+        .execute(&mut db.connection().unwrap())
         .unwrap();
 
     let req = TestRequest::get()
