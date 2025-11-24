@@ -1,5 +1,7 @@
-use crate::clans::{Clan, ClanInvite, ClanMember};
+use std::collections::HashSet;
+
 use crate::app_data::db::DbConnection;
+use crate::clans::{Clan, ClanInvite, ClanMember};
 use crate::error_handler::ApiError;
 use crate::schema::{clan_invites, clan_members, clans, users};
 use crate::users::me::notifications::{Notification, NotificationType};
@@ -134,11 +136,35 @@ impl ClanMember {
         members: Vec<Uuid>,
     ) -> Result<Vec<Uuid>, ApiError> {
         let result = conn.transaction(|connection| -> Result<Vec<Uuid>, ApiError> {
-            delete(clan_members::table)
+            let existing_members: Vec<ClanMember> = clan_members::table
                 .filter(clan_members::clan_id.eq(clan_id))
-                .execute(connection)?;
+                .select(ClanMember::as_select())
+                .load(connection)?;
 
-            Self::add_members(clan_id, members.as_ref(), connection)?;
+            let existing_user_ids: HashSet<Uuid> = existing_members
+                .iter()
+                .map(|member| member.user_id)
+                .collect();
+            let requested_user_ids: HashSet<Uuid> = members.iter().cloned().collect();
+
+            let users_to_remove: Vec<Uuid> = existing_user_ids
+                .difference(&requested_user_ids)
+                .cloned()
+                .collect();
+            if !users_to_remove.is_empty() {
+                delete(clan_members::table)
+                    .filter(clan_members::clan_id.eq(clan_id))
+                    .filter(clan_members::user_id.eq_any(&users_to_remove))
+                    .execute(connection)?;
+            }
+
+            let users_to_add: Vec<Uuid> = requested_user_ids
+                .difference(&existing_user_ids)
+                .cloned()
+                .collect();
+            if !users_to_add.is_empty() {
+                Self::add_members(clan_id, &users_to_add, connection)?;
+            }
 
             Ok(members)
         })?;

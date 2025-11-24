@@ -8,6 +8,7 @@ use crate::{
 };
 #[cfg(test)]
 use actix_web::test;
+use chrono::{Duration, Timelike, Utc};
 #[cfg(test)]
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 use uuid::Uuid;
@@ -78,6 +79,55 @@ async fn set_members() {
     assert_eq!(members.len(), 2);
     assert!(members.contains(&u1));
     assert!(members.contains(&u2));
+}
+
+#[actix_web::test]
+async fn set_members_preserves_metadata() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::ClanModify)).await;
+    let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
+    let clan_id = create_test_clan(&db).await;
+
+    let (existing_user, _) = create_test_user(&db, None).await;
+    create_test_clan_member(&db, clan_id, existing_user, 1).await;
+    let preserved_timestamp = (Utc::now() - Duration::days(7)).with_nanosecond(0).unwrap();
+    diesel::update(
+        clan_members::table
+            .filter(clan_members::clan_id.eq(clan_id))
+            .filter(clan_members::user_id.eq(existing_user)),
+    )
+    .set((
+        clan_members::created_at.eq(preserved_timestamp),
+        clan_members::updated_at.eq(preserved_timestamp),
+    ))
+    .execute(&mut db.connection().unwrap())
+    .unwrap();
+
+    let (new_user, _) = create_test_user(&db, None).await;
+
+    let req = test::TestRequest::patch()
+        .uri(&format!("/clans/{}/members", clan_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&vec![existing_user, new_user])
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+
+    let (role, created_at, updated_at): (i32, chrono::DateTime<Utc>, chrono::DateTime<Utc>) =
+        clan_members::table
+            .filter(clan_members::clan_id.eq(clan_id))
+            .filter(clan_members::user_id.eq(existing_user))
+            .select((
+                clan_members::role,
+                clan_members::created_at,
+                clan_members::updated_at,
+            ))
+            .first(&mut db.connection().unwrap())
+            .unwrap();
+
+    assert_eq!(role, 1);
+    assert_eq!(created_at, preserved_timestamp);
+    assert_eq!(updated_at, preserved_timestamp);
 }
 
 #[actix_web::test]
