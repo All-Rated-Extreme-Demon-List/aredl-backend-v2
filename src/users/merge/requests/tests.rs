@@ -38,9 +38,9 @@ async fn create_merge_request() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+
     let body: serde_json::Value = test::read_body_json(resp).await;
-    println!("{:?}", body);
-    // assert!(resp.status().is_success(), "status is {}", resp.status());
 
     assert_eq!(
         body["secondary_user"].as_str().unwrap().to_string(),
@@ -254,7 +254,6 @@ async fn unclaim_merge_request() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    println!("{:?}", resp);
     assert!(resp.status().is_success(), "status is {}", resp.status());
 
     let claimed: bool = merge_requests::table

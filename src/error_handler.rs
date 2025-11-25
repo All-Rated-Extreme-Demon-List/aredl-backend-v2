@@ -30,7 +30,6 @@ impl fmt::Display for ApiError {
 
 impl From<DieselError> for ApiError {
     fn from(error: DieselError) -> Self {
-        println!("Diesel error: {:?}", error);
         match error {
             DieselError::DatabaseError(_, err) => ApiError::new(409, err.message()),
             DieselError::NotFound => ApiError::new(404, "Record not found"),
@@ -54,11 +53,6 @@ impl ResponseError for ApiError {
             true => self.error_message.clone(),
             false => "Internal server error".to_string(),
         };
-
-        println!(
-            "Returning error response: {} - {}",
-            status_code, error_message
-        );
 
         HttpResponse::build(status_code).json(json!({"message": error_message}))
     }

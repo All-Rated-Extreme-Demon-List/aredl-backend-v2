@@ -800,3 +800,99 @@ async fn shift_completes() {
         .unwrap();
     assert_eq!(status, ShiftStatus::Completed);
 }
+
+#[actix_web::test]
+async fn reviewer_submission_can_set_reviewer_fields_for_other_users() {
+    let (app, db, auth, _) = init_test_app().await;
+
+    let (reviewer_id, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
+    let (other_user_id, _) = create_test_user(&db, None).await;
+    let reviewer_token =
+        create_test_token(reviewer_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    let other_level = create_test_level(&db).await;
+    let reviewer_level = create_test_level(&db).await;
+
+    let other_submission = json!({
+        "submitted_by": other_user_id,
+        "level_id": other_level,
+        "video_url": "https://video.example.com/other",
+        "raw_url": "https://raw.example.com/other",
+        "mobile": false,
+        "status": "UnderConsideration",
+        "reviewer_notes": "Initial review notes",
+    });
+
+    let other_req = test::TestRequest::post()
+        .uri("/aredl/submissions")
+        .insert_header(("Authorization", format!("Bearer {}", reviewer_token)))
+        .set_json(&other_submission)
+        .to_request();
+
+    let other_resp = test::call_service(&app, other_req).await;
+    assert!(other_resp.status().is_success(), "status is {}", other_resp.status());
+    let other_body: serde_json::Value = test::read_body_json(other_resp).await;
+
+    let other_submission_id = Uuid::parse_str(other_body["id"].as_str().unwrap())
+        .expect("Response missing submission id");
+
+    let stored_other_submission = submissions::table
+        .find(other_submission_id)
+        .select(Submission::as_select())
+        .first::<Submission>(&mut db.connection().unwrap())
+        .expect("Failed to fetch stored submission");
+
+    assert_eq!(
+        stored_other_submission.status,
+        SubmissionStatus::UnderConsideration,
+        "Reviewer provided status should be applied for other users",
+    );
+    assert_eq!(
+        stored_other_submission.reviewer_notes.as_deref(),
+        Some("Initial review notes"),
+        "Reviewer notes should be stored for other users",
+    );
+
+    let reviewer_submission = json!({
+        "level_id": reviewer_level,
+        "video_url": "https://video.example.com/self",
+        "raw_url": "https://raw.example.com/self",
+        "mobile": false,
+        "status": "Accepted",
+        "reviewer_notes": "Should not be applied",
+    });
+
+    let reviewer_req = test::TestRequest::post()
+        .uri("/aredl/submissions")
+        .insert_header(("Authorization", format!("Bearer {}", reviewer_token)))
+        .set_json(&reviewer_submission)
+        .to_request();
+
+    let reviewer_resp = test::call_service(&app, reviewer_req).await;
+    assert!(
+        reviewer_resp.status().is_success(),
+        "status is {}",
+        reviewer_resp.status()
+    );
+    let reviewer_body: serde_json::Value = test::read_body_json(reviewer_resp).await;
+
+    let reviewer_submission_id = Uuid::parse_str(reviewer_body["id"].as_str().unwrap())
+        .expect("Response missing reviewer submission id");
+
+    let stored_reviewer_submission = submissions::table
+        .find(reviewer_submission_id)
+        .select(Submission::as_select())
+        .first::<Submission>(&mut db.connection().unwrap())
+        .expect("Failed to fetch reviewer submission");
+
+    assert_eq!(
+        stored_reviewer_submission.status,
+        SubmissionStatus::Pending,
+        "Reviewer status should be ignored on own submissions",
+    );
+    assert!(
+        stored_reviewer_submission.reviewer_notes.is_none(),
+        "Reviewer notes should be ignored on own submissions",
+    );
+}
+

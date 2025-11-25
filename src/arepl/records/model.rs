@@ -279,8 +279,6 @@ impl Record {
             // Then update the record-specific fields
             let record_patch = RecordUpdate::from_record_insert(record.clone());
 
-            println!("Record patch: {:?}", record_patch);
-
             let result = diesel::update(records::table)
                 .filter(records::submitted_by.eq(record.submitted_by))
                 .filter(records::level_id.eq(record.level_id))

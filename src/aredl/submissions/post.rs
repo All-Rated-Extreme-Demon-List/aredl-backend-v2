@@ -87,6 +87,8 @@ pub struct SubmissionInsert {
     pub status: SubmissionStatus,
     /// Reviewer notes for the submission.
     pub reviewer_notes: Option<String>,
+    /// UUID of the user reviewing the submission.
+    pub reviewer_id: Option<Uuid>,
 }
 
 impl SubmissionPostMod {
@@ -120,7 +122,7 @@ impl SubmissionInsert {
             user_notes: body.user_notes,
             priority: authenticated.is_aredl_plus(conn)?,
             status: SubmissionStatus::Pending,
-            reviewer_notes: None,
+            ..Default::default()
         })
     }
 
@@ -147,8 +149,9 @@ impl SubmissionInsert {
             mod_menu: body.mod_menu,
             user_notes: body.user_notes,
             priority: authenticated.is_aredl_plus(conn)?,
-            status: SubmissionStatus::Pending,
+            status: body.status.unwrap_or(SubmissionStatus::Pending),
             reviewer_notes: body.reviewer_notes,
+            reviewer_id: Some(authenticated.user_id),
         })
     }
 }
@@ -222,8 +225,6 @@ impl Submission {
                     }
                 }
             }
-
-            println!("Creating submission: {:?}", &inserted_submission);
 
             let submission = diesel::insert_into(submissions::table)
                 .values(&inserted_submission)

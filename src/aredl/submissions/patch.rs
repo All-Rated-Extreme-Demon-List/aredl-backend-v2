@@ -254,7 +254,6 @@ impl SubmissionPatchMod {
         authenticated: Authenticated,
         notify_tx: broadcast::Sender<WebsocketNotification>,
     ) -> Result<Submission, ApiError> {
-        println!("Patching submission {:?} with {:?}", id, patch);
         if patch == Self::default() {
             return Err(ApiError::new(400, "No changes were provided!"));
         }
