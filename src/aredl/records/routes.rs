@@ -55,11 +55,14 @@ async fn find(
 async fn create(
     db: web::Data<Arc<DbAppState>>,
     record: web::Json<RecordInsert>,
+    authenticated: Authenticated,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&record));
-    let record =
-        web::block(move || Record::create(&mut db.connection()?, record.into_inner())).await??;
+    let record = web::block(move || {
+        Record::create(&mut db.connection()?, record.into_inner(), authenticated)
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(record))
 }
 
@@ -85,11 +88,17 @@ async fn update(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
     record: web::Json<RecordPatch>,
+    authenticated: Authenticated,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&record));
     let record = web::block(move || {
-        Record::update(&mut db.connection()?, id.into_inner(), record.into_inner())
+        Record::update(
+            &mut db.connection()?,
+            id.into_inner(),
+            record.into_inner(),
+            authenticated,
+        )
     })
     .await??;
     Ok(HttpResponse::Ok().json(record))

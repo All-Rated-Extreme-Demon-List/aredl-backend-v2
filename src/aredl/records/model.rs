@@ -3,6 +3,7 @@ use crate::aredl::levels::ExtendedBaseLevel;
 use crate::aredl::submissions::patch::SubmissionPatchMod;
 use crate::aredl::submissions::post::SubmissionInsert;
 use crate::aredl::submissions::{Submission, SubmissionStatus};
+use crate::auth::Authenticated;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::{aredl::levels, aredl::records, aredl::submissions, users};
@@ -175,6 +176,7 @@ impl SubmissionInsert {
             mobile: record.mobile,
             video_url: record.video_url,
             status: SubmissionStatus::Accepted,
+            reviewer_notes: Some("Added by a moderator".to_string()),
             ..Default::default()
         }
     }
@@ -185,8 +187,8 @@ impl SubmissionPatchMod {
         Self {
             mobile: Some(record.mobile),
             video_url: Some(record.video_url),
-            reviewer_notes: Some("Added by a moderator".to_string()),
             status: Some(SubmissionStatus::Accepted),
+            reviewer_notes: Some("Added by a moderator".to_string()),
             ..Default::default()
         }
     }
@@ -252,8 +254,15 @@ impl Submission {
 }
 
 impl Record {
-    pub fn create(conn: &mut DbConnection, record: RecordInsert) -> Result<Self, ApiError> {
+    pub fn create(
+        conn: &mut DbConnection,
+        record: RecordInsert,
+        authenticated: Authenticated,
+    ) -> Result<Self, ApiError> {
         conn.transaction(|conn| -> Result<Self, ApiError> {
+            if authenticated.user_id == record.submitted_by {
+                return Err(ApiError::new(400, "You cannot create records for yourself"));
+            }
             // Create the corresponding submission first and let triggers initialize the record
             Submission::upsert_from_record_insert(conn, record.clone())?;
 
@@ -277,6 +286,7 @@ impl Record {
         conn: &mut DbConnection,
         record_id: Uuid,
         record: RecordPatch,
+        authenticated: Authenticated,
     ) -> Result<Self, ApiError> {
         conn.transaction(|conn| -> Result<Self, ApiError> {
             // Update the corresponding submission first and let triggers update the record
@@ -286,6 +296,10 @@ impl Record {
                 .filter(records::id.eq(record_id))
                 .select((records::level_id, records::submitted_by))
                 .first(conn)?;
+
+            if authenticated.user_id == submitted_by {
+                return Err(ApiError::new(400, "You cannot update records for yourself"));
+            }
 
             diesel::update(submissions::table)
                 .filter(submissions::submitted_by.eq(submitted_by))

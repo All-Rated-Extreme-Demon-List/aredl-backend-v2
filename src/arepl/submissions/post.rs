@@ -38,13 +38,43 @@ pub struct SubmissionInsert {
     pub priority: bool,
     /// Status of the submission
     pub status: SubmissionStatus,
+    /// Reviewer notes for the submission.
+    pub reviewer_notes: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Insertable, ToSchema)]
 #[diesel(table_name=submissions, check_for_backend(Pg))]
-pub struct SubmissionInsertBody {
-    /// UUID of the user submitting the record.
+
+pub struct SubmissionPostMod {
+    /// [MOD ONLY] UUID of the user submitting the record.
     pub submitted_by: Option<Uuid>,
+    /// UUID of the level this record is on.
+    pub level_id: Uuid,
+    /// Set to `true` if this completion is on a mobile device.
+    pub mobile: bool,
+    /// ID of the LDM used for the record, if any.
+    pub ldm_id: Option<i32>,
+    /// Video link of the completion.
+    pub video_url: String,
+    /// Completion time of the record in milliseconds.
+    pub completion_time: i64,
+    /// Link to the raw video file of the completion.
+    pub raw_url: Option<String>,
+    /// The mod menu used in this record
+    pub mod_menu: Option<String>,
+    /// Any additional notes left by the submitter.
+    pub user_notes: Option<String>,
+    /// [MOD ONLY] Whether this submission has priority in the review queue.
+    pub priority: Option<bool>,
+    /// [MOD ONLY] Initial status of the submission
+    pub status: Option<SubmissionStatus>,
+    /// [MOD ONLY] Reviewer notes for the submission.
+    pub reviewer_notes: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Insertable, ToSchema)]
+#[diesel(table_name=submissions, check_for_backend(Pg))]
+pub struct SubmissionPostUser {
     /// UUID of the level this record is on.
     pub level_id: Uuid,
     /// Set to `true` if this completion is on a mobile device.
@@ -63,21 +93,54 @@ pub struct SubmissionInsertBody {
     pub user_notes: Option<String>,
 }
 
+impl SubmissionPostMod {
+    pub fn downgrade(self) -> SubmissionPostUser {
+        SubmissionPostUser {
+            level_id: self.level_id,
+            mobile: self.mobile,
+            ldm_id: self.ldm_id,
+            video_url: self.video_url,
+            raw_url: self.raw_url,
+            mod_menu: self.mod_menu,
+            user_notes: self.user_notes,
+            completion_time: self.completion_time,
+        }
+    }
+}
+
 impl SubmissionInsert {
-    pub fn from_body(
+    pub fn from_user(
         conn: &mut DbConnection,
-        body: SubmissionInsertBody,
+        body: SubmissionPostUser,
+        authenticated: &Authenticated,
+    ) -> Result<Self, ApiError> {
+        Ok(SubmissionInsert {
+            submitted_by: authenticated.user_id,
+            level_id: body.level_id,
+            mobile: body.mobile,
+            ldm_id: body.ldm_id,
+            video_url: body.video_url,
+            raw_url: body.raw_url,
+            mod_menu: body.mod_menu,
+            user_notes: body.user_notes,
+            completion_time: body.completion_time,
+            priority: authenticated.is_aredl_plus(conn)?,
+            status: SubmissionStatus::Pending,
+            reviewer_notes: None,
+        })
+    }
+
+    pub fn from_mod(
+        conn: &mut DbConnection,
+        body: SubmissionPostMod,
         authenticated: &Authenticated,
     ) -> Result<Self, ApiError> {
         let submitted_by = body.submitted_by.unwrap_or(authenticated.user_id);
 
-        if authenticated.user_id != submitted_by
-            && !authenticated.has_permission(conn, Permission::SubmissionReview)?
+        if !authenticated.has_permission(conn, Permission::SubmissionReview)?
+            || submitted_by == authenticated.user_id
         {
-            return Err(ApiError::new(
-                403,
-                "You do not have permission to submit on behalf of other users",
-            ));
+            return SubmissionInsert::from_user(conn, body.downgrade(), authenticated);
         }
 
         Ok(SubmissionInsert {
@@ -92,6 +155,7 @@ impl SubmissionInsert {
             completion_time: body.completion_time,
             priority: authenticated.is_aredl_plus(conn)?,
             status: SubmissionStatus::Pending,
+            reviewer_notes: body.reviewer_notes,
         })
     }
 }
@@ -99,7 +163,7 @@ impl SubmissionInsert {
 impl Submission {
     pub fn create(
         conn: &mut DbConnection,
-        submission_body: SubmissionInsertBody,
+        submission_body: SubmissionPostMod,
         authenticated: Authenticated,
     ) -> Result<Self, ApiError> {
         if !is_url(&submission_body.video_url) {
@@ -117,7 +181,7 @@ impl Submission {
 
         conn.transaction(|connection| -> Result<Self, ApiError> {
             let inserted_submission =
-                SubmissionInsert::from_body(connection, submission_body, &authenticated)?;
+                SubmissionInsert::from_mod(connection, submission_body, &authenticated)?;
 
             if authenticated.user_id == inserted_submission.submitted_by
                 && !(SubmissionsEnabled::is_enabled(connection)?)

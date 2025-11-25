@@ -19,9 +19,10 @@ use serde_json::json;
 #[actix_web::test]
 async fn create_record() {
     let (app, db, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let (moderator_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
     let token =
-        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+        create_test_token(moderator_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let level = create_test_level(&db).await;
 
     let record_data = json!({
@@ -50,6 +51,36 @@ async fn create_record() {
 }
 
 #[actix_web::test]
+async fn create_self_record_fails() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let level = create_test_level(&db).await;
+
+    let record_data = json!({
+        "submitted_by": user_id.to_string(),
+        "mobile": false,
+        "level_id": level.to_string(),
+        "video_url": "https://video.com",
+        "is_verification": false,
+        "raw_url": "https://raw.com"
+    });
+
+    let req = test::TestRequest::post()
+        .uri("/aredl/records")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&record_data)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(
+        resp.status().is_client_error(),
+        "status is {}",
+        resp.status()
+    );
+}
+
+#[actix_web::test]
 async fn get_record_list() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
@@ -74,9 +105,10 @@ async fn get_record_list() {
 #[actix_web::test]
 async fn update_record() {
     let (app, db, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let (moderator_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
     let token =
-        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+        create_test_token(moderator_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
     let (_, record_id) = create_test_level_with_record(&db, user_id).await;
     let update_data = json!({
@@ -95,6 +127,26 @@ async fn update_record() {
         update_data["video_url"].as_str().unwrap(),
         "Videos do not match!"
     )
+}
+
+#[actix_web::test]
+async fn update_self_record_fails() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    let (_, record_id) = create_test_level_with_record(&db, user_id).await;
+    let update_data = json!({
+        "video_url": "https://updated.com"
+    });
+    let req = test::TestRequest::patch()
+        .uri(&format!("/aredl/records/{}", record_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&update_data)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_client_error(), "status is {}", resp.status());
 }
 
 #[actix_web::test]

@@ -7,7 +7,7 @@ use tokio::sync::broadcast;
 use crate::{
     app_data::db::DbAppState, aredl::{
         records::Record, submissions::{
-            Submission, SubmissionPage, SubmissionResolved, SubmissionStatus, patch::{SubmissionPatchMod, SubmissionPatchUser}, post::{SubmissionInsert, SubmissionInsertBody}, statistics, status
+            Submission, SubmissionPage, SubmissionResolved, SubmissionStatus, patch::{SubmissionPatchMod, SubmissionPatchUser}, post::{SubmissionInsert, SubmissionPostMod}, statistics, status
         }
     }, auth::{Authenticated, Permission, UserAuth}, error_handler::ApiError, notifications::WebsocketNotification
 };
@@ -27,10 +27,10 @@ use super::{history, queue, resolved};
         ("access_token" = []),
         ("api_key" = []),
     ),
-    request_body = SubmissionInsertBody,
+    request_body = SubmissionPostMod,
 )]
 #[post("", wrap="UserAuth::load()")]
-async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionInsertBody>, authenticated: Authenticated, root_span: RootSpan) -> Result<HttpResponse, ApiError> {
+async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionPostMod>, authenticated: Authenticated, root_span: RootSpan) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&body));
     let created = web::block(move || {
         let conn = &mut db.connection()?;
