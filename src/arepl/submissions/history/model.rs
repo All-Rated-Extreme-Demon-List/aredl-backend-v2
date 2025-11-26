@@ -21,10 +21,16 @@ pub struct SubmissionHistory {
     pub id: Uuid,
     pub submission_id: Uuid,
     pub status: SubmissionStatus,
+    pub timestamp: DateTime<Utc>,
+    pub video_url: Option<String>,
+    pub raw_url: Option<String>,
+    pub mobile: Option<bool>,
+    pub ldm_id: Option<i32>,
+    pub mod_menu: Option<String>,
+    pub completion_time: Option<i64>,
+    pub user_notes: Option<String>,
     pub reviewer_notes: Option<String>,
     pub reviewer_id: Option<Uuid>,
-    pub user_notes: Option<String>,
-    pub timestamp: DateTime<Utc>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
