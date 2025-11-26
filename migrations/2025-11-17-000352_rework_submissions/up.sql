@@ -335,11 +335,10 @@ BEGIN
             RETURN NEW;
         END IF;
 
-        -- skip history if we only flip Pending <-> Claimed and nothing else changes
+        -- skip history if we only flip Pending <-> Claimed and reviewer and nothing else changes
         only_claim_toggle = NEW.status <> OLD.status
             AND ((OLD.status = 'Pending' AND NEW.status = 'Claimed') OR (OLD.status = 'Claimed' AND NEW.status = 'Pending'))
             AND NEW.user_notes IS NOT DISTINCT FROM OLD.user_notes
-            AND NEW.reviewer_id IS NOT DISTINCT FROM OLD.reviewer_id
             AND NEW.reviewer_notes IS NOT DISTINCT FROM OLD.reviewer_notes
             AND NEW.mobile IS NOT DISTINCT FROM OLD.mobile
             AND NEW.ldm_id IS NOT DISTINCT FROM OLD.ldm_id
@@ -385,7 +384,6 @@ BEGIN
         only_claim_toggle = NEW.status <> OLD.status
             AND ((OLD.status = 'Pending' AND NEW.status = 'Claimed') OR (OLD.status = 'Claimed' AND NEW.status = 'Pending'))
             AND NEW.user_notes IS NOT DISTINCT FROM OLD.user_notes
-            AND NEW.reviewer_id IS NOT DISTINCT FROM OLD.reviewer_id
             AND NEW.reviewer_notes IS NOT DISTINCT FROM OLD.reviewer_notes
             AND NEW.mobile IS NOT DISTINCT FROM OLD.mobile
             AND NEW.ldm_id IS NOT DISTINCT FROM OLD.ldm_id
