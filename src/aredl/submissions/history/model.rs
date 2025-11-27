@@ -37,11 +37,16 @@ pub struct SubmissionHistoryResolved {
     pub id: Uuid,
     pub submission_id: Uuid,
     pub status: SubmissionStatus,
+    pub timestamp: DateTime<Utc>,
+    pub video_url: Option<String>,
+    pub raw_url: Option<String>,
+    pub mobile: Option<bool>,
+    pub ldm_id: Option<i32>,
+    pub mod_menu: Option<String>,
+    pub user_notes: Option<String>,
     pub reviewer_notes: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reviewer: Option<BaseUser>,
-    pub user_notes: Option<String>,
-    pub timestamp: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -60,6 +65,11 @@ impl SubmissionHistoryResolved {
             reviewer: user,
             user_notes: history.user_notes,
             timestamp: history.timestamp,
+            video_url: history.video_url,
+            raw_url: history.raw_url,
+            mobile: history.mobile,
+            ldm_id: history.ldm_id,
+            mod_menu: history.mod_menu,
         }
     }
 
