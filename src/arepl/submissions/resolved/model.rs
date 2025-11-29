@@ -1,7 +1,7 @@
 use crate::{
+    app_data::db::DbConnection,
     arepl::{levels::ExtendedBaseLevel, submissions::*},
     auth::{Authenticated, Permission},
-    app_data::db::DbConnection,
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
     schema::{
@@ -139,6 +139,7 @@ impl SubmissionResolved {
             reviewer,
             priority: submission.priority,
             reviewer_notes: submission.reviewer_notes,
+            private_reviewer_notes: submission.private_reviewer_notes,
             user_notes: submission.user_notes,
             created_at: submission.created_at,
             updated_at: submission.updated_at,

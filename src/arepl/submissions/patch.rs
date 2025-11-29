@@ -52,16 +52,16 @@ pub struct SubmissionPatchMod {
     pub completion_time: Option<i64>,
     /// Link to the raw video file of the completion.
     pub raw_url: Option<String>,
-    /// [Mod only] The status of the submission
+    /// [MOD ONLY] The status of the submission
     pub status: Option<SubmissionStatus>,
     /// The mod menu used in this record
     pub mod_menu: Option<String>,
     /// Whether the record was submitted as a priority record.
     pub priority: Option<bool>,
-    /// [Mod only] Internal UUID of the user who reviewed the record.
-    pub reviewer_id: Option<Uuid>,
-    /// [Mod only] Notes given by the reviewer when reviewing the record.
+    /// [MOD ONLY] Notes given by the reviewer when reviewing the record.
     pub reviewer_notes: Option<String>,
+    /// [MOD ONLY] Private notes given by the reviewer when reviewing the record.
+    pub private_reviewer_notes: Option<String>,
     /// Any additional notes left by the submitter.
     pub user_notes: Option<String>,
 }

@@ -136,6 +136,7 @@ pub mod arepl {
             raw_url -> Nullable<Varchar>,
             mod_menu -> Nullable<Varchar>,
             priority -> Nullable<Bool>,
+            private_reviewer_notes -> Nullable<Text>,
             completion_time -> Nullable<Int8>,
         }
     }
@@ -161,6 +162,7 @@ pub mod arepl {
             mod_menu -> Nullable<Varchar>,
             updated_at -> Timestamptz,
             completion_time -> Int8,
+            private_reviewer_notes -> Nullable<Text>,
         }
     }
 

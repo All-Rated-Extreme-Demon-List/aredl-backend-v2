@@ -26,13 +26,20 @@ DROP VIEW arepl.min_placement_country_records;
 
 -- Make history entries include all submission fields
 
+ALTER TABLE aredl.submissions
+ADD COLUMN private_reviewer_notes text;
+
+ALTER TABLE arepl.submissions
+ADD COLUMN private_reviewer_notes text;
+
 ALTER TABLE aredl.submission_history 
 ADD COLUMN mobile boolean, 
 ADD COLUMN ldm_id int, 
 ADD COLUMN video_url varchar, 
 ADD COLUMN raw_url varchar, 
 ADD COLUMN mod_menu varchar, 
-ADD COLUMN priority boolean;
+ADD COLUMN priority boolean,
+ADD COLUMN private_reviewer_notes text;
 
 ALTER TABLE arepl.submission_history 
 ADD COLUMN mobile boolean, 
@@ -41,6 +48,7 @@ ADD COLUMN video_url varchar,
 ADD COLUMN raw_url varchar, 
 ADD COLUMN mod_menu varchar, 
 ADD COLUMN priority boolean, 
+ADD COLUMN private_reviewer_notes text,
 ADD COLUMN completion_time bigint;
 
 
@@ -325,8 +333,8 @@ DECLARE
     only_claim_toggle boolean;
 BEGIN
     IF TG_OP = 'INSERT' THEN
-        INSERT INTO aredl.submission_history (id, submission_id, status, user_notes, reviewer_id, reviewer_notes, mobile, ldm_id, video_url, raw_url, mod_menu, priority, timestamp)
-        VALUES (uuid_generate_v4(), NEW.id, NEW.status, NEW.user_notes, NEW.reviewer_id, NEW.reviewer_notes, NEW.mobile, NEW.ldm_id, NEW.video_url, NEW.raw_url, NEW.mod_menu, NEW.priority, CLOCK_TIMESTAMP());
+        INSERT INTO aredl.submission_history (id, submission_id, status, user_notes, reviewer_id, reviewer_notes, private_reviewer_notes, mobile, ldm_id, video_url, raw_url, mod_menu, priority, timestamp)
+        VALUES (uuid_generate_v4(), NEW.id, NEW.status, NEW.user_notes, NEW.reviewer_id, NEW.reviewer_notes, NEW.private_reviewer_notes, NEW.mobile, NEW.ldm_id, NEW.video_url, NEW.raw_url, NEW.mod_menu, NEW.priority, CLOCK_TIMESTAMP());
         RETURN NEW;
     END IF;
 
@@ -340,6 +348,7 @@ BEGIN
             AND ((OLD.status = 'Pending' AND NEW.status = 'Claimed') OR (OLD.status = 'Claimed' AND NEW.status = 'Pending'))
             AND NEW.user_notes IS NOT DISTINCT FROM OLD.user_notes
             AND NEW.reviewer_notes IS NOT DISTINCT FROM OLD.reviewer_notes
+            AND NEW.private_reviewer_notes IS NOT DISTINCT FROM OLD.private_reviewer_notes
             AND NEW.mobile IS NOT DISTINCT FROM OLD.mobile
             AND NEW.ldm_id IS NOT DISTINCT FROM OLD.ldm_id
             AND NEW.video_url IS NOT DISTINCT FROM OLD.video_url
@@ -351,8 +360,8 @@ BEGIN
             RETURN NEW;
         END IF;
 
-        INSERT INTO aredl.submission_history (id, submission_id, status, user_notes, reviewer_id, reviewer_notes, mobile, ldm_id, video_url, raw_url, mod_menu, priority, timestamp)
-        VALUES (uuid_generate_v4(), NEW.id, NEW.status, NEW.user_notes, NEW.reviewer_id, NEW.reviewer_notes, NEW.mobile, NEW.ldm_id, NEW.video_url, NEW.raw_url, NEW.mod_menu, NEW.priority, CLOCK_TIMESTAMP());
+        INSERT INTO aredl.submission_history (id, submission_id, status, user_notes, reviewer_id, reviewer_notes, private_reviewer_notes, mobile, ldm_id, video_url, raw_url, mod_menu, priority, timestamp)
+        VALUES (uuid_generate_v4(), NEW.id, NEW.status, NEW.user_notes, NEW.reviewer_id, NEW.reviewer_notes, NEW.private_reviewer_notes, NEW.mobile, NEW.ldm_id, NEW.video_url, NEW.raw_url, NEW.mod_menu, NEW.priority, CLOCK_TIMESTAMP());
 
         RETURN NEW;
     END IF;
@@ -371,8 +380,8 @@ DECLARE
     only_claim_toggle boolean;
 BEGIN
     IF TG_OP = 'INSERT' THEN
-        INSERT INTO arepl.submission_history (id, submission_id, status, user_notes, reviewer_id, reviewer_notes, mobile, ldm_id, video_url, raw_url, mod_menu, priority, completion_time, timestamp)
-        VALUES (uuid_generate_v4(), NEW.id, NEW.status, NEW.user_notes, NEW.reviewer_id, NEW.reviewer_notes, NEW.mobile, NEW.ldm_id, NEW.video_url, NEW.raw_url, NEW.mod_menu, NEW.priority, NEW.completion_time, CLOCK_TIMESTAMP());
+        INSERT INTO arepl.submission_history (id, submission_id, status, user_notes, reviewer_id, reviewer_notes, private_reviewer_notes, mobile, ldm_id, video_url, raw_url, mod_menu, priority, completion_time, timestamp)
+        VALUES (uuid_generate_v4(), NEW.id, NEW.status, NEW.user_notes, NEW.reviewer_id, NEW.reviewer_notes, NEW.private_reviewer_notes, NEW.mobile, NEW.ldm_id, NEW.video_url, NEW.raw_url, NEW.mod_menu, NEW.priority, NEW.completion_time, CLOCK_TIMESTAMP());
         RETURN NEW;
     END IF;
 
@@ -385,6 +394,7 @@ BEGIN
             AND ((OLD.status = 'Pending' AND NEW.status = 'Claimed') OR (OLD.status = 'Claimed' AND NEW.status = 'Pending'))
             AND NEW.user_notes IS NOT DISTINCT FROM OLD.user_notes
             AND NEW.reviewer_notes IS NOT DISTINCT FROM OLD.reviewer_notes
+            AND NEW.private_reviewer_notes IS NOT DISTINCT FROM OLD.private_reviewer_notes
             AND NEW.mobile IS NOT DISTINCT FROM OLD.mobile
             AND NEW.ldm_id IS NOT DISTINCT FROM OLD.ldm_id
             AND NEW.video_url IS NOT DISTINCT FROM OLD.video_url
@@ -397,8 +407,8 @@ BEGIN
             RETURN NEW;
         END IF;
 
-        INSERT INTO arepl.submission_history (id, submission_id, status, user_notes, reviewer_id, reviewer_notes, mobile, ldm_id, video_url, raw_url, mod_menu, priority, completion_time, timestamp)
-        VALUES (uuid_generate_v4(), NEW.id, NEW.status, NEW.user_notes, NEW.reviewer_id, NEW.reviewer_notes, NEW.mobile, NEW.ldm_id, NEW.video_url, NEW.raw_url, NEW.mod_menu, NEW.priority, NEW.completion_time, CLOCK_TIMESTAMP());
+        INSERT INTO arepl.submission_history (id, submission_id, status, user_notes, reviewer_id, reviewer_notes, private_reviewer_notes, mobile, ldm_id, video_url, raw_url, mod_menu, priority, completion_time, timestamp)
+        VALUES (uuid_generate_v4(), NEW.id, NEW.status, NEW.user_notes, NEW.reviewer_id, NEW.reviewer_notes, NEW.private_reviewer_notes, NEW.mobile, NEW.ldm_id, NEW.video_url, NEW.raw_url, NEW.mod_menu, NEW.priority, NEW.completion_time, CLOCK_TIMESTAMP());
 
         RETURN NEW;
     END IF;

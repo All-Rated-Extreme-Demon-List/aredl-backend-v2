@@ -144,6 +144,7 @@ pub mod aredl {
             raw_url -> Nullable<Varchar>,
             mod_menu -> Nullable<Varchar>,
             priority -> Nullable<Bool>,
+            private_reviewer_notes -> Nullable<Text>,
         }
     }
 
@@ -167,6 +168,7 @@ pub mod aredl {
             status -> SubmissionStatus,
             mod_menu -> Nullable<Varchar>,
             updated_at -> Timestamptz,
+            private_reviewer_notes -> Nullable<Text>,
         }
     }
 

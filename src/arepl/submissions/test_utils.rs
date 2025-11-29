@@ -55,6 +55,7 @@ pub async fn insert_history_entry(
         mod_menu: Some("Mega Hack v8".to_string()),
         timestamp: Utc::now(),
         user_notes: None,
+        private_reviewer_notes: None,
         reviewer_id,
     };
     diesel::insert_into(submission_history::table)

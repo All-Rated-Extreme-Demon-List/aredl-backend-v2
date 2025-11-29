@@ -29,6 +29,7 @@ pub struct SubmissionHistory {
     pub mod_menu: Option<String>,
     pub user_notes: Option<String>,
     pub reviewer_notes: Option<String>,
+    pub private_reviewer_notes: Option<String>,
     pub reviewer_id: Option<Uuid>,
 }
 
@@ -46,6 +47,8 @@ pub struct SubmissionHistoryResolved {
     pub user_notes: Option<String>,
     pub reviewer_notes: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub private_reviewer_notes: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reviewer: Option<BaseUser>,
 }
 
@@ -62,6 +65,7 @@ impl SubmissionHistoryResolved {
             submission_id: history.submission_id,
             status: history.status,
             reviewer_notes: history.reviewer_notes,
+            private_reviewer_notes: history.private_reviewer_notes,
             reviewer: user,
             user_notes: history.user_notes,
             timestamp: history.timestamp,

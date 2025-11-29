@@ -51,6 +51,7 @@ pub async fn insert_history_entry(
         status,
         timestamp: Utc::now(),
         user_notes: None,
+        private_reviewer_notes: None,
         reviewer_id,
     };
     diesel::insert_into(submission_history::table)

@@ -55,6 +55,8 @@ pub struct Submission {
     pub reviewer_notes: Option<String>,
     /// Any additional notes left by the submitter.
     pub user_notes: Option<String>,
+    /// Private notes given by the reviewer when reviewing the record.
+    pub private_reviewer_notes: Option<String>,
     /// Timestamp of when the submission was created.
     pub created_at: DateTime<Utc>,
     /// Timestamp of when the submission was last updated.
@@ -88,6 +90,8 @@ pub struct SubmissionWithPriority {
     pub priority: bool,
     /// Notes given by the reviewer when reviewing the record.
     pub reviewer_notes: Option<String>,
+    /// Private notes given by the reviewer when reviewing the record.
+    pub private_reviewer_notes: Option<String>,
     /// Any additional notes left by the submitter.
     pub user_notes: Option<String>,
     /// Timestamp of when the submission was created.
@@ -118,9 +122,12 @@ pub struct SubmissionResolved {
     pub mod_menu: Option<String>,
     /// The status of this submission
     pub status: SubmissionStatus,
-    /// User who reviewed the record.
+    /// [MOD ONLY] User who reviewed the record.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reviewer: Option<BaseUser>,
+    /// [MOD ONLY] Private notes given by the reviewer when reviewing the record.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub private_reviewer_notes: Option<String>,
     /// Whether the record was submitted as a priority record.
     pub priority: bool,
     /// Notes given by the reviewer when reviewing the record.
@@ -131,7 +138,6 @@ pub struct SubmissionResolved {
     pub created_at: DateTime<Utc>,
     /// Timestamp of when the submission was last updated.
     pub updated_at: DateTime<Utc>,
-    ///
     pub priority_value: i64,
 }
 

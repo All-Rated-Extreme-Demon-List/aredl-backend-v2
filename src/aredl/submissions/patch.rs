@@ -52,14 +52,14 @@ pub struct SubmissionPatchMod {
     pub mod_menu: Option<String>,
     /// Any additional notes left by the submitter.
     pub user_notes: Option<String>,
-    /// [Mod only] The status of the submission
+    /// [MOD ONLY] The status of the submission
     pub status: Option<SubmissionStatus>,
-    /// [Mod only] Whether the record was submitted as a priority record.
+    /// [MOD ONLY] Whether the record was submitted as a priority record.
     pub priority: Option<bool>,
-    /// [Mod only] Internal UUID of the user who reviewed the record.
-    pub reviewer_id: Option<Uuid>,
-    /// [Mod only] Notes given by the reviewer when reviewing the record.
+    /// [MOD ONLY] Notes given by the reviewer when reviewing the record.
     pub reviewer_notes: Option<String>,
+    /// [MOD ONLY] Private notes given by the reviewer when reviewing the record.
+    pub private_reviewer_notes: Option<String>,
 }
 
 impl Submission {

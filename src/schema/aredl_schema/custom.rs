@@ -191,6 +191,7 @@ diesel::table! {
         priority -> Bool,
         priority_value -> Bigint,
         reviewer_notes -> Nullable<Varchar>,
+        private_reviewer_notes -> Nullable<Varchar>,
         user_notes -> Nullable<Varchar>,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
