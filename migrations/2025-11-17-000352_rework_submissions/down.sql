@@ -3,6 +3,9 @@ DROP VIEW arepl.min_placement_clans_records;
 DROP VIEW aredl.min_placement_country_records;
 DROP VIEW arepl.min_placement_country_records;
 
+DROP VIEW aredl.submissions_with_priority;
+DROP VIEW arepl.submissions_with_priority;
+
 
 DROP TRIGGER submission_sync_record_ins ON aredl.submissions;
 DROP TRIGGER submission_sync_record_upd ON aredl.submissions;
@@ -225,7 +228,7 @@ WITH subquery AS (
           PARTITION BY r.level_id, u.country
           ORDER BY r.placement_order
         ) AS order_pos
-    FROM arepl.records r
+    FROM aredl.records r
     JOIN users u ON u.id = r.submitted_by
 )
 SELECT *
@@ -247,3 +250,17 @@ WITH subquery AS (
 SELECT *
 FROM subquery
 WHERE order_pos = 1;
+
+CREATE OR REPLACE VIEW aredl.submissions_with_priority AS
+SELECT 
+    *,
+    (EXTRACT(EPOCH FROM CLOCK_TIMESTAMP()) - EXTRACT(EPOCH FROM created_at))::BIGINT + 
+    CASE WHEN priority = TRUE THEN 21600 ELSE 0 END AS priority_value
+FROM aredl.submissions;
+
+CREATE OR REPLACE VIEW arepl.submissions_with_priority AS
+SELECT 
+    *,
+    (EXTRACT(EPOCH FROM CLOCK_TIMESTAMP()) - EXTRACT(EPOCH FROM created_at))::BIGINT + 
+    CASE WHEN priority = TRUE THEN 21600 ELSE 0 END AS priority_value
+FROM arepl.submissions;
