@@ -7,7 +7,7 @@ use crate::auth::Authenticated;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::{arepl::levels, arepl::records, arepl::submissions, users};
-use crate::users::{BaseUser, ExtendedBaseUser};
+use crate::users::ExtendedBaseUser;
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::query_dsl::JoinOnDsl;
@@ -24,18 +24,18 @@ use uuid::Uuid;
 pub struct Record {
     /// Internal UUID of the record.
     pub id: Uuid,
-    /// Level ID in the game. May not be unique for 2P levels.
+    /// Level this record is for.
     pub level_id: Uuid,
-    /// Internal UUID of the user who submitted the record.
+    /// User who submitted the record.
     pub submitted_by: Uuid,
     /// Whether the record was completed on mobile or not.
     pub mobile: bool,
     /// Video link of the completion.
     pub video_url: String,
-    /// Whether the record's video should be hidden on the website.
-    pub hide_video: bool,
     /// Completion time of the record in milliseconds.
     pub completion_time: i64,
+    /// Whether the record's video should be hidden on the website.
+    pub hide_video: bool,
     /// Whether this record is the verification of this level or not.
     pub is_verification: bool,
     /// Timestamp of when the record was created (first accepted).
@@ -44,7 +44,31 @@ pub struct Record {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Serialize, Deserialize, Insertable, Debug, ToSchema, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct ResolvedRecord {
+    /// Internal UUID of the record.
+    pub id: Uuid,
+    /// Level this record is for.
+    pub level: ExtendedBaseLevel,
+    /// User who submitted the record.
+    pub submitted_by: ExtendedBaseUser,
+    /// Whether the record was completed on mobile or not.
+    pub mobile: bool,
+    /// Video link of the completion.
+    pub video_url: String,
+    /// Completion time of the record in milliseconds.
+    pub completion_time: i64,
+    /// Whether the record's video should be hidden on the website.
+    pub hide_video: bool,
+    /// Whether this record is the verification of this level or not.
+    pub is_verification: bool,
+    /// Timestamp of when the record was created (first accepted).
+    pub created_at: DateTime<Utc>,
+    /// Timestamp of when the record was last updated.
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Serialize, Deserialize, Insertable, Debug, ToSchema, Clone)]
 #[diesel(table_name=records, check_for_backend(Pg))]
 pub struct RecordInsert {
     /// Internal UUID of the user who submitted the record.
@@ -55,10 +79,10 @@ pub struct RecordInsert {
     pub level_id: Uuid,
     /// Video link of the completion.
     pub video_url: String,
-    /// Whether the record's video should be hidden on the website.
-    pub hide_video: Option<bool>,
     /// Completion time of the record in milliseconds.
     pub completion_time: i64,
+    /// Whether the record's video should be hidden on the website.
+    pub hide_video: Option<bool>,
     /// Whether this record is the verification of this level or not.
     pub is_verification: Option<bool>,
     /// Timestamp of when the record was created (first accepted).
@@ -78,10 +102,10 @@ pub struct RecordPatch {
     pub video_url: Option<String>,
     /// Whether the record's video should be hidden on the website.
     pub hide_video: Option<bool>,
-    /// Internal UUID of the level the record is for.
-    pub level_id: Option<Uuid>,
     /// Completion time of the record in milliseconds.
     pub completion_time: Option<i64>,
+    /// Internal UUID of the level the record is for.
+    pub level_id: Option<Uuid>,
     /// Whether this record is the verification of this level or not.
     pub is_verification: Option<bool>,
     /// Timestamp of when the record was created (first accepted).
@@ -99,83 +123,15 @@ pub struct RecordUpdate {
     pub is_verification: Option<bool>,
 }
 
-#[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
-#[diesel(table_name=records, check_for_backend(Pg))]
-pub struct PublicRecordTemplate<T> {
-    /// Internal UUID of the record.
-    pub id: Uuid,
-    /// User who submitted the record.
-    pub submitted_by: T,
-    /// Whether the record was completed on mobile or not.
-    pub mobile: bool,
-    /// Completion time of the record in milliseconds.
-    pub completion_time: i64,
-    /// Video link of the completion.
-    pub video_url: String,
-    /// Whether the record's video should be hidden on the website.
-    pub hide_video: bool,
-    /// Timestamp of when the record was created (first accepted).
-    pub created_at: DateTime<Utc>,
-}
-
-pub type PublicRecordUnresolved = PublicRecordTemplate<Uuid>;
-pub type PublicRecordResolved = PublicRecordTemplate<BaseUser>;
-pub type PublicRecordResolvedExtended = PublicRecordTemplate<ExtendedBaseUser>;
-
-#[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
-#[diesel(table_name=records, check_for_backend(Pg))]
-#[schema(bound = "LevelT: utoipa::ToSchema, UserT: utoipa::ToSchema")]
-pub struct FullRecordTemplate<LevelT, UserT> {
-    /// Internal UUID of the record.
-    pub id: Uuid,
-    /// Level this record is for.
-    #[serde(rename = "level")]
-    pub level_id: LevelT,
-    /// User who submitted the record.
-    pub submitted_by: UserT,
-    /// Whether the record was completed on mobile or not.
-    pub mobile: bool,
-    /// Completion time of the record in milliseconds.
-    pub completion_time: i64,
-    /// Video link of the completion.
-    pub video_url: String,
-    /// Whether the record's video should be hidden on the website.
-    pub hide_video: bool,
-    /// Whether this record is the verification of this level or not.
-    pub is_verification: bool,
-    /// Timestamp of when the record was created (first accepted).
-    pub created_at: DateTime<Utc>,
-    /// Timestamp of when the record was last updated.
-    pub updated_at: DateTime<Utc>,
-}
-
-pub type FullRecordUnresolved = FullRecordTemplate<Uuid, Uuid>;
-pub type FullRecordResolved = FullRecordTemplate<ExtendedBaseLevel, BaseUser>;
-
-// Weird shenanigans type to get the FullRecordTemplate with UUID to work with ToSchema for Utoipa.
-#[derive(Serialize, Deserialize, ToSchema)]
-#[schema(title = "FullRecordUnresolved")]
-pub struct FullRecordUnresolvedDto {
-    #[serde(flatten)]
-    #[schema(inline)]
-    pub record: FullRecordTemplate<Uuid, Uuid>,
-}
-
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct RecordsQueryOptions {
     pub mobile_filter: Option<bool>,
     pub level_filter: Option<Uuid>,
     pub submitter_filter: Option<Uuid>,
 }
-
 #[derive(Serialize, Deserialize, ToSchema)]
-pub struct FullUnresolvedRecordPage {
-    data: Vec<FullRecordUnresolvedDto>,
-}
-
-#[derive(Serialize, Deserialize, ToSchema)]
-pub struct FullResolvedRecordPage {
-    data: Vec<FullRecordResolved>,
+pub struct ResolvedRecordPage {
+    data: Vec<ResolvedRecord>,
 }
 
 impl SubmissionInsert {
@@ -354,61 +310,19 @@ impl Record {
     }
 }
 
-impl FullRecordUnresolved {
-    pub fn find_all<const D: i64>(
-        conn: &mut DbConnection,
-        page_query: PageQuery<D>,
-        options: RecordsQueryOptions,
-    ) -> Result<Paginated<FullUnresolvedRecordPage>, ApiError> {
-        let build_filtered = || {
-            let mut q = records::table.into_boxed::<Pg>();
-            if let Some(mobile) = options.mobile_filter {
-                q = q.filter(records::mobile.eq(mobile));
-            }
-            if let Some(level) = options.level_filter {
-                q = q.filter(records::level_id.eq(level));
-            }
-            if let Some(submitter) = options.submitter_filter {
-                q = q.filter(records::submitted_by.eq(submitter));
-            }
-            q
-        };
-
-        let total_count: i64 = build_filtered().count().get_result(conn)?;
-
-        let raw_records = build_filtered()
-            .limit(page_query.per_page())
-            .offset(page_query.offset())
-            .select(FullRecordUnresolved::as_select())
-            .load::<FullRecordUnresolved>(conn)?;
-
-        let records: Vec<FullRecordUnresolvedDto> = raw_records
-            .into_iter()
-            .map(|record| FullRecordUnresolvedDto { record })
-            .collect();
-
-        Ok(Paginated::from_data(
-            page_query,
-            total_count,
-            FullUnresolvedRecordPage { data: records },
-        ))
-    }
-}
-
-impl FullRecordResolved {
+impl ResolvedRecord {
     pub fn find(conn: &mut DbConnection, record_id: Uuid) -> Result<Self, ApiError> {
-        let (record, user, level): (FullRecordTemplate<Uuid, Uuid>, BaseUser, ExtendedBaseLevel) =
-            records::table
-                .filter(records::id.eq(record_id))
-                .inner_join(users::table.on(records::submitted_by.eq(users::id)))
-                .inner_join(levels::table.on(records::level_id.eq(levels::id)))
-                .order_by(records::completion_time.asc())
-                .select((
-                    FullRecordTemplate::<Uuid, Uuid>::as_select(),
-                    BaseUser::as_select(),
-                    ExtendedBaseLevel::as_select(),
-                ))
-                .first(conn)?;
+        let (record, user, level): (Record, ExtendedBaseUser, ExtendedBaseLevel) = records::table
+            .filter(records::id.eq(record_id))
+            .inner_join(users::table.on(records::submitted_by.eq(users::id)))
+            .inner_join(levels::table.on(records::level_id.eq(levels::id)))
+            .order_by(records::completion_time.asc())
+            .select((
+                Record::as_select(),
+                ExtendedBaseUser::as_select(),
+                ExtendedBaseLevel::as_select(),
+            ))
+            .first(conn)?;
 
         Ok(Self::from_data(record, user, level))
     }
@@ -417,7 +331,7 @@ impl FullRecordResolved {
         conn: &mut DbConnection,
         page_query: PageQuery<D>,
         options: RecordsQueryOptions,
-    ) -> Result<Paginated<FullResolvedRecordPage>, ApiError> {
+    ) -> Result<Paginated<ResolvedRecordPage>, ApiError> {
         let build_filtered = || {
             let mut q = records::table.into_boxed::<Pg>();
             if let Some(mobile) = options.mobile_filter {
@@ -441,12 +355,11 @@ impl FullRecordResolved {
             .limit(page_query.per_page())
             .offset(page_query.offset())
             .select((
-                FullRecordUnresolved::as_select(),
-                BaseUser::as_select(),
+                Record::as_select(),
+                ExtendedBaseUser::as_select(),
                 ExtendedBaseLevel::as_select(),
             ))
-            .load::<(FullRecordUnresolved, BaseUser, ExtendedBaseLevel)>(conn)?;
-
+            .load::<(Record, ExtendedBaseUser, ExtendedBaseLevel)>(conn)?;
         let records_resolved: Vec<Self> = records
             .into_iter()
             .map(|(record, user, level)| Self::from_data(record, user, level))
@@ -455,17 +368,17 @@ impl FullRecordResolved {
         Ok(Paginated::from_data(
             page_query,
             total_count,
-            FullResolvedRecordPage {
+            ResolvedRecordPage {
                 data: records_resolved,
             },
         ))
     }
 
-    fn from_data(record: FullRecordUnresolved, user: BaseUser, level: ExtendedBaseLevel) -> Self {
+    fn from_data(record: Record, user: ExtendedBaseUser, level: ExtendedBaseLevel) -> Self {
         Self {
             id: record.id,
             submitted_by: user,
-            level_id: level,
+            level,
             mobile: record.mobile,
             video_url: record.video_url,
             completion_time: record.completion_time,
