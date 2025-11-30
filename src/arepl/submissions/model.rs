@@ -180,7 +180,7 @@ impl Submission {
                 ))
                 .execute(conn)?;
 
-            let resolved = SubmissionResolved::resolve_from_id(conn, next_id, authenticated)?;
+            let resolved = SubmissionResolved::find_one(conn, next_id, authenticated)?;
 
             Ok(resolved)
         })

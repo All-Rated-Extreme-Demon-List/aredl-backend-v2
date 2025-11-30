@@ -119,32 +119,6 @@ macro_rules! aredl_apply_submissions_filters {
     }};
 }
 
-#[macro_export]
-macro_rules! aredl_apply_submissions_filters_unauth {
-    ($query:expr, $opts:expr) => {{
-        let opts = &$opts;
-        let mut new_query = $query;
-
-        if let Some(status) = opts.status_filter.clone() {
-            new_query = new_query.filter(submissions_with_priority::status.eq(status));
-        }
-        if let Some(mobile) = opts.mobile_filter.clone() {
-            new_query = new_query.filter(submissions_with_priority::mobile.eq(mobile));
-        }
-        if let Some(level) = opts.level_filter.clone() {
-            new_query = new_query.filter(submissions_with_priority::level_id.eq(level));
-        }
-        if let Some(submitter) = opts.submitter_filter.clone() {
-            new_query = new_query.filter(submissions_with_priority::submitted_by.eq(submitter));
-        }
-        if let Some(priority) = opts.priority_filter.clone() {
-            new_query = new_query.filter(submissions_with_priority::priority.eq(priority));
-        }
-
-        new_query
-    }};
-}
-
 impl SubmissionResolved {
     pub fn from_data(resolved: ResolvedSubmissionRow) -> SubmissionResolved {
         let (submission, level, submitter, reviewer) = resolved;
@@ -169,24 +143,6 @@ impl SubmissionResolved {
         }
     }
 
-    pub fn resolve_from_id(
-        submission_id: Uuid,
-        conn: &mut DbConnection,
-        authenticated: Authenticated,
-    ) -> Result<SubmissionResolved, ApiError> {
-        let resolved_raw = aredl_base_resolved_submission_query!()
-            .filter(submissions_with_priority::id.eq(submission_id))
-            .first::<ResolvedSubmissionRow>(conn)?;
-
-        let mut resolved = Self::from_data(resolved_raw);
-
-        if !authenticated.has_permission(conn, Permission::SubmissionReview)? {
-            resolved.reviewer = None;
-        }
-
-        Ok(resolved)
-    }
-
     pub fn find_one(
         conn: &mut DbConnection,
         id: Uuid,
@@ -199,9 +155,14 @@ impl SubmissionResolved {
             query = query.filter(submissions_with_priority::submitted_by.eq(authenticated.user_id));
         }
 
-        let resolved = query.first::<ResolvedSubmissionRow>(conn)?;
+        let mut resolved = Self::from_data(query.first::<ResolvedSubmissionRow>(conn)?);
 
-        Ok(Self::from_data(resolved))
+        if !authenticated.has_permission(conn, Permission::SubmissionReview)? {
+            resolved.reviewer = None;
+            resolved.private_reviewer_notes = None;
+        }
+
+        Ok(resolved)
     }
 }
 
@@ -231,7 +192,10 @@ impl ResolvedSubmissionPage {
         let total_count: i64 = count_query.count().get_result(conn)?;
 
         if !authenticated.has_permission(conn, Permission::SubmissionReview)? {
-            submissions.iter_mut().for_each(|s| s.reviewer = None);
+            submissions.iter_mut().for_each(|s| {
+                s.reviewer = None;
+                s.private_reviewer_notes = None;
+            });
         }
 
         Ok(Paginated::<Self>::from_data(
@@ -244,13 +208,10 @@ impl ResolvedSubmissionPage {
     pub fn find_own<const D: i64>(
         conn: &mut DbConnection,
         page_query: PageQuery<D>,
-        options: SubmissionQueryOptions,
+        mut options: SubmissionQueryOptions,
         authenticated: Authenticated,
     ) -> Result<Paginated<Self>, ApiError> {
-        let options = SubmissionQueryOptions {
-            submitter_filter: Some(authenticated.user_id),
-            ..options
-        };
+        options.submitter_filter = Some(authenticated.user_id);
 
         Ok(Self::find_all(conn, page_query, options, authenticated)?)
     }

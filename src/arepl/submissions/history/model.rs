@@ -97,7 +97,10 @@ impl SubmissionHistoryResolved {
             .collect::<Vec<_>>();
 
         if !authenticated.has_permission(conn, Permission::SubmissionReview)? {
-            resolved_history.iter_mut().for_each(|h| h.reviewer = None);
+            resolved_history.iter_mut().for_each(|h| {
+                h.reviewer = None;
+                h.private_reviewer_notes = None;
+            });
         }
 
         Ok(resolved_history)

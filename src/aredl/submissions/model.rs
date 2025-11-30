@@ -174,7 +174,7 @@ impl Submission {
                 ))
                 .execute(conn)?;
 
-            let resolved = SubmissionResolved::resolve_from_id(next_id, conn, authenticated)?;
+            let resolved = SubmissionResolved::find_one(conn, next_id, authenticated)?;
 
             Ok(resolved)
         })
