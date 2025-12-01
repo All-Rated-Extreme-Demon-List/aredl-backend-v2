@@ -7,7 +7,7 @@ use crate::auth::Authenticated;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::{aredl::levels, aredl::records, aredl::submissions, users};
-use crate::users::ExtendedBaseUser;
+use crate::users::{user_filter, ExtendedBaseUser};
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::query_dsl::JoinOnDsl;
@@ -119,7 +119,7 @@ pub struct RecordUpdate {
 pub struct RecordsQueryOptions {
     pub mobile_filter: Option<bool>,
     pub level_filter: Option<Uuid>,
-    pub submitter_filter: Option<Uuid>,
+    pub submitter_filter: Option<String>,
 }
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct ResolvedRecordPage {
@@ -331,9 +331,10 @@ impl ResolvedRecord {
             if let Some(level) = options.level_filter {
                 q = q.filter(records::level_id.eq(level));
             }
-            if let Some(submitter) = options.submitter_filter {
-                q = q.filter(records::submitted_by.eq(submitter));
+            if let Some(ref submitter) = options.submitter_filter {
+                q = q.filter(records::submitted_by.eq_any(user_filter(submitter).select(users::id)))
             }
+
             q
         };
 

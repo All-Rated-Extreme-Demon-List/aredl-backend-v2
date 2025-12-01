@@ -13,7 +13,7 @@ use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::{merge_requests, users};
 use crate::users::me::notifications::{Notification, NotificationType};
 use crate::users::merge::merge_users;
-use crate::users::BaseUser;
+use crate::users::{user_filter, BaseUser};
 
 #[derive(Serialize, Deserialize, Debug, ToSchema, Insertable, AsChangeset)]
 #[diesel(table_name = merge_requests, check_for_backend(Pg))]
@@ -63,7 +63,7 @@ pub struct ResolvedMergeRequest {
 pub struct MergeRequestQueryOptions {
     pub claimed_filter: Option<bool>,
     pub rejected_filter: Option<bool>,
-    pub user_filter: Option<Uuid>,
+    pub user_filter: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
@@ -126,11 +126,12 @@ impl MergeRequestPage {
                 q = q.filter(merge_requests::is_rejected.eq(rejected));
             }
 
-            if let Some(user) = options.user_filter {
+            if let Some(ref user) = options.user_filter {
                 q = q.filter(
                     merge_requests::primary_user
-                        .eq(user)
-                        .or(merge_requests::secondary_user.eq(user)),
+                        .eq_any(user_filter(user).select(users::id))
+                        .or(merge_requests::secondary_user
+                            .eq_any(user_filter(user).select(users::id))),
                 );
             }
 

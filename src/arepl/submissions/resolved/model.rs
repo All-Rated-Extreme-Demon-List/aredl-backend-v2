@@ -8,7 +8,7 @@ use crate::{
         arepl::{levels, submissions_with_priority},
         users,
     },
-    users::BaseUser,
+    users::{user_filter, BaseUser},
 };
 use diesel::expression_methods::NullableExpressionMethods;
 use diesel::{
@@ -31,9 +31,9 @@ pub struct SubmissionQueryOptions {
     pub status_filter: Option<SubmissionStatus>,
     pub mobile_filter: Option<bool>,
     pub level_filter: Option<Uuid>,
-    pub submitter_filter: Option<Uuid>,
+    pub submitter_filter: Option<String>,
     pub priority_filter: Option<bool>,
-    pub reviewer_filter: Option<Uuid>,
+    pub reviewer_filter: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -82,14 +82,20 @@ macro_rules! arepl_apply_submissions_filters {
         if let Some(level) = opts.level_filter.clone() {
             new_query = new_query.filter(submissions_with_priority::level_id.eq(level));
         }
-        if let Some(submitter) = opts.submitter_filter.clone() {
-            new_query = new_query.filter(submissions_with_priority::submitted_by.eq(submitter));
+        if let Some(ref submitter) = opts.submitter_filter {
+            new_query = new_query.filter(
+                submissions_with_priority::submitted_by
+                    .eq_any(user_filter(&submitter).select(users::id)),
+            );
         }
         if let Some(priority) = opts.priority_filter.clone() {
             new_query = new_query.filter(submissions_with_priority::priority.eq(priority));
         }
-        if let Some(reviewer) = opts.reviewer_filter.clone() {
-            new_query = new_query.filter(submissions_with_priority::reviewer_id.eq(reviewer));
+        if let Some(ref reviewer) = opts.reviewer_filter {
+            new_query = new_query.filter(
+                submissions_with_priority::reviewer_id
+                    .eq_any(user_filter(&reviewer).select(users::id.nullable())),
+            );
         }
 
         new_query
@@ -189,7 +195,7 @@ impl ResolvedSubmissionPage {
         mut options: SubmissionQueryOptions,
         authenticated: Authenticated,
     ) -> Result<Paginated<Self>, ApiError> {
-        options.submitter_filter = Some(authenticated.user_id);
+        options.submitter_filter = Some(authenticated.user_id.to_string());
         Ok(Self::find_all(conn, page_query, options, authenticated)?)
     }
 }

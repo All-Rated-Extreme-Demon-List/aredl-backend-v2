@@ -169,6 +169,23 @@ pub struct UserPage {
     pub data: Vec<User>,
 }
 
+// user filter that matches either by UUID, username, or discord_id
+pub fn user_filter<'a>(input: &'a String) -> users::BoxedQuery<'a, Pg> {
+    let mut q = users::table.into_boxed::<Pg>();
+
+    if let Ok(uuid) = Uuid::parse_str(&input) {
+        q = q.filter(users::id.eq(uuid));
+    } else {
+        q = q.filter(
+            users::discord_id
+                .eq(Some(input.to_owned()))
+                .or(users::username.eq(input)),
+        );
+    }
+
+    q
+}
+
 impl BaseUser {
     pub fn from_base_user_with_ban_level(user: BaseUserWithBanLevel) -> Self {
         BaseUser {
@@ -262,7 +279,11 @@ impl User {
         let build_query = || {
             let mut q = users::table.into_boxed::<Pg>();
             if let Some(ref name_like) = options.name_filter {
-                q = q.filter(users::global_name.ilike(name_like));
+                q = q.filter(
+                    users::global_name.ilike(name_like).or(users::username
+                        .ilike(name_like)
+                        .or(users::id.eq_any(user_filter(name_like).select(users::id)))),
+                );
             }
             if let Some(placeholder) = options.placeholder {
                 q = q.filter(users::placeholder.eq(placeholder));
@@ -271,9 +292,19 @@ impl User {
         };
 
         let total_count: i64 = build_query().count().get_result(conn)?;
+        let mut q = build_query();
 
-        let entries: Vec<User> = build_query()
-            .order(users::username.asc())
+        if let Some(ref name_like) = options.name_filter {
+            q = q.order((
+                users::username.eq(name_like).desc(),
+                users::global_name.eq(name_like).desc(),
+                users::username.asc(),
+            ));
+        } else {
+            q = q.order(users::username.asc());
+        }
+
+        let entries: Vec<User> = q
             .limit(page_query.per_page())
             .offset(page_query.offset())
             .select(User::as_select())

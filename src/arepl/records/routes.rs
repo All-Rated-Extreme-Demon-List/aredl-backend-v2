@@ -136,7 +136,7 @@ async fn delete(
         ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page"),
         ("level_filter" = Option<Uuid>, Query, description = "The level internal UUID to filter by"),
         ("mobile_filter" = Option<bool>, Query, description = "Whether to show only/hide mobile records"),
-        ("submitter_filter" = Option<Uuid>, Query, description = "The submitter user internal UUID to filter by"),
+        ("submitter_filter" = Option<String>, Query, description = "The submitter user (UUID, discord ID, or username) to filter by"),
     ),
     responses(
         (status = 200, body = Paginated<ResolvedRecord>)
@@ -193,7 +193,7 @@ async fn find_me(
             RecordsQueryOptions {
                 level_filter: None,
                 mobile_filter: None,
-                submitter_filter: Some(authenticated.user_id),
+                submitter_filter: Some(authenticated.user_id.to_string()),
             },
         )
     })

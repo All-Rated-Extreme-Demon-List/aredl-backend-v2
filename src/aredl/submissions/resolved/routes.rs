@@ -33,9 +33,9 @@ use crate::{
         ("level_filter" = Option<Uuid>, Query, description = "Filter submissions to a specific level UUID"),
         ("status_filter" = Option<SubmissionStatus>, Query, description = "Filter submissions to specific statuses"),
         ("mobile_filter" = Option<bool>, Query, description = "Filter submissions to mobile/desktop submissions only"),
-        ("submitter_filter" = Option<Uuid>, Query, description = "Filter submissions to a specific submitter UUID"),
+        ("submitter_filter" = Option<String>, Query, description = "Filter submissions to a specific submitter (UUID, discord ID, or username)"),
         ("priority_filter" = Option<bool>, Query, description = "Filter submissions to priority/non-priority submissions"),
-        ("reviewer_filter" = Option<Uuid>, Query, description = "Filter submissions to a specific reviewer UUID"),
+        ("reviewer_filter" = Option<String>, Query, description = "Filter submissions to a specific reviewer (UUID, discord ID, or username)"),
         ("note_filter" = Option<String>, Query, description = "Filter submissions that contain a specific note substring"),
 ))]
 #[get("", wrap = "UserAuth::require(Permission::SubmissionReview)")]
