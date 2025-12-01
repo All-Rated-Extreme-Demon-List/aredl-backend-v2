@@ -1,12 +1,13 @@
 use crate::app_data::db::DbConnection;
 use crate::aredl::levels::ExtendedBaseLevel;
+use crate::aredl::records::ResolvedRecord;
 use crate::clans::Clan;
 use crate::error_handler::ApiError;
 use crate::schema::{
     aredl::{clans_leaderboard, levels, min_placement_clans_records},
     clan_members, clans, users,
 };
-use crate::users::BaseUser;
+use crate::users::{BaseUser, ExtendedBaseUser};
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::{
@@ -25,13 +26,6 @@ pub struct Rank {
     pub extremes: i32,
 }
 
-#[derive(Serialize, Deserialize, Debug, ToSchema)]
-pub struct ClanProfileLevelResolved {
-    #[serde(flatten)]
-    pub level: ExtendedBaseLevel,
-    pub user: BaseUser,
-}
-
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
 #[diesel(table_name=min_placement_clans_records, check_for_backend(Pg))]
 pub struct ClanProfileRecord {
@@ -45,8 +39,10 @@ pub struct ClanProfileRecord {
     pub mobile: bool,
     /// Video link of the completion.
     pub video_url: String,
-    #[serde(skip_serializing)]
+    /// Whether the record is a verification or not.
     pub is_verification: bool,
+    /// Whether the record's video should be hidden on the website.
+    pub hide_video: bool,
     /// Timestamp of when the record was created (first accepted).
     pub created_at: DateTime<Utc>,
     /// Timestamp of when the record was last updated.
@@ -54,13 +50,11 @@ pub struct ClanProfileRecord {
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
-pub struct ClanProfileRecordResolved {
+pub struct ResolvedClanProfileLevel {
     #[serde(flatten)]
-    pub record: ClanProfileRecord,
-    pub user: BaseUser,
     pub level: ExtendedBaseLevel,
+    pub publisher: BaseUser,
 }
-
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct ClanProfileResolved {
     /// This profile's clan.
@@ -68,11 +62,29 @@ pub struct ClanProfileResolved {
     /// Rank of the clan in the clans leaderboard.
     pub rank: Option<Rank>,
     /// Records of users from this clan.
-    pub records: Vec<ClanProfileRecordResolved>,
-    /// Verification of users from this clan.
-    pub verified: Vec<ClanProfileRecordResolved>,
+    pub records: Vec<ResolvedRecord>,
     /// Levels published by users from this clan.
-    pub published: Vec<ClanProfileLevelResolved>,
+    pub published: Vec<ResolvedClanProfileLevel>,
+}
+
+impl ResolvedRecord {
+    pub fn from_clan_data(
+        record: ClanProfileRecord,
+        level: ExtendedBaseLevel,
+        user: ExtendedBaseUser,
+    ) -> Self {
+        Self {
+            id: record.id,
+            submitted_by: user,
+            level,
+            mobile: record.mobile,
+            video_url: record.video_url,
+            is_verification: record.is_verification,
+            hide_video: record.hide_video,
+            updated_at: record.updated_at,
+            created_at: record.created_at,
+        }
+    }
 }
 
 impl ClanProfileResolved {
@@ -88,25 +100,21 @@ impl ClanProfileResolved {
             .first(conn)
             .optional()?;
 
-        let (verified, records): (Vec<_>, Vec<_>) = min_placement_clans_records::table
+        let records = min_placement_clans_records::table
             .filter(min_placement_clans_records::clan_id.eq(clan_id))
             .inner_join(users::table.on(users::id.eq(min_placement_clans_records::submitted_by)))
             .inner_join(levels::table.on(levels::id.eq(min_placement_clans_records::level_id)))
             .select((
                 ClanProfileRecord::as_select(),
-                BaseUser::as_select(),
+                ExtendedBaseUser::as_select(),
                 ExtendedBaseLevel::as_select(),
             ))
-            .load::<(ClanProfileRecord, BaseUser, ExtendedBaseLevel)>(conn)?
+            .load::<(ClanProfileRecord, ExtendedBaseUser, ExtendedBaseLevel)>(conn)?
             .into_iter()
-            .map(|(record, user, level)| ClanProfileRecordResolved {
-                record,
-                user,
-                level,
-            })
-            .partition(|resolved| resolved.record.is_verification);
+            .map(|(record, user, level)| ResolvedRecord::from_clan_data(record, level, user))
+            .collect();
 
-        let published: Vec<ClanProfileLevelResolved> = levels::table
+        let published: Vec<ResolvedClanProfileLevel> = levels::table
             .inner_join(users::table.on(users::id.eq(levels::publisher_id)))
             .inner_join(clan_members::table.on(clan_members::user_id.eq(users::id)))
             .filter(clan_members::clan_id.eq(clan_id))
@@ -114,14 +122,16 @@ impl ClanProfileResolved {
             .select((ExtendedBaseLevel::as_select(), BaseUser::as_select()))
             .load(conn)?
             .into_iter()
-            .map(|(level, user)| ClanProfileLevelResolved { level, user })
+            .map(|(level, user)| ResolvedClanProfileLevel {
+                level,
+                publisher: user,
+            })
             .collect();
 
         Ok(Self {
             clan,
             rank,
             records,
-            verified,
             published,
         })
     }

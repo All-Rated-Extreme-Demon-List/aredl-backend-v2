@@ -374,7 +374,7 @@ impl ResolvedRecord {
         ))
     }
 
-    fn from_data(record: Record, user: ExtendedBaseUser, level: ExtendedBaseLevel) -> Self {
+    pub fn from_data(record: Record, user: ExtendedBaseUser, level: ExtendedBaseLevel) -> Self {
         Self {
             id: record.id,
             submitted_by: user,

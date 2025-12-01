@@ -1,11 +1,12 @@
 use crate::app_data::db::DbConnection;
 use crate::aredl::levels::ExtendedBaseLevel;
+use crate::aredl::records::ResolvedRecord;
 use crate::error_handler::ApiError;
 use crate::schema::{
     aredl::{country_leaderboard, levels, min_placement_country_records},
     users,
 };
-use crate::users::BaseUser;
+use crate::users::{BaseUser, ExtendedBaseUser};
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::{
@@ -24,13 +25,6 @@ pub struct Rank {
     pub extremes: i32,
 }
 
-#[derive(Serialize, Deserialize, Debug, ToSchema)]
-pub struct CountryProfileLevelResolved {
-    #[serde(flatten)]
-    pub level: ExtendedBaseLevel,
-    pub user: BaseUser,
-}
-
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
 #[diesel(table_name=min_placement_country_records, check_for_backend(Pg))]
 pub struct CountryProfileRecord {
@@ -44,8 +38,10 @@ pub struct CountryProfileRecord {
     pub mobile: bool,
     /// Video link of the completion.
     pub video_url: String,
-    #[serde(skip_serializing)]
+    /// Whether the record is a verification or not.
     pub is_verification: bool,
+    /// Whether the record's video should be hidden on the website.
+    pub hide_video: bool,
     /// Timestamp of when the record was created (first accepted).
     pub created_at: DateTime<Utc>,
     /// Timestamp of when the record was last updated.
@@ -53,11 +49,31 @@ pub struct CountryProfileRecord {
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
-pub struct CountryProfileRecordResolved {
+pub struct ResolvedCountryProfileLevel {
     #[serde(flatten)]
-    pub record: CountryProfileRecord,
-    pub user: BaseUser,
     pub level: ExtendedBaseLevel,
+    /// The user who published the level.
+    pub publisher: BaseUser,
+}
+
+impl ResolvedRecord {
+    pub fn from_country_data(
+        record: CountryProfileRecord,
+        level: ExtendedBaseLevel,
+        user: ExtendedBaseUser,
+    ) -> Self {
+        Self {
+            id: record.id,
+            submitted_by: user,
+            level,
+            mobile: record.mobile,
+            video_url: record.video_url,
+            is_verification: record.is_verification,
+            hide_video: record.hide_video,
+            updated_at: record.updated_at,
+            created_at: record.created_at,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
@@ -67,11 +83,9 @@ pub struct CountryProfileResolved {
     /// Rank of the country in the countries leaderboard.
     pub rank: Option<Rank>,
     /// Records of users from the country.
-    pub records: Vec<CountryProfileRecordResolved>,
-    /// Verification of users from the country.
-    pub verified: Vec<CountryProfileRecordResolved>,
+    pub records: Vec<ResolvedRecord>,
     /// Levels published by users from the country.
-    pub published: Vec<CountryProfileLevelResolved>,
+    pub published: Vec<ResolvedCountryProfileLevel>,
 }
 
 impl CountryProfileResolved {
@@ -82,39 +96,37 @@ impl CountryProfileResolved {
             .first(conn)
             .optional()?;
 
-        let (verified, records): (Vec<_>, Vec<_>) = min_placement_country_records::table
+        let records = min_placement_country_records::table
             .filter(min_placement_country_records::country.eq(country))
             .inner_join(users::table.on(users::id.eq(min_placement_country_records::submitted_by)))
             .inner_join(levels::table.on(levels::id.eq(min_placement_country_records::level_id)))
             .select((
                 CountryProfileRecord::as_select(),
-                BaseUser::as_select(),
+                ExtendedBaseUser::as_select(),
                 ExtendedBaseLevel::as_select(),
             ))
-            .load::<(CountryProfileRecord, BaseUser, ExtendedBaseLevel)>(conn)?
+            .load::<(CountryProfileRecord, ExtendedBaseUser, ExtendedBaseLevel)>(conn)?
             .into_iter()
-            .map(|(record, user, level)| CountryProfileRecordResolved {
-                record,
-                user,
-                level,
-            })
-            .partition(|resolved| resolved.record.is_verification);
+            .map(|(record, user, level)| ResolvedRecord::from_country_data(record, level, user))
+            .collect();
 
-        let published: Vec<CountryProfileLevelResolved> = levels::table
+        let published = levels::table
             .inner_join(users::table.on(users::id.eq(levels::publisher_id)))
             .filter(users::country.eq(country))
             .order_by(levels::position.asc())
             .select((ExtendedBaseLevel::as_select(), BaseUser::as_select()))
             .load(conn)?
             .into_iter()
-            .map(|(level, user)| CountryProfileLevelResolved { level, user })
+            .map(|(level, user)| ResolvedCountryProfileLevel {
+                level,
+                publisher: user,
+            })
             .collect();
 
         Ok(Self {
             country,
             rank,
             records,
-            verified,
             published,
         })
     }

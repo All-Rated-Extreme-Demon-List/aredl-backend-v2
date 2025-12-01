@@ -2,6 +2,7 @@ use crate::app_data::db::DbConnection;
 use crate::arepl::levels::ExtendedBaseLevel;
 use crate::arepl::packs::{BasePack, PackWithTierResolved};
 use crate::arepl::packtiers::BasePackTier;
+use crate::arepl::records::Record;
 use crate::clans::Clan;
 use crate::error_handler::ApiError;
 use crate::schema::{
@@ -42,28 +43,27 @@ pub struct Rank {
     pub extremes: i32,
 }
 
-#[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema, QueryableByName)]
-#[diesel(table_name=records)]
-pub struct ProfileRecord {
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+/// A resolved record for a specific level (ommits the level field compared to ResolvedRecord).
+pub struct ProfileRecordResolved {
     /// Internal UUID of the record.
     pub id: Uuid,
+    /// The level the record is for.
+    pub level: ExtendedBaseLevel,
     /// Whether the record was completed on mobile or not.
     pub mobile: bool,
-    #[serde(skip_serializing)]
-    pub is_verification: bool,
     /// Video link of the completion.
     pub video_url: String,
     /// Completion time of the record in milliseconds.
     pub completion_time: i64,
+    /// Whether the record is a verification or not.
+    pub is_verification: bool,
+    /// Whether the record's video should be hidden on the website.
+    pub hide_video: bool,
     /// Timestamp of when the record was created (first accepted).
     pub created_at: DateTime<Utc>,
-}
-
-#[derive(Serialize, Deserialize, Debug, ToSchema)]
-pub struct ProfileRecordResolved {
-    #[serde(flatten)]
-    pub record: ProfileRecord,
-    pub level: ExtendedBaseLevel,
+    /// Timestamp of when the record was last updated.
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
@@ -80,12 +80,26 @@ pub struct ProfileResolved {
     pub packs: Vec<PackWithTierResolved>,
     /// Records the user has submitted.
     pub records: Vec<ProfileRecordResolved>,
-    /// Verifications of the user.
-    pub verified: Vec<ProfileRecordResolved>,
     /// Levels the user is listed as a creator of.
     pub created: Vec<ExtendedBaseLevel>,
     /// Levels the user has published in game.
     pub published: Vec<ExtendedBaseLevel>,
+}
+
+impl ProfileRecordResolved {
+    pub fn from_data(record: Record, level: ExtendedBaseLevel) -> Self {
+        Self {
+            id: record.id,
+            level,
+            mobile: record.mobile,
+            video_url: record.video_url,
+            completion_time: record.completion_time,
+            is_verification: record.is_verification,
+            hide_video: record.hide_video,
+            updated_at: record.updated_at,
+            created_at: record.created_at,
+        }
+    }
 }
 
 impl ProfileResolved {
@@ -121,19 +135,15 @@ impl ProfileResolved {
             .first(conn)
             .optional()?;
 
-        let full_records = records::table
+        let records = records::table
             .filter(records::submitted_by.eq(user.id))
             .inner_join(levels::table.on(levels::id.eq(records::level_id)))
             .order(levels::position.asc())
-            .select((ProfileRecord::as_select(), ExtendedBaseLevel::as_select()))
-            .load::<(ProfileRecord, ExtendedBaseLevel)>(conn)?
+            .select((Record::as_select(), ExtendedBaseLevel::as_select()))
+            .load::<(Record, ExtendedBaseLevel)>(conn)?
             .into_iter()
-            .map(|(record, level)| ProfileRecordResolved { record, level })
+            .map(|(record, level)| ProfileRecordResolved::from_data(record, level))
             .collect::<Vec<_>>();
-
-        let (verified, records) = full_records
-            .into_iter()
-            .partition(|record| record.record.is_verification);
 
         let mut created = levels::table
             .inner_join(levels_created::table.on(levels_created::level_id.eq(levels::id)))
@@ -177,7 +187,6 @@ impl ProfileResolved {
             rank,
             packs,
             records,
-            verified,
             created,
             published,
         })
