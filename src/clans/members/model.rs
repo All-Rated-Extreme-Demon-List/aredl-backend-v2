@@ -5,7 +5,7 @@ use crate::clans::{Clan, ClanInvite, ClanMember};
 use crate::error_handler::ApiError;
 use crate::schema::{clan_invites, clan_members, clans, users};
 use crate::users::me::notifications::{Notification, NotificationType};
-use crate::users::BaseDiscordUser;
+use crate::users::ExtendedBaseUser;
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::{
@@ -71,7 +71,7 @@ pub struct ClanMemberMeta {
 #[derive(Debug, Serialize, Deserialize, ToSchema, Queryable)]
 pub struct ClanMemberResolved {
     #[serde(flatten)]
-    pub user: BaseDiscordUser,
+    pub user: ExtendedBaseUser,
     #[serde(flatten)]
     pub member: ClanMemberMeta,
 }
@@ -84,7 +84,7 @@ impl ClanMember {
         let members = clan_members::table
             .filter(clan_members::clan_id.eq(clan_id))
             .inner_join(users::table.on(clan_members::user_id.eq(users::id)))
-            .select((BaseDiscordUser::as_select(), ClanMemberMeta::as_select()))
+            .select((ExtendedBaseUser::as_select(), ClanMemberMeta::as_select()))
             .load::<ClanMemberResolved>(conn)?;
         Ok(members)
     }

@@ -46,19 +46,6 @@ pub struct ExtendedBaseUser {
     pub country: Option<i32>,
     /// Discord ID of the user. Updated on every login.
     pub discord_id: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
-#[diesel(table_name=users, check_for_backend(Pg))]
-pub struct BaseDiscordUser {
-    /// Internal UUID of the user.
-    pub id: Uuid,
-    /// Username of the user. This is linked to the Discord username and is updated on every login.
-    pub username: String,
-    /// Global display name of the user. May be freely set by the user.
-    pub global_name: String,
-    /// Discord ID of the user. Updated on every login.
-    pub discord_id: Option<String>,
     /// Discord avatar hash of the user. Updated on every login.
     pub discord_avatar: Option<String>,
 }

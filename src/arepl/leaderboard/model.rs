@@ -1,6 +1,6 @@
+use crate::app_data::db::DbConnection;
 use crate::arepl::levels::BaseLevel;
 use crate::clans::Clan;
-use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::scheduled::refresh_matviews::MatviewRefreshLog;
@@ -8,7 +8,7 @@ use crate::schema::{
     arepl::{levels, user_leaderboard},
     clans, matview_refresh_log, users,
 };
-use crate::users::BaseDiscordUser;
+use crate::users::ExtendedBaseUser;
 use chrono::Utc;
 use diesel::pg::Pg;
 use diesel::{
@@ -52,7 +52,7 @@ pub struct LeaderboardEntryResolved {
     /// Rank of the user in the country leaderboard, sorted by total points (excluding packs).
     pub country_raw_rank: i32,
     /// This entry's user.
-    pub user: BaseDiscordUser,
+    pub user: ExtendedBaseUser,
     /// Country of the user. Uses the ISO 3166-1 numeric country code.
     pub country: Option<i32>,
     /// Total points of the user, including pack points.
@@ -152,7 +152,7 @@ impl LeaderboardPage {
 
         let raw: Vec<(
             LeaderboardEntry,
-            BaseDiscordUser,
+            ExtendedBaseUser,
             Option<Clan>,
             Option<BaseLevel>,
         )> = query
@@ -160,7 +160,7 @@ impl LeaderboardPage {
             .offset(page_query.offset())
             .select((
                 LeaderboardEntry::as_select(),
-                BaseDiscordUser::as_select(),
+                ExtendedBaseUser::as_select(),
                 Option::<Clan>::as_select(),
                 Option::<BaseLevel>::as_select(),
             ))

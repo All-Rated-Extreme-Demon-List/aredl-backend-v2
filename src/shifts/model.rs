@@ -3,7 +3,7 @@ use crate::{
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
     schema::{shifts, users},
-    users::BaseDiscordUser,
+    users::ExtendedBaseUser,
 };
 use chrono::{DateTime, Utc};
 use diesel::{
@@ -67,7 +67,7 @@ pub struct ResolvedShift {
     /// Internal UUID of the shift.
     pub id: Uuid,
     /// User this shift is assigned to.
-    pub user: BaseDiscordUser,
+    pub user: ExtendedBaseUser,
     /// The target number of submissions to review for this shift.
     pub target_count: i32,
     /// The number of submissions that have been reviewed for this shift.
@@ -128,7 +128,7 @@ impl Shift {
 }
 
 impl ResolvedShift {
-    pub fn from_data(shift_row: (Shift, BaseDiscordUser)) -> Self {
+    pub fn from_data(shift_row: (Shift, ExtendedBaseUser)) -> Self {
         let (shift, user) = shift_row;
         Self {
             id: shift.id,
@@ -161,8 +161,8 @@ impl ShiftPage {
             .order(shifts::start_at.desc())
             .limit(page_query.per_page())
             .offset(page_query.offset())
-            .select((Shift::as_select(), BaseDiscordUser::as_select()))
-            .load::<(Shift, BaseDiscordUser)>(conn)?;
+            .select((Shift::as_select(), ExtendedBaseUser::as_select()))
+            .load::<(Shift, ExtendedBaseUser)>(conn)?;
 
         let resolved_shifts = shift_rows
             .into_iter()
@@ -196,12 +196,12 @@ impl ShiftPage {
 
         let total_count: i64 = build_filtered().count().get_result(conn)?;
 
-        let shift_rows: Vec<(Shift, BaseDiscordUser)> = build_filtered()
+        let shift_rows: Vec<(Shift, ExtendedBaseUser)> = build_filtered()
             .inner_join(users::table.on(shifts::user_id.eq(users::id)))
             .order(shifts::start_at.desc())
             .limit(page_query.per_page())
             .offset(page_query.offset())
-            .select((Shift::as_select(), BaseDiscordUser::as_select()))
+            .select((Shift::as_select(), ExtendedBaseUser::as_select()))
             .load(conn)?;
 
         let resolved_shifts = shift_rows
