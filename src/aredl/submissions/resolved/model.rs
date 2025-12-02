@@ -8,7 +8,7 @@ use crate::{
         aredl::{levels, submission_history, submissions_with_priority},
         users,
     },
-    users::{user_filter, BaseUser},
+    users::{user_filter, ExtendedBaseUser},
 };
 use diesel::{
     expression_methods::NullableExpressionMethods, BoolExpressionMethods, PgTextExpressionMethods,
@@ -23,8 +23,8 @@ use uuid::Uuid;
 pub type ResolvedSubmissionRow = (
     SubmissionWithPriority,
     ExtendedBaseLevel,
-    BaseUser,
-    Option<BaseUser>,
+    ExtendedBaseUser,
+    Option<ExtendedBaseUser>,
 );
 
 fn get_submission_ids_from_notes(
@@ -75,9 +75,9 @@ macro_rules! aredl_base_resolved_submission_query {
             .select((
                 SubmissionWithPriority::as_select(),
                 ExtendedBaseLevel::as_select(),
-                BaseUser::as_select(),
+                ExtendedBaseUser::as_select(),
                 reviewers
-                    .fields(<BaseUser as Selectable<Pg>>::construct_selection())
+                    .fields(<ExtendedBaseUser as Selectable<Pg>>::construct_selection())
                     .nullable(),
             ))
             .into_boxed::<Pg>()

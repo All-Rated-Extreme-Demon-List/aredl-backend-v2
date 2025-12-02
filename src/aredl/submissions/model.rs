@@ -4,7 +4,7 @@ use crate::{
     auth::{Authenticated, Permission},
     error_handler::ApiError,
     schema::aredl::{submissions, submissions_with_priority},
-    users::BaseUser,
+    users::ExtendedBaseUser,
 };
 use chrono::{DateTime, Utc};
 use diesel::{pg::Pg, Connection, ExpressionMethods, QueryDsl, RunQueryDsl, Selectable};
@@ -109,7 +109,7 @@ pub struct SubmissionResolved {
     /// The level this submission is for
     pub level: ExtendedBaseLevel,
     /// User who submitted this completion.
-    pub submitted_by: BaseUser,
+    pub submitted_by: ExtendedBaseUser,
     /// Whether the record was completed on mobile or not.
     pub mobile: bool,
     /// ID of the LDM used for the record, if any.
@@ -124,7 +124,7 @@ pub struct SubmissionResolved {
     pub status: SubmissionStatus,
     /// [MOD ONLY] User who reviewed the record.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub reviewer: Option<BaseUser>,
+    pub reviewer: Option<ExtendedBaseUser>,
     /// [MOD ONLY] Private notes given by the reviewer when reviewing the record.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub private_reviewer_notes: Option<String>,

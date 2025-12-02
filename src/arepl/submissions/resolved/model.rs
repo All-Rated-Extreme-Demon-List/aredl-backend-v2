@@ -8,7 +8,7 @@ use crate::{
         arepl::{levels, submissions_with_priority},
         users,
     },
-    users::{user_filter, BaseUser},
+    users::{user_filter, ExtendedBaseUser},
 };
 use diesel::expression_methods::NullableExpressionMethods;
 use diesel::{
@@ -22,8 +22,8 @@ use uuid::Uuid;
 pub type ResolvedSubmissionRow = (
     SubmissionWithPriority,
     ExtendedBaseLevel,
-    BaseUser,
-    Option<BaseUser>,
+    ExtendedBaseUser,
+    Option<ExtendedBaseUser>,
 );
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -58,9 +58,9 @@ macro_rules! arepl_base_resolved_submission_query {
             .select((
                 SubmissionWithPriority::as_select(),
                 ExtendedBaseLevel::as_select(),
-                BaseUser::as_select(),
+                ExtendedBaseUser::as_select(),
                 reviewers
-                    .fields(<BaseUser as Selectable<Pg>>::construct_selection())
+                    .fields(<ExtendedBaseUser as Selectable<Pg>>::construct_selection())
                     .nullable(),
             ))
             .into_boxed::<Pg>()
