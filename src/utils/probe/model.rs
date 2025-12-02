@@ -212,6 +212,8 @@ impl ResolvedMedia {
     async fn get_exiftool(path: &str) -> Result<JsonValue, ApiError> {
         let mut command = Command::new("/usr/bin/exiftool");
         command
+            .arg("-api")
+            .arg("LargeFileSupport=1")
             .arg("-j")
             .arg(path)
             .stdout(Stdio::piped())

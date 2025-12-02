@@ -3,7 +3,7 @@ use reqwest::{header, Client, StatusCode};
 use std::io::Write;
 use tempfile::NamedTempFile;
 
-pub const CHUNK_SIZE: u64 = 4 * 1024 * 1024;
+pub const CHUNK_SIZE: u64 = 8 * 1024 * 1024;
 
 pub async fn save_to_temp_file(bytes: &[u8]) -> Result<std::path::PathBuf, ApiError> {
     let mut file = NamedTempFile::new()
