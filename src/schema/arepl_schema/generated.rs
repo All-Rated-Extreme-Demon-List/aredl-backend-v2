@@ -115,6 +115,7 @@ pub mod arepl {
             is_verification -> Bool,
             completion_time -> Int8,
             hide_video -> Bool,
+            submission_id -> Uuid,
         }
     }
 
@@ -176,6 +177,7 @@ pub mod arepl {
     }
 
     diesel::joinable!(level_ldms -> levels (level_id));
+    diesel::joinable!(records -> submissions (submission_id));
     diesel::joinable!(submission_history -> submissions (submission_id));
 
     diesel::allow_tables_to_appear_in_same_query!(

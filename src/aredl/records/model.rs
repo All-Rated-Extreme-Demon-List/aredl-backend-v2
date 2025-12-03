@@ -24,6 +24,8 @@ use uuid::Uuid;
 pub struct Record {
     /// Internal UUID of the record.
     pub id: Uuid,
+    /// Internal UUID of the submission this record is linked to.
+    pub submission_id: Uuid,
     /// Level this record is for.
     pub level_id: Uuid,
     /// User who submitted the record.
@@ -46,6 +48,8 @@ pub struct Record {
 pub struct ResolvedRecord {
     /// Internal UUID of the record.
     pub id: Uuid,
+    /// Internal UUID of the submission this record is linked to.
+    pub submission_id: Uuid,
     /// Level this record is for.
     pub level: ExtendedBaseLevel,
     /// User who submitted the record.
@@ -369,6 +373,7 @@ impl ResolvedRecord {
     pub fn from_data(record: Record, user: ExtendedBaseUser, level: ExtendedBaseLevel) -> Self {
         Self {
             id: record.id,
+            submission_id: record.submission_id,
             submitted_by: user,
             level: level,
             mobile: record.mobile,

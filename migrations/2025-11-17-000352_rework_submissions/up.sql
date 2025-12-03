@@ -220,7 +220,8 @@ ALTER TABLE aredl.records
 	DROP COLUMN reviewer_notes,
     DROP COLUMN reviewer_id,
 	DROP COLUMN placement_order,
-	DROP COLUMN mod_menu;
+	DROP COLUMN mod_menu,
+    ADD COLUMN submission_id uuid REFERENCES aredl.submissions(id) ON DELETE CASCADE;
 
 ALTER TABLE arepl.records
     DROP COLUMN ldm_id,
@@ -229,9 +230,28 @@ ALTER TABLE arepl.records
 	DROP COLUMN reviewer_notes,
     DROP COLUMN reviewer_id,
 	DROP COLUMN placement_order,
-	DROP COLUMN mod_menu;
+	DROP COLUMN mod_menu,
+    ADD COLUMN submission_id uuid REFERENCES arepl.submissions(id) ON DELETE CASCADE;
 
+-- Records should reference the corresponding submission
 
+UPDATE aredl.records AS r
+SET submission_id = s.id
+FROM aredl.submissions AS s
+WHERE r.level_id = s.level_id
+  AND r.submitted_by = s.submitted_by;
+
+UPDATE arepl.records AS r
+SET submission_id = s.id
+FROM arepl.submissions AS s
+WHERE r.level_id = s.level_id
+  AND r.submitted_by = s.submitted_by;
+
+ALTER TABLE aredl.records
+    ALTER COLUMN submission_id SET NOT NULL;
+
+ALTER TABLE arepl.records
+    ALTER COLUMN submission_id SET NOT NULL;
 
 -- Create triggers to sync accepted submissions with records
 
@@ -244,13 +264,15 @@ BEGIN
             level_id,
             submitted_by,
             mobile,
-            video_url
+            video_url,
+            submission_id
         )
         VALUES (
             NEW.level_id,
             NEW.submitted_by,
             NEW.mobile,
-            NEW.video_url
+            NEW.video_url,
+            NEW.id
         )
         ON CONFLICT (level_id, submitted_by)
         DO UPDATE SET
@@ -261,8 +283,7 @@ BEGIN
       AND (OLD.status IS DISTINCT FROM NEW.status)
     THEN
         DELETE FROM aredl.records
-        WHERE level_id = NEW.level_id
-          AND submitted_by = NEW.submitted_by;
+        WHERE submission_id = NEW.id;
     END IF;
 
     RETURN NEW;
@@ -287,14 +308,16 @@ BEGIN
             submitted_by,
             mobile,
             video_url,
-			completion_time
+			completion_time,
+            submission_id
         )
         VALUES (
             NEW.level_id,
             NEW.submitted_by,
             NEW.mobile,
             NEW.video_url,
-			NEW.completion_time
+			NEW.completion_time,
+            NEW.id
         )
         ON CONFLICT (level_id, submitted_by)
         DO UPDATE SET
@@ -306,8 +329,7 @@ BEGIN
       AND (OLD.status IS DISTINCT FROM NEW.status)
     THEN
         DELETE FROM arepl.records
-        WHERE level_id = NEW.level_id
-          AND submitted_by = NEW.submitted_by;
+        WHERE submission_id = NEW.id;
     END IF;
 
     RETURN NEW;

@@ -31,6 +31,8 @@ pub struct Rank {
 pub struct ClanProfileRecord {
     /// Internal UUID of the record.
     pub id: Uuid,
+    /// Internal UUID of the submission this record is linked to.
+    pub submission_id: Uuid,
     /// Internal UUID of the level the record is for.
     pub level_id: Uuid,
     /// Internal UUID of the user who submitted the record.
@@ -75,6 +77,7 @@ impl ResolvedRecord {
     ) -> Self {
         Self {
             id: record.id,
+            submission_id: record.submission_id,
             submitted_by: user,
             level,
             mobile: record.mobile,

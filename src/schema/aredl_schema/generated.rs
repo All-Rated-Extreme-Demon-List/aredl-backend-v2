@@ -123,6 +123,7 @@ pub mod aredl {
             updated_at -> Timestamptz,
             is_verification -> Bool,
             hide_video -> Bool,
+            submission_id -> Uuid,
         }
     }
 
@@ -182,6 +183,7 @@ pub mod aredl {
     }
 
     diesel::joinable!(level_ldms -> levels (level_id));
+    diesel::joinable!(records -> submissions (submission_id));
     diesel::joinable!(submission_history -> submissions (submission_id));
 
     diesel::allow_tables_to_appear_in_same_query!(

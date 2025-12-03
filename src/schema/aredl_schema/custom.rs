@@ -114,6 +114,7 @@ diesel::allow_tables_to_appear_in_same_query!(completed_packs, pack_tiers,);
 diesel::table! {
     aredl.min_placement_country_records (id) {
         id -> Uuid,
+        submission_id -> Uuid,
         level_id -> Uuid,
         submitted_by -> Uuid,
         mobile -> Bool,
@@ -155,6 +156,7 @@ diesel::allow_tables_to_appear_in_same_query!(clans_leaderboard, clans,);
 diesel::table! {
     aredl.min_placement_clans_records (id) {
         id -> Uuid,
+        submission_id -> Uuid,
         level_id -> Uuid,
         submitted_by -> Uuid,
         mobile -> Bool,
