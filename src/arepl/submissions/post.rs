@@ -44,7 +44,7 @@ pub struct SubmissionInsert {
     pub reviewer_id: Option<Uuid>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Insertable, ToSchema)]
+#[derive(Serialize, Deserialize, Debug, Insertable, ToSchema, Default)]
 #[diesel(table_name=submissions, check_for_backend(Pg))]
 
 pub struct SubmissionPostMod {

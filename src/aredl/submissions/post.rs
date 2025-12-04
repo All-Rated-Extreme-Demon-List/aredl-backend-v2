@@ -33,7 +33,7 @@ pub struct SubmissionPostUser {
     pub user_notes: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Insertable, ToSchema)]
+#[derive(Serialize, Deserialize, Debug, Insertable, ToSchema, Default)]
 #[diesel(table_name=submissions, check_for_backend(Pg))]
 
 pub struct SubmissionPostMod {

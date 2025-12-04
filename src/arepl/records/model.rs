@@ -1,7 +1,7 @@
 use crate::app_data::db::DbConnection;
 use crate::arepl::levels::ExtendedBaseLevel;
 use crate::arepl::submissions::patch::SubmissionPatchMod;
-use crate::arepl::submissions::post::SubmissionInsert;
+use crate::arepl::submissions::post::SubmissionPostMod;
 use crate::arepl::submissions::{Submission, SubmissionStatus};
 use crate::auth::Authenticated;
 use crate::error_handler::ApiError;
@@ -138,14 +138,14 @@ pub struct ResolvedRecordPage {
     data: Vec<ResolvedRecord>,
 }
 
-impl SubmissionInsert {
+impl SubmissionPostMod {
     pub fn from_record_insert(record: RecordInsert) -> Self {
         Self {
-            submitted_by: record.submitted_by,
+            submitted_by: Some(record.submitted_by),
             level_id: record.level_id,
             mobile: record.mobile,
             video_url: record.video_url,
-            status: SubmissionStatus::Accepted,
+            status: Some(SubmissionStatus::Accepted),
             reviewer_notes: Some("Added by a moderator".to_string()),
             ..Default::default()
         }
@@ -194,6 +194,7 @@ impl Submission {
     pub fn upsert_from_record_insert(
         conn: &mut DbConnection,
         record: RecordInsert,
+        authenticated: Authenticated,
     ) -> Result<Self, ApiError> {
         let existing_submission_id = submissions::table
             .filter(submissions::submitted_by.eq(record.submitted_by))
@@ -204,18 +205,24 @@ impl Submission {
 
         match existing_submission_id {
             Some(submission_id) => {
-                let submission_update = SubmissionPatchMod::from_record_insert(record);
+                let submission_update = (
+                    SubmissionPatchMod::from_record_insert(record),
+                    submissions::reviewer_id.eq(Some(authenticated.user_id)),
+                );
                 return Ok(diesel::update(
                     submissions::table.filter(submissions::id.eq(submission_id)),
                 )
-                .set(&submission_update)
+                .set(submission_update)
                 .returning(Submission::as_select())
                 .get_result::<Self>(conn)?);
             }
             None => {
-                let submission_insert = SubmissionInsert::from_record_insert(record);
+                let submission_insert = (
+                    SubmissionPostMod::from_record_insert(record),
+                    submissions::reviewer_id.eq(Some(authenticated.user_id)),
+                );
                 return Ok(diesel::insert_into(submissions::table)
-                    .values(&submission_insert)
+                    .values(submission_insert)
                     .returning(Submission::as_select())
                     .get_result::<Self>(conn)?);
             }
@@ -234,14 +241,14 @@ impl Record {
                 return Err(ApiError::new(400, "You cannot create records for yourself"));
             }
             // Create the corresponding submission first and let triggers initialize the record
-            Submission::upsert_from_record_insert(conn, record.clone())?;
+            let submission =
+                Submission::upsert_from_record_insert(conn, record.clone(), authenticated)?;
 
             // Then update the record-specific fields
             let record_patch = RecordUpdate::from_record_insert(record.clone());
 
             let result = diesel::update(records::table)
-                .filter(records::submitted_by.eq(record.submitted_by))
-                .filter(records::level_id.eq(record.level_id))
+                .filter(records::submission_id.eq(submission.id))
                 .set(&record_patch)
                 .returning(Record::as_select())
                 .get_result::<Self>(conn)?;
@@ -258,11 +265,14 @@ impl Record {
     ) -> Result<Self, ApiError> {
         conn.transaction(|conn| -> Result<Self, ApiError> {
             // Update the corresponding submission first and let triggers update the record
-            let submission_patch = SubmissionPatchMod::from_record_update(record.clone());
+            let submission_patch = (
+                SubmissionPatchMod::from_record_update(record.clone()),
+                submissions::reviewer_id.eq(Some(authenticated.user_id)),
+            );
 
-            let (levelid, submitted_by): (Uuid, Uuid) = records::table
+            let (submission_id, submitted_by): (Uuid, Uuid) = records::table
                 .filter(records::id.eq(record_id))
-                .select((records::level_id, records::submitted_by))
+                .select((records::submission_id, records::submitted_by))
                 .first(conn)?;
 
             if authenticated.user_id == submitted_by {
@@ -270,9 +280,8 @@ impl Record {
             }
 
             diesel::update(submissions::table)
-                .filter(submissions::submitted_by.eq(submitted_by))
-                .filter(submissions::level_id.eq(levelid))
-                .set(&submission_patch)
+                .filter(submissions::id.eq(submission_id))
+                .set(submission_patch)
                 .execute(conn)?;
 
             // Then update the record-specific fields
@@ -293,18 +302,22 @@ impl Record {
         })
     }
 
-    pub fn delete(conn: &mut DbConnection, record_id: Uuid) -> Result<(), ApiError> {
+    pub fn delete(
+        conn: &mut DbConnection,
+        record_id: Uuid,
+        authenticated: Authenticated,
+    ) -> Result<(), ApiError> {
         conn.transaction(|conn| -> Result<(), ApiError> {
-            let (levelid, submitted_by): (Uuid, Uuid) = records::table
+            let submission_id: Uuid = records::table
                 .filter(records::id.eq(record_id))
-                .select((records::level_id, records::submitted_by))
+                .select(records::submission_id)
                 .first(conn)?;
 
             diesel::update(submissions::table)
-                .filter(submissions::submitted_by.eq(submitted_by))
-                .filter(submissions::level_id.eq(levelid))
+                .filter(submissions::id.eq(submission_id))
                 .set((
                     submissions::status.eq(SubmissionStatus::Denied),
+                    submissions::reviewer_id.eq(Some(authenticated.user_id)),
                     submissions::reviewer_notes
                         .eq(Some("Record deleted by a moderator".to_string())),
                 ))

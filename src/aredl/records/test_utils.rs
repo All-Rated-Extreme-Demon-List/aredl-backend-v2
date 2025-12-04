@@ -15,7 +15,7 @@ use uuid::Uuid;
 #[cfg(test)]
 pub async fn create_test_record(db: &Arc<DbAppState>, user_id: Uuid, level_id: Uuid) -> Uuid {
     let conn = &mut db.connection().unwrap();
-    let (level_id, submitted_by) = diesel::insert_into(submissions::table)
+    let submission_id = diesel::insert_into(submissions::table)
         .values((
             submissions::submitted_by.eq(user_id),
             submissions::video_url.eq("https://example.com/video.mp4"),
@@ -23,13 +23,12 @@ pub async fn create_test_record(db: &Arc<DbAppState>, user_id: Uuid, level_id: U
             submissions::status.eq(SubmissionStatus::Accepted),
             submissions::mobile.eq(false),
         ))
-        .returning((submissions::level_id, submissions::submitted_by))
-        .get_result::<(Uuid, Uuid)>(conn)
+        .returning(submissions::id)
+        .get_result::<Uuid>(conn)
         .expect("Failed to create test aredl record");
 
     return records::table
-        .filter(records::level_id.eq(level_id))
-        .filter(records::submitted_by.eq(submitted_by))
+        .filter(records::submission_id.eq(submission_id))
         .select(records::id)
         .first::<Uuid>(conn)
         .expect("Failed to retrieve test aredl record ID");

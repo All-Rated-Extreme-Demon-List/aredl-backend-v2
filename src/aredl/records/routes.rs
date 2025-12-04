@@ -122,9 +122,11 @@ async fn update(
 async fn delete(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
+    authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let record =
-        web::block(move || Record::delete(&mut db.connection()?, id.into_inner())).await??;
+        web::block(move || Record::delete(&mut db.connection()?, id.into_inner(), authenticated))
+            .await??;
     Ok(HttpResponse::Ok().json(record))
 }
 
