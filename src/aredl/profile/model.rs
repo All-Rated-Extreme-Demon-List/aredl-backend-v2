@@ -106,13 +106,6 @@ impl ProfileResolved {
     }
 
     pub fn from_user(conn: &mut DbConnection, user: User) -> Result<Self, ApiError> {
-        if User::is_banned(user.id.clone(), conn)? {
-            return Err(ApiError::new(
-                403,
-                "This user has been banned from the list.".into(),
-            ));
-        }
-
         let clan = clans::table
             .inner_join(clan_members::table.on(clans::id.eq(clan_members::clan_id)))
             .filter(clan_members::user_id.eq(user.id))
@@ -155,6 +148,8 @@ impl ProfileResolved {
             .order(levels::position.asc())
             .select(ExtendedBaseLevel::as_select())
             .load::<ExtendedBaseLevel>(conn)?;
+
+        // also append to "created" the levels that the user has published that don't have any listed creators
 
         let published_without_creators_list: Vec<ExtendedBaseLevel> = levels::table
             .left_outer_join(levels_created::table.on(levels_created::level_id.eq(levels::id)))
