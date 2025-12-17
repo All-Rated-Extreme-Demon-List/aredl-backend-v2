@@ -100,7 +100,7 @@ impl LevelResolvedRecordExtended {
         }
 
         let records = query
-            .order(records::created_at.asc())
+            .order(records::completion_time.asc())
             .select((Record::as_select(), ExtendedBaseUser::as_select()))
             .load::<(Record, ExtendedBaseUser)>(conn)?;
 

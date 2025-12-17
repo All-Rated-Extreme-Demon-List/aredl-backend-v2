@@ -370,7 +370,7 @@ impl ResolvedRecord {
         let records = build_filtered()
             .inner_join(users::table.on(records::submitted_by.eq(users::id)))
             .inner_join(levels::table.on(records::level_id.eq(levels::id)))
-            .order_by(records::completion_time.asc())
+            .order_by(records::created_at.desc())
             .limit(page_query.per_page())
             .offset(page_query.offset())
             .select((
