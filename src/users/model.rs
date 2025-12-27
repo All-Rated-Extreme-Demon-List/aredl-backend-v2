@@ -2,7 +2,14 @@ use crate::app_data::db::DbConnection;
 use crate::clans::Clan;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
-use crate::schema::{clan_members, clans, permissions, roles, user_roles, users};
+use crate::schema::{
+    aredl::submissions, arepl::submissions as plat_submissions, clan_members, clans, permissions,
+    roles, user_roles, users,
+};
+use crate::{
+    aredl::submissions::SubmissionStatus,
+    arepl::submissions::SubmissionStatus as PlatSubmissionStatus,
+};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::pg::Pg;
 use diesel::{
@@ -348,6 +355,32 @@ impl User {
             .set(users::ban_level.eq(ban_level))
             .returning(Self::as_select())
             .get_result::<Self>(conn)?;
+
+        if ban_level >= 2 {
+            // Set user's pending classic submissions to `Denied`
+            diesel::update(
+                submissions::table
+                    .filter(submissions::submitted_by.eq(user_id))
+                    .filter(submissions::status.eq(SubmissionStatus::Pending)),
+            )
+            .set((
+                submissions::status.eq(SubmissionStatus::Denied),
+                submissions::reviewer_notes.eq("This player has been list banned."),
+            ))
+            .execute(conn)?;
+
+            // Set user's pending platformer submissions to `Denied`
+            diesel::update(
+                plat_submissions::table
+                    .filter(plat_submissions::submitted_by.eq(user_id))
+                    .filter(plat_submissions::status.eq(PlatSubmissionStatus::Pending)),
+            )
+            .set((
+                plat_submissions::status.eq(PlatSubmissionStatus::Denied),
+                plat_submissions::reviewer_notes.eq("This player has been list banned."),
+            ))
+            .execute(conn)?;
+        }
         Ok(user)
     }
 }
