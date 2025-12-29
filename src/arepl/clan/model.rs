@@ -115,6 +115,7 @@ impl ClanProfileResolved {
                 ExtendedBaseUser::as_select(),
                 ExtendedBaseLevel::as_select(),
             ))
+            .order_by(levels::position.asc())
             .load::<(ClanProfileRecord, ExtendedBaseUser, ExtendedBaseLevel)>(conn)?
             .into_iter()
             .map(|(record, user, level)| ResolvedRecord::from_clan_data(record, level, user))

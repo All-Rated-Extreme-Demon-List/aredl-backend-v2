@@ -108,6 +108,7 @@ impl CountryProfileResolved {
                 ExtendedBaseUser::as_select(),
                 ExtendedBaseLevel::as_select(),
             ))
+            .order_by(levels::position.asc())
             .load::<(CountryProfileRecord, ExtendedBaseUser, ExtendedBaseLevel)>(conn)?
             .into_iter()
             .map(|(record, user, level)| ResolvedRecord::from_country_data(record, level, user))
