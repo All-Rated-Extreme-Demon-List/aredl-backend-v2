@@ -4,6 +4,7 @@ use crate::{
     auth::{Authenticated, Permission},
     error_handler::ApiError,
     notifications::WebsocketNotification,
+    providers::VideoProvidersAppState,
     schema::{
         arepl::{levels, submissions},
         shifts, users,
@@ -14,7 +15,6 @@ use crate::{
 use chrono::Utc;
 use diesel::Connection;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
-use is_url::is_url;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use utoipa::ToSchema;
@@ -129,10 +129,11 @@ impl Submission {
 
 impl SubmissionPatchUser {
     pub fn patch(
-        patch: Self,
+        mut patch: Self,
         id: Uuid,
         conn: &mut DbConnection,
         authenticated: Authenticated,
+        providers: &VideoProvidersAppState,
     ) -> Result<Submission, ApiError> {
         let user = authenticated.user_id;
 
@@ -141,18 +142,21 @@ impl SubmissionPatchUser {
         }
 
         if let Some(video_url) = patch.video_url.as_ref() {
-            if !is_url(video_url) {
-                return Err(ApiError::new(
-                    400,
-                    "Completion video link is not a valid URL!",
-                ));
-            }
+            patch.video_url = Some(providers.validate_completion_video_url(video_url).map_err(
+                |mut e| {
+                    e.error_message = format!("Invalid completion video URL: {}", e.error_message);
+                    e
+                },
+            )?);
         }
 
         if let Some(raw_url) = patch.raw_url.as_ref() {
-            if !is_url(raw_url) {
-                return Err(ApiError::new(400, "Raw footage link is not a valid URL!"));
-            }
+            patch.raw_url = Some(providers.validate_raw_footage_url(raw_url).map_err(
+                |mut e| {
+                    e.error_message = format!("Invalid raw footage URL: {}", e.error_message);
+                    e
+                },
+            )?);
         }
 
         let submitter_ban = users::table
@@ -251,11 +255,12 @@ impl SubmissionPatchUser {
 
 impl SubmissionPatchMod {
     pub fn patch(
-        patch: Self,
+        mut patch: Self,
         id: Uuid,
         conn: &mut DbConnection,
         authenticated: Authenticated,
         notify_tx: broadcast::Sender<WebsocketNotification>,
+        providers: &VideoProvidersAppState,
     ) -> Result<Submission, ApiError> {
         if patch == Self::default() {
             return Err(ApiError::new(400, "No changes were provided!"));
@@ -269,18 +274,21 @@ impl SubmissionPatchMod {
         }
 
         if let Some(video_url) = patch.video_url.as_ref() {
-            if !is_url(video_url) {
-                return Err(ApiError::new(
-                    400,
-                    "Completion video link is not a valid URL!",
-                ));
-            }
+            patch.video_url = Some(providers.validate_completion_video_url(video_url).map_err(
+                |mut e| {
+                    e.error_message = format!("Invalid completion video URL: {}", e.error_message);
+                    e
+                },
+            )?);
         }
 
         if let Some(raw_url) = patch.raw_url.as_ref() {
-            if !is_url(raw_url) {
-                return Err(ApiError::new(400, "Raw footage link is not a valid URL!"));
-            }
+            patch.raw_url = Some(providers.validate_raw_footage_url(raw_url).map_err(
+                |mut e| {
+                    e.error_message = format!("Invalid raw footage URL: {}", e.error_message);
+                    e
+                },
+            )?);
         }
 
         let old_submission = submissions::table
@@ -294,6 +302,7 @@ impl SubmissionPatchMod {
                 id,
                 conn,
                 authenticated,
+                providers,
             );
         }
 
@@ -310,11 +319,13 @@ impl SubmissionPatchMod {
             let old_status = old_submission.status;
             let new_status = patch.status.unwrap_or(old_status.clone());
 
+            // Side effects when status changes to reviewed state
             if (new_status == SubmissionStatus::Accepted
                 || new_status == SubmissionStatus::Denied
                 || new_status == SubmissionStatus::UnderConsideration)
                 && old_status != new_status
             {
+                // Send user notification
                 let level_name = levels::table
                     .filter(levels::id.eq(updated.level_id))
                     .select(levels::name)
@@ -339,6 +350,8 @@ impl SubmissionPatchMod {
                 };
 
                 Notification::create(connection, updated.submitted_by, message, notif_type)?;
+
+                // Send websocket notification
 
                 let ws_type = match new_status {
                     SubmissionStatus::Accepted => "SUBMISSION_ACCEPTED",

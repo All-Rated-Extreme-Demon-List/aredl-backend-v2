@@ -4,6 +4,7 @@ extern crate diesel;
 extern crate diesel_migrations;
 
 mod app_data;
+pub use app_data::providers;
 mod error_handler;
 mod schema;
 
@@ -28,7 +29,7 @@ mod shifts;
 mod users;
 mod utils;
 
-use crate::app_data::{auth as auth_data, db, drive};
+use crate::app_data::{auth as auth_data, db};
 use crate::cache_control::CacheController;
 use crate::docs::ApiDoc;
 use crate::scheduled::{
@@ -99,7 +100,7 @@ async fn main() -> std::io::Result<()> {
 
     let auth_app_state = auth_data::init_app_state().await;
 
-    let drive_app_state = drive::init_app_state();
+    let providers_app_state = providers::init_app_state().await;
 
     db_app_state.run_pending_migrations();
 
@@ -156,7 +157,7 @@ async fn main() -> std::io::Result<()> {
                 web::scope("/api")
                     .app_data(web::Data::new(auth_app_state.clone()))
                     .app_data(web::Data::new(db_app_state.clone()))
-                    .app_data(web::Data::new(drive_app_state.clone()))
+                    .app_data(web::Data::new(providers_app_state.clone()))
                     .app_data(web::Data::new(notify_tx.clone()))
                     .wrap(CacheController::default_no_store())
                     .wrap(NormalizePath::trim())

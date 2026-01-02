@@ -28,6 +28,8 @@ pub struct LevelResolvedRecord {
     pub video_url: String,
     /// Whether the record's video should be hidden on the website.
     pub hide_video: bool,
+    /// Timestamp of when this record was achieved, used for ordering.
+    pub achieved_at: DateTime<Utc>,
     /// Timestamp of when the record was created (first accepted).
     pub created_at: DateTime<Utc>,
     /// Timestamp of when the record was last updated.
@@ -47,6 +49,8 @@ pub struct LevelResolvedRecordExtended {
     pub video_url: String,
     /// Whether the record's video should be hidden on the website.
     pub hide_video: bool,
+    /// Timestamp of when this record was achieved, used for ordering.
+    pub achieved_at: DateTime<Utc>,
     /// Timestamp of when the record was created (first accepted).
     pub created_at: DateTime<Utc>,
     /// Timestamp of when the record was last updated.
@@ -61,6 +65,7 @@ impl LevelResolvedRecord {
             mobile: record.mobile,
             video_url: record.video_url,
             hide_video: record.hide_video,
+            achieved_at: record.achieved_at,
             updated_at: record.updated_at,
             created_at: record.created_at,
         }
@@ -95,7 +100,7 @@ impl LevelResolvedRecordExtended {
         }
 
         let records = query
-            .order(records::created_at.asc())
+            .order(records::achieved_at.asc())
             .select((Record::as_select(), ExtendedBaseUser::as_select()))
             .load::<(Record, ExtendedBaseUser)>(conn)?;
 
@@ -113,6 +118,7 @@ impl LevelResolvedRecordExtended {
             mobile: record.mobile,
             video_url: record.video_url,
             hide_video: record.hide_video,
+            achieved_at: record.achieved_at,
             updated_at: record.updated_at,
             created_at: record.created_at,
         }

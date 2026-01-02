@@ -124,6 +124,7 @@ pub mod aredl {
             is_verification -> Bool,
             hide_video -> Bool,
             submission_id -> Uuid,
+            achieved_at -> Timestamptz,
         }
     }
 

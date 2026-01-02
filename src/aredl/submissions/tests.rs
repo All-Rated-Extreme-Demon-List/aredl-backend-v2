@@ -40,8 +40,8 @@ async fn create_submission() {
 
     let submission_data = json!({
         "level_id": level_id,
-        "video_url": "https://video.com",
-        "raw_url": "https://raw.com",
+        "video_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
+        "raw_url": "https://www.youtube.com/watch?v=xvFZjo5PgG0",
         "mobile": false
     });
 
@@ -73,7 +73,7 @@ async fn submission_without_raw() {
 
     let submission_data = json!({
         "level_id": level_id,
-        "video_url": "https://video.com",
+        "video_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
         "mobile": false,
     });
 
@@ -104,7 +104,7 @@ async fn submission_malformed_url() {
     let submission_data = json!({
         "level_id": level_id,
         "video_url": "slkdfjskdlf",
-        "raw_url": "https://raw.com",
+        "raw_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
         "mobile": false,
     });
 
@@ -119,7 +119,7 @@ async fn submission_malformed_url() {
     // raw_url
     let submission_data = json!({
         "level_id": level_id,
-        "video_url": "https://video.com",
+        "video_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
         "raw_url": "isldjfsdkf",
         "mobile": false,
     });
@@ -165,7 +165,7 @@ async fn submission_edit_no_perms() {
     let submission_id = create_test_submission(level_id, user_id_1, &db).await;
 
     let submission_edit_json = json!({
-        "video_url": "https://new_video.com"
+        "video_url": "https://www.youtube.com/watch?v=othervideo1"
     });
 
     // edit own submission
@@ -247,8 +247,8 @@ async fn submission_aredlplus_boost() {
     // video_url
     let submission_data = json!({
         "level_id": level_id,
-        "video_url": "https://video.com",
-        "raw_url": "https://raw.com",
+        "video_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
+        "raw_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
         "mobile": false
     });
 
@@ -332,8 +332,8 @@ async fn submission_banned_player() {
 
     let submission_data = json!({
         "level_id": level_id,
-        "video_url": "https://video.com",
-        "raw_url": "https://raw.com",
+        "video_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
+        "raw_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
         "mobile": false,
     });
 
@@ -816,8 +816,8 @@ async fn reviewer_submission_can_set_reviewer_fields_for_other_users() {
     let other_submission = json!({
         "submitted_by": other_user_id,
         "level_id": other_level,
-        "video_url": "https://video.example.com/other",
-        "raw_url": "https://raw.example.com/other",
+        "video_url": "https://www.youtube.com/watch?v=other111111",
+        "raw_url": "https://www.youtube.com/watch?v=otherraw111",
         "mobile": false,
         "status": "UnderConsideration",
         "reviewer_notes": "Initial review notes",
@@ -830,7 +830,11 @@ async fn reviewer_submission_can_set_reviewer_fields_for_other_users() {
         .to_request();
 
     let other_resp = test::call_service(&app, other_req).await;
-    assert!(other_resp.status().is_success(), "status is {}", other_resp.status());
+    assert!(
+        other_resp.status().is_success(),
+        "status is {}",
+        other_resp.status()
+    );
     let other_body: serde_json::Value = test::read_body_json(other_resp).await;
 
     let other_submission_id = Uuid::parse_str(other_body["id"].as_str().unwrap())
@@ -855,8 +859,8 @@ async fn reviewer_submission_can_set_reviewer_fields_for_other_users() {
 
     let reviewer_submission = json!({
         "level_id": reviewer_level,
-        "video_url": "https://video.example.com/self",
-        "raw_url": "https://raw.example.com/self",
+        "video_url": "https://www.youtube.com/watch?v=self1111111",
+        "raw_url": "https://www.youtube.com/watch?v=selfraw1111",
         "mobile": false,
         "status": "Accepted",
         "reviewer_notes": "Should not be applied",
@@ -895,4 +899,3 @@ async fn reviewer_submission_can_set_reviewer_fields_for_other_users() {
         "Reviewer notes should be ignored on own submissions",
     );
 }
-

@@ -8,7 +8,7 @@ use crate::{
         records::Record, submissions::{
              Submission, SubmissionPage, SubmissionResolved, SubmissionStatus, patch::{SubmissionPatchMod, SubmissionPatchUser}, pemonlist, post::{SubmissionInsert, SubmissionPostMod}, statistics, status
         }
-    }, auth::{Authenticated, Permission, UserAuth}, error_handler::ApiError, notifications::WebsocketNotification
+    }, auth::{Authenticated, Permission, UserAuth}, error_handler::ApiError, notifications::WebsocketNotification, providers::VideoProvidersAppState
 };
 use tokio::sync::broadcast;
 
@@ -30,12 +30,12 @@ use super::{history, queue, resolved};
     request_body = SubmissionPostMod,
 )]
 #[post("", wrap="UserAuth::load()")]
-async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionPostMod>, authenticated: Authenticated, root_span: RootSpan) -> Result<HttpResponse, ApiError> {
+async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionPostMod>, authenticated: Authenticated, root_span: RootSpan, providers: web::Data<Arc<VideoProvidersAppState>>) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&body));
     let created = web::block(move || {
         let conn = &mut db.connection()?;
         authenticated.check_is_banned(conn)?;
-        Submission::create(conn, body.into_inner(), authenticated)
+        Submission::create(conn, body.into_inner(), authenticated, providers.as_ref())
     }).await??;
     Ok(HttpResponse::Created().json(created))
 }
@@ -64,18 +64,26 @@ async fn patch(
     authenticated: Authenticated,
     root_span: RootSpan,
     notify_tx: web::Data<broadcast::Sender<WebsocketNotification>>,
+    providers: web::Data<Arc<VideoProvidersAppState>>,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&body));
+    let db_clone = db.clone();
+    let providers_clone = providers.clone();
     let patched = web::block(move || {
         let conn = &mut db.connection()?;
         match authenticated.has_permission( conn, Permission::SubmissionReview)? {
-            true => SubmissionPatchMod::patch(body.into_inner(), id.into_inner(), conn, authenticated, notify_tx.get_ref().clone()),
+            true => SubmissionPatchMod::patch(body.into_inner(), id.into_inner(), conn, authenticated, notify_tx.get_ref().clone(), providers.as_ref()),
             false => {
                 let user_patch = SubmissionPatchMod::downgrade(body.into_inner());
-                SubmissionPatchUser::patch(user_patch, id.into_inner(), conn, authenticated)
+                SubmissionPatchUser::patch(user_patch, id.into_inner(), conn, authenticated, providers.as_ref())
             }
         }
     }).await??;
+
+    // if the status submission is changed to accepted, we may need to fetch the record's achieved_at timestamp
+    if patched.status == SubmissionStatus::Accepted {
+        let _ = Record::fire_and_forget_fetch_completion_timestamp(db_clone, None, Some(patched.id), providers_clone).await;
+    }
     Ok(HttpResponse::Ok().json(patched))
 }
 
@@ -162,6 +170,7 @@ async fn delete(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticat
         create,
         patch,
         delete,
+        
     )
 )]
 pub struct ApiDoc;

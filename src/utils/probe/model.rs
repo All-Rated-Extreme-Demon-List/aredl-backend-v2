@@ -1,33 +1,11 @@
-use std::{fs::remove_file, process::Stdio, sync::Arc};
-
-use regex::Regex;
-use reqwest::header::HeaderMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map as JsonMap, Value as JsonValue};
+use std::{fs::remove_file, io::Write, process::Stdio};
+use tempfile::NamedTempFile;
 use tokio::{join, process::Command};
 use utoipa::ToSchema;
 
-use crate::{
-    app_data::drive::DriveState, error_handler::ApiError, utils::probe::fetcher::save_to_temp_file,
-};
-
-#[derive(Debug, Clone, Copy, Serialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum MediaProvider {
-    GoogleDrive,
-}
-
-#[derive(Debug, Clone)]
-pub struct ProviderMatch {
-    pub provider: MediaProvider,
-    pub id: String,
-}
-
-#[derive(Debug, Clone)]
-pub struct ResolvedMedia {
-    pub url: String,
-    pub headers: HeaderMap,
-}
+use crate::{error_handler::ApiError, providers::ContentDataLocation};
 
 #[derive(Deserialize, ToSchema)]
 pub struct ProbeRequest {
@@ -63,65 +41,6 @@ impl ProbeField {
 
     pub fn set_err<S: Into<String>>(&mut self, msg: S) {
         self.error = Some(msg.into());
-    }
-}
-
-impl ProviderMatch {
-    pub fn available_providers() -> Vec<(MediaProvider, Vec<Regex>)> {
-        vec![(
-            MediaProvider::GoogleDrive,
-            vec![
-                Regex::new(r"https?://drive\.google\.com/file/d/([\w-]+)").unwrap(),
-                Regex::new(r"https?://drive\.google\.com/open\?id=([\w-]+)").unwrap(),
-                Regex::new(r"https?://drive\.google\.com/uc\?(?:[^#]*?)id=([\w-]+)").unwrap(),
-            ],
-        )]
-    }
-
-    pub fn from_url(url: &str) -> Option<Self> {
-        for (provider, regexes) in Self::available_providers() {
-            for re in regexes {
-                if let Some(caps) = re.captures(url) {
-                    if let Some(m) = caps.get(1) {
-                        return Some(ProviderMatch {
-                            provider,
-                            id: m.as_str().to_string(),
-                        });
-                    }
-                }
-            }
-        }
-        None
-    }
-
-    pub async fn resolve(
-        self: &Self,
-        drive_state: &Option<Arc<DriveState>>,
-    ) -> Result<ResolvedMedia, ApiError> {
-        match self.provider {
-            MediaProvider::GoogleDrive => {
-                let drive_state = drive_state
-                    .as_ref()
-                    .ok_or_else(|| ApiError::new(500, "Google Drive support isn't available"))?;
-
-                let token = drive_state.get_access_token().await.map_err(|e| {
-                    ApiError::new(502, &format!("Failed to acquire Drive token: {e}"))
-                })?;
-
-                let url = format!(
-                    "https://www.googleapis.com/drive/v3/files/{}?alt=media&supportsAllDrives=true",
-                    self.id
-                );
-
-                let mut headers = HeaderMap::new();
-                headers.insert(
-                    "Authorization",
-                    reqwest::header::HeaderValue::from_str(&format!("Bearer {}", token)).unwrap(),
-                );
-
-                Ok(ResolvedMedia { url, headers })
-            }
-        }
     }
 }
 
@@ -170,7 +89,7 @@ impl<'a> ExifInfo<'a> {
     }
 }
 
-impl ResolvedMedia {
+impl ContentDataLocation {
     async fn get_ffprobe(path: &str) -> Result<JsonValue, ApiError> {
         let mut command = Command::new("/usr/local/bin/ffprobe");
         command
@@ -323,4 +242,19 @@ impl ResolvedMedia {
             ffprobe: ffprobe_field,
         })
     }
+}
+
+pub async fn save_to_temp_file(bytes: &[u8]) -> Result<std::path::PathBuf, ApiError> {
+    let mut file = NamedTempFile::new()
+        .map_err(|e| ApiError::new(500, &format!("Failed to create temp file: {e}")))?;
+
+    file.write_all(bytes)
+        .map_err(|e| ApiError::new(500, &format!("Failed to write temp file: {e}")))?;
+
+    let path = file.path().to_path_buf();
+
+    file.keep()
+        .map_err(|e| ApiError::new(500, &format!("Failed to persist temp file: {e}")))?;
+
+    Ok(path)
 }

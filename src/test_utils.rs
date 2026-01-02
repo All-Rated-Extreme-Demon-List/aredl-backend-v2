@@ -1,6 +1,7 @@
 use crate::app_data::{
-    auth::{init_app_state, AuthAppState},
+    auth::{init_app_state as auth_init_app_state, AuthAppState},
     db::DbAppState,
+    providers::init_app_state as providers_init_app_state,
 };
 use actix_http::Request;
 
@@ -76,17 +77,20 @@ pub async fn init_test_app() -> (
 
     dotenv::dotenv().ok();
 
-    let auth_app_state = init_app_state().await;
+    let auth_app_state = auth_init_app_state().await;
 
     let (notify_tx, _notify_rx) = broadcast::channel::<WebsocketNotification>(100);
 
     let db_app_state = init_test_db_state();
+
+    let providers_app_state = providers_init_app_state().await;
 
     let app = test::init_service(
         App::new()
             .app_data(Data::new(db_app_state.clone()))
             .app_data(Data::new(auth_app_state.clone()))
             .app_data(Data::new(notify_tx.clone()))
+            .app_data(Data::new(providers_app_state.clone()))
             .wrap(NormalizePath::trim())
             .wrap(TracingLogger::<AppRootSpanBuilder>::new())
             .wrap(BoxResponse)

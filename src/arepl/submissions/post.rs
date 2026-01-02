@@ -3,12 +3,12 @@ use crate::{
     arepl::submissions::{status::SubmissionsEnabled, *},
     auth::{Authenticated, Permission},
     error_handler::ApiError,
+    providers::VideoProvidersAppState,
     schema::arepl::{levels, submissions},
 };
 use diesel::{
     Connection, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
 };
-use is_url::is_url;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -166,20 +166,24 @@ impl SubmissionInsert {
 impl Submission {
     pub fn create(
         conn: &mut DbConnection,
-        submission_body: SubmissionPostMod,
+        mut submission_body: SubmissionPostMod,
         authenticated: Authenticated,
+        providers: &VideoProvidersAppState,
     ) -> Result<Self, ApiError> {
-        if !is_url(&submission_body.video_url) {
-            return Err(ApiError::new(
-                400,
-                "Completion video link is not a valid URL!",
-            ));
-        }
+        submission_body.video_url = providers
+            .validate_completion_video_url(&submission_body.video_url)
+            .map_err(|mut e| {
+                e.error_message = format!("Invalid completion video URL: {}", e.error_message);
+                e
+            })?;
 
         if let Some(raw_url) = submission_body.raw_url.as_ref() {
-            if !is_url(raw_url) {
-                return Err(ApiError::new(400, "Raw footage link is not a valid URL!"));
-            }
+            submission_body.raw_url = Some(providers.validate_raw_footage_url(raw_url).map_err(
+                |mut e| {
+                    e.error_message = format!("Invalid raw footage URL: {}", e.error_message);
+                    e
+                },
+            )?);
         }
 
         conn.transaction(|connection| -> Result<Self, ApiError> {

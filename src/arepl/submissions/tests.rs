@@ -40,8 +40,8 @@ async fn create_submission() {
 
     let submission_data = json!({
         "level_id": level_id,
-        "video_url": "https://video.com",
-        "raw_url": "https://raw.com",
+        "video_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
+        "raw_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
         "mobile": false,
         "completion_time": 1000,
     });
@@ -74,7 +74,7 @@ async fn submission_without_raw() {
 
     let submission_data = json!({
         "level_id": level_id,
-        "video_url": "https://video.com",
+        "video_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
         "mobile": false,
         "completion_time": 1000,
     });
@@ -106,7 +106,7 @@ async fn submission_malformed_url() {
     let submission_data = json!({
         "level_id": level_id,
         "video_url": "slkdfjskdlf",
-        "raw_url": "https://raw.com",
+        "raw_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
         "mobile": false,
         "completion_time": 1000,
     });
@@ -122,7 +122,7 @@ async fn submission_malformed_url() {
     // raw_url
     let submission_data = json!({
         "level_id": level_id,
-        "video_url": "https://video.com",
+        "video_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
         "raw_url": "isldjfsdkf",
         "mobile": false,
         "completion_time": 1000,
@@ -169,7 +169,7 @@ async fn submission_edit_no_perms() {
     let submission_id = create_test_submission(level_id, user_id_1, &db).await;
 
     let submission_edit_json = json!({
-        "video_url": "https://new_video.com"
+        "video_url": "https://youtube.com/watch?v=otheridk111"
     });
 
     // edit own submission
@@ -251,8 +251,8 @@ async fn submission_aredlplus_boost() {
     // video_url
     let submission_data = json!({
         "level_id": level_id,
-        "video_url": "https://video.com",
-        "raw_url": "https://raw.com",
+        "video_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
+        "raw_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
         "mobile": false,
         "completion_time": 1000,
     });
@@ -337,8 +337,8 @@ async fn submission_banned_player() {
 
     let submission_data = json!({
         "level_id": level_id,
-        "video_url": "https://video.com",
-        "raw_url": "https://raw.com",
+        "video_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
+        "raw_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
         "mobile": false,
         "completion_time": 1000,
     });
@@ -822,8 +822,8 @@ async fn reviewer_submission_can_set_reviewer_fields_for_other_users() {
     let other_submission = json!({
         "submitted_by": other_user_id,
         "level_id": other_level,
-        "video_url": "https://video.example.com/other",
-        "raw_url": "https://raw.example.com/other",
+        "video_url": "https://youtube.com/watch?v=otheridk111",
+        "raw_url": "https://youtube.com/watch?v=otherrawidk",
         "mobile": false,
         "status": "UnderConsideration",
         "reviewer_notes": "Initial review notes",
@@ -866,8 +866,8 @@ async fn reviewer_submission_can_set_reviewer_fields_for_other_users() {
 
     let reviewer_submission = json!({
         "level_id": reviewer_level,
-        "video_url": "https://video.example.com/self",
-        "raw_url": "https://raw.example.com/self",
+        "video_url": "https://youtube.com/watch?v=selfidk1111",
+        "raw_url": "https://youtube.com/watch?v=selfrawidk1",
         "mobile": false,
         "status": "Accepted",
         "reviewer_notes": "Should not be applied",

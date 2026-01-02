@@ -75,7 +75,8 @@ ALTER TABLE aredl.records
     ADD COLUMN reviewer_id uuid,
     ADD COLUMN placement_order int,
     ADD COLUMN mod_menu varchar,
-    DROP COLUMN submission_id;
+    DROP COLUMN submission_id,
+    DROP COLUMN achieved_at;
 
 ALTER TABLE arepl.records
     ADD COLUMN ldm_id int,
@@ -85,7 +86,8 @@ ALTER TABLE arepl.records
     ADD COLUMN reviewer_id uuid,
     ADD COLUMN placement_order int,
     ADD COLUMN mod_menu varchar,
-    DROP COLUMN submission_id;
+    DROP COLUMN submission_id,
+    DROP COLUMN achieved_at;
 
 
 

@@ -4,20 +4,29 @@ use utoipa::OpenApi;
 
 use crate::{
     auth::{Permission, UserAuth},
-    drive::DriveState,
     error_handler::ApiError,
-    utils::probe::model::{ProbeRequest, ProviderMatch},
+    providers::VideoProvidersAppState,
+    utils::probe::model::ProbeRequest,
 };
 
 #[post("", wrap = "UserAuth::require(Permission::SubmissionReview)")]
 pub async fn probe_file(
     req: web::Json<ProbeRequest>,
-    drive_state: web::Data<Option<Arc<DriveState>>>,
+    providers_state: web::Data<Arc<VideoProvidersAppState>>,
 ) -> Result<HttpResponse, ApiError> {
-    let result = ProviderMatch::from_url(req.url.as_str())
-        .ok_or_else(|| ApiError::new(400, "Unsupported media URL"))?
-        .resolve(drive_state.get_ref())
+    let providers_state = providers_state.get_ref();
+
+    let matched = providers_state.parse_url(req.url.as_str())?;
+
+    let result = providers_state
+        .get_content_location(&matched)
         .await?
+        .ok_or_else(|| {
+            ApiError::new(
+                422,
+                "Not supported for this provider yet, or failed to retrieve content location",
+            )
+        })?
         .probe()
         .await?;
 

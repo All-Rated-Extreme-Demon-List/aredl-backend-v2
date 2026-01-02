@@ -45,6 +45,8 @@ pub struct CountryProfileRecord {
     pub is_verification: bool,
     /// Whether the record's video should be hidden on the website.
     pub hide_video: bool,
+    /// Timestamp of when this record was achieved, used for ordering.
+    pub achieved_at: DateTime<Utc>,
     /// Timestamp of when the record was created (first accepted).
     pub created_at: DateTime<Utc>,
     /// Timestamp of when the record was last updated.
@@ -75,6 +77,7 @@ impl ResolvedRecord {
             completion_time: record.completion_time,
             is_verification: record.is_verification,
             hide_video: record.hide_video,
+            achieved_at: record.achieved_at,
             updated_at: record.updated_at,
             created_at: record.created_at,
         }

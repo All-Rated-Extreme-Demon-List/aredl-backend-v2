@@ -60,7 +60,7 @@ async fn disable_submissions() {
 
     let data = json!({
         "level_id": level_id,
-        "video_url": "https://video.com",
+        "video_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
         "raw_url": "https://raw.com"
     });
 

@@ -4,6 +4,7 @@ use crate::arepl::records::{statistics, Record, RecordPatch, RecordsQueryOptions
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
+use crate::providers::VideoProvidersAppState;
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
@@ -97,6 +98,36 @@ async fn update(
         )
     })
     .await??;
+    Ok(HttpResponse::Ok().json(record))
+}
+
+#[utoipa::path(
+    patch,
+    summary = "[Staff]Update record completion timestamp",
+    description = "Tries to fetch and update the achieved_at timestamp for this record, by looking up the completion video's link",
+    tag = "AREDL (P) - Records",
+    params(
+        ("id" = Uuid, description = "Internal record UUID")
+    ),
+    responses(
+        (status = 200, body = Record)
+    ),
+    security(
+        ("access_token" = ["RecordModify"]),
+        ("api_key" = ["RecordModify"]),
+    )
+)]
+#[patch(
+    "/{id}/update-timestamp",
+    wrap = "UserAuth::require(Permission::RecordModify)"
+)]
+async fn update_timestamp(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<Uuid>,
+    providers: web::Data<Arc<VideoProvidersAppState>>,
+) -> Result<HttpResponse, ApiError> {
+    let record =
+        Record::update_timestamp(db, Some(id.into_inner()), None, providers.get_ref()).await?;
     Ok(HttpResponse::Ok().json(record))
 }
 
@@ -221,6 +252,7 @@ async fn find_me(
     paths(
         create,
         update,
+        update_timestamp,
         delete,
         find,
         find_all,
@@ -235,6 +267,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .configure(statistics::init_routes)
             .service(create)
             .service(update)
+            .service(update_timestamp)
             .service(delete)
             .service(find_all)
             .service(find_me)

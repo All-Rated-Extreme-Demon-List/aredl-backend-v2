@@ -27,6 +27,14 @@ ALTER TABLE arepl.submissions
 	ALTER COLUMN created_at SET DEFAULT NOW(),
 	ALTER COLUMN updated_at SET DEFAULT NOW();
 
+ALTER TABLE aredl.records
+	ALTER COLUMN created_at SET DEFAULT NOW(),
+	ALTER COLUMN updated_at SET DEFAULT NOW();
+
+ALTER TABLE arepl.records
+	ALTER COLUMN created_at SET DEFAULT NOW(),
+	ALTER COLUMN updated_at SET DEFAULT NOW();
+
 ALTER TABLE aredl.submissions_enabled
 	ALTER COLUMN created_at SET DEFAULT NOW();
 

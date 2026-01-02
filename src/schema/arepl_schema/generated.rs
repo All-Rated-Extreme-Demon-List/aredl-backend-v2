@@ -116,6 +116,7 @@ pub mod arepl {
             completion_time -> Int8,
             hide_video -> Bool,
             submission_id -> Uuid,
+            achieved_at -> Timestamptz,
         }
     }
 

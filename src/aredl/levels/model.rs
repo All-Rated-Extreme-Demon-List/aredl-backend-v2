@@ -202,7 +202,7 @@ impl ResolvedLevel {
         let verifications_rows = records::table
             .filter(records::level_id.eq(id))
             .filter(records::is_verification.eq(true))
-            .order(records::created_at.asc())
+            .order(records::achieved_at.asc())
             .inner_join(users::table.on(records::submitted_by.eq(users::id)))
             .select((Record::as_select(), BaseUserWithBanLevel::as_select()))
             .load::<(Record, BaseUserWithBanLevel)>(conn)?;

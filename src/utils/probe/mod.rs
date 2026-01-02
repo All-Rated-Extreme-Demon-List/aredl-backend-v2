@@ -1,4 +1,3 @@
-mod fetcher;
 mod model;
 mod routes;
 

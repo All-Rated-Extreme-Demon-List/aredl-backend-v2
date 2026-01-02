@@ -27,9 +27,9 @@ async fn create_record() {
         "submitted_by": user_id.to_string(),
         "mobile": false,
         "level_id": level.to_string(),
-        "video_url": "https://video.com",
+        "video_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
         "is_verification": false,
-        "raw_url": "https://raw.com",
+        "raw_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
         "completion_time": 10000,
     });
 
@@ -61,9 +61,9 @@ async fn create_self_record_fails() {
         "submitted_by": user_id.to_string(),
         "mobile": false,
         "level_id": level.to_string(),
-        "video_url": "https://video.com",
+        "video_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
         "is_verification": false,
-        "raw_url": "https://raw.com",
+        "raw_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
         "completion_time": 10000
     });
 

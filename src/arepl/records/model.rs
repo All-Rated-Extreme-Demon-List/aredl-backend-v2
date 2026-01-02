@@ -1,4 +1,6 @@
-use crate::app_data::db::DbConnection;
+use std::sync::Arc;
+
+use crate::app_data::db::{DbAppState, DbConnection};
 use crate::arepl::levels::ExtendedBaseLevel;
 use crate::arepl::submissions::patch::SubmissionPatchMod;
 use crate::arepl::submissions::post::SubmissionPostMod;
@@ -6,8 +8,10 @@ use crate::arepl::submissions::{Submission, SubmissionStatus};
 use crate::auth::Authenticated;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
+use crate::providers::VideoProvidersAppState;
 use crate::schema::{arepl::levels, arepl::records, arepl::submissions, users};
 use crate::users::{user_filter, ExtendedBaseUser};
+use actix_web::web;
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::query_dsl::JoinOnDsl;
@@ -19,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
+#[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema, Clone)]
 #[diesel(table_name=records, check_for_backend(Pg))]
 pub struct Record {
     /// Internal UUID of the record.
@@ -40,6 +44,8 @@ pub struct Record {
     pub hide_video: bool,
     /// Whether this record is the verification of this level or not.
     pub is_verification: bool,
+    /// Timestamp of when this record was achieved, used for ordering.
+    pub achieved_at: DateTime<Utc>,
     /// Timestamp of when the record was created (first accepted).
     pub created_at: DateTime<Utc>,
     /// Timestamp of when the record was last updated.
@@ -66,6 +72,8 @@ pub struct ResolvedRecord {
     pub hide_video: bool,
     /// Whether this record is the verification of this level or not.
     pub is_verification: bool,
+    /// Timestamp of when this record was achieved, used for ordering.
+    pub achieved_at: DateTime<Utc>,
     /// Timestamp of when the record was created (first accepted).
     pub created_at: DateTime<Utc>,
     /// Timestamp of when the record was last updated.
@@ -89,6 +97,8 @@ pub struct RecordInsert {
     pub hide_video: Option<bool>,
     /// Whether this record is the verification of this level or not.
     pub is_verification: Option<bool>,
+    /// Timestamp of when this record was achieved, used for ordering.
+    pub achieved_at: Option<DateTime<Utc>>,
     /// Timestamp of when the record was created (first accepted).
     pub created_at: Option<DateTime<Utc>>,
     /// Timestamp of when the record was last updated.
@@ -112,6 +122,8 @@ pub struct RecordPatch {
     pub level_id: Option<Uuid>,
     /// Whether this record is the verification of this level or not.
     pub is_verification: Option<bool>,
+    /// Timestamp of when this record was achieved, used for ordering.
+    pub achieved_at: Option<DateTime<Utc>>,
     /// Timestamp of when the record was created (first accepted).
     pub created_at: Option<DateTime<Utc>>,
     /// Timestamp of when the record was last updated.
@@ -125,6 +137,8 @@ pub struct RecordUpdate {
     pub hide_video: Option<bool>,
     /// Whether this record is the verification of this level or not.
     pub is_verification: Option<bool>,
+    /// Timestamp of when this record was achieved, used for ordering.
+    pub achieved_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -179,6 +193,7 @@ impl RecordUpdate {
         Self {
             hide_video: record.hide_video,
             is_verification: record.is_verification,
+            achieved_at: record.achieved_at,
         }
     }
 
@@ -186,6 +201,7 @@ impl RecordUpdate {
         Self {
             hide_video: record.hide_video,
             is_verification: record.is_verification,
+            achieved_at: record.achieved_at,
         }
     }
 }
@@ -327,6 +343,108 @@ impl Record {
     }
 }
 
+// Helpers for updating the achieved_at timestamp
+impl Record {
+    pub async fn fetch_completion_timestamp(
+        record: Record,
+        providers: &VideoProvidersAppState,
+    ) -> DateTime<Utc> {
+        let result = async {
+            let matched = providers.parse_url(&record.video_url)?;
+            let metadata = providers
+                .fetch_metadata(&matched)
+                .await?
+                .ok_or_else(|| ApiError::new(422, "Failed to fetch metadata"))?;
+            Ok::<_, ApiError>(metadata.published_at)
+        }
+        .await;
+
+        match result {
+            Ok(Some(timestamp)) => timestamp,
+            Ok(None) => {
+                tracing::warn!(
+                    %record.id,
+                    %record.video_url,
+                    "Fetched metadata does not contain publication timestamp"
+                );
+                record.created_at
+            }
+            Err(e) => {
+                tracing::warn!(
+                    error = %e.error_message,
+                    %record.id,
+                    %record.video_url,
+                    "Failed to fetch metadata"
+                );
+                record.created_at
+            }
+        }
+    }
+
+    pub async fn update_timestamp(
+        db: web::Data<Arc<DbAppState>>,
+        record_id: Option<Uuid>,
+        submission_id: Option<Uuid>,
+        providers: &VideoProvidersAppState,
+    ) -> Result<Self, ApiError> {
+        let db_clone = db.clone();
+        let record = web::block(move || {
+            let conn = &mut db.connection()?;
+            let record = match (record_id, submission_id) {
+                (Some(record_id), _) => records::table
+                    .filter(records::id.eq(record_id))
+                    .select(Record::as_select())
+                    .first::<Record>(conn)?,
+                (None, Some(submission_id)) => records::table
+                    .filter(records::submission_id.eq(submission_id))
+                    .select(Record::as_select())
+                    .first::<Record>(conn)?,
+                _ => return Err(ApiError::new(400, "No record or submission ID provided")),
+            };
+            Ok(record)
+        })
+        .await??;
+
+        if record.achieved_at != record.created_at {
+            return Ok(record);
+        }
+
+        let achieved_at = Record::fetch_completion_timestamp(record.clone(), providers).await;
+
+        let result = web::block(move || -> Result<Record, ApiError> {
+            let conn = &mut db_clone.connection()?;
+            let result = diesel::update(records::table.filter(records::id.eq(record.id)))
+                .set(records::achieved_at.eq(achieved_at))
+                .returning(Record::as_select())
+                .get_result::<Record>(conn)?;
+            Ok(result)
+        })
+        .await??;
+
+        Ok(result)
+    }
+
+    pub async fn fire_and_forget_fetch_completion_timestamp(
+        db: web::Data<Arc<DbAppState>>,
+        record_id: Option<Uuid>,
+        submission_id: Option<Uuid>,
+        providers: web::Data<Arc<VideoProvidersAppState>>,
+    ) {
+        tokio::spawn(async move {
+            if let Err(error) =
+                Record::update_timestamp(db, record_id, submission_id, providers.get_ref()).await
+            {
+                tracing::warn!(
+                    error = %error.error_message,
+                    ?record_id,
+                    ?submission_id,
+                    "Failed to fetch completion timestamp in background task"
+                );
+            }
+        });
+    }
+}
+
 impl ResolvedRecord {
     pub fn find(conn: &mut DbConnection, record_id: Uuid) -> Result<Self, ApiError> {
         let (record, user, level): (Record, ExtendedBaseUser, ExtendedBaseLevel) = records::table
@@ -406,6 +524,7 @@ impl ResolvedRecord {
             created_at: record.created_at,
             updated_at: record.updated_at,
             hide_video: record.hide_video,
+            achieved_at: record.achieved_at,
         }
     }
 }

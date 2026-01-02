@@ -197,7 +197,7 @@ WHERE sh.submission_id IS NOT NULL
 
 
 
--- Drop unneeded columns and add constraints
+-- Update history and records schemas, and add constraints
 
 ALTER TABLE aredl.submission_history
     DROP COLUMN record_id;
@@ -221,7 +221,15 @@ ALTER TABLE aredl.records
     DROP COLUMN reviewer_id,
 	DROP COLUMN placement_order,
 	DROP COLUMN mod_menu,
-    ADD COLUMN submission_id uuid REFERENCES aredl.submissions(id) ON DELETE CASCADE;
+    ADD COLUMN submission_id uuid REFERENCES aredl.submissions(id) ON DELETE CASCADE,
+    ADD COLUMN achieved_at TIMESTAMPTZ;
+
+UPDATE aredl.records
+SET achieved_at = created_at;
+
+ALTER TABLE aredl.records
+    ALTER COLUMN achieved_at SET NOT NULL,
+    ALTER COLUMN achieved_at SET DEFAULT CLOCK_TIMESTAMP();
 
 ALTER TABLE arepl.records
     DROP COLUMN ldm_id,
@@ -231,7 +239,15 @@ ALTER TABLE arepl.records
     DROP COLUMN reviewer_id,
 	DROP COLUMN placement_order,
 	DROP COLUMN mod_menu,
-    ADD COLUMN submission_id uuid REFERENCES arepl.submissions(id) ON DELETE CASCADE;
+    ADD COLUMN submission_id uuid REFERENCES arepl.submissions(id) ON DELETE CASCADE,
+    ADD COLUMN achieved_at TIMESTAMPTZ;
+
+UPDATE arepl.records
+SET achieved_at = created_at;
+
+ALTER TABLE arepl.records
+    ALTER COLUMN achieved_at SET NOT NULL,
+    ALTER COLUMN achieved_at SET DEFAULT CLOCK_TIMESTAMP();
 
 -- Records should reference the corresponding submission
 
@@ -481,7 +497,7 @@ CREATE VIEW aredl.min_placement_clans_records AS
         SELECT
             r.*,
             cm.clan_id,
-            row_number() over ( PARTITION BY r.level_id, cm.clan_id ORDER BY r.created_at) as order_pos
+            row_number() over ( PARTITION BY r.level_id, cm.clan_id ORDER BY r.achieved_at) as order_pos
         FROM aredl.records r
         JOIN clan_members cm ON cm.user_id = r.submitted_by
     )
@@ -494,7 +510,7 @@ CREATE VIEW arepl.min_placement_clans_records AS
         SELECT
             r.*,
             cm.clan_id,
-            row_number() over ( PARTITION BY r.level_id, cm.clan_id ORDER BY r.created_at) as order_pos
+            row_number() over ( PARTITION BY r.level_id, cm.clan_id ORDER BY r.achieved_at) as order_pos
         FROM arepl.records r
         JOIN clan_members cm ON cm.user_id = r.submitted_by
     )
@@ -509,7 +525,7 @@ WITH subquery AS (
         u.country,
         row_number() OVER (
           PARTITION BY r.level_id, u.country
-          ORDER BY r.created_at
+          ORDER BY r.achieved_at
         ) AS order_pos
     FROM aredl.records r
     JOIN users u ON u.id = r.submitted_by
@@ -525,7 +541,7 @@ WITH subquery AS (
         u.country,
         row_number() OVER (
           PARTITION BY r.level_id, u.country
-          ORDER BY r.created_at
+          ORDER BY r.achieved_at
         ) AS order_pos
     FROM arepl.records r
     JOIN users u ON u.id = r.submitted_by

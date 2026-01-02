@@ -39,6 +39,14 @@ ALTER TABLE aredl.submission_history
 ALTER TABLE arepl.submission_history
 	ALTER COLUMN timestamp SET DEFAULT CLOCK_TIMESTAMP();
 
+ALTER TABLE aredl.records
+	ALTER COLUMN created_at SET DEFAULT CLOCK_TIMESTAMP(),
+	ALTER COLUMN updated_at SET DEFAULT CLOCK_TIMESTAMP();
+
+ALTER TABLE arepl.records
+	ALTER COLUMN created_at SET DEFAULT CLOCK_TIMESTAMP(),
+	ALTER COLUMN updated_at SET DEFAULT CLOCK_TIMESTAMP();
+
 CREATE OR REPLACE VIEW aredl.submissions_with_priority AS
 SELECT 
     *,

@@ -1,18 +1,15 @@
 use crate::{error_handler::ApiError, get_optional_secret};
 use serde::Deserialize;
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
 #[derive(Deserialize)]
-struct GoogleOAuth2InstalledClientJson {
-    installed: GoogleOAuth2InstalledClient,
+struct GoogleOAuth2WebClientJson {
+    web: GoogleOAuth2WebClient,
 }
 
 #[derive(Deserialize)]
-struct GoogleOAuth2InstalledClient {
+struct GoogleOAuth2WebClient {
     client_id: String,
     client_secret: String,
     token_uri: String,
@@ -34,13 +31,13 @@ struct CachedToken {
     expires_at: Instant,
 }
 
-pub struct DriveState {
+pub struct GoogleAuthState {
     grant_request: Vec<(&'static str, String)>,
     grant_uri: String,
     latest_token: Mutex<Option<CachedToken>>,
 }
 
-impl DriveState {
+impl GoogleAuthState {
     async fn fetch_new_token(&self) -> Result<GoogleOAuth2GrantResponse, ApiError> {
         let client = reqwest::Client::new();
         let resp = client
@@ -86,7 +83,8 @@ impl DriveState {
 
     pub async fn get_access_token(&self) -> Result<String, ApiError> {
         {
-            if let Some(cached_token) = &*self.latest_token.lock().await {
+            let mutex = self.latest_token.lock().await;
+            if let Some(cached_token) = &*mutex {
                 if cached_token.expires_at > Instant::now() {
                     return Ok(cached_token.access_token.clone());
                 }
@@ -95,38 +93,38 @@ impl DriveState {
 
         self.fetch_and_cache_token().await
     }
-}
 
-pub fn init_app_state() -> Option<Arc<DriveState>> {
-    let client_secret = get_optional_secret("GOOGLE_OAUTH_CLIENT")?;
-    let refresh_secret = get_optional_secret("GOOGLE_OAUTH_REFRESH")?;
+    pub async fn new() -> Option<Self> {
+        let client_secret = get_optional_secret("GOOGLE_OAUTH_CLIENT")?;
+        let refresh_secret = get_optional_secret("GOOGLE_OAUTH_REFRESH")?;
 
-    let client: GoogleOAuth2InstalledClientJson = match serde_json::from_str(&client_secret) {
-        Ok(c) => c,
-        Err(e) => {
-            tracing::warn!("Failed to parse GOOGLE_OAUTH_CLIENT: {}", e);
-            return None;
-        }
-    };
+        let client: GoogleOAuth2WebClientJson = match serde_json::from_str(&client_secret) {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::warn!("Failed to parse GOOGLE_OAUTH_CLIENT: {}", e);
+                return None;
+            }
+        };
 
-    let refresh: GoogleOAuth2RefreshJson = match serde_json::from_str(&refresh_secret) {
-        Ok(r) => r,
-        Err(e) => {
-            tracing::warn!("Failed to parse GOOGLE_OAUTH_REFRESH: {}", e);
-            return None;
-        }
-    };
+        let refresh: GoogleOAuth2RefreshJson = match serde_json::from_str(&refresh_secret) {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::warn!("Failed to parse GOOGLE_OAUTH_REFRESH: {}", e);
+                return None;
+            }
+        };
 
-    let grant_request = vec![
-        ("grant_type", "refresh_token".to_string()),
-        ("refresh_token", refresh.refresh_token.clone()),
-        ("client_id", client.installed.client_id.clone()),
-        ("client_secret", client.installed.client_secret.clone()),
-    ];
+        let grant_request = vec![
+            ("grant_type", "refresh_token".to_string()),
+            ("refresh_token", refresh.refresh_token.clone()),
+            ("client_id", client.web.client_id.clone()),
+            ("client_secret", client.web.client_secret.clone()),
+        ];
 
-    Some(Arc::new(DriveState {
-        grant_request,
-        grant_uri: client.installed.token_uri,
-        latest_token: Mutex::new(None),
-    }))
+        Some(GoogleAuthState {
+            grant_request,
+            grant_uri: client.web.token_uri,
+            latest_token: Mutex::new(None),
+        })
+    }
 }
