@@ -24,7 +24,7 @@ impl GoogleDriveProvider {
                 // https://drive.google.com/drive/folders/<id>
                 // https://drive.google.com/u/0/drive/folders/<id>
                 Regex::new(
-                    r"^https?://drive\.google\.com(?:/u/\d+)?/drive/folders/(?P<id>[\w-]+)(?:[/?#].*)?$"
+                    r"^https?://drive\.google\.com/drive(?:/u/\d+)?/folders/(?P<id>[\w-]+)(?:[/?#].*)?$"
                 ).unwrap(),
                 // https://drive.google.com/open?id=<id>
                 Regex::new(

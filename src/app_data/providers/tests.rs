@@ -19,7 +19,7 @@ mod tests {
         let cases: Vec<(&str, ProviderId, &str, &str)> = vec![
             // YouTube
             (
-                "https://youtube.com/watch?v=xvFZjo5PgG0?si=123456&ab_channel=Foo",
+                "https://youtube.com/watch?v=xvFZjo5PgG0&si=123456&ab_channel=Foo",
                 ProviderId::YouTube,
                 "xvFZjo5PgG0",
                 "https://www.youtube.com/watch?v=xvFZjo5PgG0",
@@ -29,6 +29,54 @@ mod tests {
                 ProviderId::YouTube,
                 "xvFZjo5PgG0",
                 "https://www.youtube.com/watch?v=xvFZjo5PgG0&t=123",
+            ),
+            (
+                "https://youtu.be/xvFZjo5PgG0?t=123&si=123456&ab_channel=Foo",
+                ProviderId::YouTube,
+                "xvFZjo5PgG0",
+                "https://www.youtube.com/watch?v=xvFZjo5PgG0&t=123",
+            ),
+            (
+                "https://www.youtube.com/shorts/xvFZjo5PgG0?si=abc123",
+                ProviderId::YouTube,
+                "xvFZjo5PgG0",
+                "https://www.youtube.com/watch?v=xvFZjo5PgG0",
+            ),
+            (
+                "https://youtube.com/shorts/xvFZjo5PgG0?t=90&si=abc123",
+                ProviderId::YouTube,
+                "xvFZjo5PgG0",
+                "https://www.youtube.com/watch?v=xvFZjo5PgG0&t=90",
+            ),
+            (
+                "https://youtube.com/shorts/xvFZjo5PgG0?si=abc123&t=90",
+                ProviderId::YouTube,
+                "xvFZjo5PgG0",
+                "https://www.youtube.com/watch?v=xvFZjo5PgG0&t=90",
+            ),
+            (
+                "https://www.youtube.com/live/xvFZjo5PgG0?si=abc123",
+                ProviderId::YouTube,
+                "xvFZjo5PgG0",
+                "https://www.youtube.com/watch?v=xvFZjo5PgG0",
+            ),
+            (
+                "https://youtube.com/live/xvFZjo5PgG0?start=123&foo=bar",
+                ProviderId::YouTube,
+                "xvFZjo5PgG0",
+                "https://www.youtube.com/watch?v=xvFZjo5PgG0&t=123",
+            ),
+            (
+                "https://youtube.com/live/xvFZjo5PgG0?foo=bar&t=123",
+                ProviderId::YouTube,
+                "xvFZjo5PgG0",
+                "https://www.youtube.com/watch?v=xvFZjo5PgG0&t=123",
+            ),
+            (
+                "https://m.youtube.com/shorts/xvFZjo5PgG0?t=90",
+                ProviderId::YouTube,
+                "xvFZjo5PgG0",
+                "https://www.youtube.com/watch?v=xvFZjo5PgG0&t=90",
             ),
             // Vimeo
             (
@@ -121,7 +169,7 @@ mod tests {
 				"https://drive.google.com/drive/folders/1NH3sbowKcOP5KOTAfJ4mhaUleUnZgd0m",
 			),
 			(
-				"https://drive.google.com/u/0/drive/folders/1NH3sbowKcOP5KOTAfJ4mhaUleUnZgd0m?usp=sharing",
+				"https://drive.google.com/drive/u/0/folders/1NH3sbowKcOP5KOTAfJ4mhaUleUnZgd0m?usp=sharing",
 				ProviderId::GoogleDrive,
 				"1NH3sbowKcOP5KOTAfJ4mhaUleUnZgd0m",
 				"https://drive.google.com/drive/folders/1NH3sbowKcOP5KOTAfJ4mhaUleUnZgd0m",

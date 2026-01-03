@@ -17,16 +17,22 @@ impl YouTubeProvider {
     pub fn new() -> Self {
         Self {
             patterns: vec![
-                // https://www.youtube.com/watch?v=<id>>[&...][&t=... or &start=...]
+                // https://(www.|m.)youtube.com/watch?v=<id>[...][&t=... or &start=...]
                 Regex::new(
-                    r"^https?://(?:www\.)?youtube\.com/watch\?[^#]*v=(?P<id>[A-Za-z0-9_-]{11})(?:[^#]*[?&](?:t|start)=(?P<ts>[^&#]+))?"
-                )
-                .unwrap(),
-                // https://youtu.be/VIDEO_ID[?t=...]
+                    r"^https?://(?:www\.|m\.)?youtube\.com/watch\?(?:[^#]*?[&?])?v=(?P<id>[A-Za-z0-9_-]{11})(?:[^#]*?[&?](?:t|start)=(?P<ts>[^&#]+))?(?:[&#].*)?$"
+                ).unwrap(),
+                // https://youtu.be/<id>[...][t=... or start=...]
                 Regex::new(
-                    r"^https?://youtu\.be/(?P<id>[A-Za-z0-9_-]{11})(?:\?(?:.*&)?t=(?P<ts>[^&#]+))?"
-                )
-                .unwrap(),
+                    r"^https?://youtu\.be/(?P<id>[A-Za-z0-9_-]{11})(?:\?(?:(?:[^#]*?&)?(?:t|start)=(?P<ts>[^&#]+)[^#]*)?[^#]*)?(?:[&#].*)?$"
+                ).unwrap(),
+                // https://(www.|m.)youtube.com/shorts/<id>[...][t=... or start=...]
+                Regex::new(
+                    r"^https?://(?:www\.|m\.)?youtube\.com/shorts/(?P<id>[A-Za-z0-9_-]{11})(?:\?(?:(?:[^#]*?&)?(?:t|start)=(?P<ts>[^&#]+)[^#]*)?[^#]*)?(?:[&#].*)?$"
+                ).unwrap(),
+                // https://(www.|m.)youtube.com/live/<id>[...][t=... or start=...]
+                Regex::new(
+                    r"^https?://(?:www\.|m\.)?youtube\.com/live/(?P<id>[A-Za-z0-9_-]{11})(?:\?(?:(?:[^#]*?&)?(?:t|start)=(?P<ts>[^&#]+)[^#]*)?[^#]*)?(?:[&#].*)?$"
+                ).unwrap(),
             ],
         }
     }

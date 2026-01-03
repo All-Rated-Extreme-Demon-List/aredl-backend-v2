@@ -11,21 +11,18 @@ impl TwitchProvider {
     pub fn new() -> Self {
         Self {
              patterns: vec![
-                // https://www.twitch.tv/videos/<id>[?t=...]
+                // https://www.twitch.tv/videos/<id>[?...][t=...]
                 Regex::new(
-                    r"^https?://(?:www\.)?twitch\.tv/videos/(?P<id>\d+)(?:\?t=(?P<ts>[^&#]+))?(?:[&#].*)?$"
+                    r"^https?://(?:www\.)?twitch\.tv/videos/(?P<id>\d+)(?:\?(?:(?:[^#]*?&)?t=(?P<ts>[^&#]+)[^#]*)?[^#]*)?(?:[&#].*)?$"
                 ).unwrap(),
-
-                // https://www.twitch.tv/<channel>/video/<id>[?t=...]
+                // https://www.twitch.tv/<channel>/video/<id>[?...][t=...]
                 Regex::new(
-                    r"^https?://(?:www\.)?twitch\.tv/(?P<other>[A-Za-z0-9_]+)/video/(?P<id>\d+)(?:\?t=(?P<ts>[^&#]+))?(?:[&#].*)?$"
+                    r"^https?://(?:www\.)?twitch\.tv/(?P<other>[A-Za-z0-9_]+)/video/(?P<id>\d+)(?:\?(?:(?:[^#]*?&)?t=(?P<ts>[^&#]+)[^#]*)?[^#]*)?(?:[&#].*)?$"
                 ).unwrap(),
-
-                // https://www.twitch.tv/<channel>/v/<id>[?t=...]
+                // https://www.twitch.tv/<channel>/v/<id>[?...][t=...]
                 Regex::new(
-                    r"^https?://(?:www\.)?twitch\.tv/(?P<other>[A-Za-z0-9_]+)/v/(?P<id>\d+)(?:\?t=(?P<ts>[^&#]+))?(?:[&#].*)?$"
+                    r"^https?://(?:www\.)?twitch\.tv/(?P<other>[A-Za-z0-9_]+)/v/(?P<id>\d+)(?:\?(?:(?:[^#]*?&)?t=(?P<ts>[^&#]+)[^#]*)?[^#]*)?(?:[&#].*)?$"
                 ).unwrap(),
-
                 // https://player.twitch.tv/?video=v<id>&time=...
                 Regex::new(
                     r"^https?://player\.twitch\.tv/\?(?:[^#&]*&)*video=v(?P<id>\d+)(?:&(?:[^#&]*&)*time=(?P<ts>[^&#]+))?(?:[&#].*)?$"
