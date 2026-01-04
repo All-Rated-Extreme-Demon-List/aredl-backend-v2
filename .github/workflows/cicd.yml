@@ -78,22 +78,19 @@ jobs:
       - name: Cache cargo for main
         uses: Swatinem/rust-cache@v2
 
-      - name: Install cargo-tarpaulin
-        run: |
-          cargo install cargo-tarpaulin --version 0.32.7
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Generate coverage report
         run: |
-            cargo tarpaulin \
+          cargo llvm-cov \
             --workspace \
-            --out Lcov \
-            --timeout 120 \
-            --ignore-tests \
-            --rustflags="-C opt-level=0" \
-            --exclude-files "src/schema/*" "src/scheduled/*" "src/main.rs" "src/docs.rs" "src/utils/probe/*"
+            --lcov \
+            --output-path lcov.info \
+            --ignore-filename-regex 'src/schema/|src/scheduled/|src/main\.rs|src/docs\.rs|src/utils/probe/'
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           files: lcov.info
           fail_ci_if_error: false
