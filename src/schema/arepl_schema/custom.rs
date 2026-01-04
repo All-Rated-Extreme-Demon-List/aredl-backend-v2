@@ -213,6 +213,7 @@ diesel::joinable!(submissions -> submissions_with_priority (id));
 diesel::joinable!(users -> level_ldms (id));
 
 diesel::allow_tables_to_appear_in_same_query!(submissions, submissions_with_priority);
+diesel::allow_tables_to_appear_in_same_query!(submission_history, submissions_with_priority);
 diesel::allow_tables_to_appear_in_same_query!(levels, submissions_with_priority);
 diesel::allow_tables_to_appear_in_same_query!(users, submissions_with_priority);
 diesel::allow_tables_to_appear_in_same_query!(users, submissions_enabled);

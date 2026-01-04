@@ -1,19 +1,18 @@
 #[cfg(test)]
-use std::sync::Arc;
-
-#[cfg(test)]
-use crate::{app_data::db::DbAppState, schema::aredl::submissions};
-use crate::{
-    aredl::submissions::{history::SubmissionHistory, SubmissionStatus},
-    schema::aredl::submission_history,
+use {
+    crate::{
+        app_data::db::DbAppState,
+        aredl::{
+            levels::test_utils::create_test_level,
+            submissions::{history::SubmissionHistory, SubmissionStatus},
+        },
+        schema::aredl::{submission_history, submissions},
+    },
+    chrono::{DateTime, Utc},
+    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
+    std::sync::Arc,
+    uuid::Uuid,
 };
-
-use chrono::Utc;
-#[cfg(test)]
-use diesel::{ExpressionMethods, RunQueryDsl};
-
-#[cfg(test)]
-use uuid::Uuid;
 
 #[cfg(test)]
 pub async fn create_test_submission(level_id: Uuid, user_id: Uuid, db: &Arc<DbAppState>) -> Uuid {
@@ -58,4 +57,37 @@ pub async fn insert_history_entry(
         .values(&history)
         .execute(&mut db.connection().unwrap())
         .expect("Failed to insert submission history");
+}
+
+#[cfg(test)]
+pub async fn create_two_test_submissions_with_different_timestamps(
+    db: &Arc<DbAppState>,
+    submitter_id: Uuid,
+) -> (Uuid, Uuid) {
+    let level_a = create_test_level(db).await;
+    let level_b = create_test_level(db).await;
+
+    let older_id = create_test_submission(level_a, submitter_id, db).await;
+    let newer_id = create_test_submission(level_b, submitter_id, db).await;
+
+    let t1: DateTime<Utc> = "2020-01-01T00:00:00Z".parse().unwrap();
+    let t2: DateTime<Utc> = "2021-01-01T00:00:00Z".parse().unwrap();
+
+    diesel::update(submissions::table.filter(submissions::id.eq(older_id)))
+        .set((
+            submissions::created_at.eq(t1),
+            submissions::updated_at.eq(t1),
+        ))
+        .execute(&mut db.connection().unwrap())
+        .unwrap();
+
+    diesel::update(submissions::table.filter(submissions::id.eq(newer_id)))
+        .set((
+            submissions::created_at.eq(t2),
+            submissions::updated_at.eq(t2),
+        ))
+        .execute(&mut db.connection().unwrap())
+        .unwrap();
+
+    (older_id, newer_id)
 }

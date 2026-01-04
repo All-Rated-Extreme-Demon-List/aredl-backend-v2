@@ -3,7 +3,9 @@ use {
     crate::{
         aredl::{
             levels::test_utils::{create_test_level, create_test_level_with_record},
-            records::test_utils::create_test_record,
+            records::test_utils::{
+                create_test_record, create_two_test_records_with_different_timestamps,
+            },
         },
         auth::{create_test_token, Permission},
         schema::aredl::records,
@@ -11,10 +13,8 @@ use {
     },
     actix_web::test,
     diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
+    serde_json::json,
 };
-
-#[cfg(test)]
-use serde_json::json;
 
 #[actix_web::test]
 async fn create_record() {
@@ -292,4 +292,172 @@ async fn get_records_submitter_filter() {
     let body: serde_json::Value = test::read_body_json(resp).await;
     assert_eq!(body["data"].as_array().unwrap().len(), 1);
     assert_eq!(body["data"][0]["id"], record_one.to_string());
+}
+
+#[actix_web::test]
+async fn get_records_sort_oldest_created_at() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
+    let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
+
+    let (older, newer) = create_two_test_records_with_different_timestamps(&db, user_id).await;
+
+    let req = test::TestRequest::get()
+        .uri("/aredl/records?per_page=10&sort=OldestCreatedAt")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+    let body: serde_json::Value = test::read_body_json(resp).await;
+
+    let got: Vec<String> = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["id"].as_str().unwrap().to_string())
+        .collect();
+    assert!(got.len() >= 2);
+    assert_eq!(got[0], older.to_string());
+    assert_eq!(got[1], newer.to_string());
+}
+
+#[actix_web::test]
+async fn get_records_sort_newest_created_at() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
+    let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
+
+    let (older, newer) = create_two_test_records_with_different_timestamps(&db, user_id).await;
+
+    let req = test::TestRequest::get()
+        .uri("/aredl/records?per_page=10&sort=NewestCreatedAt")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+    let body: serde_json::Value = test::read_body_json(resp).await;
+
+    let got: Vec<String> = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["id"].as_str().unwrap().to_string())
+        .collect();
+    assert!(got.len() >= 2);
+    assert_eq!(got[0], newer.to_string());
+    assert_eq!(got[1], older.to_string());
+}
+
+#[actix_web::test]
+async fn get_records_sort_oldest_achieved_at() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
+    let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
+
+    let (older, newer) = create_two_test_records_with_different_timestamps(&db, user_id).await;
+
+    let req = test::TestRequest::get()
+        .uri("/aredl/records?per_page=10&sort=OldestAchievedAt")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+    let body: serde_json::Value = test::read_body_json(resp).await;
+
+    let got: Vec<String> = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["id"].as_str().unwrap().to_string())
+        .collect();
+    assert!(got.len() >= 2);
+    assert_eq!(got[0], older.to_string());
+    assert_eq!(got[1], newer.to_string());
+}
+
+#[actix_web::test]
+async fn get_records_sort_newest_achieved_at() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
+    let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
+
+    let (older, newer) = create_two_test_records_with_different_timestamps(&db, user_id).await;
+
+    let req = test::TestRequest::get()
+        .uri("/aredl/records?per_page=10&sort=NewestAchievedAt")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+    let body: serde_json::Value = test::read_body_json(resp).await;
+
+    let got: Vec<String> = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["id"].as_str().unwrap().to_string())
+        .collect();
+    assert!(got.len() >= 2);
+    assert_eq!(got[0], newer.to_string());
+    assert_eq!(got[1], older.to_string());
+}
+
+#[actix_web::test]
+async fn get_records_sort_oldest_updated_at() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
+    let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
+
+    let (older, newer) = create_two_test_records_with_different_timestamps(&db, user_id).await;
+
+    let req = test::TestRequest::get()
+        .uri("/aredl/records?per_page=10&sort=OldestUpdatedAt")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+    let body: serde_json::Value = test::read_body_json(resp).await;
+
+    let got: Vec<String> = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["id"].as_str().unwrap().to_string())
+        .collect();
+    assert!(got.len() >= 2);
+    assert_eq!(got[0], older.to_string());
+    assert_eq!(got[1], newer.to_string());
+}
+
+#[actix_web::test]
+async fn get_records_sort_newest_updated_at() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
+    let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
+
+    let (older, newer) = create_two_test_records_with_different_timestamps(&db, user_id).await;
+
+    let req = test::TestRequest::get()
+        .uri("/aredl/records?per_page=10&sort=NewestUpdatedAt")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+    let body: serde_json::Value = test::read_body_json(resp).await;
+
+    let got: Vec<String> = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["id"].as_str().unwrap().to_string())
+        .collect();
+    assert!(got.len() >= 2);
+    assert_eq!(got[0], newer.to_string());
+    assert_eq!(got[1], older.to_string());
 }

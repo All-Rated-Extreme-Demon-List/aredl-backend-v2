@@ -134,10 +134,21 @@ pub struct RecordUpdate {
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
+pub enum RecordSortField {
+    OldestCreatedAt,
+    NewestCreatedAt,
+    OldestAchievedAt,
+    NewestAchievedAt,
+    OldestUpdatedAt,
+    NewestUpdatedAt,
+}
+
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct RecordsQueryOptions {
     pub mobile_filter: Option<bool>,
     pub level_filter: Option<Uuid>,
     pub submitter_filter: Option<String>,
+    pub sort: Option<RecordSortField>,
 }
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct ResolvedRecordPage {
@@ -475,18 +486,43 @@ impl ResolvedRecord {
 
         let total_count: i64 = build_filtered().count().get_result(conn)?;
 
-        let records = build_filtered()
+        let mut records_query = build_filtered()
             .inner_join(users::table.on(records::submitted_by.eq(users::id)))
             .inner_join(levels::table.on(records::level_id.eq(levels::id)))
-            .order_by(records::created_at.desc())
             .limit(page_query.per_page())
             .offset(page_query.offset())
             .select((
                 Record::as_select(),
                 ExtendedBaseUser::as_select(),
                 ExtendedBaseLevel::as_select(),
-            ))
-            .load::<(Record, ExtendedBaseUser, ExtendedBaseLevel)>(conn)?;
+            ));
+
+        if let Some(sort) = &options.sort {
+            records_query = match sort {
+                RecordSortField::OldestCreatedAt => {
+                    records_query.order_by(records::created_at.asc())
+                }
+                RecordSortField::NewestCreatedAt => {
+                    records_query.order_by(records::created_at.desc())
+                }
+                RecordSortField::OldestAchievedAt => {
+                    records_query.order_by(records::achieved_at.asc())
+                }
+                RecordSortField::NewestAchievedAt => {
+                    records_query.order_by(records::achieved_at.desc())
+                }
+                RecordSortField::OldestUpdatedAt => {
+                    records_query.order_by(records::updated_at.asc())
+                }
+                RecordSortField::NewestUpdatedAt => {
+                    records_query.order_by(records::updated_at.desc())
+                }
+            };
+        } else {
+            records_query = records_query.order_by(records::created_at.desc());
+        }
+
+        let records = records_query.load::<(Record, ExtendedBaseUser, ExtendedBaseLevel)>(conn)?;
 
         let records_resolved: Vec<Self> = records
             .into_iter()
