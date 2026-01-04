@@ -1,5 +1,5 @@
 use crate::aredl::levels::test_utils::create_test_level;
-use crate::aredl::submissions::statistics::ResolvedLeaderboardRow;
+use crate::aredl::statistics::submissions::daily::ResolvedLeaderboardRow;
 use crate::aredl::submissions::test_utils::{create_test_submission, insert_history_entry};
 use crate::aredl::submissions::SubmissionStatus;
 use crate::auth::{create_test_token, Permission};
@@ -28,7 +28,7 @@ async fn submission_stats_filter_moderator() {
         .unwrap();
 
     let uri = format!(
-        "/aredl/submissions/statistics?reviewer_id={}&page=1&per_page=10",
+        "/aredl/statistics/submissions/daily?reviewer_id={}&page=1&per_page=10",
         mod_id
     );
     let req = TestRequest::get()
@@ -99,7 +99,7 @@ async fn submission_leaderboard_counts_and_ordering() {
         .unwrap();
 
     let req = TestRequest::get()
-        .uri("/aredl/submissions/statistics/leaderboard")
+        .uri("/aredl/statistics/submissions/daily/leaderboard")
         .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
         .to_request();
 
@@ -132,7 +132,7 @@ async fn submission_leaderboard_only_active_filters_out() {
         .execute(&mut db.connection().unwrap())
         .unwrap();
 
-    let uri = "/aredl/submissions/statistics/leaderboard?only_active=true";
+    let uri = "/aredl/statistics/submissions/daily/leaderboard?only_active=true";
     let req = TestRequest::get()
         .uri(uri)
         .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
@@ -163,7 +163,7 @@ async fn submission_leaderboard_since_filters_out_future_date() {
 
     let tomorrow = chrono::Utc::now().date_naive() + chrono::Duration::days(1);
     let uri = format!(
-        "/aredl/submissions/statistics/leaderboard?since={}",
+        "/aredl/statistics/submissions/daily/leaderboard?since={}",
         tomorrow
     );
 

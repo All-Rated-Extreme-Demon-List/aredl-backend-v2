@@ -1,10 +1,7 @@
+mod daily;
 mod model;
 mod routes;
-
-#[cfg(test)]
-pub mod test_utils;
-#[cfg(test)]
-pub mod tests;
+mod tests;
 
 pub use model::*;
 pub use routes::{init_routes, ApiDoc};

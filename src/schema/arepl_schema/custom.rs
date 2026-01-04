@@ -242,3 +242,14 @@ diesel::table! {
 
 diesel::joinable!(record_totals -> levels (level_id));
 diesel::allow_tables_to_appear_in_same_query!(record_totals, levels);
+
+diesel::table! {
+    arepl.submission_totals (level_id) {
+        level_id -> Nullable<Uuid>,
+        submissions -> Int8,
+        percent_of_queue -> Float8,
+    }
+}
+
+diesel::joinable!(submission_totals -> levels (level_id));
+diesel::allow_tables_to_appear_in_same_query!(submission_totals, levels);

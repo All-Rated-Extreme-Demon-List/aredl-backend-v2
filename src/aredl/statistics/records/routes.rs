@@ -1,7 +1,7 @@
 use crate::{
-    aredl::records::statistics::{total_records, ResolvedLevelTotalRecordsRow},
-    cache_control::CacheController,
     app_data::db::DbAppState,
+    aredl::statistics::records::{total_records, ResolvedLevelTotalRecordsRow},
+    cache_control::CacheController,
     error_handler::ApiError,
 };
 use actix_web::{get, web, HttpResponse};
@@ -12,7 +12,7 @@ use utoipa::OpenApi;
     get,
     summary = "[Staff]Total records",
     description = "List levels ranked by number of records, as well as total records.",
-    tag = "AREDL - Records",
+    tag = "AREDL - Statistics",
     responses((status = 200, body = [ResolvedLevelTotalRecordsRow])),
 )]
 #[get("", wrap = "CacheController::public_with_max_age(900)")]
@@ -26,5 +26,5 @@ pub async fn total(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiEr
 pub struct ApiDoc;
 
 pub fn init_routes(config: &mut web::ServiceConfig) {
-    config.service(web::scope("/statistics").service(total));
+    config.service(web::scope("/records").service(total));
 }

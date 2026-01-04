@@ -27,6 +27,8 @@ pub async fn start_matviews_refresher(db: Arc<DbAppState>) {
         "country_leaderboard",
         "clans_leaderboard",
         "submission_stats",
+        "record_totals",
+        "submission_totals",
     ];
 
     task::spawn(async move {

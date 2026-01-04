@@ -1,9 +1,9 @@
 use crate::{
-    aredl::submissions::statistics::{
+    app_data::db::DbAppState,
+    aredl::statistics::submissions::daily::{
         stats_mod_leaderboard, DailyStatsPage, ResolvedLeaderboardRow,
     },
     auth::{Permission, UserAuth},
-    app_data::db::DbAppState,
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
 };
@@ -23,7 +23,7 @@ pub struct StatsQuery {
     get,
     summary = "[Staff]Get submission statistics",
     description = "Get per-day submission statistics, optionally filtered by moderator.",
-    tag = "AREDL - Submissions",
+    tag = "AREDL - Statistics",
     params(
         ("page" = Option<i64>, Query, description = "The page to fetch"),
         ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page"),
@@ -59,7 +59,7 @@ pub struct LeaderboardQuery {
     get,
     summary = "[Staff]Moderator leaderboard",
     description = "List moderators ranked by number of checked submissions.",
-    tag = "AREDL - Submissions",
+    tag = "AREDL - Statistics",
     params(
         ("since" = Option<NaiveDate>, Query, description = "Only include data since this date"),
         ("only_active" = Option<bool>, Query, description = "Whether or not to exclude moderators that aren't staff anymore"),
@@ -97,7 +97,7 @@ pub struct ApiDoc;
 
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
-        web::scope("/statistics")
+        web::scope("/daily")
             .service(stats)
             .service(leaderboard_route),
     );

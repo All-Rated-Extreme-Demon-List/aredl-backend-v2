@@ -1,8 +1,6 @@
 use crate::app_data::db::DbAppState;
 use crate::aredl::records::model::{RecordInsert, RecordPatch};
-use crate::aredl::records::{
-    statistics, Record, RecordsQueryOptions, ResolvedRecord, ResolvedRecordPage,
-};
+use crate::aredl::records::{Record, RecordsQueryOptions, ResolvedRecord, ResolvedRecordPage};
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
@@ -250,9 +248,6 @@ async fn find_me(
             ResolvedRecordPage
         )
     ),
-    nest(
-        (path = "/statistics", api=statistics::ApiDoc)
-    ),
     paths(
         create,
         update,
@@ -268,7 +263,6 @@ pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/records")
-            .configure(statistics::init_routes)
             .service(create)
             .service(update)
             .service(update_timestamp)
