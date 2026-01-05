@@ -6,7 +6,6 @@ pub mod post;
 mod queue;
 mod resolved;
 mod routes;
-mod statistics;
 mod status;
 
 #[cfg(test)]

@@ -1,8 +1,8 @@
 #[cfg(test)]
 use crate::{
     arepl::{
-        levels::test_utils::create_test_level_with_record,
-        records::{statistics::ResolvedLevelTotalRecordsRow, test_utils::create_test_record},
+        levels::test_utils::create_test_level_with_record, records::test_utils::create_test_record,
+        statistics::records::ResolvedLevelTotalRecordsRow,
     },
     auth::create_test_token,
     test_utils::init_test_app,
@@ -31,7 +31,7 @@ async fn total_records_counts_and_ordering() {
         .unwrap();
 
     let req = TestRequest::get()
-        .uri("/arepl/records/statistics")
+        .uri("/arepl/statistics/records")
         .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
         .to_request();
 

@@ -6,7 +6,7 @@ use utoipa::OpenApi;
 use crate::{
     app_data::db::DbAppState, arepl::{
         records::Record, submissions::{
-             Submission, SubmissionPage, SubmissionResolved, SubmissionStatus, patch::{SubmissionPatchMod, SubmissionPatchUser}, pemonlist, post::{SubmissionInsert, SubmissionPostMod}, statistics, status
+             Submission, SubmissionPage, SubmissionResolved, SubmissionStatus, patch::{SubmissionPatchMod, SubmissionPatchUser}, pemonlist, post::{SubmissionInsert, SubmissionPostMod},  status
         }
     }, auth::{Authenticated, Permission, UserAuth}, error_handler::ApiError, notifications::WebsocketNotification, providers::VideoProvidersAppState
 };
@@ -151,7 +151,6 @@ async fn delete(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticat
         (path = "/", api=queue::ApiDoc),
         (path = "/", api=resolved::ApiDoc),
         (path = "/status", api=status::ApiDoc),
-        (path = "/statistics", api=statistics::ApiDoc)
     ),
     components(
         schemas(
@@ -179,7 +178,6 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
         web::scope("/submissions")
             .service(claim)
             .configure(pemonlist::init_routes)
-            .configure(statistics::init_routes)
             .configure(status::init_routes)
             .configure(history::init_routes)
             .configure(queue::init_routes)

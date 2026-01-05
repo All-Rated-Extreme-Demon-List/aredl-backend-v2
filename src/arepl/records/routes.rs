@@ -1,6 +1,6 @@
 use crate::app_data::db::DbAppState;
 use crate::arepl::records::model::RecordInsert;
-use crate::arepl::records::{statistics, Record, RecordPatch, RecordsQueryOptions, ResolvedRecord};
+use crate::arepl::records::{Record, RecordPatch, RecordsQueryOptions, ResolvedRecord};
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
@@ -240,9 +240,6 @@ async fn find_me(
     tags(
         (name = "AREDL (P) - Records", description = "Endpoints for fetching and managing platformer records")
     ),
-    nest(
-        (path = "/statistics", api=statistics::ApiDoc),
-    ),
     components(
         schemas(
             Record,
@@ -265,7 +262,6 @@ pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/records")
-            .configure(statistics::init_routes)
             .service(create)
             .service(update)
             .service(update_timestamp)

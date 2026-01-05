@@ -1,5 +1,5 @@
 use crate::arepl::levels::test_utils::create_test_level;
-use crate::arepl::submissions::statistics::ResolvedLeaderboardRow;
+use crate::arepl::statistics::submissions::daily::ResolvedLeaderboardRow;
 use crate::arepl::submissions::test_utils::{create_test_submission, insert_history_entry};
 use crate::arepl::submissions::SubmissionStatus;
 use crate::auth::{create_test_token, Permission};
@@ -28,7 +28,7 @@ async fn submission_stats_filter_moderator() {
         .unwrap();
 
     let uri = format!(
-        "/arepl/submissions/statistics?reviewer_id={}&page=1&per_page=10",
+        "/arepl/statistics/submissions/daily?reviewer_id={}&page=1&per_page=10",
         mod_id
     );
     let req = TestRequest::get()
@@ -56,20 +56,50 @@ async fn submission_leaderboard_counts_and_ordering() {
     let lvl = create_test_level(&db).await;
 
     let sub1 = create_test_submission(lvl, Uuid::new_v4(), &db).await;
-    insert_history_entry(sub1, Some(mod1), SubmissionStatus::Accepted, &db).await;
-    insert_history_entry(sub1, Some(mod1), SubmissionStatus::Accepted, &db).await;
-    insert_history_entry(sub1, Some(mod1), SubmissionStatus::Denied, &db).await;
+    insert_history_entry(
+        sub1,
+        Some(mod1),
+        crate::arepl::submissions::SubmissionStatus::Accepted,
+        &db,
+    )
+    .await;
+    insert_history_entry(
+        sub1,
+        Some(mod1),
+        crate::arepl::submissions::SubmissionStatus::Accepted,
+        &db,
+    )
+    .await;
+    insert_history_entry(
+        sub1,
+        Some(mod1),
+        crate::arepl::submissions::SubmissionStatus::Denied,
+        &db,
+    )
+    .await;
 
     let sub2 = create_test_submission(lvl, Uuid::new_v4(), &db).await;
-    insert_history_entry(sub2, Some(mod2), SubmissionStatus::Accepted, &db).await;
-    insert_history_entry(sub2, Some(mod2), SubmissionStatus::UnderConsideration, &db).await;
+    insert_history_entry(
+        sub2,
+        Some(mod2),
+        crate::arepl::submissions::SubmissionStatus::Accepted,
+        &db,
+    )
+    .await;
+    insert_history_entry(
+        sub2,
+        Some(mod2),
+        crate::arepl::submissions::SubmissionStatus::UnderConsideration,
+        &db,
+    )
+    .await;
 
     diesel::sql_query("REFRESH MATERIALIZED VIEW arepl.submission_stats")
         .execute(&mut db.connection().unwrap())
         .unwrap();
 
     let req = TestRequest::get()
-        .uri("/arepl/submissions/statistics/leaderboard")
+        .uri("/arepl/statistics/submissions/daily/leaderboard")
         .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
         .to_request();
 
@@ -102,7 +132,7 @@ async fn submission_leaderboard_only_active_filters_out() {
         .execute(&mut db.connection().unwrap())
         .unwrap();
 
-    let uri = "/arepl/submissions/statistics/leaderboard?only_active=true";
+    let uri = "/arepl/statistics/submissions/daily/leaderboard?only_active=true";
     let req = TestRequest::get()
         .uri(uri)
         .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
@@ -133,7 +163,7 @@ async fn submission_leaderboard_since_filters_out_future_date() {
 
     let tomorrow = chrono::Utc::now().date_naive() + chrono::Duration::days(1);
     let uri = format!(
-        "/arepl/submissions/statistics/leaderboard?since={}",
+        "/arepl/statistics/submissions/daily/leaderboard?since={}",
         tomorrow
     );
 

@@ -1,5 +1,6 @@
 use crate::arepl::{
-    changelog, clan, country, leaderboard, levels, packs, packtiers, profile, records, submissions,
+    changelog, clan, country, leaderboard, levels, packs, packtiers, profile, records, statistics,
+    submissions,
 };
 use actix_web::web;
 use utoipa::OpenApi;
@@ -20,6 +21,7 @@ use utoipa::OpenApi;
         (path = "/clan", api=clan::ApiDoc),
         (path = "/submissions", api=submissions::ApiDoc),
         (path = "/records", api=records::ApiDoc),
+        (path = "/statistics", api=statistics::ApiDoc)
     ),
 )]
 
@@ -36,6 +38,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .configure(profile::init_routes)
             .configure(country::init_routes)
             .configure(clan::init_routes)
-            .configure(records::init_routes),
+            .configure(records::init_routes)
+            .configure(statistics::init_routes),
     );
 }
