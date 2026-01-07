@@ -4,7 +4,7 @@ use crate::page_helper::{PageQuery, Paginated};
 use crate::{
     error_handler::ApiError,
     schema::{arepl::submission_stats, users},
-    users::BaseUser,
+    users::{BaseUser, ExtendedBaseUser},
 };
 use chrono::NaiveDate;
 use diesel::pg::Pg;
@@ -30,7 +30,7 @@ pub struct DailyStats {
 
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct ResolvedLeaderboardRow {
-    pub moderator: BaseUser,
+    pub moderator: ExtendedBaseUser,
     pub accepted: i64,
     pub denied: i64,
     pub under_consideration: i64,
@@ -112,14 +112,14 @@ pub fn stats_mod_leaderboard(
 ) -> Result<Vec<ResolvedLeaderboardRow>, ApiError> {
     let mut query = submission_stats::table
         .inner_join(users::table.on(users::id.nullable().eq(submission_stats::reviewer_id)))
-        .select((DailyStats::as_select(), BaseUser::as_select()))
+        .select((DailyStats::as_select(), ExtendedBaseUser::as_select()))
         .into_boxed::<Pg>();
 
     if let Some(date) = since {
         query = query.filter(submission_stats::day.ge(date));
     }
 
-    let all_rows: Vec<(DailyStats, BaseUser)> = query.load(conn)?;
+    let all_rows: Vec<(DailyStats, ExtendedBaseUser)> = query.load(conn)?;
 
     let rows = all_rows.into_iter().filter_map(|(stats, user)| {
         if only_active {
