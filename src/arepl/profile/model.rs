@@ -5,13 +5,14 @@ use crate::arepl::packtiers::BasePackTier;
 use crate::arepl::records::Record;
 use crate::clans::Clan;
 use crate::error_handler::ApiError;
+use crate::roles::Role;
 use crate::schema::{
     arepl::{
         completed_packs, levels, levels_created, pack_tiers, packs, records, user_leaderboard,
     },
     clan_members, clans, roles, user_roles,
 };
-use crate::users::{Role, User};
+use crate::users::User;
 use chrono::{DateTime, Utc};
 use diesel::{
     ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,

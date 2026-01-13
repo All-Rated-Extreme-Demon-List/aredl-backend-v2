@@ -16,6 +16,8 @@ pub struct Role {
     pub privilege_level: i32,
     /// Name of the role.
     pub role_desc: String,
+    /// Whether this role should be hidden from public listings and only used to grant permissions.
+    pub hide: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Insertable, AsChangeset, ToSchema)]
@@ -25,6 +27,8 @@ pub struct RoleCreate {
     pub privilege_level: i32,
     /// Name of the role to create.
     pub role_desc: String,
+    /// Whether this role should be hidden from public listings and only used to grant permissions.
+    pub hide: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Insertable, AsChangeset, ToSchema)]
@@ -34,6 +38,8 @@ pub struct RoleUpdate {
     pub privilege_level: Option<i32>,
     /// New name of the role.
     pub role_desc: Option<String>,
+    /// Whether this role should be hidden from public listings and only used to grant permissions.
+    pub hide: Option<bool>,
 }
 
 impl Role {

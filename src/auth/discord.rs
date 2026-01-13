@@ -19,8 +19,9 @@ use crate::auth::token::UserClaims;
 use crate::auth::token::{self, check_token_valid};
 use crate::error_handler::ApiError;
 use crate::get_secret;
+use crate::roles::Role;
 use crate::schema::{oauth_requests, permissions, roles, user_roles};
-use crate::users::{Role, User, UserUpsert};
+use crate::users::{User, UserUpsert};
 
 #[derive(Deserialize)]
 struct OAuthCallbackQuery {

@@ -1,8 +1,9 @@
 use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
+use crate::roles::Role;
 use crate::schema::{roles, user_roles, users};
-use crate::users::{BaseUser, Role};
-use diesel::{QueryDsl, RunQueryDsl, SelectableHelper};
+use crate::users::BaseUser;
+use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -19,6 +20,7 @@ pub struct RoleResolved {
 impl RoleResolved {
     pub fn find_all(conn: &mut DbConnection) -> Result<Vec<Self>, ApiError> {
         let roles: HashMap<i32, Role> = roles::table
+            .filter(roles::hide.eq(false))
             .select(Role::as_select())
             .load::<Role>(conn)?
             .into_iter()
@@ -28,6 +30,7 @@ impl RoleResolved {
         let user_roles = user_roles::table
             .inner_join(users::table)
             .select((user_roles::role_id, BaseUser::as_select()))
+            .filter(user_roles::role_id.eq_any(roles.keys().copied().collect::<Vec<i32>>()))
             .order_by(user_roles::role_id)
             .load::<(i32, BaseUser)>(conn)?;
 
@@ -40,6 +43,7 @@ impl RoleResolved {
                     id: role.clone(),
                     privilege_level: roles[&role].privilege_level,
                     role_desc: roles[&role].role_desc.clone(),
+                    hide: roles[&role].hide,
                 },
                 users: users.map(|(_, users)| users).collect(),
             })

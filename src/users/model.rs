@@ -2,6 +2,7 @@ use crate::app_data::db::DbConnection;
 use crate::clans::Clan;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
+use crate::roles::Role;
 use crate::schema::{
     aredl::submissions, arepl::submissions as plat_submissions, clan_members, clans, permissions,
     roles, user_roles, users,
@@ -126,19 +127,6 @@ pub struct UserResolved {
     pub roles: Vec<Role>,
     /// Permissions scopes the user has.
     pub scopes: Vec<String>,
-}
-
-#[derive(
-    Serialize, Deserialize, Queryable, Selectable, Identifiable, PartialEq, Debug, ToSchema,
-)]
-#[diesel(table_name = roles)]
-pub struct Role {
-    /// Internal UUID of the role.
-    pub id: i32,
-    /// Privilege level of the role. Refer to [API Overview](#overview) for more information.
-    pub privilege_level: i32,
-    /// Name of the role.
-    pub role_desc: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Insertable, AsChangeset, ToSchema)]
