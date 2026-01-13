@@ -45,6 +45,14 @@ impl Authenticated {
         Ok(())
     }
 
+    pub fn has_higher_privilege(
+        &self,
+        conn: &mut DbConnection,
+        required_privilege: i32,
+    ) -> Result<bool, ApiError> {
+        permission::check_higher_privilege(conn, self.user_id, required_privilege)
+    }
+
     pub fn has_permission(
         &self,
         conn: &mut DbConnection,

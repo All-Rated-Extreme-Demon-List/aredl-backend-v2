@@ -1,5 +1,5 @@
 use crate::app_data::db::DbAppState;
-use crate::auth::{check_higher_privilege, Authenticated, Permission, UserAuth};
+use crate::auth::{check_higher_privilege_user, Authenticated, Permission, UserAuth};
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::users::{
@@ -124,7 +124,7 @@ async fn update(
     root_span.record("body", &tracing::field::debug(&user));
     let result = web::block(move || {
         let conn = &mut db.connection()?;
-        check_higher_privilege(conn, authenticated.user_id, id.clone())?;
+        check_higher_privilege_user(conn, authenticated.user_id, id.clone())?;
         User::update(conn, id.into_inner(), user.into_inner())
     })
     .await??;
@@ -168,7 +168,7 @@ async fn ban(
     root_span.record("body", &tracing::field::debug(&user));
     let result = web::block(move || {
         let conn = &mut db.connection()?;
-        check_higher_privilege(conn, authenticated.user_id, id.clone())?;
+        check_higher_privilege_user(conn, authenticated.user_id, id.clone())?;
         User::ban(conn, id.into_inner(), user.into_inner().ban_level)
     })
     .await??;

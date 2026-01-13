@@ -115,3 +115,13 @@ pub async fn create_test_placeholder_user(
 
     (user_id, username)
 }
+
+#[cfg(test)]
+pub fn get_permission_privilege_level(db: &DbAppState, permission: Permission) -> i32 {
+    let conn = &mut db.connection().unwrap();
+    permissions::table
+        .filter(permissions::permission.eq(permission.to_string()))
+        .select(permissions::privilege_level)
+        .first::<i32>(conn)
+        .expect("Failed to get privilege level from permissions table")
+}

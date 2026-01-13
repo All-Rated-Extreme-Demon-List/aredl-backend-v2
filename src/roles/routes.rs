@@ -1,5 +1,5 @@
-use crate::auth::{Permission, UserAuth};
 use crate::app_data::db::DbAppState;
+use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::error_handler::ApiError;
 use crate::roles::{users, Role, RoleCreate, RoleUpdate};
 use actix_web::{delete, get, patch, post, web, HttpResponse};
@@ -40,10 +40,13 @@ async fn find_all(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiErr
 async fn create(
     db: web::Data<Arc<DbAppState>>,
     role: web::Json<RoleCreate>,
+    authenticated: Authenticated,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&role));
-    let role = web::block(move || Role::create(&mut db.connection()?, role.into_inner())).await??;
+    let role =
+        web::block(move || Role::create(&mut db.connection()?, authenticated, role.into_inner()))
+            .await??;
     Ok(HttpResponse::Ok().json(role))
 }
 
@@ -68,13 +71,20 @@ async fn create(
 async fn update(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<i32>,
+    authenticated: Authenticated,
     role: web::Json<RoleUpdate>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&role));
-    let role =
-        web::block(move || Role::update(&mut db.connection()?, id.into_inner(), role.into_inner()))
-            .await??;
+    let role = web::block(move || {
+        Role::update(
+            &mut db.connection()?,
+            authenticated,
+            id.into_inner(),
+            role.into_inner(),
+        )
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(role))
 }
 
@@ -97,9 +107,12 @@ async fn update(
 #[delete("/{id}", wrap = "UserAuth::require(Permission::RoleManage)")]
 async fn delete(
     db: web::Data<Arc<DbAppState>>,
+    authenticated: Authenticated,
     id: web::Path<i32>,
 ) -> Result<HttpResponse, ApiError> {
-    let role = web::block(move || Role::delete(&mut db.connection()?, id.into_inner())).await??;
+    let role =
+        web::block(move || Role::delete(&mut db.connection()?, authenticated, id.into_inner()))
+            .await??;
     Ok(HttpResponse::Ok().json(role))
 }
 

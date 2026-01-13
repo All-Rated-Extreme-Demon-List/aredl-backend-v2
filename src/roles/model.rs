@@ -1,7 +1,7 @@
-use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::roles;
-use diesel::{ExpressionMethods, RunQueryDsl};
+use crate::{app_data::db::DbConnection, auth::Authenticated};
+use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -37,19 +37,59 @@ pub struct RoleUpdate {
 }
 
 impl Role {
+    pub fn user_can_edit(
+        conn: &mut DbConnection,
+        authenticated: Authenticated,
+        target_role_id: i32,
+    ) -> Result<(), ApiError> {
+        let target_role = roles::table
+            .filter(roles::id.eq(target_role_id))
+            .first::<Role>(conn)?;
+
+        authenticated
+            .has_higher_privilege(conn, target_role.privilege_level)?
+            .then_some(())
+            .ok_or_else(|| {
+                ApiError::new(
+                    403,
+                    "You do not have sufficient permissions to edit this role.".into(),
+                )
+            })?;
+
+        Ok(())
+    }
     pub fn find_all(conn: &mut DbConnection) -> Result<Vec<Self>, ApiError> {
         let roles = roles::table.load(conn)?;
         Ok(roles)
     }
 
-    pub fn create(conn: &mut DbConnection, role: RoleCreate) -> Result<Self, ApiError> {
+    pub fn create(
+        conn: &mut DbConnection,
+        authenticated: Authenticated,
+        role: RoleCreate,
+    ) -> Result<Self, ApiError> {
+        authenticated
+            .has_higher_privilege(conn, role.privilege_level)?
+            .then_some(())
+            .ok_or_else(|| {
+                ApiError::new(
+                    403,
+                    "You can not create a role with higher permissions than yourself.".into(),
+                )
+            })?;
         let role = diesel::insert_into(roles::table)
             .values(role)
             .get_result(conn)?;
         Ok(role)
     }
 
-    pub fn update(conn: &mut DbConnection, id: i32, role: RoleUpdate) -> Result<Self, ApiError> {
+    pub fn update(
+        conn: &mut DbConnection,
+        authenticated: Authenticated,
+        id: i32,
+        role: RoleUpdate,
+    ) -> Result<Self, ApiError> {
+        Self::user_can_edit(conn, authenticated, id)?;
         let role = diesel::update(roles::table)
             .filter(roles::id.eq(id))
             .set(role)
@@ -57,7 +97,12 @@ impl Role {
         Ok(role)
     }
 
-    pub fn delete(conn: &mut DbConnection, id: i32) -> Result<Self, ApiError> {
+    pub fn delete(
+        conn: &mut DbConnection,
+        authenticated: Authenticated,
+        id: i32,
+    ) -> Result<Self, ApiError> {
+        Self::user_can_edit(conn, authenticated, id)?;
         let role = diesel::delete(roles::table)
             .filter(roles::id.eq(id))
             .get_result(conn)?;

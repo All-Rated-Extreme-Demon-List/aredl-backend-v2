@@ -53,6 +53,15 @@ pub fn check_permission(
 
 pub fn check_higher_privilege(
     conn: &mut DbConnection,
+    user_id: Uuid,
+    required_privilege: i32,
+) -> Result<bool, ApiError> {
+    let user_privilege = get_privilege_level(conn, user_id)?;
+    Ok(user_privilege > required_privilege)
+}
+
+pub fn check_higher_privilege_user(
+    conn: &mut DbConnection,
     acting_user_id: Uuid,
     target_user_id: Uuid,
 ) -> Result<(), ApiError> {

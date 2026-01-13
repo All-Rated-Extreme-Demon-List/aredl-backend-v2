@@ -1,5 +1,5 @@
-use crate::auth::{Permission, UserAuth};
 use crate::app_data::db::DbAppState;
+use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::error_handler::ApiError;
 use crate::users::BaseUser;
 use actix_web::{delete, patch, post, web, HttpResponse};
@@ -30,13 +30,20 @@ use uuid::Uuid;
 async fn set(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<i32>,
+    authenticated: Authenticated,
     users: web::Json<Vec<Uuid>>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&users));
-    let users =
-        web::block(move || BaseUser::role_set_all(&mut db.connection()?, *id, users.into_inner()))
-            .await??;
+    let users = web::block(move || {
+        BaseUser::role_set_all(
+            &mut db.connection()?,
+            *id,
+            authenticated,
+            users.into_inner(),
+        )
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(users))
 }
 
@@ -62,13 +69,20 @@ async fn set(
 async fn add(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<i32>,
+    authenticated: Authenticated,
     users: web::Json<Vec<Uuid>>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&users));
-    let users =
-        web::block(move || BaseUser::role_add_all(&mut db.connection()?, *id, users.into_inner()))
-            .await??;
+    let users = web::block(move || {
+        BaseUser::role_add_all(
+            &mut db.connection()?,
+            *id,
+            authenticated,
+            users.into_inner(),
+        )
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(users))
 }
 
@@ -94,12 +108,19 @@ async fn add(
 async fn delete(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<i32>,
+    authenticated: Authenticated,
+
     users: web::Json<Vec<Uuid>>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&users));
     let users = web::block(move || {
-        BaseUser::role_delete_all(&mut db.connection()?, *id, users.into_inner())
+        BaseUser::role_delete_all(
+            &mut db.connection()?,
+            *id,
+            authenticated,
+            users.into_inner(),
+        )
     })
     .await??;
     Ok(HttpResponse::Ok().json(users))

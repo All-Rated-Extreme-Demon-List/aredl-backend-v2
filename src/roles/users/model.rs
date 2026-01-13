@@ -1,5 +1,7 @@
 use crate::app_data::db::DbConnection;
+use crate::auth::Authenticated;
 use crate::error_handler::ApiError;
+use crate::roles::Role;
 use crate::schema::{user_roles, users};
 use crate::users::BaseUser;
 use diesel::{
@@ -11,9 +13,11 @@ impl BaseUser {
     pub fn role_add_all(
         conn: &mut DbConnection,
         role_id: i32,
+        authenticated: Authenticated,
         users: Vec<Uuid>,
     ) -> Result<Vec<Self>, ApiError> {
         conn.transaction(move |connection| -> Result<Vec<Self>, ApiError> {
+            Role::user_can_edit(connection, authenticated, role_id)?;
             Self::add_users(role_id, users.as_ref(), connection)?;
 
             let users: Vec<BaseUser> = user_roles::table
@@ -28,9 +32,11 @@ impl BaseUser {
     pub fn role_set_all(
         conn: &mut DbConnection,
         role_id: i32,
+        authenticated: Authenticated,
         users: Vec<Uuid>,
     ) -> Result<Vec<Self>, ApiError> {
         conn.transaction(move |connection| -> Result<Vec<Self>, ApiError> {
+            Role::user_can_edit(connection, authenticated, role_id)?;
             diesel::delete(user_roles::table.filter(user_roles::role_id.eq(role_id)))
                 .execute(connection)?;
 
@@ -48,9 +54,11 @@ impl BaseUser {
     pub fn role_delete_all(
         conn: &mut DbConnection,
         role_id: i32,
+        authenticated: Authenticated,
         users: Vec<Uuid>,
     ) -> Result<Vec<Self>, ApiError> {
         conn.transaction(move |connection| -> Result<Vec<Self>, ApiError> {
+            Role::user_can_edit(connection, authenticated, role_id)?;
             Self::delete_users(role_id, &users, connection)?;
 
             let users: Vec<BaseUser> = user_roles::table
