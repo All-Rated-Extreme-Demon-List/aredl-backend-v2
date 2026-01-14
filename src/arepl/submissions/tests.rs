@@ -681,7 +681,8 @@ async fn post_submission_legacy_level_rejected() {
         "level_id": level,
         "video_url": "https://youtube.com/watch?v=legacy11111",
         "raw_url": "https://youtube.com/watch?v=legacyraw11",
-        "mobile": false
+        "mobile": false,
+        "completion_time": 1500,
     });
 
     let req = test::TestRequest::post()
@@ -703,7 +704,8 @@ async fn post_submission_level_missing() {
         "level_id": Uuid::new_v4(),
         "video_url": "https://youtube.com/watch?v=missing1111",
         "raw_url": "https://youtube.com/watch?v=missingraw1",
-        "mobile": false
+        "mobile": false,
+        "completion_time": 1500,
     });
 
     let req = test::TestRequest::post()
@@ -726,7 +728,8 @@ async fn post_submission_closed() {
         "level_id": level,
         "video_url": "https://youtube.com/watch?v=closed11111",
         "raw_url": "https://youtube.com/watch?v=closedraw11",
-        "mobile": false
+        "mobile": false,
+        "completion_time": 1500,
     });
 
     SubmissionsEnabled::disable(&mut db.connection().unwrap(), user).unwrap();
