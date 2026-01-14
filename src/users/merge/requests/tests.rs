@@ -23,7 +23,7 @@ async fn create_merge_request() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_1_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
-    let (user_2_id, _) = create_test_placeholder_user(&db, None).await;
+    let (user_2_id, _) = create_test_placeholder_user(&db).await;
     let token =
         create_test_token(user_1_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -69,7 +69,7 @@ async fn accept_merge_request() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_1_id, _) = create_test_user(&db, None).await;
-    let (user_2_id, _) = create_test_placeholder_user(&db, None).await;
+    let (user_2_id, _) = create_test_placeholder_user(&db).await;
     let (mod_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
     let token =
         create_test_token(mod_id, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -117,7 +117,7 @@ async fn reject_merge_request() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_1_id, _) = create_test_user(&db, None).await;
-    let (user_2_id, _) = create_test_placeholder_user(&db, None).await;
+    let (user_2_id, _) = create_test_placeholder_user(&db).await;
     let (mod_id, _) = create_test_user(&db, Some(Permission::DirectMerge)).await;
     let token =
         create_test_token(mod_id, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -241,7 +241,7 @@ async fn create_merge_request_rejects_duplicate_submission() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_1_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
-    let (user_2_id, _) = create_test_placeholder_user(&db, None).await;
+    let (user_2_id, _) = create_test_placeholder_user(&db).await;
     let token =
         create_test_token(user_1_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -272,7 +272,7 @@ async fn list_merge_requests() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_1_id, _) = create_test_user(&db, None).await;
-    let (user_2_id, _) = create_test_placeholder_user(&db, None).await;
+    let (user_2_id, _) = create_test_placeholder_user(&db).await;
     let (mod_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
     let token =
         create_test_token(mod_id, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -299,7 +299,7 @@ async fn find_merge_request() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_1_id, _) = create_test_user(&db, None).await;
-    let (user_2_id, _) = create_test_placeholder_user(&db, None).await;
+    let (user_2_id, _) = create_test_placeholder_user(&db).await;
     let (mod_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
     let token =
         create_test_token(mod_id, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -322,7 +322,7 @@ async fn list_merge_requests_filter_is_claimed() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_1_id, _) = create_test_user(&db, None).await;
-    let (user_2_id, _) = create_test_placeholder_user(&db, None).await;
+    let (user_2_id, _) = create_test_placeholder_user(&db).await;
     let (user_3_id, _) = create_test_user(&db, None).await;
     let (mod_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
     let token =
@@ -361,7 +361,7 @@ async fn list_merge_requests_filter_is_rejected() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_1_id, _) = create_test_user(&db, None).await;
-    let (user_2_id, _) = create_test_placeholder_user(&db, None).await;
+    let (user_2_id, _) = create_test_placeholder_user(&db).await;
     let (user_3_id, _) = create_test_user(&db, None).await;
     let (mod_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
     let token =
@@ -400,9 +400,9 @@ async fn list_merge_requests_filter_user() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_1_id, user_1_name) = create_test_user(&db, None).await;
-    let (user_2_id, _) = create_test_placeholder_user(&db, None).await;
+    let (user_2_id, _) = create_test_placeholder_user(&db).await;
     let (user_3_id, _) = create_test_user(&db, None).await;
-    let (user_4_id, _) = create_test_placeholder_user(&db, None).await;
+    let (user_4_id, _) = create_test_placeholder_user(&db).await;
     let (mod_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
     let token =
         create_test_token(mod_id, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -437,7 +437,7 @@ async fn claim_merge_request() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_1_id, _) = create_test_user(&db, None).await;
-    let (user_2_id, _) = create_test_placeholder_user(&db, None).await;
+    let (user_2_id, _) = create_test_placeholder_user(&db).await;
     let (user_3_id, _) = create_test_user(&db, None).await;
     let (mod_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
     let token =
@@ -486,7 +486,7 @@ async fn unclaim_merge_request() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_1_id, _) = create_test_user(&db, None).await;
-    let (user_2_id, _) = create_test_placeholder_user(&db, None).await;
+    let (user_2_id, _) = create_test_placeholder_user(&db).await;
     let (mod_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
     let token =
         create_test_token(mod_id, &auth.jwt_encoding_key).expect("Failed to generate token");

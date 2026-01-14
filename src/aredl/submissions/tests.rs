@@ -1,7 +1,7 @@
 use crate::{
-    aredl::submissions::{history::SubmissionHistory, Submission},
+    aredl::submissions::{history::SubmissionHistory, status::SubmissionsEnabled, Submission},
     schema::{
-        aredl::{records, submission_history},
+        aredl::{levels, records, submission_history},
         shifts,
     },
     shifts::{test_utils::create_test_shift, ShiftStatus},
@@ -466,7 +466,154 @@ async fn patch_submission_invalid_urls() {
 }
 
 #[actix_web::test]
-async fn patch_submission_mod_errors() {
+async fn patch_submission_banned_submitter() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user, _) = create_test_user(&db, None).await;
+    let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
+    let level = create_test_level(&db).await;
+    let submission = create_test_submission(level, user, &db).await;
+
+    diesel::update(users::table)
+        .filter(users::id.eq(user))
+        .set(users::ban_level.eq(2))
+        .execute(&mut db.connection().unwrap())
+        .unwrap();
+
+    let req = test::TestRequest::patch()
+        .uri(&format!("/aredl/submissions/{submission}"))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&json!({"video_url": "https://www.youtube.com/watch?v=banupdate11"}))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_client_error());
+}
+
+#[actix_web::test]
+async fn patch_submission_legacy_level_rejected() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user, _) = create_test_user(&db, None).await;
+    let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
+    let level = create_test_level(&db).await;
+
+    diesel::update(levels::table.filter(levels::id.eq(level)))
+        .set(levels::legacy.eq(true))
+        .execute(&mut db.connection().unwrap())
+        .unwrap();
+
+    let submission = create_test_submission(level, user, &db).await;
+    let req = test::TestRequest::patch()
+        .uri(&format!("/aredl/submissions/{submission}"))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&json!({"raw_url": "https://www.youtube.com/watch?v=rawupdate11"}))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_client_error());
+}
+
+#[actix_web::test]
+async fn patch_submission_under_review_rejected() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user, _) = create_test_user(&db, None).await;
+    let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
+    let level = create_test_level(&db).await;
+    let submission = create_test_submission(level, user, &db).await;
+
+    diesel::update(submissions::table.filter(submissions::id.eq(submission)))
+        .set(submissions::status.eq(SubmissionStatus::Claimed))
+        .execute(&mut db.connection().unwrap())
+        .unwrap();
+
+    let req = test::TestRequest::patch()
+        .uri(&format!("/aredl/submissions/{submission}"))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&json!({"video_url": "https://www.youtube.com/watch?v=reviewed111"}))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_client_error());
+}
+
+#[actix_web::test]
+async fn patch_resubmission_closed() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user, _) = create_test_user(&db, None).await;
+    let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
+    let level = create_test_level(&db).await;
+    let submission = create_test_submission(level, user, &db).await;
+
+    diesel::update(submissions::table.filter(submissions::id.eq(submission)))
+        .set(submissions::status.eq(SubmissionStatus::Accepted))
+        .execute(&mut db.connection().unwrap())
+        .unwrap();
+
+    SubmissionsEnabled::disable(&mut db.connection().unwrap(), user).unwrap();
+
+    let req = test::TestRequest::patch()
+        .uri(&format!("/aredl/submissions/{submission}"))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&json!({"video_url": "https://www.youtube.com/watch?v=closed11111"}))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_client_error());
+}
+
+#[actix_web::test]
+async fn patch_submission_mod_invalid_urls() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (moderator, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
+    let (user, _) = create_test_user(&db, None).await;
+    let token = create_test_token(moderator, &auth.jwt_encoding_key).unwrap();
+    let level = create_test_level(&db).await;
+    let submission = create_test_submission(level, user, &db).await;
+
+    let req = test::TestRequest::patch()
+        .uri(&format!("/aredl/submissions/{submission}"))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&json!({"video_url": "not a url"}))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_client_error());
+
+    let req = test::TestRequest::patch()
+        .uri(&format!("/aredl/submissions/{submission}"))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&json!({"raw_url": "not a url"}))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_client_error());
+}
+
+#[actix_web::test]
+async fn patch_submission_mod_downgrades_for_own_submission() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (moderator, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
+    let token = create_test_token(moderator, &auth.jwt_encoding_key).unwrap();
+    let level = create_test_level(&db).await;
+    let submission = create_test_submission(level, moderator, &db).await;
+
+    let req = test::TestRequest::patch()
+        .uri(&format!("/aredl/submissions/{submission}"))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&json!({
+            "video_url": "https://www.youtube.com/watch?v=selfupdate1",
+            "status": "Accepted",
+            "reviewer_notes": "should be ignored",
+        }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+
+    let stored = submissions::table
+        .find(submission)
+        .select(Submission::as_select())
+        .first::<Submission>(&mut db.connection().unwrap())
+        .expect("Failed to fetch submission");
+
+    assert_eq!(stored.status, SubmissionStatus::Pending);
+    assert!(stored.reviewer_notes.is_none());
+}
+
+#[actix_web::test]
+async fn patch_submission_mod_no_changes() {
     let (app, db, auth, _) = init_test_app().await;
     let (moderator, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let token = create_test_token(moderator, &auth.jwt_encoding_key).unwrap();
@@ -481,46 +628,135 @@ async fn patch_submission_mod_errors() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_client_error());
+}
 
-    // duplicate submission
-    let dup_level = create_test_level(&db).await;
-    let _other = create_test_submission(dup_level, moderator, &db).await;
-    let req = test::TestRequest::patch()
-        .uri(&format!("/aredl/submissions/{submission}"))
+#[actix_web::test]
+async fn post_submission_duplicate_level() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user, _) = create_test_user(&db, None).await;
+    let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
+    let level = create_test_level(&db).await;
+
+    let submission_data = json!({
+        "level_id": level,
+        "video_url": "https://youtube.com/watch?v=dup11111111",
+        "raw_url": "https://youtube.com/watch?v=dupraw11111",
+        "mobile": false
+    });
+
+    let req = test::TestRequest::post()
+        .uri("/aredl/submissions")
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"level_id": dup_level}))
+        .set_json(&submission_data)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+
+    let req = test::TestRequest::post()
+        .uri("/aredl/submissions")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&submission_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_client_error());
 }
 
 #[actix_web::test]
-async fn banned_player_resubmission() {
+async fn post_submission_legacy_level_rejected() {
     let (app, db, auth, _) = init_test_app().await;
     let (user, _) = create_test_user(&db, None).await;
     let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
     let level = create_test_level(&db).await;
-    let submission = create_test_submission(level, user, &db).await;
 
-    diesel::update(submissions::table)
-        .filter(submissions::id.eq(submission))
-        .set(submissions::status.eq(SubmissionStatus::Denied))
+    diesel::update(levels::table.filter(levels::id.eq(level)))
+        .set(levels::legacy.eq(true))
         .execute(&mut db.connection().unwrap())
         .unwrap();
 
-    diesel::update(users::table)
-        .filter(users::id.eq(user))
-        .set(users::ban_level.eq(2))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    let submission_data = json!({
+        "level_id": level,
+        "video_url": "https://youtube.com/watch?v=legacy11111",
+        "raw_url": "https://youtube.com/watch?v=legacyraw11",
+        "mobile": false
+    });
 
-    let req = test::TestRequest::patch()
-        .uri(&format!("/aredl/submissions/{submission}"))
+    let req = test::TestRequest::post()
+        .uri("/aredl/submissions")
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({}))
+        .set_json(&submission_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_client_error());
+}
+
+#[actix_web::test]
+async fn post_submission_level_missing() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user, _) = create_test_user(&db, None).await;
+    let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
+
+    let submission_data = json!({
+        "level_id": Uuid::new_v4(),
+        "video_url": "https://youtube.com/watch?v=missing1111",
+        "raw_url": "https://youtube.com/watch?v=missingraw1",
+        "mobile": false
+    });
+
+    let req = test::TestRequest::post()
+        .uri("/aredl/submissions")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&submission_data)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_client_error());
+}
+
+#[actix_web::test]
+async fn post_submission_closed() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user, _) = create_test_user(&db, None).await;
+    let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
+    let level = create_test_level(&db).await;
+
+    let submission_data = json!({
+        "level_id": level,
+        "video_url": "https://youtube.com/watch?v=closed11111",
+        "raw_url": "https://youtube.com/watch?v=closedraw11",
+        "mobile": false
+    });
+
+    SubmissionsEnabled::disable(&mut db.connection().unwrap(), user).unwrap();
+
+    let req = test::TestRequest::post()
+        .uri(&format!("/aredl/submissions"))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&submission_data)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_client_error());
+}
+
+#[actix_web::test]
+async fn delete_submission_requires_ownership_without_review_permission() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (owner, _) = create_test_user(&db, None).await;
+    let (other_user, _) = create_test_user(&db, None).await;
+    let owner_submission = create_test_submission(create_test_level(&db).await, owner, &db).await;
+    let other_token = create_test_token(other_user, &auth.jwt_encoding_key).unwrap();
+
+    let req = test::TestRequest::delete()
+        .uri(&format!("/aredl/submissions/{owner_submission}"))
+        .insert_header(("Authorization", format!("Bearer {}", other_token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+
+    let still_exists = submissions::table
+        .find(owner_submission)
+        .select(submissions::id)
+        .first::<Uuid>(&mut db.connection().unwrap())
+        .is_ok();
+    assert!(still_exists);
 }
 
 #[actix_web::test]

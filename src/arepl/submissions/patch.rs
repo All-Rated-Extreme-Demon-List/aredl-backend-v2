@@ -1,7 +1,7 @@
 use crate::{
     app_data::db::DbConnection,
     arepl::submissions::{status::SubmissionsEnabled, *},
-    auth::{Authenticated, Permission},
+    auth::Authenticated,
     error_handler::ApiError,
     notifications::WebsocketNotification,
     providers::VideoProvidersAppState,
@@ -204,37 +204,16 @@ impl SubmissionPatchUser {
             ));
         }
 
-        if patch.raw_url.is_some() {
-            let raw_footage = patch.raw_url.clone().or(old_submission.raw_url.clone());
+        let is_legacy = levels::table
+            .filter(levels::id.eq(old_submission.level_id))
+            .select(levels::legacy)
+            .first::<bool>(conn)?;
 
-            let level_info = levels::table
-                .filter(levels::id.eq(old_submission.level_id))
-                .select((levels::legacy, levels::position))
-                .first::<(bool, i32)>(conn)
-                .optional()?;
-
-            match level_info {
-                None => {
-                    return Err(ApiError::new(
-                        404,
-                        "Could not find the level for this submission.",
-                    ))
-                }
-                Some((is_legacy, pos)) => {
-                    if is_legacy {
-                        return Err(ApiError::new(
-                            400,
-                            "This level is on the legacy list and is not accepting records!",
-                        ));
-                    }
-                    if pos < 400 && raw_footage.is_none() {
-                        return Err(ApiError::new(
-                            400,
-                            "This level is top 400 and requires raw footage!",
-                        ));
-                    }
-                }
-            }
+        if is_legacy {
+            return Err(ApiError::new(
+                400,
+                "This level is on the legacy list and is not accepting records!",
+            ));
         }
 
         let result = diesel::update(submissions::table)
@@ -264,13 +243,6 @@ impl SubmissionPatchMod {
     ) -> Result<Submission, ApiError> {
         if patch == Self::default() {
             return Err(ApiError::new(400, "No changes were provided!"));
-        }
-
-        if !authenticated.has_permission(conn, Permission::SubmissionReview)? {
-            return Err(ApiError::new(
-                403,
-                "You do not have permission to review submissions.",
-            ));
         }
 
         if let Some(video_url) = patch.video_url.as_ref() {
