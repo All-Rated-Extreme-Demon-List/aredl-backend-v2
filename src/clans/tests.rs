@@ -112,6 +112,25 @@ async fn delete_clan() {
 }
 
 #[actix_web::test]
+async fn delete_clan_with_multiple_members_forbidden() {
+    use crate::clans::test_utils::create_test_clan_member;
+    let (app, db, auth, _) = init_test_app().await;
+    let clan_id = create_test_clan(&db).await;
+    let (owner_id, _) = create_test_user(&db, None).await;
+    create_test_clan_member(&db, clan_id, owner_id, 2).await;
+    let (member_id, _) = create_test_user(&db, None).await;
+    create_test_clan_member(&db, clan_id, member_id, 0).await;
+    let token = create_test_token(owner_id, &auth.jwt_encoding_key).unwrap();
+
+    let req = test::TestRequest::delete()
+        .uri(&format!("/clans/{}", clan_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status().as_u16(), 403);
+}
+
+#[actix_web::test]
 async fn create_clan_name_too_long() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, None).await;
@@ -121,6 +140,23 @@ async fn create_clan_name_too_long() {
     let payload = json!({"global_name": name, "tag": "TL"});
     let req = test::TestRequest::post()
         .uri("/clans")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&payload)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_client_error());
+}
+
+#[actix_web::test]
+async fn create_empty_clan_name_too_long() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::ClanModify)).await;
+    let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
+
+    let name = "a".repeat(101);
+    let payload = json!({"global_name": name, "tag": "TL"});
+    let req = test::TestRequest::post()
+        .uri("/clans/placeholder")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(&payload)
         .to_request();
@@ -145,6 +181,22 @@ async fn create_clan_tag_too_long() {
 }
 
 #[actix_web::test]
+async fn create_empty_clan_tag_too_long() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::ClanModify)).await;
+    let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
+
+    let payload = json!({"global_name": "TagLong", "tag": "TOOLONG"});
+    let req = test::TestRequest::post()
+        .uri("/clans/placeholder")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&payload)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_client_error());
+}
+
+#[actix_web::test]
 async fn create_clan_description_too_long() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, None).await;
@@ -154,6 +206,23 @@ async fn create_clan_description_too_long() {
     let payload = json!({"global_name": "DescLong", "tag": "DL", "description": desc});
     let req = test::TestRequest::post()
         .uri("/clans")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&payload)
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_client_error());
+}
+
+#[actix_web::test]
+async fn create_empty_clan_description_too_long() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::ClanModify)).await;
+    let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
+
+    let desc = "d".repeat(301);
+    let payload = json!({"global_name": "DescLong", "tag": "DL", "description": desc});
+    let req = test::TestRequest::post()
+        .uri("/clans/placeholder")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(&payload)
         .to_request();

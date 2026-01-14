@@ -83,6 +83,48 @@ async fn update_authenticated_user() {
 }
 
 #[actix_web::test]
+async fn update_authenticated_user_global_name_too_long() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let user_token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    let update_payload = json!({
+        "global_name": "a".repeat(36)
+    });
+
+    let req = test::TestRequest::patch()
+        .uri("/users/@me")
+        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .set_json(&update_payload)
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status().as_u16(), 400);
+}
+
+#[actix_web::test]
+async fn update_authenticated_user_description_too_long() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let user_token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    let update_payload = json!({
+        "description": "d".repeat(301)
+    });
+
+    let req = test::TestRequest::patch()
+        .uri("/users/@me")
+        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .set_json(&update_payload)
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status().as_u16(), 400);
+}
+
+#[actix_web::test]
 async fn update_authenticated_user_banned() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, None).await;

@@ -82,6 +82,37 @@ async fn set_members() {
 }
 
 #[actix_web::test]
+async fn set_members_removes_missing_members() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::ClanModify)).await;
+    let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
+    let clan_id = create_test_clan(&db).await;
+    let (u1, _) = create_test_user(&db, None).await;
+    let (u2, _) = create_test_user(&db, None).await;
+    create_test_clan_member(&db, clan_id, u1, 0).await;
+    create_test_clan_member(&db, clan_id, u2, 0).await;
+
+    let req = test::TestRequest::patch()
+        .uri(&format!("/clans/{}/members", clan_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&vec![u2])
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    let members: Vec<Uuid> = test::read_body_json(resp).await;
+    assert!(!members.contains(&u1));
+    assert!(members.contains(&u2));
+
+    let remaining: Vec<Uuid> = clan_members::table
+        .filter(clan_members::clan_id.eq(clan_id))
+        .select(clan_members::user_id)
+        .load(&mut db.connection().unwrap())
+        .unwrap();
+    assert_eq!(remaining.len(), 1);
+    assert!(remaining.contains(&u2));
+}
+
+#[actix_web::test]
 async fn set_members_preserves_metadata() {
     let (app, db, auth, _) = init_test_app().await;
     let (staff_id, _) = create_test_user(&db, Some(Permission::ClanModify)).await;
