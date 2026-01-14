@@ -152,6 +152,122 @@ async fn reject_merge_request() {
 }
 
 #[actix_web::test]
+async fn create_merge_request_rejects_self_merge() {
+    let (app, db, auth, _) = init_test_app().await;
+
+    let (user_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    let req_data = json!({
+        "secondary_user": user_id.to_string()
+    });
+
+    let req = test::TestRequest::post()
+        .uri("/users/merge/requests")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&req_data)
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 400, "status is {}", resp.status());
+
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert_eq!(
+        body["message"].as_str().unwrap(),
+        "You cannot merge your account with itself."
+    );
+}
+
+#[actix_web::test]
+async fn create_merge_request_rejects_unknown_user() {
+    let (app, db, auth, _) = init_test_app().await;
+
+    let (user_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    let req_data = json!({
+        "secondary_user": uuid::Uuid::new_v4().to_string()
+    });
+
+    let req = test::TestRequest::post()
+        .uri("/users/merge/requests")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&req_data)
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 404, "status is {}", resp.status());
+
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert_eq!(
+        body["message"].as_str().unwrap(),
+        "The secondary user does not exist."
+    );
+}
+
+#[actix_web::test]
+async fn create_merge_request_rejects_non_placeholder_user() {
+    let (app, db, auth, _) = init_test_app().await;
+
+    let (user_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
+    let (secondary_id, _) = create_test_user(&db, None).await;
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    let req_data = json!({
+        "secondary_user": secondary_id.to_string()
+    });
+
+    let req = test::TestRequest::post()
+        .uri("/users/merge/requests")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&req_data)
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 400, "status is {}", resp.status());
+
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert_eq!(
+        body["message"].as_str().unwrap(),
+        "You can only submit merge requests for placeholder users. To merge your account with a user that is already linked to another discord account, please make a support post on our discord server."
+    );
+}
+
+#[actix_web::test]
+async fn create_merge_request_rejects_duplicate_submission() {
+    let (app, db, auth, _) = init_test_app().await;
+
+    let (user_1_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
+    let (user_2_id, _) = create_test_placeholder_user(&db, None).await;
+    let token =
+        create_test_token(user_1_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    create_test_merge_req(&db, user_1_id, user_2_id).await;
+
+    let req_data = json!({
+        "secondary_user": user_2_id.to_string()
+    });
+
+    let req = test::TestRequest::post()
+        .uri("/users/merge/requests")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&req_data)
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 409, "status is {}", resp.status());
+
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert_eq!(
+        body["message"].as_str().unwrap(),
+        "You already submitted a merge request for your account. Please wait until it's either accepted or denied before submitting a new one."
+    );
+}
+
+#[actix_web::test]
 async fn list_merge_requests() {
     let (app, db, auth, _) = init_test_app().await;
 
@@ -202,6 +318,121 @@ async fn find_merge_request() {
 }
 
 #[actix_web::test]
+async fn list_merge_requests_filter_is_claimed() {
+    let (app, db, auth, _) = init_test_app().await;
+
+    let (user_1_id, _) = create_test_user(&db, None).await;
+    let (user_2_id, _) = create_test_placeholder_user(&db, None).await;
+    let (user_3_id, _) = create_test_user(&db, None).await;
+    let (mod_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
+    let token =
+        create_test_token(mod_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    let claimed_merge = create_test_merge_req(&db, user_1_id, user_2_id).await;
+    let unclaimed_merge = create_test_merge_req(&db, user_3_id, user_2_id).await;
+
+    diesel::update(merge_requests::table)
+        .filter(merge_requests::id.eq(claimed_merge))
+        .set(merge_requests::is_claimed.eq(true))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to claim merge request");
+
+    let req = test::TestRequest::get()
+        .uri("/users/merge/requests?claimed_filter=true")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+
+    let body: serde_json::Value = read_body_json(resp).await;
+    let ids: Vec<String> = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| row["id"].as_str().unwrap().to_string())
+        .collect();
+    assert!(ids.contains(&claimed_merge.to_string()));
+    assert!(!ids.contains(&unclaimed_merge.to_string()));
+}
+
+#[actix_web::test]
+async fn list_merge_requests_filter_is_rejected() {
+    let (app, db, auth, _) = init_test_app().await;
+
+    let (user_1_id, _) = create_test_user(&db, None).await;
+    let (user_2_id, _) = create_test_placeholder_user(&db, None).await;
+    let (user_3_id, _) = create_test_user(&db, None).await;
+    let (mod_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
+    let token =
+        create_test_token(mod_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    let rejected_merge = create_test_merge_req(&db, user_1_id, user_2_id).await;
+    let pending_merge = create_test_merge_req(&db, user_3_id, user_2_id).await;
+
+    diesel::update(merge_requests::table)
+        .filter(merge_requests::id.eq(rejected_merge))
+        .set(merge_requests::is_rejected.eq(true))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to reject merge request");
+
+    let req = test::TestRequest::get()
+        .uri("/users/merge/requests?rejected_filter=true")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+
+    let body: serde_json::Value = read_body_json(resp).await;
+    let ids: Vec<String> = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| row["id"].as_str().unwrap().to_string())
+        .collect();
+    assert!(ids.contains(&rejected_merge.to_string()));
+    assert!(!ids.contains(&pending_merge.to_string()));
+}
+
+#[actix_web::test]
+async fn list_merge_requests_filter_user() {
+    let (app, db, auth, _) = init_test_app().await;
+
+    let (user_1_id, user_1_name) = create_test_user(&db, None).await;
+    let (user_2_id, _) = create_test_placeholder_user(&db, None).await;
+    let (user_3_id, _) = create_test_user(&db, None).await;
+    let (user_4_id, _) = create_test_placeholder_user(&db, None).await;
+    let (mod_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
+    let token =
+        create_test_token(mod_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    let matching_merge = create_test_merge_req(&db, user_1_id, user_2_id).await;
+    let other_merge = create_test_merge_req(&db, user_3_id, user_4_id).await;
+
+    let req = test::TestRequest::get()
+        .uri(&format!(
+            "/users/merge/requests?user_filter={}",
+            user_1_name
+        ))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+
+    let body: serde_json::Value = read_body_json(resp).await;
+    let ids: Vec<String> = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| row["id"].as_str().unwrap().to_string())
+        .collect();
+    assert!(ids.contains(&matching_merge.to_string()));
+    assert!(!ids.contains(&other_merge.to_string()));
+}
+
+#[actix_web::test]
 async fn claim_merge_request() {
     let (app, db, auth, _) = init_test_app().await;
 
@@ -228,6 +459,26 @@ async fn claim_merge_request() {
         body["id"].as_str().unwrap() == merge_1.to_string(),
         "Claimed merge request does not match oldest request ID!"
     );
+}
+
+#[actix_web::test]
+async fn claim_merge_request_when_none_exist() {
+    let (app, _db, auth, _) = init_test_app().await;
+
+    let (mod_id, _) = create_test_user(&_db, Some(Permission::MergeReview)).await;
+    let token =
+        create_test_token(mod_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    let req = test::TestRequest::get()
+        .uri("/users/merge/requests/claim")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert!(body.is_null(), "Expected null body when no requests");
 }
 
 #[actix_web::test]
