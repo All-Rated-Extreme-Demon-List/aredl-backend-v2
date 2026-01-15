@@ -1,33 +1,39 @@
-use crate::{
-    aredl::submissions::{history::SubmissionHistory, status::SubmissionsEnabled, Submission},
-    schema::{
-        aredl::{levels, records, submission_history},
-        shifts,
+#[cfg(test)]
+use {
+    crate::{
+        aredl::{
+            levels::test_utils::create_test_level,
+            submissions::{
+                history::SubmissionHistory, status::SubmissionsEnabled,
+                test_utils::create_test_submission, Submission, SubmissionStatus,
+            },
+        },
+        auth::{create_test_token, Permission},
+        providers::{
+            context::{GoogleAuthState, ProviderContext},
+            list::youtube::{YouTubeProvider, YouTubeProviderConfig},
+            model::{Provider, ProviderRegistry},
+            test_utils::{clear_google_env, mock_google_token_endpoint, set_google_env},
+            VideoProvidersAppState,
+        },
+        schema::{
+            aredl::{levels, records, submission_history, submissions},
+            roles, shifts, user_roles, users,
+        },
+        shifts::{test_utils::create_test_shift, ShiftStatus},
+        test_utils::*,
+        users::test_utils::create_test_user,
     },
-    shifts::{test_utils::create_test_shift, ShiftStatus},
+    actix_web::test::{self, read_body_json},
+    chrono::{DateTime, Utc},
+    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper},
+    httpmock::prelude::*,
+    serde_json::json,
+    serial_test::serial,
+    std::sync::Arc,
+    tokio::time::{sleep, Duration},
+    uuid::Uuid,
 };
-#[cfg(test)]
-use crate::{
-    aredl::{
-        levels::test_utils::create_test_level,
-        submissions::{test_utils::create_test_submission, SubmissionStatus},
-    },
-    auth::{create_test_token, Permission},
-    schema::{aredl::submissions, roles, user_roles, users},
-    test_utils::*,
-    users::test_utils::create_test_user,
-};
-#[cfg(test)]
-use actix_web::test;
-#[cfg(test)]
-use actix_web::test::read_body_json;
-#[cfg(test)]
-use diesel::{ExpressionMethods, RunQueryDsl};
-use diesel::{QueryDsl, SelectableHelper};
-#[cfg(test)]
-use serde_json::json;
-#[cfg(test)]
-use uuid::Uuid;
 
 #[actix_web::test]
 async fn create_submission() {
@@ -1134,4 +1140,141 @@ async fn reviewer_submission_can_set_reviewer_fields_for_other_users() {
         stored_reviewer_submission.reviewer_notes.is_none(),
         "Reviewer notes should be ignored on own submissions",
     );
+}
+
+#[actix_web::test]
+#[serial]
+async fn accept_submission_triggers_record_timestamp_fetch_from_youtube() {
+    clear_google_env();
+
+    let server = MockServer::start_async().await;
+    set_google_env(&server.base_url());
+    mock_google_token_endpoint(&server, 3600, "test_access").await;
+
+    let yt_mock = server
+        .mock_async(|when, then| {
+            when.method(GET)
+                .path("/videos")
+                .query_param("part", "snippet")
+                .query_param("id", "xvFZjo5PgG0")
+                .header_exists("Authorization");
+
+            then.status(200)
+                .header("content-type", "application/json")
+                .body(r#"{"items":[{"snippet":{"publishedAt":"2009-10-25T06:57:33Z"}}]}"#);
+        })
+        .await;
+
+    let google_auth = GoogleAuthState::new()
+        .await
+        .expect("Failed to create GoogleAuthState");
+
+    let providers_app_state = Arc::new(VideoProvidersAppState::new(
+        ProviderRegistry::new(vec![Arc::new(YouTubeProvider::new(YouTubeProviderConfig {
+            api_base: url::Url::parse(&server.base_url()).unwrap(),
+        })) as Arc<dyn Provider>]),
+        ProviderContext {
+            http: reqwest::Client::new(),
+            google_auth: Some(Arc::new(google_auth)),
+        },
+    ));
+
+    let (app, db, auth, _) = init_test_app_with_providers(providers_app_state).await;
+
+    let (submitter_id, _) = create_test_user(&db, None).await;
+    let submitter_token = create_test_token(submitter_id, &auth.jwt_encoding_key).unwrap();
+
+    let (moderator_id, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
+    let moderator_token = create_test_token(moderator_id, &auth.jwt_encoding_key).unwrap();
+
+    let level_id = create_test_level(&db).await;
+
+    let submission_data = json!({
+        "level_id": level_id,
+        "video_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
+        "raw_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
+        "mobile": false,
+    });
+
+    let create_req = actix_web::test::TestRequest::post()
+        .uri("/aredl/submissions")
+        .insert_header(("Authorization", format!("Bearer {}", submitter_token)))
+        .set_json(&submission_data)
+        .to_request();
+
+    let create_resp = actix_web::test::call_service(&app, create_req).await;
+    assert!(
+        create_resp.status().is_success(),
+        "create submission status is {}",
+        create_resp.status()
+    );
+    let created_body: serde_json::Value = actix_web::test::read_body_json(create_resp).await;
+    let submission_id = Uuid::parse_str(
+        created_body["id"]
+            .as_str()
+            .expect("submission must have id"),
+    )
+    .expect("submission id must be uuid");
+
+    let accept_data = json!({ "status": "Accepted", "reviewer_notes": "ok" });
+
+    let accept_resp = actix_web::test::call_service(
+        &app,
+        actix_web::test::TestRequest::patch()
+            .uri(&format!("/aredl/submissions/{}", submission_id))
+            .insert_header(("Authorization", format!("Bearer {}", moderator_token)))
+            .set_json(&accept_data)
+            .to_request(),
+    )
+    .await;
+    assert!(
+        accept_resp.status().is_success(),
+        "accept submission status is {}",
+        accept_resp.status()
+    );
+
+    let (record_id, created_at): (Uuid, DateTime<Utc>) = {
+        let mut conn = db.connection().unwrap();
+        records::table
+            .filter(records::level_id.eq(level_id))
+            .filter(records::submitted_by.eq(submitter_id))
+            .select((records::id, records::created_at))
+            .first(&mut conn)
+            .expect("record should be created on accept")
+    };
+
+    let expected: DateTime<Utc> = "2009-10-25T06:57:33Z".parse().unwrap();
+
+    let mut last_seen: Option<DateTime<Utc>> = None;
+    let mut ok = false;
+
+    for _ in 0..40 {
+        let achieved_at: DateTime<Utc> = {
+            let mut conn = db.connection().unwrap();
+            records::table
+                .filter(records::id.eq(record_id))
+                .select(records::achieved_at)
+                .first(&mut conn)
+                .unwrap()
+        };
+
+        last_seen = Some(achieved_at);
+
+        if achieved_at == expected {
+            ok = true;
+            break;
+        }
+
+        sleep(Duration::from_millis(50)).await;
+    }
+
+    assert!(
+        ok,
+        "achieved_at never updated to expected value; created_at={}, last_seen={:?}",
+        created_at, last_seen
+    );
+
+    assert_eq!(yt_mock.calls_async().await, 1);
+
+    clear_google_env();
 }

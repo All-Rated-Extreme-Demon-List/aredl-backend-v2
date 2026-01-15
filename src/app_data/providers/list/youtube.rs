@@ -9,13 +9,28 @@ use super::super::{
 };
 use crate::error_handler::ApiError;
 
+#[derive(Clone)]
+pub struct YouTubeProviderConfig {
+    pub api_base: url::Url,
+}
+
+impl Default for YouTubeProviderConfig {
+    fn default() -> Self {
+        Self {
+            api_base: url::Url::parse("https://www.googleapis.com/youtube/v3/").unwrap(),
+        }
+    }
+}
+
 pub struct YouTubeProvider {
+    config: YouTubeProviderConfig,
     patterns: Vec<Regex>,
 }
 
 impl YouTubeProvider {
-    pub fn new() -> Self {
+    pub fn new(config: YouTubeProviderConfig) -> Self {
         Self {
+            config,
             patterns: vec![
                 // https://(www.|m.)youtube.com/watch?v=<id>[...][&t=... or &start=...]
                 Regex::new(
@@ -86,8 +101,8 @@ impl Provider for YouTubeProvider {
             .map_err(|e| ApiError::new(502, &format!("Failed to acquire Youtube token: {e}")))?;
 
         let url = format!(
-            "https://www.googleapis.com/youtube/v3/videos?part=snippet&id={}",
-            matched.content_id
+            "{}videos?part=snippet&id={}",
+            self.config.api_base, matched.content_id
         );
 
         let mut headers = HeaderMap::new();

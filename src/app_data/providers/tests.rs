@@ -4,8 +4,16 @@ mod tests {
 
     use crate::{
         app_data::providers::model::ProviderId,
-        providers::{init_app_state, VideoProvidersAppState},
+        providers::{
+            context::GoogleAuthState,
+            init_app_state,
+            test_utils::{clear_google_env, mock_google_token_endpoint, set_google_env},
+            VideoProvidersAppState,
+        },
     };
+
+    use httpmock::MockServer;
+    use serial_test::serial;
 
     async fn providers() -> Arc<VideoProvidersAppState> {
         init_app_state().await
@@ -257,5 +265,82 @@ mod tests {
                 "Expected no match error for {url}, but got a match"
             );
         }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn google_auth_fetches_once_then_uses_cache() {
+        clear_google_env();
+
+        let server = MockServer::start_async().await;
+        set_google_env(&server.base_url());
+
+        let mock = mock_google_token_endpoint(&server, 3600, "token1").await;
+
+        let state = GoogleAuthState::new()
+            .await
+            .expect("expected GoogleAuthState");
+
+        let t1 = state.get_access_token().await.unwrap();
+        let t2 = state.get_access_token().await.unwrap();
+
+        assert_eq!(t1, "token1");
+        assert_eq!(t2, "token1");
+        assert_eq!(
+            mock.calls_async().await,
+            1,
+            "should only request token once"
+        );
+
+        clear_google_env();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn google_auth_refreshes_when_immediately_expired() {
+        clear_google_env();
+
+        let server = MockServer::start_async().await;
+        set_google_env(&server.base_url());
+
+        let mock = mock_google_token_endpoint(&server, 60, "token1").await;
+
+        let state = GoogleAuthState::new()
+            .await
+            .expect("expected GoogleAuthState");
+
+        let _ = state.get_access_token().await.unwrap();
+        let _ = state.get_access_token().await.unwrap();
+
+        assert_eq!(
+            mock.calls_async().await,
+            2,
+            "should refresh due to immediate expiry"
+        );
+
+        clear_google_env();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn google_auth_refreshes_after_expiry() {
+        clear_google_env();
+
+        let server = MockServer::start_async().await;
+        set_google_env(&server.base_url());
+
+        let mock = mock_google_token_endpoint(&server, 61, "token1").await;
+
+        let state = GoogleAuthState::new()
+            .await
+            .expect("expected GoogleAuthState");
+
+        let _ = state.get_access_token().await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(1200)).await;
+        let _ = state.get_access_token().await.unwrap();
+
+        assert_eq!(mock.calls_async().await, 2, "should refresh after expiry");
+
+        clear_google_env();
     }
 }

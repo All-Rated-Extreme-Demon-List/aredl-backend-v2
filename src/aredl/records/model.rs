@@ -408,7 +408,7 @@ impl Record {
         })
         .await??;
 
-        if record.achieved_at != record.created_at {
+        if record.achieved_at < record.created_at - chrono::Duration::seconds(1) {
             return Ok(record);
         }
 

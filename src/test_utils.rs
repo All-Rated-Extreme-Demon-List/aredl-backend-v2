@@ -3,6 +3,8 @@ use crate::app_data::{
     db::DbAppState,
     providers::init_app_state as providers_init_app_state,
 };
+#[cfg(test)]
+use crate::providers::VideoProvidersAppState;
 use actix_http::Request;
 
 use actix_web::{
@@ -12,8 +14,16 @@ use actix_web::{
 };
 use actix_web::{test, web::Data, App};
 
+use actix_web::middleware::NormalizePath;
 use futures_util::future::{ready, LocalBoxFuture, Ready};
 use std::sync::Arc;
+use tokio::sync::broadcast;
+use tracing_actix_web::TracingLogger;
+
+use crate::{
+    app_data::db::init_test_db_state, notifications::WebsocketNotification, AppRootSpanBuilder,
+};
+
 pub struct BoxResponse;
 impl<S, B> Transform<S, ServiceRequest> for BoxResponse
 where
@@ -67,14 +77,6 @@ pub async fn init_test_app() -> (
     Arc<AuthAppState>,
     tokio::sync::broadcast::Sender<crate::notifications::WebsocketNotification>,
 ) {
-    use actix_web::middleware::NormalizePath;
-    use tokio::sync::broadcast;
-    use tracing_actix_web::TracingLogger;
-
-    use crate::{
-        app_data::db::init_test_db_state, notifications::WebsocketNotification, AppRootSpanBuilder,
-    };
-
     dotenv::dotenv().ok();
 
     let auth_app_state = auth_init_app_state().await;
@@ -84,6 +86,47 @@ pub async fn init_test_app() -> (
     let db_app_state = init_test_db_state();
 
     let providers_app_state = providers_init_app_state().await;
+
+    let app = test::init_service(
+        App::new()
+            .app_data(Data::new(db_app_state.clone()))
+            .app_data(Data::new(auth_app_state.clone()))
+            .app_data(Data::new(notify_tx.clone()))
+            .app_data(Data::new(providers_app_state.clone()))
+            .wrap(NormalizePath::trim())
+            .wrap(TracingLogger::<AppRootSpanBuilder>::new())
+            .wrap(BoxResponse)
+            .configure(crate::users::init_routes)
+            .configure(crate::aredl::init_routes)
+            .configure(crate::arepl::init_routes)
+            .configure(crate::auth::init_routes)
+            .configure(crate::roles::init_routes)
+            .configure(crate::clans::init_routes)
+            .configure(crate::notifications::init_routes)
+            .configure(crate::shifts::init_routes)
+            .configure(crate::health::init_routes),
+    )
+    .await;
+
+    (app, db_app_state, auth_app_state, notify_tx)
+}
+
+#[cfg(test)]
+pub async fn init_test_app_with_providers(
+    providers_app_state: Arc<VideoProvidersAppState>,
+) -> (
+    impl Service<Request, Response = ServiceResponse<BoxBody>, Error = Error>,
+    Arc<DbAppState>,
+    Arc<AuthAppState>,
+    tokio::sync::broadcast::Sender<crate::notifications::WebsocketNotification>,
+) {
+    dotenv::dotenv().ok();
+
+    let auth_app_state = auth_init_app_state().await;
+
+    let (notify_tx, _notify_rx) = broadcast::channel::<WebsocketNotification>(100);
+
+    let db_app_state = init_test_db_state();
 
     let app = test::init_service(
         App::new()
