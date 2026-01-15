@@ -10,9 +10,12 @@ use {
         auth::{create_test_token, Permission},
         providers::{
             context::{GoogleAuthState, ProviderContext},
-            list::youtube::{YouTubeProvider, YouTubeProviderConfig},
+            list::youtube::YouTubeProvider,
             model::{Provider, ProviderRegistry},
-            test_utils::{clear_google_env, mock_google_token_endpoint, set_google_env},
+            test_utils::{
+                clear_google_env, mock_google_token_endpoint, mock_youtube_videos_endpoint,
+                set_google_env,
+            },
             VideoProvidersAppState,
         },
         schema::arepl::records,
@@ -547,31 +550,21 @@ async fn update_timestamp_endpoint_fetches_youtube_published_at() {
     set_google_env(&server.base_url());
     mock_google_token_endpoint(&server, 3600, "test_access").await;
 
-    let yt_mock = server
-        .mock_async(|when, then| {
-            when.method(GET)
-                .path("/videos")
-                .query_param("part", "snippet")
-                .query_param("id", "xvFZjo5PgG0")
-                .header_exists("Authorization");
-
-            then.status(200)
-                .header("content-type", "application/json")
-                .body(r#"{"items":[{"snippet":{"publishedAt":"2009-10-25T06:57:33Z"}}]}"#);
-        })
-        .await;
+    let yt_mock =
+        mock_youtube_videos_endpoint(&server, "xvFZjo5PgG0", "2009-10-25T06:57:33Z").await;
 
     let google_auth = GoogleAuthState::new()
         .await
         .expect("Failed to create GoogleAuthState");
 
+    std::env::set_var("YOUTUBE_API_BASE_URL", server.base_url());
+
     let providers_app_state = Arc::new(VideoProvidersAppState::new(
-        ProviderRegistry::new(vec![Arc::new(YouTubeProvider::new(YouTubeProviderConfig {
-            api_base: url::Url::parse(&server.base_url()).unwrap(),
-        })) as Arc<dyn Provider>]),
+        ProviderRegistry::new(vec![Arc::new(YouTubeProvider::new()) as Arc<dyn Provider>]),
         ProviderContext {
             http: reqwest::Client::new(),
             google_auth: Some(Arc::new(google_auth)),
+            twitch_auth: None,
         },
     ));
 
@@ -634,5 +627,6 @@ async fn update_timestamp_endpoint_fetches_youtube_published_at() {
     let expected: DateTime<Utc> = "2009-10-25T06:57:33Z".parse().unwrap();
     assert_eq!(got_dt, expected);
 
+    std::env::remove_var("YOUTUBE_API_BASE_URL");
     clear_google_env();
 }

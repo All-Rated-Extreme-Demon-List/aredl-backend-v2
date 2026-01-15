@@ -65,6 +65,9 @@ services:
 
       GOOGLE_OAUTH_CLIENT: /run/secrets/google_oauth_client
       GOOGLE_OAUTH_REFRESH: /run/secrets/google_oauth_refresh
+      TWITCH_OAUTH_CLIENT_ID: /run/secrets/twitch_oauth_client_id
+      TWITCH_OAUTH_CLIENT_SECRET: /run/secrets/twitch_oauth_client_secret
+
     logging:
       driver: loki
       options:
@@ -97,6 +100,8 @@ services:
       - nlw_sheet_id
       - google_oauth_client
       - google_oauth_refresh
+      - twitch_oauth_client_id
+      - twitch_oauth_client_secret
       
     networks:
       - api_net
@@ -141,6 +146,10 @@ secrets:
   google_oauth_client:
     external: true
   google_oauth_refresh:
+    external: true
+  twitch_oauth_client_id:
+    external: true
+  twitch_oauth_client_secret:
     external: true
 networks:
   api_net:

@@ -9,7 +9,7 @@ use super::{
     },
     model::{ContentDataLocation, ContentMetadata, Provider, ProviderMatch, ProviderRegistry},
 };
-use crate::error_handler::ApiError;
+use crate::{error_handler::ApiError, providers::context::TwitchAuthState};
 
 use std::sync::Arc;
 
@@ -93,14 +93,16 @@ impl VideoProvidersAppState {
 pub async fn init_app_state() -> Arc<VideoProvidersAppState> {
     let http = reqwest::Client::new();
     let google_state = GoogleAuthState::new().await.map(Arc::new);
+    let twitch_state = TwitchAuthState::new().await.map(Arc::new);
 
     let context = ProviderContext {
         http,
         google_auth: google_state,
+        twitch_auth: twitch_state,
     };
 
     let registry = ProviderRegistry::new(vec![
-        Arc::new(YouTubeProvider::new(Default::default())) as Arc<dyn Provider>,
+        Arc::new(YouTubeProvider::new()) as Arc<dyn Provider>,
         Arc::new(TwitchProvider::new()) as Arc<dyn Provider>,
         Arc::new(VimeoProvider::new()) as Arc<dyn Provider>,
         Arc::new(MedalProvider::new()) as Arc<dyn Provider>,

@@ -9,28 +9,13 @@ use super::super::{
 };
 use crate::error_handler::ApiError;
 
-#[derive(Clone)]
-pub struct YouTubeProviderConfig {
-    pub api_base: url::Url,
-}
-
-impl Default for YouTubeProviderConfig {
-    fn default() -> Self {
-        Self {
-            api_base: url::Url::parse("https://www.googleapis.com/youtube/v3/").unwrap(),
-        }
-    }
-}
-
 pub struct YouTubeProvider {
-    config: YouTubeProviderConfig,
     patterns: Vec<Regex>,
 }
 
 impl YouTubeProvider {
-    pub fn new(config: YouTubeProviderConfig) -> Self {
+    pub fn new() -> Self {
         Self {
-            config,
             patterns: vec![
                 // https://(www.|m.)youtube.com/watch?v=<id>[...][&t=... or &start=...]
                 Regex::new(
@@ -100,9 +85,12 @@ impl Provider for YouTubeProvider {
             .await
             .map_err(|e| ApiError::new(502, &format!("Failed to acquire Youtube token: {e}")))?;
 
+        let youtube_base = std::env::var("YOUTUBE_API_BASE_URL")
+            .unwrap_or_else(|_| "https://www.googleapis.com/youtube/v3".to_string());
+
         let url = format!(
-            "{}videos?part=snippet&id={}",
-            self.config.api_base, matched.content_id
+            "{}/videos?part=snippet&id={}",
+            youtube_base, matched.content_id
         );
 
         let mut headers = HeaderMap::new();
@@ -120,7 +108,6 @@ impl Provider for YouTubeProvider {
             .map_err(|e| ApiError::new(502, &format!("YouTube API error: {e}")))?;
 
         if !response.status().is_success() {
-            tracing::warn!("full YouTube API response: {:?}", response);
             return Err(ApiError::new(
                 response.status().as_u16(),
                 "YouTube API returned non-success",
