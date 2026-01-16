@@ -139,6 +139,7 @@ pub mod arepl {
             mod_menu -> Nullable<Varchar>,
             priority -> Nullable<Bool>,
             private_reviewer_notes -> Nullable<Text>,
+            locked -> Nullable<Bool>,
             completion_time -> Nullable<Int8>,
         }
     }
@@ -165,6 +166,7 @@ pub mod arepl {
             updated_at -> Timestamptz,
             completion_time -> Int8,
             private_reviewer_notes -> Nullable<Text>,
+            locked -> Bool,
         }
     }
 

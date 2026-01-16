@@ -201,6 +201,8 @@ diesel::table! {
         reviewer_notes -> Nullable<Varchar>,
         private_reviewer_notes -> Nullable<Varchar>,
         user_notes -> Nullable<Varchar>,
+
+        locked -> Bool,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
         status -> SubmissionStatus,

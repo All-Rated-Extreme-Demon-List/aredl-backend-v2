@@ -62,6 +62,8 @@ pub struct SubmissionPatchMod {
     pub reviewer_notes: Option<String>,
     /// [MOD ONLY] Private notes given by the reviewer when reviewing the record.
     pub private_reviewer_notes: Option<String>,
+    /// [MOD ONLY] Whether or not this submission has been locked by a staff member
+    pub locked: Option<bool>,
     /// Any additional notes left by the submitter.
     pub user_notes: Option<String>,
 }
@@ -171,7 +173,7 @@ impl SubmissionPatchUser {
             ));
         }
 
-        let old_submission = submissions::table
+        let old_submission: Submission = submissions::table
             .filter(submissions::id.eq(id))
             .select(Submission::as_select())
             .first::<Submission>(conn)?;
@@ -180,6 +182,13 @@ impl SubmissionPatchUser {
             return Err(ApiError::new(
                 403,
                 "You can only edit your own submissions.",
+            ));
+        }
+
+        if old_submission.locked {
+            return Err(ApiError::new(
+                403,
+                "This submission has been locked and cannot be edited",
             ));
         }
 
@@ -263,7 +272,7 @@ impl SubmissionPatchMod {
             )?);
         }
 
-        let old_submission = submissions::table
+        let old_submission: Submission = submissions::table
             .filter(submissions::id.eq(id))
             .select(Submission::as_select())
             .first::<Submission>(conn)?;

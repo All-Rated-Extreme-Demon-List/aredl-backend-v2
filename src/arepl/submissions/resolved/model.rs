@@ -110,6 +110,7 @@ impl SubmissionResolved {
             priority: submission.priority,
             reviewer_notes: submission.reviewer_notes,
             private_reviewer_notes: submission.private_reviewer_notes,
+            locked: submission.locked,
             user_notes: submission.user_notes,
             created_at: submission.created_at,
             updated_at: submission.updated_at,

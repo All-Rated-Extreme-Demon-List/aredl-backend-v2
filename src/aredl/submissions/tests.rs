@@ -970,6 +970,56 @@ async fn submission_under_consideration() {
 }
 
 #[actix_web::test]
+async fn cannot_edit_after_submission_locked() {
+    let (app, db, auth, _) = init_test_app().await;
+
+    let (user_id, _) = create_test_user(&db, None).await;
+    let (moderator_id, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
+    let user_token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let moderator_token =
+        create_test_token(moderator_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let level_id = create_test_level(&db).await;
+
+    let submission: Uuid = create_test_submission(level_id, user_id, &db).await;
+
+    let locked_data = json!({"locked": true,});
+
+    let lock_req = test::TestRequest::patch()
+        .uri(format!("/aredl/submissions/{submission}").as_str())
+        .insert_header(("Authorization", format!("Bearer {}", moderator_token)))
+        .set_json(&locked_data)
+        .to_request();
+
+    let resp = test::call_service(&app, lock_req).await;
+    assert!(
+        resp.status().is_success(),
+        "status of req is {}",
+        resp.status()
+    );
+
+    let edit_data = json!({"video_url": "https://youtube.com/watch?v=11111111111",});
+
+    let edit_req = test::TestRequest::patch()
+        .uri(format!("/aredl/submissions/{submission}").as_str())
+        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .set_json(&edit_data)
+        .to_request();
+
+    let resp = test::call_service(&app, edit_req).await;
+    assert!(
+        resp.status().is_client_error(),
+        "status of req is {}",
+        resp.status()
+    );
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert_eq!(
+        body["message"],
+        "This submission has been locked and cannot be edited"
+    );
+}
+
+#[actix_web::test]
 async fn increment_shift() {
     let (app, db, auth, _) = init_test_app().await;
     let (submitter_id, _) = create_test_user(&db, None).await;

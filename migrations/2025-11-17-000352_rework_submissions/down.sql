@@ -48,7 +48,8 @@ ALTER TABLE aredl.submission_history
     DROP COLUMN raw_url,
     DROP COLUMN mod_menu,
     DROP COLUMN priority,
-    DROP COLUMN private_reviewer_notes;
+    DROP COLUMN private_reviewer_notes,
+    DROP COLUMN locked;
 
 ALTER TABLE arepl.submission_history
     DROP COLUMN mobile,
@@ -58,13 +59,16 @@ ALTER TABLE arepl.submission_history
     DROP COLUMN mod_menu,
     DROP COLUMN priority,
     DROP COLUMN completion_time,
-    DROP COLUMN private_reviewer_notes;
+    DROP COLUMN private_reviewer_notes,
+    DROP COLUMN locked;
 
 ALTER TABLE aredl.submissions
-    DROP COLUMN private_reviewer_notes;
+    DROP COLUMN private_reviewer_notes,
+    DROP COLUMN locked;
 
 ALTER TABLE arepl.submissions
-    DROP COLUMN private_reviewer_notes;
+    DROP COLUMN private_reviewer_notes,
+    DROP COLUMN locked;
 
 
 ALTER TABLE aredl.records

@@ -57,6 +57,8 @@ pub struct Submission {
     pub user_notes: Option<String>,
     /// Private notes given by the reviewer when reviewing the record.
     pub private_reviewer_notes: Option<String>,
+    /// Whether or not this submission has been locked by a staff member
+    pub locked: bool,
     /// Timestamp of when the submission was created.
     pub created_at: DateTime<Utc>,
     /// Timestamp of when the submission was last updated.
@@ -94,6 +96,8 @@ pub struct SubmissionWithPriority {
     pub private_reviewer_notes: Option<String>,
     /// Any additional notes left by the submitter.
     pub user_notes: Option<String>,
+    /// Whether or not this submission has been locked by a staff member
+    pub locked: bool,
     /// Timestamp of when the submission was created.
     pub created_at: DateTime<Utc>,
     /// Timestamp of when the submission was last updated.
@@ -134,6 +138,8 @@ pub struct SubmissionResolved {
     pub reviewer_notes: Option<String>,
     /// Any additional notes left by the submitter.
     pub user_notes: Option<String>,
+    /// Whether or not this submission has been locked by a staff member
+    pub locked: bool,
     /// Timestamp of when the submission was created.
     pub created_at: DateTime<Utc>,
     /// Timestamp of when the submission was last updated.

@@ -147,6 +147,7 @@ pub mod aredl {
             mod_menu -> Nullable<Varchar>,
             priority -> Nullable<Bool>,
             private_reviewer_notes -> Nullable<Text>,
+            locked -> Nullable<Bool>,
         }
     }
 
@@ -171,6 +172,7 @@ pub mod aredl {
             mod_menu -> Nullable<Varchar>,
             updated_at -> Timestamptz,
             private_reviewer_notes -> Nullable<Text>,
+            locked -> Bool,
         }
     }
 
