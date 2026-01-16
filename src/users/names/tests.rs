@@ -1,8 +1,8 @@
 #[cfg(test)]
 use {
     crate::{
-        roles::test_utils::create_test_role_with_user, schema::roles, test_utils::init_test_app,
-        users::names::RoleResolved,
+        roles::test_utils::create_test_role_with_user, roles::RoleResolved, schema::roles,
+        test_utils::init_test_app,
     },
     actix_web::{self, test},
     diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},

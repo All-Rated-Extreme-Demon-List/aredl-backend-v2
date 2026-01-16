@@ -1,7 +1,12 @@
 use crate::error_handler::ApiError;
-use crate::schema::roles;
+use crate::schema::{roles, user_roles, users};
+use crate::users::BaseUser;
 use crate::{app_data::db::DbConnection, auth::Authenticated};
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
+use diesel::{
+    ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl,
+    SelectableHelper,
+};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -42,6 +47,14 @@ pub struct RoleUpdate {
     pub hide: Option<bool>,
 }
 
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct RoleResolved {
+    #[serde(flatten)]
+    pub role: Role,
+    /// Users with this role.
+    pub users: Vec<BaseUser>,
+}
+
 impl Role {
     pub fn user_can_edit(
         conn: &mut DbConnection,
@@ -63,10 +76,6 @@ impl Role {
             })?;
 
         Ok(())
-    }
-    pub fn find_all(conn: &mut DbConnection) -> Result<Vec<Self>, ApiError> {
-        let roles = roles::table.load(conn)?;
-        Ok(roles)
     }
 
     pub fn create(
@@ -113,5 +122,40 @@ impl Role {
             .filter(roles::id.eq(id))
             .get_result(conn)?;
         Ok(role)
+    }
+}
+
+impl RoleResolved {
+    pub fn find_all(conn: &mut DbConnection) -> Result<Vec<Self>, ApiError> {
+        let rows: Vec<(Role, Option<BaseUser>)> = roles::table
+            .left_join(user_roles::table.on(user_roles::role_id.eq(roles::id)))
+            .left_join(users::table.on(users::id.nullable().eq(user_roles::user_id.nullable())))
+            .select((Role::as_select(), Option::<BaseUser>::as_select()))
+            .order_by(roles::privilege_level.desc())
+            .load(conn)?;
+
+        let resolved = rows
+            .into_iter()
+            .chunk_by(|(role, _)| role.id)
+            .into_iter()
+            .map(|(_role_id, group)| {
+                let mut role: Option<Role> = None;
+                let mut users_vec = Vec::new();
+
+                for (r, u) in group {
+                    role.get_or_insert(r);
+                    if let Some(u) = u {
+                        users_vec.push(u);
+                    }
+                }
+
+                RoleResolved {
+                    role: role.expect("group always has at least one row"),
+                    users: users_vec,
+                }
+            })
+            .collect_vec();
+
+        Ok(resolved)
     }
 }

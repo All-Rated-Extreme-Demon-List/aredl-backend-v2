@@ -1,7 +1,7 @@
 use crate::app_data::db::DbAppState;
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::error_handler::ApiError;
-use crate::roles::{users, Role, RoleCreate, RoleUpdate};
+use crate::roles::{users, Role, RoleCreate, RoleResolved, RoleUpdate};
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
@@ -10,15 +10,15 @@ use utoipa::OpenApi;
 #[utoipa::path(
 	get,
 	summary = "List roles",
-	description = "Get the list of all roles and their base information",
+	description = "Get the list of all roles and their users",
 	tag = "Roles",
 	responses(
-		(status = 200, body = [Role])
+		(status = 200, body = [RoleResolved])
 	),
 )]
 #[get("")]
 async fn find_all(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
-    let roles = web::block(move || Role::find_all(&mut db.connection()?)).await??;
+    let roles = web::block(move || RoleResolved::find_all(&mut db.connection()?)).await??;
     Ok(HttpResponse::Ok().json(roles))
 }
 
