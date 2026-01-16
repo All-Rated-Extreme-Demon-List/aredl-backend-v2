@@ -1,4 +1,5 @@
 use crate::app_data::db::DbConnection;
+use crate::auth::Authenticated;
 use crate::clans::Clan;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
@@ -338,7 +339,12 @@ impl User {
         Ok(updated_user)
     }
 
-    pub fn ban(conn: &mut DbConnection, user_id: Uuid, ban_level: i32) -> Result<User, ApiError> {
+    pub fn ban(
+        conn: &mut DbConnection,
+        authenticated: Authenticated,
+        user_id: Uuid,
+        ban_level: i32,
+    ) -> Result<User, ApiError> {
         let user = diesel::update(users::table.filter(users::id.eq(user_id)))
             .set(users::ban_level.eq(ban_level))
             .returning(Self::as_select())
@@ -353,6 +359,7 @@ impl User {
             )
             .set((
                 submissions::status.eq(SubmissionStatus::Denied),
+                submissions::reviewer_id.eq(Some(authenticated.user_id)),
                 submissions::reviewer_notes.eq("This player has been list banned."),
             ))
             .execute(conn)?;
@@ -365,6 +372,7 @@ impl User {
             )
             .set((
                 plat_submissions::status.eq(PlatSubmissionStatus::Denied),
+                plat_submissions::reviewer_id.eq(Some(authenticated.user_id)),
                 plat_submissions::reviewer_notes.eq("This player has been list banned."),
             ))
             .execute(conn)?;

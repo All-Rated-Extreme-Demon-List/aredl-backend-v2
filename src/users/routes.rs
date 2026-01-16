@@ -1,5 +1,5 @@
 use crate::app_data::db::DbAppState;
-use crate::auth::{check_higher_privilege_user, Authenticated, Permission, UserAuth};
+use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::users::{
@@ -124,7 +124,7 @@ async fn update(
     root_span.record("body", &tracing::field::debug(&user));
     let result = web::block(move || {
         let conn = &mut db.connection()?;
-        check_higher_privilege_user(conn, authenticated.user_id, id.clone())?;
+        authenticated.ensure_has_higher_privilege_than_user(conn, id.clone())?;
         User::update(conn, id.into_inner(), user.into_inner())
     })
     .await??;
@@ -168,8 +168,16 @@ async fn ban(
     root_span.record("body", &tracing::field::debug(&user));
     let result = web::block(move || {
         let conn = &mut db.connection()?;
-        check_higher_privilege_user(conn, authenticated.user_id, id.clone())?;
-        User::ban(conn, id.into_inner(), user.into_inner().ban_level)
+        authenticated.ensure_has_higher_privilege_than_user(conn, id.clone())?;
+        if user.ban_level == 3 {
+            authenticated.ensure_has_permission(conn, Permission::UserRedact)?;
+        }
+        User::ban(
+            conn,
+            authenticated,
+            id.into_inner(),
+            user.into_inner().ban_level,
+        )
     })
     .await??;
 

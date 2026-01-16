@@ -123,7 +123,7 @@ pub fn stats_mod_leaderboard(
 
     let rows = all_rows.into_iter().filter_map(|(stats, user)| {
         if only_active {
-            match permission::check_permission(conn, user.id, Permission::SubmissionReview) {
+            match permission::check_user_permission(conn, user.id, Permission::SubmissionReview) {
                 Ok(true) => Some((stats, user)),
                 _ => None,
             }

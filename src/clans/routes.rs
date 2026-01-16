@@ -1,6 +1,6 @@
+use crate::app_data::db::DbAppState;
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::clans::{members, Clan, ClanCreate, ClanListQueryOptions, ClanPage, ClanUpdate};
-use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::clan_members;
@@ -129,7 +129,7 @@ async fn update(
     let clan_id = id.into_inner();
     let result = web::block(move || {
         let conn = &mut db.connection()?;
-        authenticated.has_clan_permission(conn, clan_id, 2)?;
+        authenticated.ensure_has_clan_permission(conn, clan_id, 2)?;
         Clan::update(conn, clan_id, clan.into_inner())
     })
     .await??;
@@ -165,7 +165,7 @@ async fn delete(
     let result = web::block(move || {
         let conn = &mut db.connection()?;
 
-        authenticated.has_clan_permission(conn, clan_id, 2)?;
+        authenticated.ensure_has_clan_permission(conn, clan_id, 2)?;
         let has_staff_permission = authenticated.has_permission(conn, Permission::ClanModify)?;
 
         let members_count: i64 = clan_members::table

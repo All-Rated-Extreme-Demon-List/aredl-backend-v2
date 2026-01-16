@@ -1,10 +1,10 @@
+use crate::app_data::db::DbAppState;
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::clans::members::ClanMemberResolved;
 use crate::clans::members::{ClanInviteCreate, ClanMemberInvite, ClanMemberUpdate};
 use crate::clans::{
     Clan, ClanCreate, ClanInvite, ClanListQueryOptions, ClanMember, ClanPage, ClanUpdate,
 };
-use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
@@ -131,10 +131,10 @@ async fn delete(
     let clan_id = clan_id.into_inner();
     let result = web::block(move || {
         let conn = &mut db.connection()?;
-        authenticated.has_clan_permission(conn, clan_id, 1)?;
+        authenticated.ensure_has_clan_permission(conn, clan_id, 1)?;
 
         for member_id in members.iter() {
-            authenticated.has_clan_higher_permission(conn, clan_id, *member_id)?;
+            authenticated.ensure_has_clan_higher_permission_than_user(conn, clan_id, *member_id)?;
         }
 
         ClanMember::remove_all(conn, clan_id, members.into_inner())
@@ -174,7 +174,7 @@ async fn invite(
     root_span.record("body", &tracing::field::debug(&user));
     let result = web::block(move || {
         let conn = &mut db.connection()?;
-        authenticated.has_clan_permission(conn, *clan_id, 1)?;
+        authenticated.ensure_has_clan_permission(conn, *clan_id, 1)?;
         let invite = ClanInvite::create(
             conn,
             ClanInviteCreate {
@@ -223,7 +223,7 @@ async fn edit(
     let (clan_id, user_id) = path.into_inner();
     let result = web::block(move || {
         let conn = &mut db.connection()?;
-        authenticated.has_clan_permission(conn, clan_id, 2)?;
+        authenticated.ensure_has_clan_permission(conn, clan_id, 2)?;
         let member = ClanMember::edit_member_role(conn, clan_id, user_id, member.into_inner())?;
         Ok::<ClanMember, ApiError>(member)
     })

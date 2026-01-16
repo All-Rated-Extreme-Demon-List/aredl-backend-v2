@@ -53,7 +53,7 @@ impl Role {
             .first::<Role>(conn)?;
 
         authenticated
-            .has_higher_privilege(conn, target_role.privilege_level)?
+            .has_higher_privilege_than(conn, target_role.privilege_level)?
             .then_some(())
             .ok_or_else(|| {
                 ApiError::new(
@@ -75,7 +75,7 @@ impl Role {
         role: RoleCreate,
     ) -> Result<Self, ApiError> {
         authenticated
-            .has_higher_privilege(conn, role.privilege_level)?
+            .has_higher_privilege_than(conn, role.privilege_level)?
             .then_some(())
             .ok_or_else(|| {
                 ApiError::new(

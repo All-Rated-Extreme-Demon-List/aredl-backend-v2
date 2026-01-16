@@ -69,21 +69,21 @@ fn init_test_db_schema_and_seed() {
             .expect("Failed to run migrations");
 
         let permissions_data = vec![
-            ("plus", 5),
             ("submission_review", 15),
             ("record_modify", 20),
             ("placeholder_create", 25),
             ("user_modify", 25),
-            ("pack_tier_modify", 30),
+            ("pack_tier_modify", 40),
             ("pack_modify", 40),
+            ("user_ban", 45),
+            ("merge_review", 50),
             ("level_modify", 50),
-            ("merge_review", 60),
-            ("clan_modify", 70),
-            ("notifications_subscribe", 75),
-            ("user_ban", 85),
-            ("direct_merge", 90),
-            ("shift_manage", 95),
-            ("role_manage", 100),
+            ("clan_modify", 60),
+            ("notifications_subscribe", 70),
+            ("user_redact", 75),
+            ("direct_merge", 80),
+            ("role_manage", 85),
+            ("shift_manage", 90),
         ];
 
         diesel::insert_into(permissions::table)

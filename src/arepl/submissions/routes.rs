@@ -34,7 +34,7 @@ async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionPostMo
     root_span.record("body", &tracing::field::debug(&body));
     let created = web::block(move || {
         let conn = &mut db.connection()?;
-        authenticated.check_is_banned(conn)?;
+        authenticated.ensure_not_banned(conn)?;
         Submission::create(conn, body.into_inner(), authenticated, providers.as_ref())
     }).await??;
     Ok(HttpResponse::Created().json(created))

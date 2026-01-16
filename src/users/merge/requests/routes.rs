@@ -126,7 +126,7 @@ async fn create(
     let result = web::block(move || {
         let conn = &mut db.connection()?;
 
-        authenticated.check_is_banned(conn)?;
+        authenticated.ensure_not_banned(conn)?;
 
         MergeRequest::upsert(
             conn,

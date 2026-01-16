@@ -121,6 +121,56 @@ async fn ban_user() {
 }
 
 #[actix_web::test]
+async fn redact_user_requires_redact_permission() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let (staff_user_id, _) = create_test_user(&db, Some(Permission::UserBan)).await;
+    let staff_token =
+        create_test_token(staff_user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    let redact_payload = json!({ "ban_level": 3 });
+
+    let req = test::TestRequest::patch()
+        .uri(&format!("/users/{}/ban", user_id))
+        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .set_json(&redact_payload)
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status().as_u16(), 403);
+
+    let ban_level = users::table
+        .filter(users::id.eq(user_id))
+        .select(users::ban_level)
+        .first::<i32>(&mut db.connection().unwrap())
+        .expect("Failed to read user ban_level");
+    assert_ne!(ban_level, 3);
+}
+
+#[actix_web::test]
+async fn redact_user_succeeds_with_redact_permission() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let (staff_user_id, _) = create_test_user(&db, Some(Permission::UserRedact)).await;
+    let staff_token =
+        create_test_token(staff_user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    let redact_payload = json!({ "ban_level": 3 });
+
+    let req = test::TestRequest::patch()
+        .uri(&format!("/users/{}/ban", user_id))
+        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .set_json(&redact_payload)
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+
+    let redacted_user: serde_json::Value = test::read_body_json(resp).await;
+    assert_eq!(redacted_user["ban_level"], 3);
+}
+
+#[actix_web::test]
 async fn find_user() {
     let (app, db, _, _) = init_test_app().await;
     let (user_id, username) = create_test_user(&db, None).await;

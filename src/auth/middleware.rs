@@ -152,7 +152,7 @@ where
 
         match self.required_perm.clone() {
             Some(required_perm) => {
-                let has_permission = permission::check_permission(conn, user_id, required_perm);
+                let has_permission = permission::check_user_permission(conn, user_id, required_perm);
                 match has_permission {
                     Ok(permission) => {
                         if !permission {
