@@ -1,11 +1,13 @@
 #[cfg(test)]
-use crate::{
-    auth::{create_test_token, Permission},
-    test_utils::init_test_app,
-    users::test_utils::create_test_user,
+use {
+    crate::{
+        auth::{create_test_token, Permission},
+        test_utils::init_test_app,
+        users::test_utils::create_test_user,
+    },
+    actix_web::{http::header, test},
+    serde_json::json,
 };
-#[cfg(test)]
-use actix_web::{http::header, test};
 
 #[cfg(test)]
 fn ws_request(path: &str) -> test::TestRequest {
@@ -41,8 +43,6 @@ async fn websocket_success() {
 
 #[actix_web::test]
 async fn notification_broadcast() {
-    use serde_json::json;
-
     let (_app, _conn, _auth, notify_tx) = init_test_app().await;
     let mut rx = notify_tx.subscribe();
 

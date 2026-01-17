@@ -1,12 +1,14 @@
-use crate::aredl::packs::test_utils::create_test_pack_tier;
 #[cfg(test)]
-use crate::auth::{create_test_token, Permission};
-#[cfg(test)]
-use crate::{test_utils::*, users::test_utils::create_test_user};
-#[cfg(test)]
-use actix_web::test;
-#[cfg(test)]
-use serde_json::json;
+use {
+    crate::{
+        aredl::packs::test_utils::create_test_pack_tier,
+        auth::{create_test_token, Permission},
+        test_utils::*,
+        users::test_utils::create_test_user,
+    },
+    actix_web::test::{self, read_body_json},
+    serde_json::json,
+};
 
 #[actix_web::test]
 async fn create_pack_tier() {
@@ -28,7 +30,7 @@ async fn create_pack_tier() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
 
     assert_eq!(
         body["name"].as_str().unwrap(),
@@ -64,7 +66,7 @@ async fn update_pack_tier() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
 
     assert_eq!(
         body["name"].as_str().unwrap(),

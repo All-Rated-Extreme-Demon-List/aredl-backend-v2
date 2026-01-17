@@ -64,7 +64,7 @@ async fn create_submission() {
     let resp = test::call_service(&app, req).await;
 
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(
         body["submitted_by"].as_str().unwrap().to_string(),
         user_id.to_string(),
@@ -95,11 +95,7 @@ async fn submission_without_raw() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert!(
-        resp.status().is_client_error(),
-        "status is {}",
-        resp.status()
-    );
+    assert_error_response(resp, 400, Some("Platformer submissions require raw footage")).await;
 }
 
 #[actix_web::test]
@@ -145,16 +141,8 @@ async fn submission_malformed_url() {
 
     let resp2 = test::call_service(&app, req).await;
 
-    assert!(
-        resp.status().is_client_error(),
-        "response 1 status is {}",
-        resp.status()
-    );
-    assert!(
-        resp2.status().is_client_error(),
-        "response 2 status is {}",
-        resp2.status()
-    );
+    assert_error_response(resp, 400, Some("Invalid completion video URL: Malformed URL")).await;
+    assert_error_response(resp2, 400, Some("Invalid raw footage URL: Malformed URL")).await;
 }
 
 #[actix_web::test]
@@ -203,11 +191,12 @@ async fn submission_edit_no_perms() {
         .to_request();
 
     let resp_edit_other = test::call_service(&app, edit_req_other).await;
-    assert!(
-        resp_edit_other.status().is_client_error(),
-        "status is {}",
-        resp_edit_other.status()
-    );
+    assert_error_response(
+        resp_edit_other,
+        403,
+        Some("You can only edit your own submissions."),
+    )
+    .await;
 
     // edit other submission as mod
     let edit_req_mod = test::TestRequest::patch()
@@ -320,7 +309,7 @@ async fn submission_aredlplus_boost() {
         "Claim request failed: {}",
         claim_resp.status()
     );
-    let body: serde_json::Value = test::read_body_json(claim_resp).await;
+    let body: serde_json::Value = read_body_json(claim_resp).await;
     assert_eq!(body["id"], submission2["id"])
 }
 
@@ -372,11 +361,7 @@ async fn submission_banned_player() {
         .to_request();
 
     let resp_2 = test::call_service(&app, req_2).await;
-    assert!(
-        resp_2.status().is_client_error(),
-        "status of req 2 is {}",
-        resp_2.status()
-    )
+    assert_error_response(resp_2, 403, Some("You have been banned from the list.")).await;
 }
 
 #[actix_web::test]
@@ -399,7 +384,7 @@ async fn patch_submission_banned_submitter() {
         .set_json(&json!({"video_url": "https://www.youtube.com/watch?v=banupdate11"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_client_error());
+    assert_error_response(resp, 403, Some("You have been banned from submitting records.")).await;
 }
 
 #[actix_web::test]
@@ -421,7 +406,12 @@ async fn patch_submission_legacy_level_rejected() {
         .set_json(&json!({"raw_url": "https://www.youtube.com/watch?v=rawupdate11"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_client_error());
+    assert_error_response(
+        resp,
+        400,
+        Some("This level is on the legacy list and is not accepting records!"),
+    )
+    .await;
 }
 
 #[actix_web::test]
@@ -443,7 +433,12 @@ async fn patch_submission_under_review_rejected() {
         .set_json(&json!({"video_url": "https://www.youtube.com/watch?v=reviewed111"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_client_error());
+    assert_error_response(
+        resp,
+        409,
+        Some("This submission is currently being reviewed and cannot be edited."),
+    )
+    .await;
 }
 
 #[actix_web::test]
@@ -467,7 +462,12 @@ async fn patch_resubmission_closed() {
         .set_json(&json!({"video_url": "https://www.youtube.com/watch?v=closed11111"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_client_error());
+    assert_error_response(
+        resp,
+        400,
+        Some("Submissions are currently closed. You can only edit pending submissions."),
+    )
+    .await;
 }
 
 #[actix_web::test]
@@ -485,7 +485,7 @@ async fn patch_submission_mod_invalid_urls() {
         .set_json(&json!({"video_url": "not a url"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_client_error());
+    assert_error_response(resp, 400, Some("Invalid completion video URL: Malformed URL")).await;
 
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission}"))
@@ -493,7 +493,7 @@ async fn patch_submission_mod_invalid_urls() {
         .set_json(&json!({"raw_url": "not a url"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_client_error());
+    assert_error_response(resp, 400, Some("Invalid raw footage URL: Malformed URL")).await;
 }
 
 #[actix_web::test]
@@ -598,7 +598,7 @@ async fn patch_submission_no_changes() {
         .set_json(&json!({}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_client_error());
+    assert_error_response(resp, 400, Some("No changes were provided!")).await;
 }
 
 #[actix_web::test]
@@ -615,7 +615,7 @@ async fn patch_submission_invalid_urls() {
         .set_json(&json!({"video_url":"not a url"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_client_error());
+    assert_error_response(resp, 400, Some("Invalid completion video URL: Malformed URL")).await;
 
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission}"))
@@ -623,7 +623,7 @@ async fn patch_submission_invalid_urls() {
         .set_json(&json!({"raw_url":"not a url"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_client_error());
+    assert_error_response(resp, 400, Some("Invalid raw footage URL: Malformed URL")).await;
 }
 
 #[actix_web::test]
@@ -640,7 +640,7 @@ async fn patch_submission_mod_no_changes() {
         .set_json(&json!({}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_client_error());
+    assert_error_response(resp, 400, Some("No changes were provided!")).await;
 }
 
 #[actix_web::test]
@@ -672,7 +672,12 @@ async fn post_submission_duplicate_level() {
         .set_json(&submission_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_client_error());
+    assert_error_response(
+        resp,
+        409,
+        Some("You already have a submission for this level"),
+    )
+    .await;
 }
 
 #[actix_web::test]
@@ -701,7 +706,12 @@ async fn post_submission_legacy_level_rejected() {
         .set_json(&submission_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_client_error());
+    assert_error_response(
+        resp,
+        400,
+        Some("This level is on the legacy list and is not accepting records."),
+    )
+    .await;
 }
 
 #[actix_web::test]
@@ -724,7 +734,7 @@ async fn post_submission_level_missing() {
         .set_json(&submission_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_client_error());
+    assert_error_response(resp, 404, Some("Could not find this level")).await;
 }
 
 #[actix_web::test]
@@ -750,7 +760,7 @@ async fn post_submission_closed() {
         .set_json(&submission_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_client_error());
+    assert_error_response(resp, 400, Some("Submissions are currently disabled")).await;
 }
 
 #[actix_web::test]
@@ -1015,16 +1025,12 @@ async fn cannot_edit_after_submission_locked() {
         .to_request();
 
     let resp = test::call_service(&app, edit_req).await;
-    assert!(
-        resp.status().is_client_error(),
-        "status of req is {}",
-        resp.status()
-    );
-    let body: serde_json::Value = test::read_body_json(resp).await;
-    assert_eq!(
-        body["message"],
-        "This submission has been locked and cannot be edited"
-    );
+    assert_error_response(
+        resp,
+        403,
+        Some("This submission has been locked and cannot be edited"),
+    )
+    .await;
 }
 
 #[actix_web::test]
@@ -1065,8 +1071,6 @@ async fn increment_shift() {
 
 #[actix_web::test]
 async fn shift_completes() {
-    use diesel::{ExpressionMethods, RunQueryDsl};
-
     let (app, db, auth, _) = init_test_app().await;
     let (submitter_id, _) = create_test_user(&db, None).await;
     let (mod_id, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
@@ -1139,7 +1143,7 @@ async fn reviewer_submission_can_set_reviewer_fields_for_other_users() {
         "status is {}",
         other_resp.status()
     );
-    let other_body: serde_json::Value = test::read_body_json(other_resp).await;
+    let other_body: serde_json::Value = read_body_json(other_resp).await;
 
     let other_submission_id = Uuid::parse_str(other_body["id"].as_str().unwrap())
         .expect("Response missing submission id");
@@ -1183,7 +1187,7 @@ async fn reviewer_submission_can_set_reviewer_fields_for_other_users() {
         "status is {}",
         reviewer_resp.status()
     );
-    let reviewer_body: serde_json::Value = test::read_body_json(reviewer_resp).await;
+    let reviewer_body: serde_json::Value = read_body_json(reviewer_resp).await;
 
     let reviewer_submission_id = Uuid::parse_str(reviewer_body["id"].as_str().unwrap())
         .expect("Response missing reviewer submission id");
@@ -1264,7 +1268,7 @@ async fn accept_submission_triggers_record_timestamp_fetch_from_youtube() {
         "create submission status is {}",
         create_resp.status()
     );
-    let created_body: serde_json::Value = actix_web::test::read_body_json(create_resp).await;
+    let created_body: serde_json::Value = read_body_json(create_resp).await;
     let submission_id = Uuid::parse_str(
         created_body["id"]
             .as_str()

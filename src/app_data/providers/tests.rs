@@ -5,7 +5,7 @@ use {
         providers::{
             context::{GoogleAuthState, ProviderContext, TwitchAuthState},
             init_app_state,
-            list::{medal::MedalProvider, youtube::YouTubeProvider},
+            list::{medal::MedalProvider, twitch::TwitchProvider, youtube::YouTubeProvider},
             test_utils::{
                 clear_google_env, clear_twitch_env, mock_google_token_endpoint,
                 mock_medal_content_endpoint, mock_twitch_token_endpoint,
@@ -508,8 +508,6 @@ async fn medal_fetch_metadata_returns_published_at_from_created_ms() {
 #[actix_web::test]
 #[serial]
 async fn twitch_fetch_metadata_returns_published_at() {
-    use crate::providers::list::twitch::TwitchProvider;
-
     clear_twitch_env();
 
     let server = MockServer::start_async().await;

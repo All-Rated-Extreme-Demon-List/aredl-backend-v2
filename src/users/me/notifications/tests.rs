@@ -1,16 +1,15 @@
 #[cfg(test)]
-use crate::{
-    auth::create_test_token,
-    schema::notifications,
-    test_utils::init_test_app,
-    users::me::notifications::{Notification, NotificationType},
-    users::test_utils::create_test_user,
+use {
+    crate::{
+        auth::create_test_token,
+        schema::notifications,
+        test_utils::init_test_app,
+        users::me::notifications::{Notification, NotificationType},
+        users::test_utils::create_test_user,
+    },
+    actix_web::test::{self, read_body_json},
+    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
 };
-#[cfg(test)]
-use actix_web::test;
-#[cfg(test)]
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
-#[cfg(test)]
 #[actix_web::test]
 async fn list_notifications() {
     let (app, db, auth, _) = init_test_app().await;
@@ -40,7 +39,7 @@ async fn list_notifications() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(body.as_array().unwrap().len(), 2);
 }
 

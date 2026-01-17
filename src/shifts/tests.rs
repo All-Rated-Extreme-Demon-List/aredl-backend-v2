@@ -219,11 +219,6 @@ async fn create_shifts_from_recurring() {
 
 #[actix_web::test]
 async fn create_shifts_no_duplicates() {
-    use crate::schema::shifts;
-    use crate::shifts::recurring::RecurringShift;
-    use chrono::NaiveDate;
-    use diesel::{QueryDsl, RunQueryDsl};
-
     let (_, db, _, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
 
@@ -260,9 +255,6 @@ async fn create_shifts_no_duplicates() {
 
 #[actix_web::test]
 async fn create_shifts_wrong_weekday() {
-    use crate::shifts::recurring::RecurringShift;
-    use chrono::NaiveDate;
-
     let (_, db, _, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
 

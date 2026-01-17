@@ -21,7 +21,7 @@ use {
         schema::arepl::records,
         {test_utils::*, users::test_utils::create_test_user},
     },
-    actix_web::test,
+    actix_web::test::{self, read_body_json},
     chrono::{DateTime, Utc},
     diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
     httpmock::prelude::*,
@@ -56,7 +56,7 @@ async fn create_record() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
 
     assert_eq!(
         body["submitted_by"].as_str().unwrap(),
@@ -89,11 +89,7 @@ async fn create_self_record_fails() {
         .set_json(&record_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(
-        resp.status().is_client_error(),
-        "status is {}",
-        resp.status()
-    );
+    assert_error_response(resp, 400, Some("You cannot create records for yourself")).await;
 }
 
 #[actix_web::test]
@@ -111,7 +107,7 @@ async fn get_record_list() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
 
     let length = body["data"].as_array().unwrap().len();
 
@@ -137,7 +133,7 @@ async fn update_record() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(
         body["video_url"].as_str().unwrap(),
         update_data["video_url"].as_str().unwrap(),
@@ -162,11 +158,7 @@ async fn update_self_record_fails() {
         .set_json(&update_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(
-        resp.status().is_client_error(),
-        "status is {}",
-        resp.status()
-    );
+    assert_error_response(resp, 400, Some("You cannot update records for yourself")).await;
 }
 
 #[actix_web::test]
@@ -186,7 +178,7 @@ async fn get_own_records() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
     assert_ne!(
         body["data"].as_array().unwrap().len(),
         0,
@@ -238,7 +230,7 @@ async fn get_one_record() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(
         body["id"].as_str().unwrap().to_string(),
         record_id.to_string(),
@@ -265,7 +257,7 @@ async fn get_records_mobile_filter() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(body["data"].as_array().unwrap().len(), 1);
     assert_eq!(body["data"][0]["id"], mobile_record.to_string());
 }
@@ -284,7 +276,7 @@ async fn get_records_level_filter() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(body["data"].as_array().unwrap().len(), 1);
     assert_eq!(body["data"][0]["id"], record_one.to_string());
 }
@@ -305,7 +297,7 @@ async fn get_records_submitter_filter() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(body["data"].as_array().unwrap().len(), 1);
     assert_eq!(body["data"][0]["id"], record_one.to_string());
 }
@@ -325,7 +317,7 @@ async fn get_records_sort_oldest_created_at() {
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
 
     let got: Vec<String> = body["data"]
         .as_array()
@@ -354,7 +346,7 @@ async fn get_records_sort_newest_created_at() {
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
 
     let got: Vec<String> = body["data"]
         .as_array()
@@ -383,7 +375,7 @@ async fn get_records_sort_oldest_achieved_at() {
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
 
     let got: Vec<String> = body["data"]
         .as_array()
@@ -412,7 +404,7 @@ async fn get_records_sort_newest_achieved_at() {
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
 
     let got: Vec<String> = body["data"]
         .as_array()
@@ -441,7 +433,7 @@ async fn get_records_sort_oldest_updated_at() {
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
 
     let got: Vec<String> = body["data"]
         .as_array()
@@ -470,7 +462,7 @@ async fn get_records_sort_newest_updated_at() {
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
 
     let got: Vec<String> = body["data"]
         .as_array()
@@ -499,7 +491,7 @@ async fn get_records_sort_shortest_completion_time() {
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
 
     let got: Vec<String> = body["data"]
         .as_array()
@@ -528,7 +520,7 @@ async fn get_records_sort_longest_completion_time() {
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
 
     let got: Vec<String> = body["data"]
         .as_array()
@@ -597,7 +589,7 @@ async fn update_timestamp_endpoint_fetches_youtube_published_at() {
         "create status is {}",
         create_resp.status()
     );
-    let created_body: serde_json::Value = test::read_body_json(create_resp).await;
+    let created_body: serde_json::Value = read_body_json(create_resp).await;
     let record_id = created_body["id"]
         .as_str()
         .expect("created record must have id");
@@ -616,7 +608,7 @@ async fn update_timestamp_endpoint_fetches_youtube_published_at() {
         update_resp.status()
     );
 
-    let updated_body: serde_json::Value = test::read_body_json(update_resp).await;
+    let updated_body: serde_json::Value = read_body_json(update_resp).await;
 
     assert_eq!(yt_mock.calls_async().await, 1);
 

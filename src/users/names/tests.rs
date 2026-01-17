@@ -4,7 +4,7 @@ use {
         roles::test_utils::create_test_role_with_user, roles::RoleResolved, schema::roles,
         test_utils::init_test_app,
     },
-    actix_web::{self, test},
+    actix_web::{self, test::{self, read_body_json}},
     diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
 };
 
@@ -20,7 +20,7 @@ async fn list_names() {
     let res = test::call_service(&app, req).await;
     assert!(res.status().is_success(), "status is {}", res.status());
 
-    let names: Vec<RoleResolved> = actix_web::test::read_body_json(res).await;
+    let names: Vec<RoleResolved> = read_body_json(res).await;
 
     assert_eq!(names.len(), 2, "Expected 2 entries, found {}", names.len());
     let returned_role_ids: Vec<i32> = names.iter().map(|r| r.role.id).collect();
@@ -66,7 +66,7 @@ async fn list_names_excludes_hidden_roles() {
     let res = test::call_service(&app, req).await;
     assert!(res.status().is_success(), "status is {}", res.status());
 
-    let names: Vec<RoleResolved> = actix_web::test::read_body_json(res).await;
+    let names: Vec<RoleResolved> = read_body_json(res).await;
 
     assert_eq!(names.len(), 1, "Expected 1 entry, found {}", names.len());
     assert_eq!(names[0].role.id, visible_role_id);

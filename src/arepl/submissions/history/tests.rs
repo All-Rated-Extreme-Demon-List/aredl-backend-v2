@@ -1,18 +1,17 @@
 #[cfg(test)]
-use crate::{
-    arepl::{
-        levels::test_utils::create_test_level, submissions::test_utils::create_test_submission,
+use {
+    crate::{
+        arepl::{
+            levels::test_utils::create_test_level, submissions::test_utils::create_test_submission,
+        },
+        auth::{create_test_token, Permission},
+        test_utils::*,
+        users::test_utils::create_test_user,
     },
-    auth::{create_test_token, Permission},
-    test_utils::*,
-    users::test_utils::create_test_user,
+    actix_web::test::{self, read_body_json},
+    serde_json::json,
+    uuid::Uuid,
 };
-#[cfg(test)]
-use actix_web::test;
-#[cfg(test)]
-use serde_json::json;
-#[cfg(test)]
-use uuid::Uuid;
 
 #[actix_web::test]
 async fn get_submission_history() {
@@ -55,7 +54,7 @@ async fn get_submission_history() {
         res.status()
     );
 
-    let body: serde_json::Value = test::read_body_json(res).await;
+    let body: serde_json::Value = read_body_json(res).await;
 
     let arr = body.as_array().unwrap();
     assert_eq!(arr.len(), 2);
@@ -132,7 +131,7 @@ async fn get_full_submission_history() {
         res.status()
     );
 
-    let record_data: serde_json::Value = test::read_body_json(res).await;
+    let record_data: serde_json::Value = read_body_json(res).await;
     let submission_id = record_data["id"].as_str().unwrap().to_string();
 
     let req = test::TestRequest::get()
@@ -147,7 +146,7 @@ async fn get_full_submission_history() {
         res.status()
     );
 
-    let body: serde_json::Value = test::read_body_json(res).await;
+    let body: serde_json::Value = read_body_json(res).await;
 
     let arr = body.as_array().unwrap();
 

@@ -231,7 +231,7 @@ impl Submission {
                     if pos <= 400 && inserted_submission.raw_url.is_none() {
                         return Err(ApiError::new(
                             400,
-                            "This level is top 400 and requires raw footage",
+                            "Platformer submissions require raw footage",
                         ));
                     }
                 }

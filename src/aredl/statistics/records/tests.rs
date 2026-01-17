@@ -1,16 +1,18 @@
 #[cfg(test)]
-use crate::{
-    aredl::{
-        levels::test_utils::create_test_level_with_record, records::test_utils::create_test_record,
-        statistics::records::ResolvedLevelTotalRecordsRow,
+use {
+    crate::{
+        aredl::{
+            levels::test_utils::create_test_level_with_record,
+            records::test_utils::create_test_record,
+            statistics::records::ResolvedLevelTotalRecordsRow,
+        },
+        auth::create_test_token,
+        test_utils::init_test_app,
+        users::test_utils::create_test_user,
     },
-    auth::create_test_token,
-    test_utils::init_test_app,
-    users::test_utils::create_test_user,
+    actix_web::{http::header, test::{self, read_body_json}},
+    diesel::{sql_query, RunQueryDsl},
 };
-use actix_web::http::header;
-use actix_web::test::{self, TestRequest};
-use diesel::{sql_query, RunQueryDsl};
 
 #[actix_web::test]
 async fn total_records_counts_and_ordering() {
@@ -30,14 +32,14 @@ async fn total_records_counts_and_ordering() {
         .execute(&mut db.connection().unwrap())
         .unwrap();
 
-    let req = TestRequest::get()
+    let req = test::TestRequest::get()
         .uri("/aredl/statistics/records")
         .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let arr: Vec<ResolvedLevelTotalRecordsRow> = test::read_body_json(resp).await;
+    let arr: Vec<ResolvedLevelTotalRecordsRow> = read_body_json(resp).await;
 
     assert_eq!(arr.len(), 3);
     assert!(arr[0].level.is_none());

@@ -1,22 +1,19 @@
 #[cfg(test)]
-use crate::{
-    aredl::{levels::test_utils::create_test_level_with_record, records::Record},
-    auth::{create_test_token, Permission},
-    schema::{aredl::records, merge_requests},
-    test_utils::*,
-    users::{
-        merge::requests::test_utils::create_test_merge_req,
-        test_utils::{create_test_placeholder_user, create_test_user},
+use {
+    crate::{
+        aredl::{levels::test_utils::create_test_level_with_record, records::Record},
+        auth::{create_test_token, Permission},
+        schema::{aredl::records, merge_requests},
+        test_utils::*,
+        users::{
+            merge::requests::test_utils::create_test_merge_req,
+            test_utils::{create_test_placeholder_user, create_test_user},
+        },
     },
+    actix_web::test::{self, read_body_json},
+    diesel::{dsl::exists, select, ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper},
+    serde_json::json,
 };
-#[cfg(test)]
-use actix_web::test::read_body_json;
-#[cfg(test)]
-use actix_web::{self, test};
-#[cfg(test)]
-use diesel::{dsl::exists, select, ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
-#[cfg(test)]
-use serde_json::json;
 
 #[actix_web::test]
 async fn create_merge_request() {
@@ -40,7 +37,7 @@ async fn create_merge_request() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
 
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
 
     assert_eq!(
         body["secondary_user"].as_str().unwrap().to_string(),
@@ -170,13 +167,7 @@ async fn create_merge_request_rejects_self_merge() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_eq!(resp.status(), 400, "status is {}", resp.status());
-
-    let body: serde_json::Value = test::read_body_json(resp).await;
-    assert_eq!(
-        body["message"].as_str().unwrap(),
-        "You cannot merge your account with itself."
-    );
+    assert_error_response(resp, 400, Some("You cannot merge your account with itself.")).await;
 }
 
 #[actix_web::test]
@@ -198,13 +189,7 @@ async fn create_merge_request_rejects_unknown_user() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_eq!(resp.status(), 404, "status is {}", resp.status());
-
-    let body: serde_json::Value = test::read_body_json(resp).await;
-    assert_eq!(
-        body["message"].as_str().unwrap(),
-        "The secondary user does not exist."
-    );
+    assert_error_response(resp, 404, Some("The secondary user does not exist.")).await;
 }
 
 #[actix_web::test]
@@ -227,13 +212,12 @@ async fn create_merge_request_rejects_non_placeholder_user() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_eq!(resp.status(), 400, "status is {}", resp.status());
-
-    let body: serde_json::Value = test::read_body_json(resp).await;
-    assert_eq!(
-        body["message"].as_str().unwrap(),
-        "You can only submit merge requests for placeholder users. To merge your account with a user that is already linked to another discord account, please make a support post on our discord server."
-    );
+    assert_error_response(
+        resp,
+        400,
+        Some("You can only submit merge requests for placeholder users. To merge your account with a user that is already linked to another discord account, please make a support post on our discord server."),
+    )
+    .await;
 }
 
 #[actix_web::test]
@@ -258,13 +242,12 @@ async fn create_merge_request_rejects_duplicate_submission() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_eq!(resp.status(), 409, "status is {}", resp.status());
-
-    let body: serde_json::Value = test::read_body_json(resp).await;
-    assert_eq!(
-        body["message"].as_str().unwrap(),
-        "You already submitted a merge request for your account. Please wait until it's either accepted or denied before submitting a new one."
-    );
+    assert_error_response(
+        resp,
+        409,
+        Some("You already submitted a merge request for your account. Please wait until it's either accepted or denied before submitting a new one."),
+    )
+    .await;
 }
 
 #[actix_web::test]

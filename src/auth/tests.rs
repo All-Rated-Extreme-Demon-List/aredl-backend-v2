@@ -2,10 +2,16 @@
 use {
     crate::{
         auth::{create_test_token, token},
+        schema::{
+            oauth_requests,
+            users::dsl::{access_valid_after, id as user_id_col, users},
+        },
         test_utils::init_test_app,
         users::test_utils::create_test_user,
     },
-    actix_web::{http::header, test},
+    actix_web::{http::header, test::{self, read_body_json}},
+    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
+    httpmock::prelude::*,
     serial_test::serial,
 };
 
@@ -59,7 +65,7 @@ async fn discord_refresh_returns_new_token() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
     assert!(body.get("access_token").is_some());
     assert!(body.get("refresh_token").is_none());
 }
@@ -87,7 +93,7 @@ async fn discord_refresh_returns_both_tokens_when_about_to_expire() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
 
     assert!(body.get("access_token").is_some());
     assert!(body.get("refresh_token").is_some());
@@ -196,7 +202,7 @@ async fn create_api_key_generates_token() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
     let api_key = body["api_key"].as_str().unwrap();
 
     let claims = token::decode_token(api_key, &auth.jwt_decoding_key, &["access"]).unwrap();
@@ -210,9 +216,6 @@ async fn logout_all_updates_timestamp() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, None).await;
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
-
-    use crate::schema::users::dsl::{access_valid_after, id as user_id_col, users};
-    use diesel::prelude::*;
 
     let before: chrono::DateTime<chrono::Utc> = users
         .filter(user_id_col.eq(user_id))
@@ -239,10 +242,6 @@ async fn logout_all_updates_timestamp() {
 #[actix_web::test]
 #[serial]
 async fn discord_callback_returns_auth() {
-    use crate::schema::oauth_requests;
-    use diesel::prelude::*;
-    use httpmock::prelude::*;
-
     let server = MockServer::start_async().await;
 
     server
@@ -297,7 +296,7 @@ async fn discord_callback_returns_auth() {
 
     assert!(resp.status().is_success());
 
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
     assert!(body.get("access_token").is_some());
     assert!(body.get("refresh_token").is_some());
     assert_eq!(body["discord_id"], "123");
@@ -307,10 +306,6 @@ async fn discord_callback_returns_auth() {
 #[actix_web::test]
 #[serial]
 async fn discord_callback_with_callback_url_redirects() {
-    use crate::schema::oauth_requests;
-    use diesel::prelude::*;
-    use httpmock::prelude::*;
-
     let server = MockServer::start_async().await;
 
     server
@@ -376,9 +371,6 @@ async fn discord_callback_with_callback_url_redirects() {
 
 #[actix_web::test]
 async fn discord_callback_fails_with_invalid_state() {
-    use crate::schema::oauth_requests;
-    use diesel::prelude::*;
-
     let (app, db, _, _) = init_test_app().await;
 
     diesel::insert_into(oauth_requests::table)

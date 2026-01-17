@@ -1,14 +1,14 @@
-use crate::aredl::changelog::test_utils::insert_history_entry;
 #[cfg(test)]
-use crate::{aredl::levels::test_utils::create_test_level, schema::aredl::levels, test_utils::*};
-
-#[cfg(test)]
-use actix_web::test;
-#[cfg(test)]
-use diesel::query_dsl::methods::FilterDsl;
-#[cfg(test)]
-use diesel::ExpressionMethods;
-use diesel::RunQueryDsl;
+use {
+    crate::{
+        aredl::changelog::test_utils::insert_history_entry,
+        aredl::levels::test_utils::create_test_level,
+        schema::aredl::levels,
+        test_utils::*,
+    },
+    actix_web::test::{self, read_body_json},
+    diesel::{query_dsl::methods::FilterDsl, ExpressionMethods, RunQueryDsl},
+};
 #[actix_web::test]
 async fn get_changelog() {
     let (app, _, _, _) = init_test_app().await;
@@ -64,7 +64,7 @@ async fn changelog_actions_and_pagination() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
     let data = body["data"].as_array().unwrap();
     assert!(data.len() >= 9);
     let mut kinds = Vec::new();
@@ -95,6 +95,6 @@ async fn changelog_actions_and_pagination() {
         .uri("/aredl/changelog?per_page=5&page=2")
         .to_request();
     let resp = test::call_service(&app, req).await;
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(body["page"], 2);
 }

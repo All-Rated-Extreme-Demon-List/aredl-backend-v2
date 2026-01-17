@@ -1,16 +1,16 @@
 #[cfg(test)]
-use crate::aredl::leaderboard::test_utils::refresh_test_leaderboards;
-use crate::aredl::levels::test_utils::create_test_level_with_record;
-#[cfg(test)]
-use crate::schema::{aredl::levels, clan_members, clans, users};
-#[cfg(test)]
-use crate::{test_utils::*, users::test_utils::create_test_user};
-#[cfg(test)]
-use actix_web::test::{self, read_body_json};
-#[cfg(test)]
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
-#[cfg(test)]
-use uuid::Uuid;
+use {
+    crate::{
+        aredl::leaderboard::test_utils::refresh_test_leaderboards,
+        aredl::levels::test_utils::create_test_level_with_record,
+        schema::{aredl::levels, clan_members, clans, users},
+        test_utils::*,
+        users::test_utils::create_test_user,
+    },
+    actix_web::test::{self, read_body_json},
+    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
+    uuid::Uuid,
+};
 
 #[actix_web::test]
 async fn get_leaderboard() {

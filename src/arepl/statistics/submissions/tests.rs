@@ -13,7 +13,7 @@ use {
     },
     actix_web::{
         http::header,
-        test::{self, TestRequest},
+        test::{self, read_body_json, TestRequest},
     },
     diesel::{sql_query, ExpressionMethods, QueryDsl, RunQueryDsl},
 };
@@ -49,7 +49,7 @@ async fn total_submissions_counts_ordering_and_percent_unique_pairs() {
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let arr: Vec<ResolvedQueueLevelSubmissionsRow> = test::read_body_json(resp).await;
+    let arr: Vec<ResolvedQueueLevelSubmissionsRow> = read_body_json(resp).await;
 
     assert_eq!(arr.len(), 3);
 
@@ -97,7 +97,7 @@ async fn total_submissions_ignores_non_pending_unique_pairs() {
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let arr: Vec<ResolvedQueueLevelSubmissionsRow> = test::read_body_json(resp).await;
+    let arr: Vec<ResolvedQueueLevelSubmissionsRow> = read_body_json(resp).await;
 
     assert_eq!(arr.len(), 2);
 

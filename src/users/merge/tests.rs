@@ -1,22 +1,19 @@
 #[cfg(test)]
-use crate::{
-    aredl::{levels::test_utils::create_test_level_with_record, records::Record},
-    auth::{create_test_token, Permission},
-    schema::aredl::records,
-    test_utils::*,
-    users::{
-        merge::test_utils::create_test_merge_log,
-        test_utils::{create_test_placeholder_user, create_test_user},
+use {
+    crate::{
+        aredl::{levels::test_utils::create_test_level_with_record, records::Record},
+        auth::{create_test_token, Permission},
+        schema::aredl::records,
+        test_utils::*,
+        users::{
+            merge::test_utils::create_test_merge_log,
+            test_utils::{create_test_placeholder_user, create_test_user},
+        },
     },
+    actix_web::test::{self, read_body_json},
+    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper},
+    serde_json::json,
 };
-#[cfg(test)]
-use actix_web::test::read_body_json;
-#[cfg(test)]
-use actix_web::{self, test};
-#[cfg(test)]
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
-#[cfg(test)]
-use serde_json::json;
 
 #[actix_web::test]
 async fn direct_merge() {

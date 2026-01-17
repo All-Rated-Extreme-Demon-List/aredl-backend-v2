@@ -1,15 +1,23 @@
-use crate::aredl::levels::test_utils::create_test_level;
-use crate::aredl::statistics::submissions::daily::ResolvedLeaderboardRow;
-use crate::aredl::submissions::test_utils::{create_test_submission, insert_history_entry};
-use crate::aredl::submissions::SubmissionStatus;
-use crate::auth::{create_test_token, Permission};
-use crate::test_utils::init_test_app;
-use crate::users::test_utils::create_test_user;
-use actix_web::http::header;
-use actix_web::test::{self, TestRequest};
-use diesel::{sql_query, RunQueryDsl};
-use serde_json::Value;
-use uuid::Uuid;
+#[cfg(test)]
+use {
+    crate::{
+        aredl::{
+            levels::test_utils::create_test_level,
+            statistics::submissions::daily::ResolvedLeaderboardRow,
+            submissions::{
+                test_utils::{create_test_submission, insert_history_entry},
+                SubmissionStatus,
+            },
+        },
+        auth::{create_test_token, Permission},
+        test_utils::init_test_app,
+        users::test_utils::create_test_user,
+    },
+    actix_web::{http::header, test::{self, read_body_json}},
+    diesel::{sql_query, RunQueryDsl},
+    serde_json::Value,
+    uuid::Uuid,
+};
 
 #[actix_web::test]
 async fn submission_stats_filter_moderator() {
@@ -31,14 +39,14 @@ async fn submission_stats_filter_moderator() {
         "/aredl/statistics/submissions/daily?reviewer_id={}&page=1&per_page=10",
         mod_id
     );
-    let req = TestRequest::get()
+    let req = test::TestRequest::get()
         .uri(&uri)
         .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "Status: {}", resp.status());
 
-    let body: Value = test::read_body_json(resp).await;
+    let body: Value = read_body_json(resp).await;
     let entries = body["data"].as_array().expect("`data` should be array");
     assert_eq!(entries.len(), 1, "Entries array length should be 1");
     let entry = &entries[0];
@@ -98,14 +106,14 @@ async fn submission_leaderboard_counts_and_ordering() {
         .execute(&mut db.connection().unwrap())
         .unwrap();
 
-    let req = TestRequest::get()
+    let req = test::TestRequest::get()
         .uri("/aredl/statistics/submissions/daily/leaderboard")
         .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let arr: Vec<ResolvedLeaderboardRow> = test::read_body_json(resp).await;
+    let arr: Vec<ResolvedLeaderboardRow> = read_body_json(resp).await;
 
     assert_eq!(arr.len(), 2);
     assert_eq!(arr[0].moderator.id, mod1);
@@ -133,14 +141,14 @@ async fn submission_leaderboard_only_active_filters_out() {
         .unwrap();
 
     let uri = "/aredl/statistics/submissions/daily/leaderboard?only_active=true";
-    let req = TestRequest::get()
+    let req = test::TestRequest::get()
         .uri(uri)
         .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let arr: Vec<ResolvedLeaderboardRow> = test::read_body_json(resp).await;
+    let arr: Vec<ResolvedLeaderboardRow> = read_body_json(resp).await;
 
     assert_eq!(arr.len(), 1);
     assert_eq!(arr[0].moderator.id, mod_active);
@@ -167,14 +175,14 @@ async fn submission_leaderboard_since_filters_out_future_date() {
         tomorrow
     );
 
-    let req = TestRequest::get()
+    let req = test::TestRequest::get()
         .uri(&uri)
         .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let arr: Vec<ResolvedLeaderboardRow> = test::read_body_json(resp).await;
+    let arr: Vec<ResolvedLeaderboardRow> = read_body_json(resp).await;
     assert_eq!(
         arr.len(),
         0,

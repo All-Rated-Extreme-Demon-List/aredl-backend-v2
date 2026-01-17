@@ -1,14 +1,14 @@
 #[cfg(test)]
-use crate::{
-    auth::{create_test_token, Permission},
-    roles::{test_utils::create_test_role, Role},
-    test_utils::init_test_app,
-    users::test_utils::{create_test_user, get_permission_privilege_level},
+use {
+    crate::{
+        auth::{create_test_token, Permission},
+        roles::{test_utils::create_test_role, Role},
+        test_utils::{assert_error_response, init_test_app},
+        users::test_utils::{create_test_user, get_permission_privilege_level},
+    },
+    actix_web::test::{self, read_body_json},
+    serde_json::json,
 };
-#[cfg(test)]
-use actix_web::test;
-#[cfg(test)]
-use serde_json::json;
 
 #[actix_web::test]
 async fn list_roles() {
@@ -20,7 +20,7 @@ async fn list_roles() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let roles: Vec<Role> = test::read_body_json(resp).await;
+    let roles: Vec<Role> = read_body_json(resp).await;
     let ids: Vec<i32> = roles.iter().map(|r| r.id).collect();
     assert!(ids.contains(&role1));
     assert!(ids.contains(&role2));
@@ -40,7 +40,7 @@ async fn create_role() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let created: Role = test::read_body_json(resp).await;
+    let created: Role = read_body_json(resp).await;
     assert_eq!(created.role_desc, "Tester", "Role description should match");
 }
 
@@ -59,7 +59,7 @@ async fn update_role() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let updated: Role = test::read_body_json(resp).await;
+    let updated: Role = read_body_json(resp).await;
     assert_eq!(
         updated.role_desc, "Updated",
         "Role description should be updated"
@@ -82,7 +82,7 @@ async fn delete_role() {
 
     let req = test::TestRequest::get().uri("/roles").to_request();
     let resp = test::call_service(&app, req).await;
-    let roles: Vec<Role> = test::read_body_json(resp).await;
+    let roles: Vec<Role> = read_body_json(resp).await;
     assert!(
         !roles.iter().any(|r| r.id == role_id),
         "Role {} should be deleted",
@@ -107,13 +107,12 @@ async fn create_role_fails_when_new_role_has_same_privilege_as_user() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_eq!(resp.status(), 403);
-
-    let body: serde_json::Value = test::read_body_json(resp).await;
-    assert_eq!(
-        body["message"],
-        "You can not create a role with higher permissions than yourself."
-    );
+    assert_error_response(
+        resp,
+        403,
+        Some("You can not create a role with higher permissions than yourself."),
+    )
+    .await;
 }
 
 #[actix_web::test]
@@ -133,13 +132,12 @@ async fn create_role_fails_when_new_role_has_higher_privilege_than_user() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_eq!(resp.status(), 403);
-
-    let body: serde_json::Value = test::read_body_json(resp).await;
-    assert_eq!(
-        body["message"],
-        "You can not create a role with higher permissions than yourself."
-    );
+    assert_error_response(
+        resp,
+        403,
+        Some("You can not create a role with higher permissions than yourself."),
+    )
+    .await;
 }
 
 #[actix_web::test]
@@ -159,13 +157,12 @@ async fn update_role_fails_when_target_role_has_same_privilege_as_user() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_eq!(resp.status(), 403);
-
-    let body: serde_json::Value = test::read_body_json(resp).await;
-    assert_eq!(
-        body["message"],
-        "You do not have sufficient permissions to edit this role."
-    );
+    assert_error_response(
+        resp,
+        403,
+        Some("You do not have sufficient permissions to edit this role."),
+    )
+    .await;
 }
 
 #[actix_web::test]
@@ -184,11 +181,10 @@ async fn delete_role_fails_when_target_role_has_same_privilege_as_user() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_eq!(resp.status(), 403);
-
-    let body: serde_json::Value = test::read_body_json(resp).await;
-    assert_eq!(
-        body["message"],
-        "You do not have sufficient permissions to edit this role."
-    );
+    assert_error_response(
+        resp,
+        403,
+        Some("You do not have sufficient permissions to edit this role."),
+    )
+    .await;
 }

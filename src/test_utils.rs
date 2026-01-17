@@ -16,6 +16,7 @@ use actix_web::{test, web::Data, App};
 
 use actix_web::middleware::NormalizePath;
 use futures_util::future::{ready, LocalBoxFuture, Ready};
+use serde_json::{from_slice, Value};
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tracing_actix_web::TracingLogger;
@@ -150,4 +151,35 @@ pub async fn init_test_app_with_providers(
     .await;
 
     (app, db_app_state, auth_app_state, notify_tx)
+}
+
+pub async fn assert_error_response(
+    resp: ServiceResponse<BoxBody>,
+    expected_status: u16,
+    expected_message: Option<&str>,
+) {
+    let actual_status = resp.status().as_u16();
+    let body_bytes = test::read_body(resp).await;
+    let body_text = String::from_utf8_lossy(&body_bytes).to_string();
+
+    let json_value = from_slice::<Value>(&body_bytes).ok();
+    let message_from_json = json_value
+        .as_ref()
+        .and_then(|v| v.get("message"))
+        .and_then(|v| v.as_str());
+
+    let actual_message = message_from_json.unwrap_or(body_text.as_str());
+
+    assert_eq!(
+        actual_status, expected_status,
+        "Unexpected status. message={}",
+        actual_message
+    );
+
+    if let Some(expected_message) = expected_message {
+        assert_eq!(
+            actual_message, expected_message,
+            "Unexpected error message."
+        );
+    }
 }

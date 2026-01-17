@@ -1,9 +1,9 @@
-use crate::schema::users;
 #[cfg(test)]
-use crate::{test_utils::*, users::test_utils::create_test_user};
-#[cfg(test)]
-use actix_web::test;
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
+use {
+    crate::{schema::users, test_utils::*, users::test_utils::create_test_user},
+    actix_web::test::{self, read_body_json},
+    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
+};
 
 #[actix_web::test]
 async fn get_profile() {
@@ -14,7 +14,7 @@ async fn get_profile() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
 
     assert_eq!(body["id"], user.to_string(), "IDs do not match!");
 }
@@ -35,7 +35,7 @@ async fn get_profile_by_discord_id() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
 
     assert_eq!(body["id"], user.to_string(), "IDs do not match!");
 }

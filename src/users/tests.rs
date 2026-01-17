@@ -1,17 +1,16 @@
-use crate::users::{User, UserUpsert};
 #[cfg(test)]
-use crate::{
-    auth::{create_test_token, Permission},
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper},
-    schema::users,
-    test_utils::init_test_app,
-    users::test_utils::create_test_user,
+use {
+    crate::{
+        auth::{create_test_token, Permission},
+        diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper},
+        schema::users,
+        test_utils::{assert_error_response, init_test_app},
+        users::{test_utils::create_test_user, User, UserUpsert},
+    },
+    actix_web::test::{self, read_body_json},
+    chrono::Utc,
+    serde_json::json,
 };
-#[cfg(test)]
-use actix_web::test;
-use chrono::Utc;
-#[cfg(test)]
-use serde_json::json;
 
 #[actix_web::test]
 async fn create_placeholder_user() {
@@ -34,7 +33,7 @@ async fn create_placeholder_user() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let created_user: serde_json::Value = test::read_body_json(resp).await;
+    let created_user: serde_json::Value = read_body_json(resp).await;
     assert_eq!(created_user["global_name"], "test_placeholder");
 }
 
@@ -60,7 +59,7 @@ async fn update_user_info() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let updated_user: serde_json::Value = test::read_body_json(resp).await;
+    let updated_user: serde_json::Value = read_body_json(resp).await;
     assert_eq!(updated_user["global_name"], "Updated Name");
     assert_eq!(updated_user["description"], "Updated description");
 }
@@ -107,7 +106,7 @@ async fn ban_user() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let banned_user: serde_json::Value = test::read_body_json(resp).await;
+    let banned_user: serde_json::Value = read_body_json(resp).await;
     assert_eq!(banned_user["ban_level"], 2);
 
     let req = test::TestRequest::get()
@@ -116,7 +115,7 @@ async fn ban_user() {
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let users: serde_json::Value = test::read_body_json(resp).await;
+    let users: serde_json::Value = read_body_json(resp).await;
     assert_eq!(users["data"].as_array().unwrap()[0]["ban_level"], 2);
 }
 
@@ -166,7 +165,7 @@ async fn redact_user_succeeds_with_redact_permission() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let redacted_user: serde_json::Value = test::read_body_json(resp).await;
+    let redacted_user: serde_json::Value = read_body_json(resp).await;
     assert_eq!(redacted_user["ban_level"], 3);
 }
 
@@ -182,7 +181,7 @@ async fn find_user() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let user: serde_json::Value = test::read_body_json(resp).await;
+    let user: serde_json::Value = read_body_json(resp).await;
     assert_eq!(user["username"], username);
 }
 
@@ -204,7 +203,7 @@ async fn find_user_by_discord_id() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let user: serde_json::Value = test::read_body_json(resp).await;
+    let user: serde_json::Value = read_body_json(resp).await;
     assert_eq!(user["username"], username);
 }
 
@@ -219,7 +218,7 @@ async fn list_users() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let users: serde_json::Value = test::read_body_json(resp).await;
+    let users: serde_json::Value = read_body_json(resp).await;
     assert!(users["data"].as_array().unwrap().len() >= 2);
 
     let req = test::TestRequest::get()
@@ -229,7 +228,7 @@ async fn list_users() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let users: serde_json::Value = test::read_body_json(resp).await;
+    let users: serde_json::Value = read_body_json(resp).await;
     assert_eq!(users["data"].as_array().unwrap().len(), 1);
     assert_eq!(
         users["data"].as_array().unwrap()[0]["global_name"],
@@ -260,14 +259,19 @@ async fn user_character_limit() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let req = test::TestRequest::post()
+    let req = test::TestRequest::patch()
         .uri("/users/@me")
         .insert_header(("Authorization", format!("Bearer {}", user_token)))
         .set_json(&update_payload)
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_client_error());
+    assert_error_response(
+        resp,
+        400,
+        Some("The display name can at most be 35 characters long."),
+    )
+    .await;
 }
 
 #[actix_web::test]
@@ -281,7 +285,7 @@ async fn list_users_with_filters() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let users: serde_json::Value = test::read_body_json(resp).await;
+    let users: serde_json::Value = read_body_json(resp).await;
     assert!(users["data"]
         .as_array()
         .unwrap()
@@ -293,7 +297,7 @@ async fn list_users_with_filters() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let users: serde_json::Value = test::read_body_json(resp).await;
+    let users: serde_json::Value = read_body_json(resp).await;
     assert_eq!(users["data"].as_array().unwrap().len(), 1);
 }
 
@@ -364,6 +368,6 @@ async fn placeholder_random_username() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let created_user: serde_json::Value = test::read_body_json(resp).await;
+    let created_user: serde_json::Value = read_body_json(resp).await;
     assert_ne!(created_user["username"], "test_placeholder");
 }

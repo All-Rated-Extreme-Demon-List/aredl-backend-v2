@@ -1,20 +1,19 @@
 #[cfg(test)]
-use crate::{
-    arepl::{
-        levels::test_utils::{create_test_level, create_test_level_with_record},
-        packs::test_utils::create_test_pack,
+use {
+    crate::{
+        arepl::{
+            levels::test_utils::{create_test_level, create_test_level_with_record},
+            packs::test_utils::create_test_pack,
+        },
+        auth::{create_test_token, Permission},
+        schema::arepl::{levels_created, pack_levels},
+        test_utils::*,
+        users::test_utils::create_test_user,
     },
-    auth::{create_test_token, Permission},
-    schema::arepl::{levels_created, pack_levels},
+    actix_web::test::{self, read_body_json},
+    diesel::{ExpressionMethods, RunQueryDsl},
+    serde_json::json,
 };
-#[cfg(test)]
-use crate::{test_utils::*, users::test_utils::create_test_user};
-#[cfg(test)]
-use actix_web::test::{self, read_body_json};
-#[cfg(test)]
-use diesel::{ExpressionMethods, RunQueryDsl};
-#[cfg(test)]
-use serde_json::json;
 
 #[actix_web::test]
 async fn create_level() {
@@ -87,7 +86,7 @@ async fn update_level() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
 
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(body["name"].to_string(), update_data["name"].to_string())
 }
 
@@ -101,7 +100,7 @@ async fn find_level() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
 
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(
         level_id.to_string(),
         body["id"].as_str().unwrap().to_string(),

@@ -1,15 +1,17 @@
-use crate::aredl::levels::ldms::test_utils::create_test_ldm;
 #[cfg(test)]
-use crate::{
-    aredl::levels::test_utils::create_test_level,
-    auth::{create_test_token, Permission},
+use {
+    crate::{
+        aredl::{
+            levels::ldms::test_utils::create_test_ldm,
+            levels::test_utils::create_test_level,
+        },
+        auth::{create_test_token, Permission},
+        test_utils::{assert_error_response, init_test_app},
+        users::test_utils::create_test_user,
+    },
+    actix_web::test::{self, read_body_json},
+    serde_json::json,
 };
-#[cfg(test)]
-use crate::{test_utils::*, users::test_utils::create_test_user};
-#[cfg(test)]
-use actix_web::test::{self, read_body_json};
-#[cfg(test)]
-use serde_json::json;
 
 #[actix_web::test]
 async fn create_ldm() {
@@ -146,9 +148,10 @@ async fn ldm_auth() {
         .set_json(&ldm_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(
-        resp.status().is_client_error(),
-        "status is {}",
-        resp.status()
-    );
+    assert_error_response(
+        resp,
+        403,
+        Some("You do not have the required permission (level_modify) to access this endpoint"),
+    )
+    .await;
 }

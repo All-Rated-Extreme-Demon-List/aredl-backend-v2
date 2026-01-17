@@ -152,13 +152,21 @@ where
 
         match self.required_perm.clone() {
             Some(required_perm) => {
-                let has_permission = permission::check_user_permission(conn, user_id, required_perm);
+                let has_permission =
+                    permission::check_user_permission(conn, user_id, required_perm.clone());
                 match has_permission {
                     Ok(permission) => {
                         if !permission {
                             return Self::error_future(
                                 http_req,
-                                ApiError::new(403, "You are not allowed to access this endpoint"),
+                                ApiError::new(
+                                    403,
+                                    format!(
+                                        "You do not have the required permission ({}) to access this endpoint",
+                                        required_perm
+                                    )
+                                    .as_str(),
+                                ),
                             );
                         }
                     }

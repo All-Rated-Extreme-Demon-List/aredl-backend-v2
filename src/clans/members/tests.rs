@@ -1,17 +1,18 @@
 #[cfg(test)]
-use crate::{
-    auth::{create_test_token, Permission},
-    clans::test_utils::{create_test_clan, create_test_clan_member},
-    schema::clan_members,
-    test_utils::init_test_app,
-    users::test_utils::create_test_user,
+use {
+    crate::{
+        auth::{create_test_token, Permission},
+        clans::test_utils::{create_test_clan, create_test_clan_member},
+        schema::clan_members,
+        test_utils::{assert_error_response, init_test_app},
+        users::test_utils::create_test_user,
+    },
+    actix_web::test::{self, read_body_json},
+    chrono::{Duration, Timelike, Utc},
+    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
+    serde_json::json,
+    uuid::Uuid,
 };
-#[cfg(test)]
-use actix_web::test;
-use chrono::{Duration, Timelike, Utc};
-#[cfg(test)]
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
-use uuid::Uuid;
 
 #[actix_web::test]
 async fn add_members() {
@@ -27,7 +28,7 @@ async fn add_members() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let members: Vec<Uuid> = test::read_body_json(resp).await;
+    let members: Vec<Uuid> = read_body_json(resp).await;
     assert!(members.contains(&user_id));
 
     let count: i64 = clan_members::table
@@ -51,7 +52,7 @@ async fn list_members() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let members: serde_json::Value = test::read_body_json(resp).await;
+    let members: serde_json::Value = read_body_json(resp).await;
     assert!(members
         .as_array()
         .unwrap()
@@ -75,7 +76,7 @@ async fn set_members() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let members: Vec<Uuid> = test::read_body_json(resp).await;
+    let members: Vec<Uuid> = read_body_json(resp).await;
     assert_eq!(members.len(), 2);
     assert!(members.contains(&u1));
     assert!(members.contains(&u2));
@@ -99,7 +100,7 @@ async fn set_members_removes_missing_members() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let members: Vec<Uuid> = test::read_body_json(resp).await;
+    let members: Vec<Uuid> = read_body_json(resp).await;
     assert!(!members.contains(&u1));
     assert!(members.contains(&u2));
 
@@ -178,7 +179,7 @@ async fn delete_members() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let remaining: Vec<Uuid> = test::read_body_json(resp).await;
+    let remaining: Vec<Uuid> = read_body_json(resp).await;
     assert!(!remaining.contains(&member_id));
 }
 
@@ -198,12 +199,11 @@ async fn delete_members_unauthorized() {
         .set_json(&vec![owner_id])
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_eq!(resp.status().as_u16(), 403);
+    assert_error_response(resp, 403, None).await;
 }
 
 #[actix_web::test]
 async fn invite_member() {
-    use serde_json::json;
     let (app, db, auth, _) = init_test_app().await;
     let clan_id = create_test_clan(&db).await;
     let (owner_id, _) = create_test_user(&db, None).await;
@@ -218,13 +218,12 @@ async fn invite_member() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let invite: serde_json::Value = test::read_body_json(resp).await;
+    let invite: serde_json::Value = read_body_json(resp).await;
     assert_eq!(invite["user_id"].as_str().unwrap(), user_id.to_string());
 }
 
 #[actix_web::test]
 async fn invite_member_unauthorized() {
-    use serde_json::json;
     let (app, db, auth, _) = init_test_app().await;
     let clan_id = create_test_clan(&db).await;
     let (owner_id, _) = create_test_user(&db, None).await;
@@ -240,12 +239,11 @@ async fn invite_member_unauthorized() {
         .set_json(&json!({"user_id": user_id}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_eq!(resp.status().as_u16(), 403);
+    assert_error_response(resp, 403, None).await;
 }
 
 #[actix_web::test]
 async fn edit_member() {
-    use serde_json::json;
     let (app, db, auth, _) = init_test_app().await;
     let clan_id = create_test_clan(&db).await;
     let (owner_id, _) = create_test_user(&db, None).await;
@@ -261,13 +259,12 @@ async fn edit_member() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let member: serde_json::Value = test::read_body_json(resp).await;
+    let member: serde_json::Value = read_body_json(resp).await;
     assert_eq!(member["role"], 1);
 }
 
 #[actix_web::test]
 async fn edit_member_unauthorized() {
-    use serde_json::json;
     let (app, db, auth, _) = init_test_app().await;
     let clan_id = create_test_clan(&db).await;
     let (owner_id, _) = create_test_user(&db, None).await;
@@ -282,12 +279,11 @@ async fn edit_member_unauthorized() {
         .set_json(&json!({"role": 1}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_eq!(resp.status().as_u16(), 403);
+    assert_error_response(resp, 403, None).await;
 }
 
 #[actix_web::test]
 async fn edit_member_transfer_ownership() {
-    use serde_json::json;
     let (app, db, auth, _) = init_test_app().await;
     let clan_id = create_test_clan(&db).await;
     let (owner_id, _) = create_test_user(&db, None).await;
@@ -303,7 +299,7 @@ async fn edit_member_transfer_ownership() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let member: serde_json::Value = test::read_body_json(resp).await;
+    let member: serde_json::Value = read_body_json(resp).await;
     assert_eq!(member["role"], 2);
 
     let old_owner_role: i32 = clan_members::table
@@ -317,7 +313,6 @@ async fn edit_member_transfer_ownership() {
 
 #[actix_web::test]
 async fn invite_member_already_in_clan() {
-    use serde_json::json;
     let (app, db, auth, _) = init_test_app().await;
     let clan_id = create_test_clan(&db).await;
     let (owner_id, _) = create_test_user(&db, None).await;
@@ -332,5 +327,5 @@ async fn invite_member_already_in_clan() {
         .set_json(&json!({"user_id": user_id}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_client_error());
+    assert_error_response(resp, 400, Some("This user is already in a clan")).await;
 }

@@ -1,7 +1,5 @@
 #[cfg(test)]
-use crate::test_utils::init_test_app;
-#[cfg(test)]
-use actix_web::test;
+use {crate::test_utils::init_test_app, actix_web::test};
 
 #[actix_web::test]
 async fn health_ok() {

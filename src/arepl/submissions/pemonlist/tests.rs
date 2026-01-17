@@ -5,7 +5,7 @@ use {
     crate::auth::create_test_token,
     crate::schema::{arepl::levels, arepl::records, users},
     crate::{test_utils::*, users::test_utils::create_test_user},
-    actix_web::test,
+    actix_web::test::{self, read_body_json},
     diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
     httpmock::prelude::*,
     serde_json::json,
@@ -64,7 +64,7 @@ async fn sync_pemonlist() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(body.as_array().unwrap().len(), 1);
 }
 

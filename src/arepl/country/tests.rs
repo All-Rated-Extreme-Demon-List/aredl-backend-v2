@@ -1,12 +1,14 @@
-use crate::arepl::levels::test_utils::create_test_level_with_record;
 #[cfg(test)]
-use crate::schema::users;
-#[cfg(test)]
-use crate::{test_utils::*, users::test_utils::create_test_user};
-#[cfg(test)]
-use actix_web::test::{self, read_body_json};
-#[cfg(test)]
-use diesel::{ExpressionMethods, RunQueryDsl};
+use {
+    crate::{
+        arepl::levels::test_utils::create_test_level_with_record,
+        schema::users,
+        test_utils::*,
+        users::test_utils::create_test_user,
+    },
+    actix_web::test::{self, read_body_json},
+    diesel::{ExpressionMethods, RunQueryDsl},
+};
 
 #[actix_web::test]
 async fn get_country() {

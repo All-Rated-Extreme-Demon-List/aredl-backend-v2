@@ -42,21 +42,29 @@ async fn resolved_find_one_unauthorized() {
     let submission = create_test_submission(level, user1, &db).await;
 
     let req = test::TestRequest::get()
-        .uri(&format!("/arepl/submissions/resolved/{submission}"))
+        .uri(&format!("/arepl/submissions/{submission}"))
         .insert_header(("Authorization", format!("Bearer {}", token2)))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_client_error());
+    assert_error_response(resp, 404, Some("Record not found")).await;
 }
 
 #[actix_web::test]
 async fn resolved_find_all_requires_auth() {
-    let (app, _, _, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user, _) = create_test_user(&db, None).await;
+    let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::get()
-        .uri("/arepl/submissions/resolved")
+        .uri("/arepl/submissions")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_client_error());
+    assert_error_response(
+        resp,
+        403,
+        Some("You do not have the required permission (submission_review) to access this endpoint"),
+    )
+    .await;
 }
 
 #[actix_web::test]

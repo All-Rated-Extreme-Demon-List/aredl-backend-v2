@@ -1,21 +1,20 @@
 #[cfg(test)]
-use crate::{
-    aredl::levels::test_utils::{
-        create_test_level as create_test_aredl_level,
-        create_test_level_with_record as create_test_aredl_level_with_record,
+use {
+    crate::{
+        aredl::levels::test_utils::{
+            create_test_level as create_test_aredl_level,
+            create_test_level_with_record as create_test_aredl_level_with_record,
+        },
+        arepl::levels::test_utils::create_test_level_with_record,
+        auth::create_test_token,
+        schema::{aredl, arepl, users},
+        test_utils::init_test_app,
+        users::test_utils::create_test_user,
     },
-    arepl::levels::test_utils::create_test_level_with_record,
-    auth::create_test_token,
-    schema::{aredl, arepl, users},
-    test_utils::init_test_app,
-    users::test_utils::create_test_user,
+    actix_web::test::{self, read_body_json},
+    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
+    serde_json::json,
 };
-#[cfg(test)]
-use actix_web::test;
-#[cfg(test)]
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
-#[cfg(test)]
-use serde_json::json;
 
 #[actix_web::test]
 async fn get_authenticated_user() {
@@ -33,7 +32,7 @@ async fn get_authenticated_user() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let user: serde_json::Value = test::read_body_json(resp).await;
+    let user: serde_json::Value = read_body_json(resp).await;
     assert_eq!(user["username"], username);
 }
 
@@ -60,7 +59,7 @@ async fn update_authenticated_user() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let updated_user: serde_json::Value = test::read_body_json(resp).await;
+    let updated_user: serde_json::Value = read_body_json(resp).await;
 
     assert_eq!(updated_user["global_name"], "Updated Name");
     assert_eq!(updated_user["description"], "Updated description");
@@ -75,7 +74,7 @@ async fn update_authenticated_user() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let user: serde_json::Value = test::read_body_json(resp).await;
+    let user: serde_json::Value = read_body_json(resp).await;
     assert_eq!(user["global_name"], "Updated Name");
     assert_eq!(user["description"], "Updated description");
     assert_eq!(user["ban_level"], 1);
@@ -200,7 +199,7 @@ async fn update_background_level_aredl() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let updated: serde_json::Value = test::read_body_json(resp).await;
+    let updated: serde_json::Value = read_body_json(resp).await;
     assert_eq!(updated["background_level"], level_id);
 }
 
@@ -228,7 +227,7 @@ async fn update_background_level_arepl() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let updated: serde_json::Value = test::read_body_json(resp).await;
+    let updated: serde_json::Value = read_body_json(resp).await;
     assert_eq!(updated["background_level"], level_id);
 }
 
@@ -291,6 +290,6 @@ async fn reset_background_level_to_zero() {
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    let updated: serde_json::Value = test::read_body_json(resp).await;
+    let updated: serde_json::Value = read_body_json(resp).await;
     assert!(updated["background_level"] == 0);
 }

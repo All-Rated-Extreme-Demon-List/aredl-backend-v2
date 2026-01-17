@@ -1,16 +1,15 @@
 #[cfg(test)]
-use crate::{
-    auth::{create_test_token, Permission},
-    roles::test_utils::{add_user_to_role, create_test_role},
-    test_utils::init_test_app,
-    users::test_utils::{create_test_user, get_permission_privilege_level},
-    users::BaseUser,
+use {
+    crate::{
+        auth::{create_test_token, Permission},
+        roles::test_utils::{add_user_to_role, create_test_role},
+        test_utils::{assert_error_response, init_test_app},
+        users::test_utils::{create_test_user, get_permission_privilege_level},
+        users::BaseUser,
+    },
+    actix_web::test::{self, read_body_json},
+    uuid::Uuid,
 };
-#[cfg(test)]
-use actix_web::test;
-#[cfg(test)]
-#[cfg(test)]
-use uuid::Uuid;
 
 #[actix_web::test]
 async fn add_role_users() {
@@ -28,7 +27,7 @@ async fn add_role_users() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let users: Vec<BaseUser> = test::read_body_json(resp).await;
+    let users: Vec<BaseUser> = read_body_json(resp).await;
     let ids: Vec<Uuid> = users.iter().map(|u| u.id).collect();
     assert!(ids.contains(&u1) && ids.contains(&u2));
 }
@@ -50,7 +49,7 @@ async fn set_role_users() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let users: Vec<BaseUser> = test::read_body_json(resp).await;
+    let users: Vec<BaseUser> = read_body_json(resp).await;
     assert_eq!(users.len(), 1);
     assert_eq!(users[0].id, u2);
 }
@@ -73,7 +72,7 @@ async fn delete_role_users() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
-    let users: Vec<BaseUser> = test::read_body_json(resp).await;
+    let users: Vec<BaseUser> = read_body_json(resp).await;
     assert_eq!(users.len(), 1);
     assert_eq!(users[0].id, u2);
 }
@@ -97,13 +96,12 @@ async fn add_role_users_fails_when_target_role_has_same_privilege_as_user() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_eq!(resp.status(), 403);
-
-    let body: serde_json::Value = test::read_body_json(resp).await;
-    assert_eq!(
-        body["message"],
-        "You do not have sufficient permissions to edit this role."
-    );
+    assert_error_response(
+        resp,
+        403,
+        Some("You do not have sufficient permissions to edit this role."),
+    )
+    .await;
 }
 
 #[actix_web::test]
@@ -125,13 +123,12 @@ async fn set_role_users_fails_when_target_role_has_same_privilege_as_user() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_eq!(resp.status(), 403);
-
-    let body: serde_json::Value = test::read_body_json(resp).await;
-    assert_eq!(
-        body["message"],
-        "You do not have sufficient permissions to edit this role."
-    );
+    assert_error_response(
+        resp,
+        403,
+        Some("You do not have sufficient permissions to edit this role."),
+    )
+    .await;
 }
 
 #[actix_web::test]
@@ -153,11 +150,10 @@ async fn delete_role_users_fails_when_target_role_has_same_privilege_as_user() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_eq!(resp.status(), 403);
-
-    let body: serde_json::Value = test::read_body_json(resp).await;
-    assert_eq!(
-        body["message"],
-        "You do not have sufficient permissions to edit this role."
-    );
+    assert_error_response(
+        resp,
+        403,
+        Some("You do not have sufficient permissions to edit this role."),
+    )
+    .await;
 }
