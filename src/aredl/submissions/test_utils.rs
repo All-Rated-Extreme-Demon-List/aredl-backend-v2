@@ -52,6 +52,7 @@ pub async fn insert_history_entry(
         user_notes: None,
         private_reviewer_notes: None,
         reviewer_id,
+        locked: Some(false),
     };
     diesel::insert_into(submission_history::table)
         .values(&history)
