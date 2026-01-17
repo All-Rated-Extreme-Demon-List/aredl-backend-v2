@@ -31,6 +31,7 @@ pub struct SubmissionHistory {
     pub reviewer_notes: Option<String>,
     pub private_reviewer_notes: Option<String>,
     pub reviewer_id: Option<Uuid>,
+    pub locked: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -50,6 +51,7 @@ pub struct SubmissionHistoryResolved {
     pub private_reviewer_notes: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reviewer: Option<BaseUser>,
+    pub locked: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -74,6 +76,7 @@ impl SubmissionHistoryResolved {
             mobile: history.mobile,
             ldm_id: history.ldm_id,
             mod_menu: history.mod_menu,
+            locked: history.locked,
         }
     }
 
