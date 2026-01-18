@@ -1233,7 +1233,7 @@ async fn accept_submission_triggers_record_timestamp_fetch_from_youtube() {
     std::env::set_var("YOUTUBE_API_BASE_URL", &server.base_url());
 
     let providers_app_state = Arc::new(VideoProvidersAppState::new(
-        ProviderRegistry::new(vec![Arc::new(YouTubeProvider::new()) as Arc<dyn Provider>]),
+        ProviderRegistry::new(vec![Arc::new(YouTubeProvider) as Arc<dyn Provider>]),
         ProviderContext {
             http: reqwest::Client::new(),
             google_auth: Some(Arc::new(google_auth)),

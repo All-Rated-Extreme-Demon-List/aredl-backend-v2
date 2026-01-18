@@ -7,7 +7,9 @@ use super::{
         mega::MegaProvider, outplayed::OutplayedProvider, twitch::TwitchProvider,
         vimeo::VimeoProvider, youtube::YouTubeProvider,
     },
-    model::{ContentDataLocation, ContentMetadata, Provider, ProviderMatch, ProviderRegistry},
+    model::{
+        ContentDataLocation, ContentMetadata, NormalizedProviderMatch, Provider, ProviderRegistry,
+    },
 };
 use crate::{error_handler::ApiError, providers::context::TwitchAuthState};
 
@@ -23,22 +25,22 @@ impl VideoProvidersAppState {
         Self { registry, context }
     }
 
-    pub fn parse_url(&self, url: &str) -> Result<ProviderMatch, ApiError> {
-        self.registry.match_url(url)
+    pub fn parse_url(&self, url: &str) -> Result<NormalizedProviderMatch, ApiError> {
+        let url = self.validate_is_url(url)?;
+        self.registry.match_url(&url)
     }
 
-    pub fn validate_is_url(&self, url: &str) -> Result<String, ApiError> {
+    pub fn validate_is_url(&self, url: &str) -> Result<Url, ApiError> {
         let input = url.trim();
         if input.chars().any(|char| char.is_whitespace()) {
             return Err(ApiError::new(400, "Malformed URL"));
         }
         let url = Url::parse(input).map_err(|_| ApiError::new(400, "Malformed URL"))?;
-        Ok(url.as_str().into())
+        Ok(url)
     }
 
     // completion video enforces a valid url and an allowed provider
     pub fn validate_completion_video_url(&self, url: &str) -> Result<String, ApiError> {
-        let url = self.validate_is_url(url)?;
         let matched = self.parse_url(&url)?;
         let provider = self
             .registry
@@ -57,11 +59,11 @@ impl VideoProvidersAppState {
 
     // raw footage only enforces a valid url, but if it matches a provider, normalize it
     pub fn validate_raw_footage_url(&self, url: &str) -> Result<String, ApiError> {
-        let url = self.validate_is_url(url)?;
-        let matched = self.parse_url(&url);
+        self.validate_is_url(url)?;
+        let matched = self.parse_url(url);
 
         if matched.is_err() {
-            return Ok(url);
+            return Ok(url.to_string());
         }
 
         Ok(matched.unwrap().normalized_url)
@@ -69,7 +71,7 @@ impl VideoProvidersAppState {
 
     pub async fn get_content_location(
         &self,
-        matched: &ProviderMatch,
+        matched: &NormalizedProviderMatch,
     ) -> Result<Option<ContentDataLocation>, ApiError> {
         let provider = self
             .registry
@@ -80,7 +82,7 @@ impl VideoProvidersAppState {
 
     pub async fn fetch_metadata(
         &self,
-        matched: &ProviderMatch,
+        matched: &NormalizedProviderMatch,
     ) -> Result<Option<ContentMetadata>, ApiError> {
         let provider = self
             .registry
@@ -102,14 +104,14 @@ pub async fn init_app_state() -> Arc<VideoProvidersAppState> {
     };
 
     let registry = ProviderRegistry::new(vec![
-        Arc::new(YouTubeProvider::new()) as Arc<dyn Provider>,
-        Arc::new(TwitchProvider::new()) as Arc<dyn Provider>,
-        Arc::new(VimeoProvider::new()) as Arc<dyn Provider>,
-        Arc::new(MedalProvider::new()) as Arc<dyn Provider>,
-        Arc::new(BiliBiliProvider::new()) as Arc<dyn Provider>,
-        Arc::new(OutplayedProvider::new()) as Arc<dyn Provider>,
-        Arc::new(GoogleDriveProvider::new()) as Arc<dyn Provider>,
-        Arc::new(MegaProvider::new()) as Arc<dyn Provider>,
+        Arc::new(YouTubeProvider) as Arc<dyn Provider>,
+        Arc::new(TwitchProvider) as Arc<dyn Provider>,
+        Arc::new(VimeoProvider) as Arc<dyn Provider>,
+        Arc::new(MedalProvider) as Arc<dyn Provider>,
+        Arc::new(BiliBiliProvider) as Arc<dyn Provider>,
+        Arc::new(OutplayedProvider) as Arc<dyn Provider>,
+        Arc::new(GoogleDriveProvider) as Arc<dyn Provider>,
+        Arc::new(MegaProvider) as Arc<dyn Provider>,
     ]);
 
     Arc::new(VideoProvidersAppState::new(registry, context))

@@ -2,37 +2,16 @@ use async_trait::async_trait;
 use chrono::{DateTime, TimeZone, Utc};
 use regex::Regex;
 use serde_json::Value;
+use url::Url;
 
-use crate::error_handler::ApiError;
+use crate::{error_handler::ApiError, providers::model::ProviderMatch};
 
 use super::super::{
     context::ProviderContext,
-    model::{ContentMetadata, Provider, ProviderId, ProviderMatch, ProviderUsage},
+    model::{ContentMetadata, NormalizedProviderMatch, Provider, ProviderId, ProviderUsage},
 };
 
-pub struct MedalProvider {
-    patterns: Vec<Regex>,
-}
-
-impl MedalProvider {
-    pub fn new() -> Self {
-        Self {
-            patterns: vec![
-                // https://medal.tv/clips/<id>
-                // https://medal.tv/pl/clips/<id>
-                Regex::new(
-                    r"^https?://medal\.tv(?:/[a-z]{2})?/clips/(?P<id>[A-Za-z0-9_-]+)(?:[/?#].*)?$"
-                ).unwrap(),
-
-                // https://medal.tv/games/<game>/clips/<id>
-                // https://medal.tv/pl/games/<game>/clips/<id>
-                Regex::new(
-                    r"^https?://medal\.tv(?:/[a-z]{2})?/games/[A-Za-z0-9_-]+/clips/(?P<id>[A-Za-z0-9_-]+)(?:[/?#].*)?$"
-                ).unwrap(),
-            ],
-        }
-    }
-}
+pub struct MedalProvider;
 
 #[async_trait]
 impl Provider for MedalProvider {
@@ -44,23 +23,62 @@ impl Provider for MedalProvider {
         ProviderUsage::CompletionVideo
     }
 
-    fn patterns(&self) -> &[Regex] {
-        &self.patterns
+    fn hosts(&self) -> &'static [&'static str] {
+        &["medal.tv", "www.medal.tv"]
     }
 
-    fn normalize_url(
-        &self,
-        _raw_url: &str,
-        content_id: &str,
-        _timestamp: Option<&str>,
-        _other_id: Option<&str>,
-    ) -> String {
-        format!("https://medal.tv/clips/{}", content_id)
+    fn match_url(&self, url: &Url) -> Option<ProviderMatch> {
+        // /clips/<id>
+        // /<lang>/clips/<id>
+        // /games/<game>/clips/<id>
+        // /<lang>/games/<game>/clips/<id>
+
+        let path = url.path().trim_matches('/');
+
+        let mut parts = path.split('/');
+
+        let first = parts.next()?;
+        let (_maybe_lang, first) =
+            if first.len() == 2 && first.bytes().all(|b| b.is_ascii_lowercase()) {
+                (Some(first), parts.next()?)
+            } else {
+                (None, first)
+            };
+
+        let content_id = match first {
+            "clips" => parts.next(),
+            "games" => {
+                let _game = parts.next()?;
+                match parts.next()? {
+                    "clips" => parts.next(),
+                    _ => None,
+                }
+            }
+            _ => None,
+        }?;
+
+        if !Regex::new(r"^[A-Za-z0-9_-]{1,128}$")
+            .unwrap()
+            .is_match(content_id)
+        {
+            return None;
+        }
+
+        Some(ProviderMatch {
+            provider: ProviderId::Medal,
+            content_id: content_id.to_string(),
+            timestamp: None,
+            other_id: None,
+        })
+    }
+
+    fn normalize_url(&self, _raw_url: &Url, matched: &ProviderMatch) -> String {
+        format!("https://medal.tv/clips/{}", matched.content_id)
     }
 
     async fn fetch_metadata(
         &self,
-        matched: &ProviderMatch,
+        matched: &NormalizedProviderMatch,
         context: &ProviderContext,
     ) -> Result<Option<ContentMetadata>, ApiError> {
         let medal_base = std::env::var("MEDAL_API_BASE_URL")

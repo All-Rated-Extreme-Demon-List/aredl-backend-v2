@@ -1,23 +1,12 @@
 use async_trait::async_trait;
 use regex::Regex;
+use url::Url;
+
+use crate::providers::model::ProviderMatch;
 
 use super::super::model::{Provider, ProviderId, ProviderUsage};
 
-pub struct BiliBiliProvider {
-    patterns: Vec<Regex>,
-}
-
-impl BiliBiliProvider {
-    pub fn new() -> Self {
-        Self {
-            patterns: vec![
-                // https://bilibili.com/video/<id>
-                Regex::new(r"^https?://(?:www\.)?bilibili\.com/video/(?P<id>[A-Za-z0-9]+)")
-                    .unwrap(),
-            ],
-        }
-    }
-}
+pub struct BiliBiliProvider;
 
 #[async_trait]
 impl Provider for BiliBiliProvider {
@@ -29,17 +18,33 @@ impl Provider for BiliBiliProvider {
         ProviderUsage::CompletionVideo
     }
 
-    fn patterns(&self) -> &[Regex] {
-        &self.patterns
+    fn hosts(&self) -> &'static [&'static str] {
+        &["bilibili.com", "www.bilibili.com", "m.bilibili.com"]
     }
 
-    fn normalize_url(
-        &self,
-        _raw_url: &str,
-        content_id: &str,
-        _timestamp: Option<&str>,
-        _other_id: Option<&str>,
-    ) -> String {
-        format!("https://www.bilibili.com/video/{}", content_id)
+    fn match_url(&self, url: &Url) -> Option<ProviderMatch> {
+        // https://bilibili.com/video/<id>
+        let path = url.path().trim_matches('/');
+
+        let mut parts = path.split('/');
+        match (parts.next(), parts.next()) {
+            (Some("video"), Some(id)) => {
+                if !Regex::new(r"^[A-Za-z0-9]+$").unwrap().is_match(id) {
+                    return None;
+                }
+
+                Some(ProviderMatch {
+                    provider: ProviderId::BiliBili,
+                    content_id: id.to_string(),
+                    timestamp: None,
+                    other_id: None,
+                })
+            }
+            _ => None,
+        }
+    }
+
+    fn normalize_url(&self, _raw_url: &Url, matched: &ProviderMatch) -> String {
+        format!("https://www.bilibili.com/video/{}", matched.content_id)
     }
 }

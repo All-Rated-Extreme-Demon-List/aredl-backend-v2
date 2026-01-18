@@ -1,23 +1,12 @@
 use async_trait::async_trait;
 use regex::Regex;
+use url::Url;
+
+use crate::providers::model::ProviderMatch;
 
 use super::super::model::{Provider, ProviderId, ProviderUsage};
 
-pub struct OutplayedProvider {
-    patterns: Vec<Regex>,
-}
-
-impl OutplayedProvider {
-    pub fn new() -> Self {
-        Self {
-            patterns: vec![Regex::new(
-                // https://outplayed.tv/<game>/<id>
-                r"^https?://outplayed\.tv/[A-Za-z0-9_-]+/(?P<id>[A-Za-z0-9_-]+)",
-            )
-            .unwrap()],
-        }
-    }
-}
+pub struct OutplayedProvider;
 
 #[async_trait]
 impl Provider for OutplayedProvider {
@@ -29,17 +18,34 @@ impl Provider for OutplayedProvider {
         ProviderUsage::CompletionVideo
     }
 
-    fn patterns(&self) -> &[Regex] {
-        &self.patterns
+    fn hosts(&self) -> &'static [&'static str] {
+        &["outplayed.tv", "www.outplayed.tv"]
     }
 
-    fn normalize_url(
-        &self,
-        _raw_url: &str,
-        content_id: &str,
-        _timestamp: Option<&str>,
-        _other_id: Option<&str>,
-    ) -> String {
-        format!("https://outplayed.tv/media/{}", content_id)
+    fn match_url(&self, url: &Url) -> Option<ProviderMatch> {
+        // https://outplayed.tv/<game>/<id>
+        let path = url.path().trim_matches('/');
+        let mut parts = path.split('/');
+
+        let _game = parts.next()?;
+        let content_id = parts.next()?;
+
+        if !Regex::new(r"^[A-Za-z0-9_-]{1,128}$")
+            .unwrap()
+            .is_match(content_id)
+        {
+            return None;
+        }
+
+        Some(ProviderMatch {
+            provider: ProviderId::Outplayed,
+            content_id: content_id.to_string(),
+            timestamp: None,
+            other_id: None,
+        })
+    }
+
+    fn normalize_url(&self, _raw_url: &Url, matched: &ProviderMatch) -> String {
+        format!("https://outplayed.tv/media/{}", matched.content_id)
     }
 }

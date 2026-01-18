@@ -95,7 +95,12 @@ async fn submission_without_raw() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_error_response(resp, 400, Some("Platformer submissions require raw footage")).await;
+    assert_error_response(
+        resp,
+        400,
+        Some("Platformer submissions require raw footage"),
+    )
+    .await;
 }
 
 #[actix_web::test]
@@ -141,7 +146,12 @@ async fn submission_malformed_url() {
 
     let resp2 = test::call_service(&app, req).await;
 
-    assert_error_response(resp, 400, Some("Invalid completion video URL: Malformed URL")).await;
+    assert_error_response(
+        resp,
+        400,
+        Some("Invalid completion video URL: Malformed URL"),
+    )
+    .await;
     assert_error_response(resp2, 400, Some("Invalid raw footage URL: Malformed URL")).await;
 }
 
@@ -384,7 +394,12 @@ async fn patch_submission_banned_submitter() {
         .set_json(&json!({"video_url": "https://www.youtube.com/watch?v=banupdate11"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(resp, 403, Some("You have been banned from submitting records.")).await;
+    assert_error_response(
+        resp,
+        403,
+        Some("You have been banned from submitting records."),
+    )
+    .await;
 }
 
 #[actix_web::test]
@@ -485,7 +500,12 @@ async fn patch_submission_mod_invalid_urls() {
         .set_json(&json!({"video_url": "not a url"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(resp, 400, Some("Invalid completion video URL: Malformed URL")).await;
+    assert_error_response(
+        resp,
+        400,
+        Some("Invalid completion video URL: Malformed URL"),
+    )
+    .await;
 
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission}"))
@@ -615,7 +635,12 @@ async fn patch_submission_invalid_urls() {
         .set_json(&json!({"video_url":"not a url"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(resp, 400, Some("Invalid completion video URL: Malformed URL")).await;
+    assert_error_response(
+        resp,
+        400,
+        Some("Invalid completion video URL: Malformed URL"),
+    )
+    .await;
 
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission}"))
@@ -1228,7 +1253,7 @@ async fn accept_submission_triggers_record_timestamp_fetch_from_youtube() {
     std::env::set_var("YOUTUBE_API_BASE_URL", server.base_url());
 
     let providers_app_state = Arc::new(VideoProvidersAppState::new(
-        ProviderRegistry::new(vec![Arc::new(YouTubeProvider::new()) as Arc<dyn Provider>]),
+        ProviderRegistry::new(vec![Arc::new(YouTubeProvider) as Arc<dyn Provider>]),
         ProviderContext {
             http: reqwest::Client::new(),
             google_auth: Some(Arc::new(google_auth)),

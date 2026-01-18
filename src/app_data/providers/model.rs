@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use regex::{Captures, Regex};
 use reqwest::header::HeaderMap;
 use reqwest::{header, Client, StatusCode};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
+use url::Url;
 
 use super::context::ProviderContext;
 use crate::error_handler::ApiError;
@@ -40,6 +40,14 @@ impl ProviderUsage {
 
 #[derive(Debug, Clone)]
 pub struct ProviderMatch {
+    pub provider: ProviderId,
+    pub content_id: String,
+    pub timestamp: Option<String>,
+    pub other_id: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct NormalizedProviderMatch {
     pub provider: ProviderId,
     pub content_id: String,
     pub other_id: Option<String>,
@@ -80,7 +88,7 @@ impl ProviderRegistry {
         self.providers.get(&id).cloned()
     }
 
-    pub fn match_url(&self, url: &str) -> Result<ProviderMatch, ApiError> {
+    pub fn match_url(&self, url: &Url) -> Result<NormalizedProviderMatch, ApiError> {
         for provider in self.providers.values() {
             match provider.parse_url(url)? {
                 Some(matched) => return Ok(matched),
@@ -99,50 +107,38 @@ pub trait Provider: Send + Sync {
     fn id(&self) -> ProviderId;
     fn usage(&self) -> ProviderUsage;
 
-    fn patterns(&self) -> &[Regex] {
-        &[]
-    }
+    fn hosts(&self) -> &'static [&'static str];
 
-    fn normalize_url(
-        &self,
-        raw_url: &str,
-        content_id: &str,
-        timestamp: Option<&str>,
-        other_id: Option<&str>,
-    ) -> String {
-        let _ = (content_id, other_id, timestamp);
-        raw_url.to_string()
-    }
+    fn normalize_url(&self, raw_url: &Url, matched: &ProviderMatch) -> String;
 
-    fn build_match(&self, url: &str, captures: &Captures<'_>) -> Option<ProviderMatch> {
-        let content_id = captures.name("id")?.as_str().to_string();
-        let timestamp = captures.name("ts").map(|m| m.as_str().to_string());
-        let other_id = captures.name("other").map(|m| m.as_str().to_string());
+    fn match_url(&self, url: &Url) -> Option<ProviderMatch>;
 
-        let normalized_url =
-            self.normalize_url(url, &content_id, timestamp.as_deref(), other_id.as_deref());
+    fn parse_url(&self, url: &Url) -> Result<Option<NormalizedProviderMatch>, ApiError> {
+        let host = match url.host_str() {
+            Some(h) => h,
+            None => return Ok(None),
+        };
 
-        Some(ProviderMatch {
-            provider: self.id(),
-            content_id,
-            other_id,
-            normalized_url,
-        })
-    }
-
-    fn parse_url(&self, url: &str) -> Result<Option<ProviderMatch>, ApiError> {
-        for regex in self.patterns() {
-            if let Some(caps) = regex.captures(url) {
-                return Ok(self.build_match(url, &caps));
-            }
+        if !self.hosts().is_empty() && !self.hosts().iter().any(|&h| h == host) {
+            return Ok(None);
         }
 
-        Ok(None)
+        if let Some(matched) = self.match_url(url) {
+            let normalized_url = self.normalize_url(url, &matched);
+            Ok(Some(NormalizedProviderMatch {
+                provider: matched.provider,
+                content_id: matched.content_id,
+                other_id: matched.other_id,
+                normalized_url,
+            }))
+        } else {
+            Ok(None)
+        }
     }
 
     async fn fetch_metadata(
         &self,
-        matched: &ProviderMatch,
+        matched: &NormalizedProviderMatch,
         context: &ProviderContext,
     ) -> Result<Option<ContentMetadata>, ApiError> {
         let _ = (matched, context);
@@ -151,7 +147,7 @@ pub trait Provider: Send + Sync {
 
     async fn get_content_location(
         &self,
-        matched: &ProviderMatch,
+        matched: &NormalizedProviderMatch,
         context: &ProviderContext,
     ) -> Result<Option<ContentDataLocation>, ApiError> {
         let _ = (matched, context);

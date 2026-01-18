@@ -1,43 +1,15 @@
 use async_trait::async_trait;
 use regex::Regex;
 use reqwest::header::HeaderMap;
+use url::Url;
 
 use super::super::{
     context::ProviderContext,
-    model::{ContentDataLocation, Provider, ProviderId, ProviderMatch, ProviderUsage},
+    model::{ContentDataLocation, NormalizedProviderMatch, Provider, ProviderId, ProviderUsage},
 };
-use crate::error_handler::ApiError;
+use crate::{error_handler::ApiError, providers::model::ProviderMatch};
 
-pub struct GoogleDriveProvider {
-    patterns: Vec<Regex>,
-}
-
-impl GoogleDriveProvider {
-    pub fn new() -> Self {
-        Self {
-            patterns: vec![
-                // https://drive.google.com/file/d/<id>
-                // https://drive.google.com/u/0/file/d/<id>
-                Regex::new(
-                    r"^https?://drive\.google\.com(?:/u/\d+)?/file/d/(?P<id>[\w-]+)(?:[/?#].*)?$"
-                ).unwrap(),
-                // https://drive.google.com/drive/folders/<id>
-                // https://drive.google.com/u/0/drive/folders/<id>
-                Regex::new(
-                    r"^https?://drive\.google\.com/drive(?:/u/\d+)?/folders/(?P<id>[\w-]+)(?:[/?#].*)?$"
-                ).unwrap(),
-                // https://drive.google.com/open?id=<id>
-                Regex::new(
-                    r"^https?://drive\.google\.com(?:/u/\d+)?/open\?(?:[^#]*?&)?id=(?P<id>[\w-]+)(?:[&#].*)?$"
-                ).unwrap(),
-                // https://drive.google.com/uc?id=<id>
-                Regex::new(
-                    r"^https?://drive\.google\.com(?:/u/\d+)?/uc\?(?:[^#]*?&)?id=(?P<id>[\w-]+)(?:[&#].*)?$"
-                ).unwrap(),
-            ],
-        }
-    }
-}
+pub struct GoogleDriveProvider;
 
 #[async_trait]
 impl Provider for GoogleDriveProvider {
@@ -49,27 +21,82 @@ impl Provider for GoogleDriveProvider {
         ProviderUsage::RawFootage
     }
 
-    fn patterns(&self) -> &[Regex] {
-        &self.patterns
+    fn hosts(&self) -> &'static [&'static str] {
+        &["drive.google.com"]
     }
 
-    fn normalize_url(
-        &self,
-        raw_url: &str,
-        content_id: &str,
-        _timestamp: Option<&str>,
-        _other_id: Option<&str>,
-    ) -> String {
-        if raw_url.contains("/folders/") {
-            format!("https://drive.google.com/drive/folders/{}", content_id)
+    fn match_url(&self, url: &Url) -> Option<ProviderMatch> {
+        let path = url.path().trim_matches('/');
+        let mut parts = path.split('/').peekable();
+
+        // ignore u/<n> or drive/ prefixes
+        loop {
+            match parts.peek().copied() {
+                Some("drive") => {
+                    parts.next();
+                }
+                Some("u") => {
+                    parts.next();
+                    let _ = parts.next()?;
+                }
+                _ => break,
+            }
+        }
+
+        let (content_id, is_folder) = match (parts.next(), parts.next(), parts.next()) {
+            (Some("file"), Some("d"), Some(id)) => (id.to_string(), false),
+            (Some("folders"), Some(id), _) => (id.to_string(), true),
+            _ => {
+                // open / uc
+                match url.path() {
+                    "/open" | "/uc" => {
+                        let mut query_id: Option<String> = None;
+                        for (key, value) in url.query_pairs() {
+                            if key == "id" {
+                                query_id = Some(value.into_owned());
+                                break;
+                            }
+                        }
+                        (query_id?, false)
+                    }
+                    _ => return None,
+                }
+            }
+        };
+
+        if !Regex::new(r"^[A-Za-z0-9_-]+$")
+            .unwrap()
+            .is_match(&content_id)
+        {
+            return None;
+        }
+
+        Some(ProviderMatch {
+            provider: ProviderId::GoogleDrive,
+            content_id,
+            timestamp: None,
+            other_id: if is_folder {
+                Some("folder".to_string())
+            } else {
+                None
+            },
+        })
+    }
+
+    fn normalize_url(&self, _raw_url: &Url, matched: &ProviderMatch) -> String {
+        if matched.other_id.as_deref() == Some("folder") {
+            format!(
+                "https://drive.google.com/drive/folders/{}",
+                matched.content_id
+            )
         } else {
-            format!("https://drive.google.com/file/d/{}", content_id)
+            format!("https://drive.google.com/file/d/{}", matched.content_id)
         }
     }
 
     async fn get_content_location(
         &self,
-        matched: &ProviderMatch,
+        matched: &NormalizedProviderMatch,
         context: &ProviderContext,
     ) -> Result<Option<ContentDataLocation>, ApiError> {
         let google_auth = context

@@ -2,41 +2,15 @@ use async_trait::async_trait;
 use regex::Regex;
 use reqwest::header::HeaderMap;
 use serde_json::Value as JsonValue;
+use url::Url;
 
 use super::super::{
     context::ProviderContext,
-    model::{ContentMetadata, Provider, ProviderId, ProviderMatch, ProviderUsage},
+    model::{ContentMetadata, NormalizedProviderMatch, Provider, ProviderId, ProviderUsage},
 };
-use crate::error_handler::ApiError;
+use crate::{error_handler::ApiError, providers::model::ProviderMatch};
 
-pub struct YouTubeProvider {
-    patterns: Vec<Regex>,
-}
-
-impl YouTubeProvider {
-    pub fn new() -> Self {
-        Self {
-            patterns: vec![
-                // https://(www.|m.)youtube.com/watch?v=<id>[...][&t=... or &start=...]
-                Regex::new(
-                    r"^https?://(?:www\.|m\.)?youtube\.com/watch\?(?:[^#]*?[&?])?v=(?P<id>[A-Za-z0-9_-]{11})(?:[^#]*?[&?](?:t|start)=(?P<ts>[^&#]+))?(?:[&#].*)?$"
-                ).unwrap(),
-                // https://youtu.be/<id>[...][t=... or start=...]
-                Regex::new(
-                    r"^https?://youtu\.be/(?P<id>[A-Za-z0-9_-]{11})(?:\?(?:(?:[^#]*?&)?(?:t|start)=(?P<ts>[^&#]+)[^#]*)?[^#]*)?(?:[&#].*)?$"
-                ).unwrap(),
-                // https://(www.|m.)youtube.com/shorts/<id>[...][t=... or start=...]
-                Regex::new(
-                    r"^https?://(?:www\.|m\.)?youtube\.com/shorts/(?P<id>[A-Za-z0-9_-]{11})(?:\?(?:(?:[^#]*?&)?(?:t|start)=(?P<ts>[^&#]+)[^#]*)?[^#]*)?(?:[&#].*)?$"
-                ).unwrap(),
-                // https://(www.|m.)youtube.com/live/<id>[...][t=... or start=...]
-                Regex::new(
-                    r"^https?://(?:www\.|m\.)?youtube\.com/live/(?P<id>[A-Za-z0-9_-]{11})(?:\?(?:(?:[^#]*?&)?(?:t|start)=(?P<ts>[^&#]+)[^#]*)?[^#]*)?(?:[&#].*)?$"
-                ).unwrap(),
-            ],
-        }
-    }
-}
+pub struct YouTubeProvider;
 
 #[async_trait]
 impl Provider for YouTubeProvider {
@@ -48,31 +22,97 @@ impl Provider for YouTubeProvider {
         ProviderUsage::CompletionVideo
     }
 
-    fn patterns(&self) -> &[Regex] {
-        &self.patterns
+    fn hosts(&self) -> &'static [&'static str] {
+        &[
+            "youtube.com",
+            "www.youtube.com",
+            "m.youtube.com",
+            "youtu.be",
+        ]
     }
 
-    fn normalize_url(
-        &self,
-        _raw_url: &str,
-        content_id: &str,
-        timestamp: Option<&str>,
-        _other_id: Option<&str>,
-    ) -> String {
-        match timestamp {
-            Some(timestamp) if !timestamp.is_empty() => {
-                format!(
-                    "https://www.youtube.com/watch?v={}&t={}",
-                    content_id, timestamp
-                )
+    fn match_url(&self, url: &Url) -> Option<ProviderMatch> {
+        let host = url.host_str()?;
+        let path = url.path();
+
+        let mut video_id: Option<String> = None;
+        let mut timestamp: Option<String> = None;
+        let mut list_id: Option<String> = None;
+
+        for (key, value) in url.query_pairs() {
+            match key.as_ref() {
+                "v" if video_id.is_none() => video_id = Some(value.into_owned()),
+                "t" if timestamp.is_none() => timestamp = Some(value.into_owned()),
+                "start" if timestamp.is_none() => timestamp = Some(value.into_owned()),
+                "list" if list_id.is_none() => list_id = Some(value.into_owned()),
+                _ => {}
             }
-            _ => format!("https://www.youtube.com/watch?v={}", content_id),
         }
+
+        let content_id: Option<String> = if host == "youtu.be" {
+            url.path()
+                .trim_matches('/')
+                .split('/')
+                .next()
+                .map(|s| s.to_string())
+        } else if path == "/watch" {
+            video_id
+        } else {
+            let p = path.trim_matches('/');
+            let mut it = p.split('/');
+            match (it.next(), it.next()) {
+                (Some("shorts"), Some(id)) => Some(id.to_string()),
+                (Some("live"), Some(id)) => Some(id.to_string()),
+                _ => None,
+            }
+        };
+
+        let content_id = content_id?;
+        if !Regex::new(r"^[A-Za-z0-9_-]{11}$")
+            .unwrap()
+            .is_match(&content_id)
+        {
+            return None;
+        }
+
+        let timestamp = timestamp.map(|s| s.trim().to_string()).filter(|s| {
+            !s.is_empty()
+                && Regex::new(r"^(?:\d{1,10}|\d{1,4}h)?(?:\d{1,4}m)?(?:\d{1,4}s)?$")
+                    .unwrap()
+                    .is_match(s)
+        });
+
+        let other_id = list_id.map(|s| s.trim().to_string()).filter(|s| {
+            !s.is_empty() && Regex::new(r"^[A-Za-z0-9_-]{1,256}$").unwrap().is_match(s)
+        });
+
+        Some(ProviderMatch {
+            provider: ProviderId::YouTube,
+            content_id,
+            timestamp,
+            other_id,
+        })
+    }
+
+    fn normalize_url(&self, _raw_url: &Url, matched: &ProviderMatch) -> String {
+        let mut normalized =
+            Url::parse("https://www.youtube.com/watch").expect("static url is valid");
+        {
+            let mut query_params = normalized.query_pairs_mut();
+            query_params.append_pair("v", &matched.content_id);
+            if let Some(ts) = matched.timestamp.as_ref().filter(|s| !s.is_empty()) {
+                query_params.append_pair("t", ts);
+            }
+            if let Some(list) = matched.other_id.as_ref().filter(|s| !s.is_empty()) {
+                query_params.append_pair("list", list);
+            }
+        }
+        normalized.to_string()
     }
 
     async fn fetch_metadata(
         &self,
-        matched: &ProviderMatch,
+        matched: &NormalizedProviderMatch,
         context: &ProviderContext,
     ) -> Result<Option<ContentMetadata>, ApiError> {
         let google_auth = context

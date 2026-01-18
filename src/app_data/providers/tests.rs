@@ -18,6 +18,7 @@ use {
     httpmock::prelude::*,
     serial_test::serial,
     std::sync::Arc,
+    url::Url,
 };
 
 #[tokio::test]
@@ -86,6 +87,43 @@ async fn match_and_normalize_all_supported_providers() {
                 ProviderId::YouTube,
                 "xvFZjo5PgG0",
                 "https://www.youtube.com/watch?v=xvFZjo5PgG0&t=90",
+            ),
+            // YouTube (playlist/list)
+            (
+                "https://www.youtube.com/watch?v=xvFZjo5PgG0&list=PLabcDEF_-123&si=zzz",
+                ProviderId::YouTube,
+                "xvFZjo5PgG0",
+                "https://www.youtube.com/watch?v=xvFZjo5PgG0&list=PLabcDEF_-123",
+            ),
+            (
+                "https://www.youtube.com/watch?list=PLabcDEF_-123&v=xvFZjo5PgG0",
+                ProviderId::YouTube,
+                "xvFZjo5PgG0",
+                "https://www.youtube.com/watch?v=xvFZjo5PgG0&list=PLabcDEF_-123",
+            ),
+            (
+                "https://youtu.be/xvFZjo5PgG0?list=PLabcDEF_-123",
+                ProviderId::YouTube,
+                "xvFZjo5PgG0",
+                "https://www.youtube.com/watch?v=xvFZjo5PgG0&list=PLabcDEF_-123",
+            ),
+            (
+                "https://youtu.be/xvFZjo5PgG0?t=123&list=PLabcDEF_-123",
+                ProviderId::YouTube,
+                "xvFZjo5PgG0",
+                "https://www.youtube.com/watch?v=xvFZjo5PgG0&t=123&list=PLabcDEF_-123",
+            ),
+            (
+                "https://www.youtube.com/shorts/xvFZjo5PgG0?list=PLabcDEF_-123&t=90",
+                ProviderId::YouTube,
+                "xvFZjo5PgG0",
+                "https://www.youtube.com/watch?v=xvFZjo5PgG0&t=90&list=PLabcDEF_-123",
+            ),
+            (
+                "https://www.youtube.com/live/xvFZjo5PgG0?start=123&list=PLabcDEF_-123",
+                ProviderId::YouTube,
+                "xvFZjo5PgG0",
+                "https://www.youtube.com/watch?v=xvFZjo5PgG0&t=123&list=PLabcDEF_-123",
             ),
             // Vimeo
             (
@@ -205,13 +243,13 @@ async fn match_and_normalize_all_supported_providers() {
         ];
 
     for (input, provider, id, expected_norm) in cases {
-        let validated_input = providers.validate_is_url(input).unwrap_or_else(|e| {
+        providers.validate_is_url(input).unwrap_or_else(|e| {
             panic!(
                 "Expected valid URL for {input}, got error: {}",
                 e.error_message
             )
         });
-        let m = providers.parse_url(&validated_input).unwrap_or_else(|e| {
+        let m = providers.parse_url(input).unwrap_or_else(|e| {
             panic!("Expected match for {input}, got error: {}", e.error_message)
         });
 
@@ -239,7 +277,6 @@ async fn reject_unsupported_or_malformed_urls() {
         "https://www.twitch.tv/directory",
         "https://medal.tv/u/someuser",
         "https://medal.tv/share/something",
-        "https://drive.google.com/folders/1NH3sbowKcOP5KOTAfJ4mhaUleUnZgd0m?usp=sharing",
         "https://drive.google.com/folders/",
         "https://drive.google.com/drive/u/0/my-drive",
         "https://drive.google.com/drive/u/0/shared-with-me",
@@ -254,13 +291,13 @@ async fn reject_unsupported_or_malformed_urls() {
     }
 
     for url in nomatch_urls {
-        let validated = providers.validate_is_url(url).unwrap_or_else(|e| {
+        providers.validate_is_url(url).unwrap_or_else(|e| {
             panic!(
                 "Expected valid URL for {url}, got error: {}",
                 e.error_message
             )
         });
-        let matched = providers.parse_url(&validated);
+        let matched = providers.parse_url(url);
         assert!(
             matched.is_err(),
             "Expected no match error for {url}, but got a match"
@@ -446,10 +483,10 @@ async fn youtube_fetch_metadata_returns_published_at() {
 
     std::env::set_var("YOUTUBE_API_BASE_URL", server.base_url());
 
-    let provider = YouTubeProvider::new();
+    let provider = YouTubeProvider;
 
     let matched = provider
-        .parse_url("https://youtube.com/watch?v=xvFZjo5PgG0")
+        .parse_url(&Url::parse("https://youtube.com/watch?v=xvFZjo5PgG0").unwrap())
         .unwrap()
         .expect("youtube url should match");
 
@@ -484,10 +521,10 @@ async fn medal_fetch_metadata_returns_published_at_from_created_ms() {
 
     std::env::set_var("MEDAL_API_BASE_URL", server.base_url());
 
-    let provider = MedalProvider::new();
+    let provider = MedalProvider;
 
     let matched = provider
-        .parse_url("https://medal.tv/clips/jyEnIYev353GxMXDV")
+        .parse_url(&Url::parse("https://medal.tv/clips/jyEnIYev353GxMXDV").unwrap())
         .unwrap()
         .expect("medal url should match");
 
@@ -529,10 +566,10 @@ async fn twitch_fetch_metadata_returns_published_at() {
         twitch_auth: Some(Arc::new(twitch_auth)),
     };
 
-    let provider = TwitchProvider::new();
+    let provider = TwitchProvider;
 
     let matched = provider
-        .parse_url("https://www.twitch.tv/videos/987654321")
+        .parse_url(&Url::parse("https://www.twitch.tv/videos/987654321").unwrap())
         .unwrap()
         .expect("twitch url should match");
 
