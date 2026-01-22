@@ -1,6 +1,7 @@
 mod daily;
 mod model;
 mod routes;
+#[cfg(test)]
 mod tests;
 
 pub use model::*;
