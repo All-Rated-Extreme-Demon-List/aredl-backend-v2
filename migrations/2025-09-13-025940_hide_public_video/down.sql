@@ -160,7 +160,7 @@ WITH subquery AS (
           PARTITION BY r.level_id, u.country
           ORDER BY r.placement_order
         ) AS order_pos
-    FROM arepl.records r
+    FROM aredl.records r
     JOIN users u ON u.id = r.submitted_by
 )
 SELECT *
