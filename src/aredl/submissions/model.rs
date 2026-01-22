@@ -39,9 +39,16 @@ pub struct Submission {
     pub mobile: bool,
     /// ID of the LDM used for the record, if any.
     pub ldm_id: Option<i32>,
-    /// Video link of the completion.
+    /// Completion video URL.
+    ///
+    /// The provider is enforced and the URL is stored in a standardized canonical form.
+    /// See [Allowed video URL types](#allowed-video-url-types).
     pub video_url: String,
-    /// Link to the raw video file of the completion.
+    /// Raw footage URL (optional).
+    ///
+    /// Only requires a valid URL (the site is not enforced). If the URL matches a recognized provider
+    /// it is standardized, otherwise it is stored as-is.
+    /// See [Allowed video URL types](#allowed-video-url-types).
     pub raw_url: Option<String>,
     /// The mod menu used in this record
     pub mod_menu: Option<String>,
@@ -78,9 +85,16 @@ pub struct SubmissionWithPriority {
     pub mobile: bool,
     /// ID of the LDM used for the record, if any.
     pub ldm_id: Option<i32>,
-    /// Video link of the completion.
+    /// Completion video URL.
+    ///
+    /// The provider is enforced and the URL is stored in a standardized canonical form.
+    /// See [Allowed video URL types](#allowed-video-url-types).
     pub video_url: String,
-    /// Link to the raw video file of the completion.
+    /// Raw footage URL (optional).
+    ///
+    /// Only requires a valid URL (the site is not enforced). If the URL matches a recognized provider
+    /// it is standardized, otherwise it is stored as-is.
+    /// See [Allowed video URL types](#allowed-video-url-types).
     pub raw_url: Option<String>,
     /// The mod menu used in this record
     pub mod_menu: Option<String>,
@@ -118,9 +132,16 @@ pub struct SubmissionResolved {
     pub mobile: bool,
     /// ID of the LDM used for the record, if any.
     pub ldm_id: Option<i32>,
-    /// Video link of the completion.
+    /// Completion video URL.
+    ///
+    /// The provider is enforced and the URL is stored in a standardized canonical form.
+    /// See [Allowed video URL types](#allowed-video-url-types).
     pub video_url: String,
-    /// Link to the raw video file of the completion.
+    /// Raw footage URL (optional).
+    ///
+    /// Only requires a valid URL (the site is not enforced). If the URL matches a recognized provider
+    /// it is standardized, otherwise it is stored as-is.
+    /// See [Allowed video URL types](#allowed-video-url-types).
     pub raw_url: Option<String>,
     /// The mod menu used in this record
     pub mod_menu: Option<String>,
