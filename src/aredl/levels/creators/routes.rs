@@ -1,7 +1,7 @@
 use crate::aredl::levels::id_resolver::resolve_level_id;
 use crate::auth::{Permission, UserAuth};
 use crate::cache_control::CacheController;
-use crate::db::DbAppState;
+use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::users::BaseUser;
 use actix_web::{delete, get, patch, post, web, HttpResponse};

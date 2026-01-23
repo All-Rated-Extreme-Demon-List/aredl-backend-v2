@@ -2,7 +2,7 @@ use crate::arepl::packtiers::PackTierResolved;
 use crate::arepl::packtiers::{PackTier, PackTierCreate, PackTierUpdate};
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::cache_control::CacheController;
-use crate::db::DbAppState;
+use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;

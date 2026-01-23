@@ -1,8 +1,9 @@
-use crate::auth::app_state::AuthAppState;
+use crate::app_data::auth::AuthAppState;
+use crate::app_data::db::DbAppState;
 use crate::auth::token::{self, check_token_valid};
-use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::schema::users;
+use actix_http::header;
 use actix_web::{post, web, HttpRequest, HttpResponse};
 use chrono::Utc;
 use diesel::prelude::*;
@@ -31,7 +32,7 @@ pub async fn logout_all(
 ) -> Result<HttpResponse, ApiError> {
     let token = req
         .headers()
-        .get(openidconnect::http::header::AUTHORIZATION)
+        .get(header::AUTHORIZATION)
         .and_then(|h| h.to_str().ok())
         .map(|h| h.strip_prefix("Bearer ").unwrap_or("").to_string());
 

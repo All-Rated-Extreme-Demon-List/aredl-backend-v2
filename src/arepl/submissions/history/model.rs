@@ -1,7 +1,7 @@
 use crate::{
+    app_data::db::DbConnection,
     arepl::submissions::SubmissionStatus,
     auth::{Authenticated, Permission},
-    db::DbConnection,
     error_handler::ApiError,
     schema::{arepl::submission_history, users},
     users::BaseUser,
@@ -20,30 +20,40 @@ use uuid::Uuid;
 pub struct SubmissionHistory {
     pub id: Uuid,
     pub submission_id: Uuid,
-    pub record_id: Option<Uuid>,
     pub status: SubmissionStatus,
-    pub reviewer_notes: Option<String>,
-    pub reviewer_id: Option<Uuid>,
-    pub user_notes: Option<String>,
     pub timestamp: DateTime<Utc>,
+    pub video_url: Option<String>,
+    pub raw_url: Option<String>,
+    pub mobile: Option<bool>,
+    pub ldm_id: Option<i32>,
+    pub mod_menu: Option<String>,
+    pub completion_time: Option<i64>,
+    pub user_notes: Option<String>,
+    pub reviewer_notes: Option<String>,
+    pub private_reviewer_notes: Option<String>,
+    pub reviewer_id: Option<Uuid>,
+    pub locked: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SubmissionHistoryResolved {
     pub id: Uuid,
     pub submission_id: Uuid,
-    pub record_id: Option<Uuid>,
     pub status: SubmissionStatus,
+    pub timestamp: DateTime<Utc>,
+    pub video_url: Option<String>,
+    pub raw_url: Option<String>,
+    pub mobile: Option<bool>,
+    pub ldm_id: Option<i32>,
+    pub mod_menu: Option<String>,
+    pub completion_time: Option<i64>,
+    pub user_notes: Option<String>,
     pub reviewer_notes: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reviewer: Option<BaseUser>,
-    pub user_notes: Option<String>,
-    pub timestamp: DateTime<Utc>,
-}
-
-#[derive(Serialize, Deserialize, ToSchema)]
-pub struct SubmissionHistoryOptions {
-    is_record_id: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub private_reviewer_notes: Option<String>,
+    pub locked: Option<bool>,
 }
 
 impl SubmissionHistoryResolved {
@@ -52,69 +62,48 @@ impl SubmissionHistoryResolved {
         Self {
             id: history.id,
             submission_id: history.submission_id,
-            record_id: history.record_id,
             status: history.status,
             reviewer_notes: history.reviewer_notes,
             reviewer: user,
             user_notes: history.user_notes,
             timestamp: history.timestamp,
+            video_url: history.video_url,
+            raw_url: history.raw_url,
+            mobile: history.mobile,
+            ldm_id: history.ldm_id,
+            mod_menu: history.mod_menu,
+            completion_time: history.completion_time,
+            private_reviewer_notes: history.private_reviewer_notes,
+            locked: history.locked,
         }
     }
 
     pub fn by_submission_id(
         conn: &mut DbConnection,
         id: Uuid,
-        options: SubmissionHistoryOptions,
         authenticated: Authenticated,
     ) -> Result<Vec<SubmissionHistoryResolved>, ApiError> {
-        let is_record = options.is_record_id.unwrap_or(false);
-
-        let mut query = submission_history::table
+        let history = submission_history::table
+            .filter(submission_history::submission_id.eq(id))
             .left_join(users::table.on(submission_history::reviewer_id.eq(users::id.nullable())))
             .into_boxed::<Pg>()
             .select((
                 SubmissionHistory::as_select(),
                 (users::id, users::username, users::global_name).nullable(),
             ))
-            .order(submission_history::timestamp.desc());
+            .order(submission_history::timestamp.desc())
+            .load::<(SubmissionHistory, Option<BaseUser>)>(conn)?;
 
-        if is_record {
-            query = query.filter(submission_history::record_id.eq(id));
-        } else {
-            query = query.filter(submission_history::submission_id.eq(id));
-        }
-
-        let mut history_row = query.load::<(SubmissionHistory, Option<BaseUser>)>(conn)?;
-
-        // migrated records have no history
-        if is_record && history_row.len() > 0 {
-            let accept_log = &history_row[0].0;
-
-            if accept_log.record_id.is_some() {
-                let other_logs = submission_history::table
-                    .left_join(
-                        users::table.on(submission_history::reviewer_id.eq(users::id.nullable())),
-                    )
-                    .filter(submission_history::submission_id.eq(accept_log.submission_id))
-                    .filter(submission_history::timestamp.lt(accept_log.timestamp))
-                    .order(submission_history::timestamp.desc())
-                    .select((
-                        SubmissionHistory::as_select(),
-                        (users::id, users::username, users::global_name).nullable(),
-                    ))
-                    .load::<(SubmissionHistory, Option<BaseUser>)>(conn)?;
-
-                history_row.extend(other_logs);
-            }
-        }
-
-        let mut resolved_history = history_row
+        let mut resolved_history = history
             .into_iter()
             .map(SubmissionHistoryResolved::from_data)
             .collect::<Vec<_>>();
 
         if !authenticated.has_permission(conn, Permission::SubmissionReview)? {
-            resolved_history.iter_mut().for_each(|h| h.reviewer = None);
+            resolved_history.iter_mut().for_each(|h| {
+                h.reviewer = None;
+                h.private_reviewer_notes = None;
+            });
         }
 
         Ok(resolved_history)

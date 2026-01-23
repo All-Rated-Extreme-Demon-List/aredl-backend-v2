@@ -1,5 +1,5 @@
+use crate::app_data::db::DbAppState;
 use crate::auth::{Authenticated, UserAuth};
-use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::users::me::{clan, notifications, UserMeUpdate};
 use crate::users::{User, UserResolved};

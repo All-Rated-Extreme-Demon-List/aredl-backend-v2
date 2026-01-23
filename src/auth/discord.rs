@@ -1,26 +1,27 @@
 use std::sync::Arc;
 
-use actix_web::http::header;
+use actix_http::header;
 use actix_web::{get, web, HttpRequest, HttpResponse};
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use diesel::prelude::*;
 use openidconnect::core::{CoreAuthenticationFlow, CoreClient, CoreJsonWebKeySet};
-use openidconnect::reqwest::async_http_client;
 use openidconnect::{
     AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce,
     OAuth2TokenResponse, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, TokenUrl,
 };
+
 use serde::{Deserialize, Serialize};
 use utoipa::{OpenApi, ToSchema};
 
-use crate::auth::app_state::AuthAppState;
+use crate::app_data::auth::{AuthAppState, DiscordClient};
+use crate::app_data::db::{DbAppState, DbConnection};
 use crate::auth::token::UserClaims;
 use crate::auth::token::{self, check_token_valid};
-use crate::db::{DbAppState, DbConnection};
 use crate::error_handler::ApiError;
 use crate::get_secret;
+use crate::roles::Role;
 use crate::schema::{oauth_requests, permissions, roles, user_roles};
-use crate::users::{Role, User, UserUpsert};
+use crate::users::{User, UserUpsert};
 
 #[derive(Deserialize)]
 struct OAuthCallbackQuery {
@@ -195,13 +196,14 @@ async fn discord_callback(
     })
     .await??;
 
+    let http_client = reqwest::Client::new();
+
     let token_response = client
         .exchange_code(query.code.clone())
         .set_pkce_verifier(PkceCodeVerifier::new(request_data.pkce_verifier))
-        .request_async(async_http_client)
+        .request_async(&http_client)
         .await
         .map_err(|_| ApiError::new(401, "Failed to request token!"))?;
-
     let access_token = token_response.access_token();
 
     let discord_base =
@@ -319,7 +321,7 @@ async fn discord_refresh(
 ) -> Result<HttpResponse, ApiError> {
     let refresh_token = req
         .headers()
-        .get(openidconnect::http::header::AUTHORIZATION)
+        .get(header::AUTHORIZATION)
         .and_then(|h| h.to_str().ok())
         .map(|h| h.strip_prefix("Bearer ").unwrap_or("").to_string());
 
@@ -379,7 +381,7 @@ async fn discord_refresh(
     Ok(HttpResponse::Ok().json(response))
 }
 
-pub(crate) async fn create_discord_client() -> Result<CoreClient, Box<dyn std::error::Error>> {
+pub(crate) async fn create_discord_client() -> Result<DiscordClient, Box<dyn std::error::Error>> {
     let discord_client_id = ClientId::new(get_secret("DISCORD_CLIENT_ID"));
 
     let discord_client_secret = ClientSecret::new(get_secret("DISCORD_CLIENT_SECRET"));
@@ -393,16 +395,13 @@ pub(crate) async fn create_discord_client() -> Result<CoreClient, Box<dyn std::e
     let auth_url = AuthUrl::new(format!("{}/oauth2/authorize", base_discord_url).to_string())?;
     let token_url = TokenUrl::new(format!("{}/api/oauth2/token", base_discord_url).to_string())?;
 
-    return Ok(CoreClient::new(
-        discord_client_id,
-        Some(discord_client_secret),
-        issuer,
-        auth_url,
-        Some(token_url),
-        None,
-        CoreJsonWebKeySet::default(),
-    )
-    .set_redirect_uri(discord_redirect_uri));
+    return Ok(
+        CoreClient::new(discord_client_id, issuer, CoreJsonWebKeySet::default())
+            .set_client_secret(discord_client_secret)
+            .set_auth_uri(auth_url)
+            .set_token_uri(token_url)
+            .set_redirect_uri(discord_redirect_uri),
+    );
 }
 
 #[derive(OpenApi)]

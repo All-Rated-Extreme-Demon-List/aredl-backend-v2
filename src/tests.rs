@@ -1,10 +1,13 @@
-use crate::{
-    error_handler::ApiError,
-    page_helper::{PageQuery, Paginated},
+#[cfg(test)]
+use {
+    crate::{
+        error_handler::ApiError,
+        page_helper::{PageQuery, Paginated},
+        test_utils::assert_error_response,
+    },
+    actix_web::{http::header, test, web, App, HttpResponse},
+    super::*,
 };
-
-use super::*;
-use actix_web::{body, http::header, test, web, App, HttpResponse, ResponseError};
 
 #[test]
 async fn page_query_defaults_and_offset() {
@@ -93,20 +96,26 @@ async fn error_handler_api_error_new_and_display() {
 
 #[actix_web::test]
 async fn error_handler_client_error_response_preserves_message() {
-    let err = ApiError::new(400, "bad request");
-    let resp = err.error_response();
-    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-    let body_bytes = body::to_bytes(resp.into_body()).await.unwrap();
-    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
-    assert_eq!(body["message"], "bad request");
+    let app = test::init_service(App::new().route(
+        "/",
+        web::get().to(|| async {
+            Err::<HttpResponse, ApiError>(ApiError::new(400, "bad request"))
+        }),
+    ))
+    .await;
+
+    let resp = test::call_service(&app, test::TestRequest::get().uri("/").to_request()).await;
+    assert_error_response(resp, 400, Some("bad request")).await;
 }
 
 #[actix_web::test]
 async fn error_handler_server_error_response_masks_message() {
-    let err = ApiError::new(500, "details");
-    let resp = err.error_response();
-    assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
-    let body_bytes = body::to_bytes(resp.into_body()).await.unwrap();
-    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
-    assert_eq!(body["message"], "Internal server error");
+    let app = test::init_service(App::new().route(
+        "/",
+        web::get().to(|| async { Err::<HttpResponse, ApiError>(ApiError::new(500, "details")) }),
+    ))
+    .await;
+
+    let resp = test::call_service(&app, test::TestRequest::get().uri("/").to_request()).await;
+    assert_error_response(resp, 500, Some("Internal server error")).await;
 }

@@ -1,4 +1,4 @@
-use crate::db::DbConnection;
+use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::aredl::levels;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};

@@ -1,8 +1,17 @@
+use crate::app_data::db::DbConnection;
+use crate::auth::Authenticated;
 use crate::clans::Clan;
-use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
-use crate::schema::{clan_members, clans, permissions, roles, user_roles, users};
+use crate::roles::Role;
+use crate::schema::{
+    aredl::submissions, arepl::submissions as plat_submissions, clan_members, clans, permissions,
+    roles, user_roles, users,
+};
+use crate::{
+    aredl::submissions::SubmissionStatus,
+    arepl::submissions::SubmissionStatus as PlatSubmissionStatus,
+};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::pg::Pg;
 use diesel::{
@@ -44,19 +53,6 @@ pub struct ExtendedBaseUser {
     pub global_name: String,
     /// Country of the user. Uses the ISO 3166-1 numeric country code.
     pub country: Option<i32>,
-    /// Discord ID of the user. Updated on every login.
-    pub discord_id: Option<String>,
-}
-
-#[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
-#[diesel(table_name=users, check_for_backend(Pg))]
-pub struct BaseDiscordUser {
-    /// Internal UUID of the user.
-    pub id: Uuid,
-    /// Username of the user. This is linked to the Discord username and is updated on every login.
-    pub username: String,
-    /// Global display name of the user. May be freely set by the user.
-    pub global_name: String,
     /// Discord ID of the user. Updated on every login.
     pub discord_id: Option<String>,
     /// Discord avatar hash of the user. Updated on every login.
@@ -134,19 +130,6 @@ pub struct UserResolved {
     pub scopes: Vec<String>,
 }
 
-#[derive(
-    Serialize, Deserialize, Queryable, Selectable, Identifiable, PartialEq, Debug, ToSchema,
-)]
-#[diesel(table_name = roles)]
-pub struct Role {
-    /// Internal UUID of the role.
-    pub id: i32,
-    /// Privilege level of the role. Refer to [API Overview](#overview) for more information.
-    pub privilege_level: i32,
-    /// Name of the role.
-    pub role_desc: String,
-}
-
 #[derive(Debug, Serialize, Deserialize, Insertable, AsChangeset, ToSchema)]
 #[diesel(table_name=users, check_for_backend(Pg))]
 pub struct UserUpdate {
@@ -180,6 +163,23 @@ pub struct UserListQueryOptions {
 pub struct UserPage {
     /// List of found users
     pub data: Vec<User>,
+}
+
+// user filter that matches either by UUID, username, or discord_id
+pub fn user_filter<'a>(input: &'a String) -> users::BoxedQuery<'a, Pg> {
+    let mut q = users::table.into_boxed::<Pg>();
+
+    if let Ok(uuid) = Uuid::parse_str(&input) {
+        q = q.filter(users::id.eq(uuid));
+    } else {
+        q = q.filter(
+            users::discord_id
+                .eq(Some(input.to_owned()))
+                .or(users::username.eq(input)),
+        );
+    }
+
+    q
 }
 
 impl BaseUser {
@@ -275,7 +275,11 @@ impl User {
         let build_query = || {
             let mut q = users::table.into_boxed::<Pg>();
             if let Some(ref name_like) = options.name_filter {
-                q = q.filter(users::global_name.ilike(name_like));
+                q = q.filter(
+                    users::global_name.ilike(name_like).or(users::username
+                        .ilike(name_like)
+                        .or(users::id.eq_any(user_filter(name_like).select(users::id)))),
+                );
             }
             if let Some(placeholder) = options.placeholder {
                 q = q.filter(users::placeholder.eq(placeholder));
@@ -284,9 +288,19 @@ impl User {
         };
 
         let total_count: i64 = build_query().count().get_result(conn)?;
+        let mut q = build_query();
 
-        let entries: Vec<User> = build_query()
-            .order(users::username.asc())
+        if let Some(ref name_like) = options.name_filter {
+            q = q.order((
+                users::username.eq(name_like).desc(),
+                users::global_name.eq(name_like).desc(),
+                users::username.asc(),
+            ));
+        } else {
+            q = q.order(users::username.asc());
+        }
+
+        let entries: Vec<User> = q
             .limit(page_query.per_page())
             .offset(page_query.offset())
             .select(User::as_select())
@@ -325,11 +339,44 @@ impl User {
         Ok(updated_user)
     }
 
-    pub fn ban(conn: &mut DbConnection, user_id: Uuid, ban_level: i32) -> Result<User, ApiError> {
+    pub fn ban(
+        conn: &mut DbConnection,
+        authenticated: Authenticated,
+        user_id: Uuid,
+        ban_level: i32,
+    ) -> Result<User, ApiError> {
         let user = diesel::update(users::table.filter(users::id.eq(user_id)))
             .set(users::ban_level.eq(ban_level))
             .returning(Self::as_select())
             .get_result::<Self>(conn)?;
+
+        if ban_level >= 2 {
+            // Set user's pending classic submissions to `Denied`
+            diesel::update(
+                submissions::table
+                    .filter(submissions::submitted_by.eq(user_id))
+                    .filter(submissions::status.eq(SubmissionStatus::Pending)),
+            )
+            .set((
+                submissions::status.eq(SubmissionStatus::Denied),
+                submissions::reviewer_id.eq(Some(authenticated.user_id)),
+                submissions::reviewer_notes.eq("This player has been list banned."),
+            ))
+            .execute(conn)?;
+
+            // Set user's pending platformer submissions to `Denied`
+            diesel::update(
+                plat_submissions::table
+                    .filter(plat_submissions::submitted_by.eq(user_id))
+                    .filter(plat_submissions::status.eq(PlatSubmissionStatus::Pending)),
+            )
+            .set((
+                plat_submissions::status.eq(PlatSubmissionStatus::Denied),
+                plat_submissions::reviewer_id.eq(Some(authenticated.user_id)),
+                plat_submissions::reviewer_notes.eq("This player has been list banned."),
+            ))
+            .execute(conn)?;
+        }
         Ok(user)
     }
 }

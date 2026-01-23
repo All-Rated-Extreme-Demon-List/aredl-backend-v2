@@ -1,16 +1,20 @@
 use crate::{
+    app_data::db::DbConnection,
     arepl::{levels::ExtendedBaseLevel, submissions::*},
     auth::{Authenticated, Permission},
-    db::DbConnection,
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
     schema::{
-        arepl::{levels, submissions_with_priority},
+        arepl::{levels, submission_history, submissions_with_priority},
         users,
     },
-    users::BaseUser,
+    users::{user_filter, ExtendedBaseUser},
 };
-use diesel::expression_methods::NullableExpressionMethods;
+use diesel::{
+    dsl::{auto_type, AliasedFields, AsSelect, Nullable},
+    expression_methods::NullableExpressionMethods,
+    BoolExpressionMethods, PgTextExpressionMethods,
+};
 use diesel::{
     pg::Pg, ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl, Selectable, SelectableHelper,
 };
@@ -22,18 +26,30 @@ use uuid::Uuid;
 pub type ResolvedSubmissionRow = (
     SubmissionWithPriority,
     ExtendedBaseLevel,
-    BaseUser,
-    Option<BaseUser>,
+    ExtendedBaseUser,
+    Option<ExtendedBaseUser>,
 );
+
+#[derive(Serialize, Deserialize, ToSchema)]
+pub enum SubmissionsSortField {
+    OldestCreatedAt,
+    NewestCreatedAt,
+    OldestUpdatedAt,
+    NewestUpdatedAt,
+    ShortestCompletionTime,
+    LongestCompletionTime,
+}
 
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct SubmissionQueryOptions {
     pub status_filter: Option<SubmissionStatus>,
     pub mobile_filter: Option<bool>,
     pub level_filter: Option<Uuid>,
-    pub submitter_filter: Option<Uuid>,
+    pub submitter_filter: Option<String>,
     pub priority_filter: Option<bool>,
-    pub reviewer_filter: Option<Uuid>,
+    pub reviewer_filter: Option<String>,
+    pub note_filter: Option<String>,
+    pub sort: Option<SubmissionsSortField>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -41,85 +57,39 @@ pub struct ResolvedSubmissionPage {
     data: Vec<SubmissionResolved>,
 }
 
-#[macro_export]
-macro_rules! arepl_base_resolved_submission_query {
-    () => {{
-        let reviewers = alias!(users as reviewers);
+diesel::alias!(users as reviewers: Reviewers);
 
-        submissions_with_priority::table
-            .inner_join(levels::table.on(submissions_with_priority::level_id.eq(levels::id)))
-            .inner_join(users::table.on(users::id.eq(submissions_with_priority::submitted_by)))
-            .left_join(
-                reviewers.on(reviewers
-                    .field(users::id)
-                    .nullable()
-                    .eq(submissions_with_priority::reviewer_id.nullable())),
-            )
-            .select((
-                SubmissionWithPriority::as_select(),
-                ExtendedBaseLevel::as_select(),
-                BaseUser::as_select(),
-                reviewers
-                    .fields(<BaseUser as Selectable<Pg>>::construct_selection())
-                    .nullable(),
-            ))
-            .into_boxed::<Pg>()
-    }};
-}
+#[auto_type]
+fn resolve_query<'a>(q: submissions_with_priority::BoxedQuery<'a, Pg>) -> _ {
+    // annoying type shenanigans to get around Diesel not being able to infer types properly
+    let selection: (
+        AsSelect<SubmissionWithPriority, Pg>,
+        AsSelect<ExtendedBaseLevel, Pg>,
+        AsSelect<ExtendedBaseUser, Pg>,
+        Nullable<
+            AliasedFields<
+                Reviewers,
+                <ExtendedBaseUser as diesel::Selectable<Pg>>::SelectExpression,
+            >,
+        >,
+    ) = (
+        SubmissionWithPriority::as_select(),
+        ExtendedBaseLevel::as_select(),
+        ExtendedBaseUser::as_select(),
+        reviewers
+            .fields(<ExtendedBaseUser as Selectable<Pg>>::construct_selection())
+            .nullable(),
+    );
 
-#[macro_export]
-macro_rules! arepl_apply_submissions_filters {
-    ($query:expr, $opts:expr) => {{
-        let opts = &$opts;
-        let mut new_query = $query;
-
-        if let Some(status) = opts.status_filter.clone() {
-            new_query = new_query.filter(submissions_with_priority::status.eq(status));
-        }
-        if let Some(mobile) = opts.mobile_filter.clone() {
-            new_query = new_query.filter(submissions_with_priority::mobile.eq(mobile));
-        }
-        if let Some(level) = opts.level_filter.clone() {
-            new_query = new_query.filter(submissions_with_priority::level_id.eq(level));
-        }
-        if let Some(submitter) = opts.submitter_filter.clone() {
-            new_query = new_query.filter(submissions_with_priority::submitted_by.eq(submitter));
-        }
-        if let Some(priority) = opts.priority_filter.clone() {
-            new_query = new_query.filter(submissions_with_priority::priority.eq(priority));
-        }
-        if let Some(reviewer) = opts.reviewer_filter.clone() {
-            new_query = new_query.filter(submissions_with_priority::reviewer_id.eq(reviewer));
-        }
-
-        new_query
-    }};
-}
-
-#[macro_export]
-macro_rules! arepl_apply_submissions_filters_unauth {
-    ($query:expr, $opts:expr) => {{
-        let opts = &$opts;
-        let mut new_query = $query;
-
-        if let Some(status) = opts.status_filter.clone() {
-            new_query = new_query.filter(submissions_with_priority::status.eq(status));
-        }
-        if let Some(mobile) = opts.mobile_filter.clone() {
-            new_query = new_query.filter(submissions_with_priority::mobile.eq(mobile));
-        }
-        if let Some(level) = opts.level_filter.clone() {
-            new_query = new_query.filter(submissions_with_priority::level_id.eq(level));
-        }
-        if let Some(submitter) = opts.submitter_filter.clone() {
-            new_query = new_query.filter(submissions_with_priority::submitted_by.eq(submitter));
-        }
-        if let Some(priority) = opts.priority_filter.clone() {
-            new_query = new_query.filter(submissions_with_priority::priority.eq(priority));
-        }
-
-        new_query
-    }};
+    q.inner_join(levels::table.on(submissions_with_priority::level_id.eq(levels::id)))
+        .inner_join(users::table.on(submissions_with_priority::submitted_by.eq(users::id)))
+        .left_join(
+            reviewers.on(reviewers
+                .field(users::id)
+                .nullable()
+                .eq(submissions_with_priority::reviewer_id.nullable())),
+        )
+        .select(selection)
 }
 
 impl SubmissionResolved {
@@ -139,6 +109,8 @@ impl SubmissionResolved {
             reviewer,
             priority: submission.priority,
             reviewer_notes: submission.reviewer_notes,
+            private_reviewer_notes: submission.private_reviewer_notes,
+            locked: submission.locked,
             user_notes: submission.user_notes,
             created_at: submission.created_at,
             updated_at: submission.updated_at,
@@ -146,39 +118,30 @@ impl SubmissionResolved {
         }
     }
 
-    pub fn resolve_from_id(
-        conn: &mut DbConnection,
-        submission_id: Uuid,
-        authenticated: Authenticated,
-    ) -> Result<SubmissionResolved, ApiError> {
-        let resolved_raw = arepl_base_resolved_submission_query!()
-            .filter(submissions_with_priority::id.eq(submission_id))
-            .first::<ResolvedSubmissionRow>(conn)?;
-
-        let mut resolved = Self::from_data(resolved_raw);
-
-        if !authenticated.has_permission(conn, Permission::SubmissionReview)? {
-            resolved.reviewer = None;
-        }
-
-        Ok(resolved)
-    }
-
     pub fn find_one(
         conn: &mut DbConnection,
         id: Uuid,
         authenticated: Authenticated,
     ) -> Result<SubmissionResolved, ApiError> {
-        let mut query =
-            arepl_base_resolved_submission_query!().filter(submissions_with_priority::id.eq(id));
+        let mut query = submissions_with_priority::table
+            .filter(submissions_with_priority::id.eq(id))
+            .into_boxed();
 
-        if !authenticated.has_permission(conn, Permission::SubmissionReview)? {
+        let is_reviewer = authenticated.has_permission(conn, Permission::SubmissionReview)?;
+
+        if !is_reviewer {
             query = query.filter(submissions_with_priority::submitted_by.eq(authenticated.user_id));
         }
 
-        let resolved = query.first::<ResolvedSubmissionRow>(conn)?;
+        let mut resolved =
+            Self::from_data(resolve_query(query).first::<ResolvedSubmissionRow>(conn)?);
 
-        Ok(Self::from_data(resolved))
+        if !is_reviewer {
+            resolved.reviewer = None;
+            resolved.private_reviewer_notes = None;
+        }
+
+        Ok(resolved)
     }
 }
 
@@ -189,27 +152,111 @@ impl ResolvedSubmissionPage {
         options: SubmissionQueryOptions,
         authenticated: Authenticated,
     ) -> Result<Paginated<Self>, ApiError> {
-        let mut query = arepl_base_resolved_submission_query!();
-        query = arepl_apply_submissions_filters!(query, options);
+        let build_filtered = || {
+            let mut query = submissions_with_priority::table.into_boxed::<Pg>();
 
-        let submissions = query
-            .order_by(submissions_with_priority::completion_time.asc())
-            .limit(page_query.per_page())
-            .offset(page_query.offset())
-            .load::<ResolvedSubmissionRow>(conn)?;
+            if let Some(status) = options.status_filter.clone() {
+                query = query.filter(submissions_with_priority::status.eq(status));
+            }
+
+            if let Some(mobile) = options.mobile_filter.clone() {
+                query = query.filter(submissions_with_priority::mobile.eq(mobile));
+            }
+
+            if let Some(level) = options.level_filter.clone() {
+                query = query.filter(submissions_with_priority::level_id.eq(level));
+            }
+
+            if let Some(ref submitter) = options.submitter_filter {
+                query = query.filter(
+                    submissions_with_priority::submitted_by
+                        .eq_any(user_filter(&submitter).select(users::id)),
+                );
+            }
+
+            if let Some(priority) = options.priority_filter.clone() {
+                query = query.filter(submissions_with_priority::priority.eq(priority));
+            }
+
+            if let Some(ref reviewer) = options.reviewer_filter {
+                query = query.filter(
+                    submissions_with_priority::reviewer_id
+                        .eq_any(user_filter(&reviewer).select(users::id.nullable())),
+                );
+            }
+
+            if let Some(note_text) = options.note_filter.as_deref() {
+                query = query.filter(
+                    submissions_with_priority::id.eq_any(
+                        submission_history::table
+                            .filter(
+                                submission_history::user_notes
+                                    .ilike(note_text)
+                                    .or(submission_history::reviewer_notes.ilike(note_text)),
+                            )
+                            .select(submission_history::submission_id)
+                            .distinct(),
+                    ),
+                );
+            }
+            query
+        };
+
+        let mut submissions_query = build_filtered();
+        if let Some(sort_field) = options.sort {
+            match sort_field {
+                SubmissionsSortField::OldestCreatedAt => {
+                    submissions_query =
+                        submissions_query.order_by(submissions_with_priority::created_at.asc())
+                }
+                SubmissionsSortField::NewestCreatedAt => {
+                    submissions_query =
+                        submissions_query.order_by(submissions_with_priority::created_at.desc())
+                }
+                SubmissionsSortField::OldestUpdatedAt => {
+                    submissions_query =
+                        submissions_query.order_by(submissions_with_priority::updated_at.asc())
+                }
+                SubmissionsSortField::NewestUpdatedAt => {
+                    submissions_query =
+                        submissions_query.order_by(submissions_with_priority::updated_at.desc())
+                }
+                SubmissionsSortField::ShortestCompletionTime => {
+                    submissions_query =
+                        submissions_query.order_by(submissions_with_priority::completion_time.asc())
+                }
+                SubmissionsSortField::LongestCompletionTime => {
+                    submissions_query = submissions_query
+                        .order_by(submissions_with_priority::completion_time.desc())
+                }
+            }
+        } else {
+            submissions_query =
+                submissions_query.order_by(submissions_with_priority::created_at.desc());
+        }
+
+        let submissions = resolve_query(
+            submissions_query
+                .limit(page_query.per_page())
+                .offset(page_query.offset()),
+        )
+        .load::<ResolvedSubmissionRow>(conn)?;
 
         let mut submissions = submissions
             .into_iter()
             .map(|resolved_row| SubmissionResolved::from_data(resolved_row))
             .collect::<Vec<_>>();
 
-        if !authenticated.has_permission(conn, Permission::SubmissionReview)? {
-            submissions.iter_mut().for_each(|s| s.reviewer = None);
-        }
+        let total_count: i64 = build_filtered().count().get_result(conn)?;
 
-        let mut count_query = arepl_base_resolved_submission_query!();
-        count_query = arepl_apply_submissions_filters!(count_query, options);
-        let total_count: i64 = count_query.count().get_result(conn)?;
+        if !authenticated.has_permission(conn, Permission::SubmissionReview)? {
+            submissions
+                .iter_mut()
+                .for_each(|s: &mut SubmissionResolved| {
+                    s.reviewer = None;
+                    s.private_reviewer_notes = None;
+                });
+        }
 
         Ok(Paginated::<Self>::from_data(
             page_query,
@@ -221,14 +268,11 @@ impl ResolvedSubmissionPage {
     pub fn find_own<const D: i64>(
         conn: &mut DbConnection,
         page_query: PageQuery<D>,
-        options: SubmissionQueryOptions,
+        mut options: SubmissionQueryOptions,
         authenticated: Authenticated,
     ) -> Result<Paginated<Self>, ApiError> {
-        let options = SubmissionQueryOptions {
-            submitter_filter: Some(authenticated.user_id),
-            ..options
-        };
-
+        options.submitter_filter = Some(authenticated.user_id.to_string());
+        options.reviewer_filter = None;
         Ok(Self::find_all(conn, page_query, options, authenticated)?)
     }
 }

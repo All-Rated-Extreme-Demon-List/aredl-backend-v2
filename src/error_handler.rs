@@ -1,11 +1,11 @@
-use std::fmt;
-use std::fmt::Formatter;
-use serde::{Deserialize, Serialize};
-use serde_json::json;
-use diesel::result::Error as DieselError;
+use actix_web::error::BlockingError;
 use actix_web::http::StatusCode;
 use actix_web::{HttpResponse, ResponseError};
-use actix_web::error::BlockingError;
+use diesel::result::Error as DieselError;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use std::fmt;
+use std::fmt::Formatter;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ApiError {
@@ -31,12 +31,9 @@ impl fmt::Display for ApiError {
 impl From<DieselError> for ApiError {
     fn from(error: DieselError) -> Self {
         match error {
-            DieselError::DatabaseError(_, err) =>
-                ApiError::new(409, err.message()),
-            DieselError::NotFound =>
-                ApiError::new(404, "Record not found"),
-            err =>
-                ApiError::new(500, &format!("Unknown Diesel error: {}", err)),
+            DieselError::DatabaseError(_, err) => ApiError::new(409, err.message()),
+            DieselError::NotFound => ApiError::new(404, "Record not found"),
+            err => ApiError::new(500, &format!("Unknown Diesel error: {}", err)),
         }
     }
 }
@@ -54,7 +51,7 @@ impl ResponseError for ApiError {
 
         let error_message = match status_code.as_u16() < 500 {
             true => self.error_message.clone(),
-            false => "Internal server error".to_string()
+            false => "Internal server error".to_string(),
         };
 
         HttpResponse::build(status_code).json(json!({"message": error_message}))

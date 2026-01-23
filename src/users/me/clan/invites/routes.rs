@@ -1,6 +1,6 @@
 use crate::auth::{Authenticated, UserAuth};
 use crate::clans::ClanInvite;
-use crate::db::DbAppState;
+use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::users::me::clan::invites::ClanInviteResolved;
 use actix_web::{get, post, web, HttpResponse};

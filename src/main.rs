@@ -3,7 +3,8 @@ extern crate diesel;
 #[macro_use]
 extern crate diesel_migrations;
 
-mod db;
+mod app_data;
+pub use app_data::providers;
 mod error_handler;
 mod schema;
 
@@ -26,14 +27,16 @@ mod roles;
 mod scheduled;
 mod shifts;
 mod users;
+mod utils;
 
+use crate::app_data::{auth as auth_data, db};
 use crate::cache_control::CacheController;
 use crate::docs::ApiDoc;
-use crate::scheduled::data_cleaner::start_data_cleaner;
-use crate::scheduled::refresh_discord_avatars::start_discord_avatars_refresher;
-use crate::scheduled::refresh_level_data::start_level_data_refresher;
-use crate::scheduled::refresh_matviews::start_matviews_refresher;
-use crate::scheduled::shifts_creator::start_recurrent_shift_creator;
+use crate::scheduled::{
+    data_cleaner::start_data_cleaner, refresh_discord_avatars::start_discord_avatars_refresher,
+    refresh_level_data::start_level_data_refresher, refresh_matviews::start_matviews_refresher,
+    shifts_creator::start_recurrent_shift_creator,
+};
 use actix_cors::Cors;
 use actix_governor::GovernorConfigBuilder;
 use actix_http::StatusCode;
@@ -56,18 +59,6 @@ use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::EnvFilter;
 use utoipa::OpenApi;
 use utoipa_rapidoc::RapiDoc;
-
-pub fn get_secret(var_name: &str) -> String {
-    let value = env::var(var_name).expect(&format!("Please set {} in .env", var_name));
-    if value.starts_with("/run/secrets/") {
-        fs::read_to_string(value.trim())
-            .expect("Failed to read secret file")
-            .trim()
-            .to_string()
-    } else {
-        value
-    }
-}
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
@@ -107,6 +98,10 @@ async fn main() -> std::io::Result<()> {
 
     let db_app_state = db::init_app_state();
 
+    let auth_app_state = auth_data::init_app_state().await;
+
+    let providers_app_state = providers::init_app_state().await;
+
     db_app_state.run_pending_migrations();
 
     start_matviews_refresher(db_app_state.clone()).await;
@@ -118,8 +113,6 @@ async fn main() -> std::io::Result<()> {
     start_recurrent_shift_creator(db_app_state.clone(), notify_tx.clone()).await;
 
     start_discord_avatars_refresher(db_app_state.clone()).await;
-
-    let auth_app_state = auth::init_app_state().await;
 
     let mut listenfd = ListenFd::from_env();
     let mut server = HttpServer::new(move || {
@@ -148,7 +141,7 @@ async fn main() -> std::io::Result<()> {
                 nav-accent-color = #ff6f00 \
              >\
                 <header style=\"color:white; font-weight: lighter; font-size: 1.5rem;\" slot=\"header\">All Rated Extreme Demons List | API v2 Documentation</header>\
-                <img style=\"padding: 0.5rem; height: 3rem;\" slot=\"logo\"  src=\"https://aredl.net/assets/logo.png\"/>
+                <img style=\"padding: 0.5rem; height: 3rem;\" slot=\"logo\"  src=\"https://aredl.net/assets/logo.webp\"/>
             </rapi-doc></body></html>";
 
         let _governor_conf = GovernorConfigBuilder::default()
@@ -164,6 +157,7 @@ async fn main() -> std::io::Result<()> {
                 web::scope("/api")
                     .app_data(web::Data::new(auth_app_state.clone()))
                     .app_data(web::Data::new(db_app_state.clone()))
+                    .app_data(web::Data::new(providers_app_state.clone()))
                     .app_data(web::Data::new(notify_tx.clone()))
                     .wrap(CacheController::default_no_store())
                     .wrap(NormalizePath::trim())
@@ -177,7 +171,8 @@ async fn main() -> std::io::Result<()> {
                     .configure(clans::init_routes)
                     .configure(notifications::init_routes)
                     .configure(health::init_routes)
-                    .configure(shifts::init_routes),
+                    .configure(shifts::init_routes)
+                    .configure(utils::init_routes),
             )
             .service(
                 RapiDoc::with_openapi("/openapi.json", ApiDoc::openapi())
@@ -211,5 +206,38 @@ impl RootSpanBuilder for AppRootSpanBuilder {
 
     fn on_request_end<B: MessageBody>(span: Span, outcome: &Result<ServiceResponse<B>, Error>) {
         DefaultRootSpanBuilder::on_request_end(span, outcome);
+    }
+}
+
+pub fn get_secret(var_name: &str) -> String {
+    let value = env::var(var_name).expect(&format!("Please set {} in .env", var_name));
+    if value.starts_with("/run/secrets/") {
+        fs::read_to_string(value.trim())
+            .expect("Failed to read secret file")
+            .trim()
+            .to_string()
+    } else {
+        value
+    }
+}
+
+pub fn get_optional_secret(var_name: &str) -> Option<String> {
+    let value = match env::var(var_name) {
+        Ok(v) => v,
+        Err(_) => {
+            tracing::warn!("Optional .env {} not set", var_name);
+            return None;
+        }
+    };
+    if value.starts_with("/run/secrets/") {
+        match fs::read_to_string(value.trim()) {
+            Ok(v) => Some(v.trim().to_string()),
+            Err(e) => {
+                tracing::warn!("Failed to read secret file for {}: {}", var_name, e);
+                return None;
+            }
+        }
+    } else {
+        Some(value)
     }
 }

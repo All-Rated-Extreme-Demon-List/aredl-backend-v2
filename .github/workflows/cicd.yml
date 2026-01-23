@@ -6,7 +6,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_TEST_THREADS: 1
   TEST_DATABASE_URL: postgres://postgres:password@localhost:5432/aredl_test
   JWT_SECRET: ${{ secrets.JWT_SECRET }}
   DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
@@ -79,22 +78,19 @@ jobs:
       - name: Cache cargo for main
         uses: Swatinem/rust-cache@v2
 
-      - name: Install cargo-tarpaulin
-        run: |
-          cargo install cargo-tarpaulin --version 0.32.7
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Generate coverage report
         run: |
-            cargo tarpaulin \
+          cargo llvm-cov \
             --workspace \
-            --out Lcov \
-            --timeout 120 \
-            --ignore-tests \
-            --rustflags="-C opt-level=0" \
-            --exclude-files "tools/*" "src/schema/*" "src/scheduled/*" "src/main.rs" "src/docs.rs"
+            --lcov \
+            --output-path lcov.info \
+            --ignore-filename-regex 'src/schema/|src/scheduled/|src/main\.rs|src/docs\.rs|src/utils/probe/'
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           files: lcov.info
           fail_ci_if_error: false

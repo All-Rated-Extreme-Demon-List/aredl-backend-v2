@@ -1,39 +1,44 @@
 use crate::{
+    app_data::db::DbConnection,
     arepl::submissions::{status::SubmissionsEnabled, *},
-    auth::{Authenticated, Permission},
-    db::DbConnection,
+    auth::Authenticated,
     error_handler::ApiError,
+    notifications::WebsocketNotification,
+    providers::VideoProvidersAppState,
     schema::{
-        arepl::{levels, submission_history, submissions},
-        users,
+        arepl::{levels, submissions},
+        shifts, users,
     },
+    shifts::{Shift, ShiftStatus},
+    users::me::notifications::{Notification, NotificationType},
 };
-use diesel::expression_methods::BoolExpressionMethods;
-use diesel::{
-    dsl::exists, select, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl,
-    SelectableHelper,
-};
-use is_url::is_url;
+use chrono::Utc;
+use diesel::Connection;
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
 use serde::{Deserialize, Serialize};
+use tokio::sync::broadcast;
 use utoipa::ToSchema;
 use uuid::Uuid;
-
-use super::history::SubmissionHistory;
 
 #[derive(Serialize, Deserialize, Debug, AsChangeset, Default, ToSchema, Clone, PartialEq)]
 #[diesel(table_name=submissions, check_for_backend(Pg))]
 pub struct SubmissionPatchUser {
-    /// UUID of the level this record is on.)
-    pub level_id: Option<Uuid>,
     /// Whether the record was completed on mobile or not.
     pub mobile: Option<bool>,
     /// ID of the LDM used for the record, if any.
     pub ldm_id: Option<i32>,
-    /// Video link of the completion.
+    /// Completion video URL.
+    ///
+    /// The provider is enforced and the URL is stored in a standardized canonical form.
+    /// See [Allowed video URL types](#allowed-video-url-types).
     pub video_url: Option<String>,
     /// Completion time of the record in milliseconds.
     pub completion_time: Option<i64>,
-    /// Link to the raw video file of the completion.
+    /// Raw footage URL (optional).
+    ///
+    /// Only requires a valid URL (the site is not enforced). If the URL matches a recognized provider
+    /// it is standardized, otherwise it is stored as-is.
+    /// See [Allowed video URL types](#allowed-video-url-types).
     pub raw_url: Option<String>,
     /// The mod menu used in this record
     pub mod_menu: Option<String>,
@@ -44,212 +49,244 @@ pub struct SubmissionPatchUser {
 #[derive(Serialize, Deserialize, Debug, AsChangeset, Default, ToSchema, Clone, PartialEq)]
 #[diesel(table_name=submissions, check_for_backend(Pg))]
 pub struct SubmissionPatchMod {
-    /// UUID of the level this record is on.)
-    pub level_id: Option<Uuid>,
-    /// [Mod only] Internal UUID of the submitter.
-    pub submitted_by: Option<Uuid>,
     /// Whether the record was completed on mobile or not.
     pub mobile: Option<bool>,
     /// ID of the LDM used for the record, if any.
     pub ldm_id: Option<i32>,
-    /// Video link of the completion.
+    /// Completion video URL.
+    ///
+    /// The provider is enforced and the URL is stored in a standardized canonical form.
+    /// See [Allowed video URL types](#allowed-video-url-types).
     pub video_url: Option<String>,
     /// Completion time of the record in milliseconds.
     pub completion_time: Option<i64>,
-    /// Link to the raw video file of the completion.
+    /// Raw footage URL (optional).
+    ///
+    /// Only requires a valid URL (the site is not enforced). If the URL matches a recognized provider
+    /// it is standardized, otherwise it is stored as-is.
+    /// See [Allowed video URL types](#allowed-video-url-types).
     pub raw_url: Option<String>,
-    /// [Mod only] The status of the submission
+    /// [MOD ONLY] The status of the submission
     pub status: Option<SubmissionStatus>,
     /// The mod menu used in this record
     pub mod_menu: Option<String>,
     /// Whether the record was submitted as a priority record.
     pub priority: Option<bool>,
-    /// [Mod only] Internal UUID of the user who reviewed the record.
-    pub reviewer_id: Option<Uuid>,
-    /// [Mod only] Notes given by the reviewer when reviewing the record.
+    /// [MOD ONLY] Notes given by the reviewer when reviewing the record.
     pub reviewer_notes: Option<String>,
+    /// [MOD ONLY] Private notes given by the reviewer when reviewing the record.
+    pub private_reviewer_notes: Option<String>,
+    /// [MOD ONLY] Whether or not this submission has been locked by a staff member
+    pub locked: Option<bool>,
     /// Any additional notes left by the submitter.
     pub user_notes: Option<String>,
+}
+impl Submission {
+    pub fn update_user_shift(
+        conn: &mut DbConnection,
+        notify_tx: broadcast::Sender<WebsocketNotification>,
+        user_id: Uuid,
+        old_status: SubmissionStatus,
+        new_status: SubmissionStatus,
+    ) -> Result<(), ApiError> {
+        let from_ok = matches!(
+            old_status,
+            SubmissionStatus::Pending
+                | SubmissionStatus::Claimed
+                | SubmissionStatus::UnderConsideration
+                | SubmissionStatus::UnderReview
+        );
+        let to_ok = matches!(
+            new_status,
+            SubmissionStatus::Accepted
+                | SubmissionStatus::Denied
+                | SubmissionStatus::UnderConsideration
+        );
+        if from_ok && to_ok && old_status != new_status {
+            let now = Utc::now();
+
+            let running_shift_id = shifts::table
+                .filter(shifts::user_id.eq(user_id))
+                .filter(shifts::status.eq(ShiftStatus::Running))
+                .filter(shifts::start_at.le(now))
+                .filter(shifts::end_at.gt(now))
+                .order(shifts::start_at.asc())
+                .select(shifts::id)
+                .first::<Uuid>(conn)
+                .optional()?;
+
+            if let Some(shift_id) = running_shift_id {
+                let updated_shift = diesel::update(shifts::table.filter(shifts::id.eq(shift_id)))
+                    .set((
+                        shifts::completed_count.eq(shifts::completed_count + 1),
+                        shifts::updated_at.eq(now),
+                    ))
+                    .returning(Shift::as_select())
+                    .get_result::<Shift>(conn)?;
+
+                if updated_shift.completed_count >= updated_shift.target_count {
+                    let notification = WebsocketNotification {
+                        notification_type: "SHIFT_COMPLETED".into(),
+                        data: serde_json::to_value(&updated_shift)
+                            .expect("Failed to serialize shift"),
+                    };
+                    if let Err(e) = notify_tx.send(notification) {
+                        tracing::error!("Failed to send shift notification: {}", e);
+                    }
+                    diesel::update(shifts::table.filter(shifts::id.eq(shift_id)))
+                        .set(shifts::status.eq(ShiftStatus::Completed))
+                        .execute(conn)?;
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 impl SubmissionPatchUser {
     pub fn patch(
-        patch: Self,
+        mut patch: Self,
         id: Uuid,
         conn: &mut DbConnection,
         authenticated: Authenticated,
+        providers: &VideoProvidersAppState,
     ) -> Result<Submission, ApiError> {
         let user = authenticated.user_id;
+
         if patch == Self::default() {
-            return Err(ApiError::new(400, "No changes were provided in the patch!"));
+            return Err(ApiError::new(400, "No changes were provided!"));
         }
 
         if let Some(video_url) = patch.video_url.as_ref() {
-            if !is_url(video_url) {
-                return Err(ApiError::new(400, "Your video is not a URL!"));
-            }
+            patch.video_url = Some(providers.validate_completion_video_url(video_url).map_err(
+                |mut e| {
+                    e.error_message = format!("Invalid completion video URL: {}", e.error_message);
+                    e
+                },
+            )?);
         }
 
         if let Some(raw_url) = patch.raw_url.as_ref() {
-            if !is_url(raw_url) {
-                return Err(ApiError::new(400, "Your raw footage is not a URL!"));
-            }
+            patch.raw_url = Some(providers.validate_raw_footage_url(raw_url).map_err(
+                |mut e| {
+                    e.error_message = format!("Invalid raw footage URL: {}", e.error_message);
+                    e
+                },
+            )?);
         }
 
-        let old_submission = submissions::table
+        let submitter_ban = users::table
+            .filter(users::id.eq(user))
+            .select(users::ban_level)
+            .first::<i32>(conn)?;
+
+        if submitter_ban >= 2 {
+            return Err(ApiError::new(
+                403,
+                "You have been banned from submitting records.",
+            ));
+        }
+
+        let old_submission: Submission = submissions::table
             .filter(submissions::id.eq(id))
             .select(Submission::as_select())
             .first::<Submission>(conn)?;
 
-        let resub = old_submission.status == SubmissionStatus::Denied;
-
-        if resub {
-            if !SubmissionsEnabled::is_enabled(conn)? {
-                return Err(ApiError::new(
-                    400,
-                    "Submissions are closed, please wait to resubmit this record!",
-                ));
-            }
-            let submitter_ban = users::table
-                .filter(users::id.eq(user))
-                .select(users::ban_level)
-                .first::<i32>(conn)?;
-
-            if submitter_ban >= 2 {
-                return Err(ApiError::new(
-                    403,
-                    "You are banned from resubmitting records.",
-                ));
-            }
-        }
-
-        let level_id = match patch.level_id {
-            Some(new_level_id) => new_level_id,
-            None => old_submission.level_id,
-        };
-
-        let raw_footage = match patch.raw_url.clone() {
-            Some(raw) => Some(raw),
-            None => old_submission.raw_url,
-        };
-
-        // if either of these fields changed, we need revalidate the raw
-        if patch.level_id.is_some() || patch.raw_url.is_some() {
-            let level_exists = levels::table
-                .filter(levels::id.eq(level_id))
-                .select((levels::legacy, levels::position))
-                .first::<(bool, i32)>(conn)
-                .optional()?;
-
-            match level_exists {
-                None => return Err(ApiError::new(404, "Could not find the new level!")),
-                Some((is_legacy, pos)) => {
-                    if is_legacy == true {
-                        return Err(ApiError::new(
-                            400,
-                            "This level is on the legacy list, and is not accepting records!",
-                        ));
-                    }
-                    if pos < 400 && raw_footage.is_none() {
-                        return Err(ApiError::new(
-                            400,
-                            "This level is top 400 and requires raw footage!",
-                        ));
-                    }
-                }
-            }
-        }
-
-        let existing_submission = submissions::table
-            .filter(submissions::level_id.eq(level_id))
-            .filter(submissions::submitted_by.eq(old_submission.submitted_by))
-            .filter(submissions::id.ne(id))
-            .select(submissions::id)
-            .first::<Uuid>(conn)
-            .optional()?;
-
-        if existing_submission.is_some() {
+        if old_submission.submitted_by != user {
             return Err(ApiError::new(
-                409,
-                "This user already has a submission for this level!",
+                403,
+                "You can only edit your own submissions.",
             ));
         }
 
-        let mut result = diesel::update(submissions::table)
+        if old_submission.locked {
+            return Err(ApiError::new(
+                403,
+                "This submission has been locked and cannot be edited",
+            ));
+        }
+
+        match old_submission.status {
+            SubmissionStatus::Claimed
+            | SubmissionStatus::UnderConsideration
+            | SubmissionStatus::UnderReview => {
+                return Err(ApiError::new(
+                    409,
+                    "This submission is currently being reviewed and cannot be edited.",
+                ));
+            }
+            _ => {}
+        }
+
+        if !SubmissionsEnabled::is_enabled(conn)?
+            && old_submission.status != SubmissionStatus::Pending
+        {
+            return Err(ApiError::new(
+                400,
+                "Submissions are currently closed. You can only edit pending submissions.",
+            ));
+        }
+
+        let is_legacy = levels::table
+            .filter(levels::id.eq(old_submission.level_id))
+            .select(levels::legacy)
+            .first::<bool>(conn)?;
+
+        if is_legacy {
+            return Err(ApiError::new(
+                400,
+                "This level is on the legacy list and is not accepting records!",
+            ));
+        }
+
+        let result = diesel::update(submissions::table)
             .filter(submissions::id.eq(id))
             .filter(submissions::submitted_by.eq(user))
-            .filter(
-                submissions::status
-                    .eq(SubmissionStatus::Pending)
-                    .or(submissions::status.eq(SubmissionStatus::Denied)),
-            )
             .set((
                 patch.clone(),
-                // FIXME: this is very silly
-                if resub {
-                    (
-                        submissions::status.eq(SubmissionStatus::Pending),
-                        submissions::reviewer_id.eq::<Option<Uuid>>(None),
-                        submissions::reviewer_notes.eq::<Option<String>>(None),
-                    )
-                } else {
-                    (
-                        submissions::status.eq(old_submission.status),
-                        submissions::reviewer_id.eq(old_submission.reviewer_id),
-                        submissions::reviewer_notes.eq(old_submission.reviewer_notes),
-                    )
-                },
+                submissions::status.eq(SubmissionStatus::Pending),
+                submissions::reviewer_id.eq::<Option<Uuid>>(None),
+                submissions::reviewer_notes.eq::<Option<String>>(None),
             ))
             .returning(Submission::as_select())
             .get_result::<Submission>(conn)?;
-
-        let history = SubmissionHistory {
-            id: Uuid::new_v4(),
-            submission_id: result.id,
-            record_id: None,
-            status: SubmissionStatus::Pending,
-            user_notes: result.user_notes.clone(),
-            reviewer_id: None,
-            reviewer_notes: None,
-            timestamp: chrono::Utc::now(),
-        };
-
-        diesel::insert_into(submission_history::table)
-            .values(&history)
-            .execute(conn)?;
-
-        if !authenticated.has_permission(conn, Permission::SubmissionReview)? {
-            result.reviewer_id = None;
-        }
 
         Ok(result)
     }
 }
 
 impl SubmissionPatchMod {
-    pub fn patch_mod(
-        patch: Self,
+    pub fn patch(
+        mut patch: Self,
         id: Uuid,
         conn: &mut DbConnection,
         authenticated: Authenticated,
+        notify_tx: broadcast::Sender<WebsocketNotification>,
+        providers: &VideoProvidersAppState,
     ) -> Result<Submission, ApiError> {
         if patch == Self::default() {
-            return Err(ApiError::new(400, "No changes were provided in the patch!"));
+            return Err(ApiError::new(400, "No changes were provided!"));
         }
 
         if let Some(video_url) = patch.video_url.as_ref() {
-            if !is_url(video_url) {
-                return Err(ApiError::new(400, "Your video is not a URL!"));
-            }
+            patch.video_url = Some(providers.validate_completion_video_url(video_url).map_err(
+                |mut e| {
+                    e.error_message = format!("Invalid completion video URL: {}", e.error_message);
+                    e
+                },
+            )?);
         }
 
         if let Some(raw_url) = patch.raw_url.as_ref() {
-            if !is_url(raw_url) {
-                return Err(ApiError::new(400, "Your raw footage is not a URL!"));
-            }
+            patch.raw_url = Some(providers.validate_raw_footage_url(raw_url).map_err(
+                |mut e| {
+                    e.error_message = format!("Invalid raw footage URL: {}", e.error_message);
+                    e
+                },
+            )?);
         }
 
-        let old_submission = submissions::table
+        let old_submission: Submission = submissions::table
             .filter(submissions::id.eq(id))
             .select(Submission::as_select())
             .first::<Submission>(conn)?;
@@ -260,79 +297,93 @@ impl SubmissionPatchMod {
                 id,
                 conn,
                 authenticated,
+                providers,
             );
         }
 
-        let level_id = match patch.level_id {
-            Some(new_level_id) => new_level_id,
-            None => old_submission.level_id,
-        };
+        let result = conn.transaction(|connection| -> Result<Submission, ApiError> {
+            let updated = diesel::update(submissions::table)
+                .filter(submissions::id.eq(id))
+                .set((
+                    patch.clone(),
+                    submissions::reviewer_id.eq(Some(authenticated.user_id)),
+                ))
+                .returning(Submission::as_select())
+                .get_result::<Submission>(connection)?;
 
-        let submitted_by = match patch.submitted_by {
-            Some(new_submitter_id) => new_submitter_id,
-            None => old_submission.submitted_by,
-        };
+            let old_status = old_submission.status;
+            let new_status = patch.status.unwrap_or(old_status.clone());
 
-        if let Some(new_submitter) = patch.submitted_by {
-            let submitter_ban = users::table
-                .filter(users::id.eq(new_submitter))
-                .select(users::ban_level)
-                .first::<i32>(conn)
-                .optional()?;
+            // Side effects when status changes to reviewed state
+            if (new_status == SubmissionStatus::Accepted
+                || new_status == SubmissionStatus::Denied
+                || new_status == SubmissionStatus::UnderConsideration)
+                && old_status != new_status
+            {
+                // Send user notification
+                let level_name = levels::table
+                    .filter(levels::id.eq(updated.level_id))
+                    .select(levels::name)
+                    .first::<String>(connection)?;
 
-            match submitter_ban {
-                None => return Err(ApiError::new(404, "Could not find the new user!")),
-                Some(ban) => {
-                    if ban >= 2 {
-                        return Err(ApiError::new(403, "This user is submission banned!"));
-                    }
-                }
+                let (notif_type, message) = match new_status {
+                    SubmissionStatus::Accepted => (
+                        NotificationType::Success,
+                        format!("Your submission for {:?} has been accepted!", level_name),
+                    ),
+                    SubmissionStatus::Denied => (
+                        NotificationType::Failure,
+                        format!("Your submission for {:?} has been denied.", level_name),
+                    ),
+                    _ => (
+                        NotificationType::Info,
+                        format!(
+                            "Your submission for {:?} has been put under consideration.",
+                            level_name
+                        ),
+                    ),
+                };
+
+                Notification::create(connection, updated.submitted_by, message, notif_type)?;
+
+                // Send websocket notification
+
+                let ws_type = match new_status {
+                    SubmissionStatus::Accepted => "SUBMISSION_ACCEPTED",
+                    SubmissionStatus::Denied => "SUBMISSION_DENIED",
+                    _ => "SUBMISSION_UNDER_CONSIDERATION",
+                };
+
+                let notification = WebsocketNotification {
+                    notification_type: ws_type.into(),
+                    data: serde_json::to_value(&updated).expect("Failed to serialize submission"),
+                };
+                let _ = notify_tx.send(notification);
             }
-        }
 
-        if let Some(new_level) = patch.level_id {
-            let level_exists = select(exists(levels::table.filter(levels::id.eq(new_level))))
-                .get_result::<bool>(conn)?;
+            Submission::update_user_shift(
+                connection,
+                notify_tx.clone(),
+                authenticated.user_id,
+                old_status,
+                new_status,
+            )?;
 
-            if level_exists == false {
-                return Err(ApiError::new(404, "Could not find the new level!"));
-            }
-        }
-
-        let existing_submission = submissions::table
-            .filter(submissions::level_id.eq(level_id))
-            .filter(submissions::submitted_by.eq(submitted_by))
-            .filter(submissions::id.ne(id))
-            .select(submissions::id)
-            .first::<Uuid>(conn)
-            .optional()?;
-
-        if existing_submission.is_some() {
-            return Err(ApiError::new(
-                409,
-                "This user already has a submission for this level!",
-            ));
-        }
-
-        let result = diesel::update(submissions::table)
-            .filter(submissions::id.eq(id))
-            .set(patch.clone())
-            .returning(Submission::as_select())
-            .get_result::<Submission>(conn)?;
+            Ok(updated)
+        })?;
 
         Ok(result)
     }
 
     pub fn downgrade(s: Self) -> SubmissionPatchUser {
         SubmissionPatchUser {
-            level_id: s.level_id,
             mobile: s.mobile,
             ldm_id: s.ldm_id,
             video_url: s.video_url,
-            completion_time: s.completion_time,
             raw_url: s.raw_url,
             mod_menu: s.mod_menu,
             user_notes: s.user_notes,
+            completion_time: s.completion_time,
         }
     }
 }

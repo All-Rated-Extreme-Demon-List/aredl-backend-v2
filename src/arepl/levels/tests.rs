@@ -1,25 +1,24 @@
 #[cfg(test)]
-use crate::{
-    arepl::{
-        packs::test_utils::create_test_pack,
-        levels::test_utils::{create_test_level, create_test_level_with_record}
+use {
+    crate::{
+        arepl::{
+            levels::test_utils::{create_test_level, create_test_level_with_record},
+            packs::test_utils::create_test_pack,
+        },
+        auth::{create_test_token, Permission},
+        schema::arepl::{levels_created, pack_levels},
+        test_utils::*,
+        users::test_utils::create_test_user,
     },
-    auth::{create_test_token, Permission},
-    schema::arepl::{levels_created, pack_levels},
+    actix_web::test::{self, read_body_json},
+    diesel::{ExpressionMethods, RunQueryDsl},
+    serde_json::json,
 };
-#[cfg(test)]
-use crate::{test_utils::*, users::test_utils::create_test_user};
-#[cfg(test)]
-use actix_web::test::{self, read_body_json};
-#[cfg(test)]
-use diesel::{ExpressionMethods, RunQueryDsl};
-#[cfg(test)]
-use serde_json::json;
 
 #[actix_web::test]
 async fn create_level() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::LevelModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::LevelModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let level_data = json!({
@@ -48,10 +47,10 @@ async fn create_level() {
 
 #[actix_web::test]
 async fn list_levels() {
-    let (app, mut conn, _, _) = init_test_app().await;
-    create_test_level(&mut conn).await;
-    create_test_level(&mut conn).await;
-    create_test_level(&mut conn).await;
+    let (app, db, _, _) = init_test_app().await;
+    create_test_level(&db).await;
+    create_test_level(&db).await;
+    create_test_level(&db).await;
     let req = test::TestRequest::get().uri("/arepl/levels").to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -71,11 +70,11 @@ async fn list_levels() {
 
 #[actix_web::test]
 async fn update_level() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::LevelModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::LevelModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let level_id = create_test_level(&mut conn).await;
+    let level_id = create_test_level(&db).await;
     let update_data = json!({
         "name": "Updated Level Name"
     });
@@ -87,21 +86,21 @@ async fn update_level() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
 
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(body["name"].to_string(), update_data["name"].to_string())
 }
 
 #[actix_web::test]
 async fn find_level() {
-    let (app, mut conn, _, _) = init_test_app().await;
-    let level_id = create_test_level(&mut conn).await;
+    let (app, db, _, _) = init_test_app().await;
+    let level_id = create_test_level(&db).await;
     let req = test::TestRequest::get()
         .uri(&format!("/arepl/levels/{}", level_id))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
 
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(
         level_id.to_string(),
         body["id"].as_str().unwrap().to_string(),
@@ -111,16 +110,16 @@ async fn find_level() {
 
 #[actix_web::test]
 async fn list_creators() {
-    let (app, mut conn, _, _) = init_test_app().await;
-    let level_id = create_test_level(&mut conn).await;
-    let (creator_id, _) = create_test_user(&mut conn, None).await;
+    let (app, db, _, _) = init_test_app().await;
+    let level_id = create_test_level(&db).await;
+    let (creator_id, _) = create_test_user(&db, None).await;
 
     diesel::insert_into(levels_created::table)
         .values((
             levels_created::level_id.eq(level_id),
             levels_created::user_id.eq(creator_id),
         ))
-        .execute(&mut conn)
+        .execute(&mut db.connection().unwrap())
         .expect("Failed to add creator to level!");
 
     let req = test::TestRequest::get()
@@ -141,11 +140,11 @@ async fn list_creators() {
 
 #[actix_web::test]
 async fn set_creators() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::LevelModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::LevelModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let level_id = create_test_level(&mut conn).await;
+    let level_id = create_test_level(&db).await;
     let new_creator_id = user_id;
     let req = test::TestRequest::post()
         .uri(&format!("/arepl/levels/{}/creators", level_id))
@@ -161,11 +160,11 @@ async fn set_creators() {
 
 #[actix_web::test]
 async fn add_and_remove_creators() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::LevelModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::LevelModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let level_id = create_test_level(&mut conn).await;
+    let level_id = create_test_level(&db).await;
     // Add creator
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/levels/{}/creators", level_id))
@@ -203,10 +202,10 @@ async fn add_and_remove_creators() {
 
 #[actix_web::test]
 async fn get_level_history() {
-    let (app, mut conn, _, _) = init_test_app().await;
-    let level_id = create_test_level(&mut conn).await;
+    let (app, db, _, _) = init_test_app().await;
+    let level_id = create_test_level(&db).await;
     // move this level by placing a new one at #1
-    let other_level = create_test_level(&mut conn).await;
+    let other_level = create_test_level(&db).await;
 
     let req = test::TestRequest::get()
         .uri(&format!("/arepl/levels/{}/history", level_id))
@@ -230,16 +229,16 @@ async fn get_level_history() {
 
 #[actix_web::test]
 async fn get_level_pack() {
-    let (app, mut conn, _, _) = init_test_app().await;
-    let level = create_test_level(&mut conn).await;
-    let pack = create_test_pack(&mut conn).await;
+    let (app, db, _, _) = init_test_app().await;
+    let level = create_test_level(&db).await;
+    let pack = create_test_pack(&db).await;
     // insert the pack into the level
     diesel::insert_into(pack_levels::table)
         .values((
             pack_levels::pack_id.eq(pack),
             pack_levels::level_id.eq(level),
         ))
-        .execute(&mut conn)
+        .execute(&mut db.connection().unwrap())
         .expect("Failed to add level to pack!");
 
     let req = test::TestRequest::get()
@@ -263,9 +262,9 @@ async fn get_level_pack() {
 
 #[actix_web::test]
 async fn get_level_records() {
-    let (app, mut conn, _, _) = init_test_app().await;
-    let (submitter, _) = create_test_user(&mut conn, None).await;
-    let (level_id, record_id) = create_test_level_with_record(&mut conn, submitter).await;
+    let (app, db, _, _) = init_test_app().await;
+    let (submitter, _) = create_test_user(&db, None).await;
+    let (level_id, record_id) = create_test_level_with_record(&db, submitter).await;
 
     let req = test::TestRequest::get()
         .uri(&format!("/arepl/levels/{}/records", level_id))

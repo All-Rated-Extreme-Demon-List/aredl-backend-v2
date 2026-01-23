@@ -1,6 +1,6 @@
 mod model;
 mod routes;
-mod statistics;
+
 #[cfg(test)]
 pub mod test_utils;
 #[cfg(test)]

@@ -1,6 +1,6 @@
+use crate::app_data::db::DbAppState;
 use crate::auth::Authenticated;
 use crate::auth::{Permission, UserAuth};
-use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::users::merge::requests::{
@@ -126,7 +126,7 @@ async fn create(
     let result = web::block(move || {
         let conn = &mut db.connection()?;
 
-        authenticated.check_is_banned(conn)?;
+        authenticated.ensure_not_banned(conn)?;
 
         MergeRequest::upsert(
             conn,

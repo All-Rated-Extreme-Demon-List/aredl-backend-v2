@@ -1,17 +1,19 @@
-use crate::arepl::packs::test_utils::create_test_pack_tier;
 #[cfg(test)]
-use crate::auth::{create_test_token, Permission};
-#[cfg(test)]
-use crate::{test_utils::*, users::test_utils::create_test_user};
-#[cfg(test)]
-use actix_web::test;
-#[cfg(test)]
-use serde_json::json;
+use {
+    crate::{
+        arepl::packs::test_utils::create_test_pack_tier,
+        auth::{create_test_token, Permission},
+        test_utils::*,
+        users::test_utils::create_test_user,
+    },
+    actix_web::test::{self, read_body_json},
+    serde_json::json,
+};
 
 #[actix_web::test]
 async fn create_pack_tier() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::PackTierModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::PackTierModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -28,7 +30,7 @@ async fn create_pack_tier() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
 
     assert_eq!(
         body["name"].as_str().unwrap(),
@@ -49,11 +51,11 @@ async fn get_pack_tiers() {
 
 #[actix_web::test]
 async fn update_pack_tier() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::PackTierModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::PackTierModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let tier_id = create_test_pack_tier(&mut conn).await;
+    let tier_id = create_test_pack_tier(&db).await;
     let update_data = json!({
         "name": "Updated Tier Name"
     });
@@ -64,7 +66,7 @@ async fn update_pack_tier() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
 
     assert_eq!(
         body["name"].as_str().unwrap(),
@@ -75,11 +77,11 @@ async fn update_pack_tier() {
 
 #[actix_web::test]
 async fn delete_pack_tier() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::PackTierModify)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::PackTierModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let tier_id = create_test_pack_tier(&mut conn).await;
+    let tier_id = create_test_pack_tier(&db).await;
     let req = test::TestRequest::delete()
         .uri(&format!("/arepl/pack-tiers/{}", tier_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))

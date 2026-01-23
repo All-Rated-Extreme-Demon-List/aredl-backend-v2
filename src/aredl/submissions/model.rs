@@ -1,27 +1,29 @@
 use crate::{
-    aredl::{levels::ExtendedBaseLevel, submissions::history::SubmissionHistory},
+    app_data::db::DbConnection,
+    aredl::levels::ExtendedBaseLevel,
     auth::{Authenticated, Permission},
-    db::DbConnection,
     error_handler::ApiError,
-    schema::aredl::{submission_history, submissions, submissions_with_priority},
-    users::BaseUser,
+    schema::aredl::{submissions, submissions_with_priority},
+    users::ExtendedBaseUser,
 };
 use chrono::{DateTime, Utc};
-use diesel::{pg::Pg, Connection, ExpressionMethods, RunQueryDsl, Selectable};
+use diesel::{pg::Pg, Connection, ExpressionMethods, QueryDsl, RunQueryDsl, Selectable};
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq, Default)]
 #[ExistingTypePath = "crate::schema::aredl::sql_types::SubmissionStatus"]
 #[DbValueStyle = "PascalCase"]
 pub enum SubmissionStatus {
+    #[default]
     Pending,
     Claimed,
     UnderConsideration,
     Denied,
     Accepted,
+    UnderReview,
 }
 
 #[derive(Serialize, Deserialize, Queryable, Insertable, Selectable, Debug, ToSchema, Clone)]
@@ -37,9 +39,16 @@ pub struct Submission {
     pub mobile: bool,
     /// ID of the LDM used for the record, if any.
     pub ldm_id: Option<i32>,
-    /// Video link of the completion.
+    /// Completion video URL.
+    ///
+    /// The provider is enforced and the URL is stored in a standardized canonical form.
+    /// See [Allowed video URL types](#allowed-video-url-types).
     pub video_url: String,
-    /// Link to the raw video file of the completion.
+    /// Raw footage URL (optional).
+    ///
+    /// Only requires a valid URL (the site is not enforced). If the URL matches a recognized provider
+    /// it is standardized, otherwise it is stored as-is.
+    /// See [Allowed video URL types](#allowed-video-url-types).
     pub raw_url: Option<String>,
     /// The mod menu used in this record
     pub mod_menu: Option<String>,
@@ -53,6 +62,10 @@ pub struct Submission {
     pub reviewer_notes: Option<String>,
     /// Any additional notes left by the submitter.
     pub user_notes: Option<String>,
+    /// Private notes given by the reviewer when reviewing the record.
+    pub private_reviewer_notes: Option<String>,
+    /// Whether or not this submission has been locked by a staff member
+    pub locked: bool,
     /// Timestamp of when the submission was created.
     pub created_at: DateTime<Utc>,
     /// Timestamp of when the submission was last updated.
@@ -72,9 +85,16 @@ pub struct SubmissionWithPriority {
     pub mobile: bool,
     /// ID of the LDM used for the record, if any.
     pub ldm_id: Option<i32>,
-    /// Video link of the completion.
+    /// Completion video URL.
+    ///
+    /// The provider is enforced and the URL is stored in a standardized canonical form.
+    /// See [Allowed video URL types](#allowed-video-url-types).
     pub video_url: String,
-    /// Link to the raw video file of the completion.
+    /// Raw footage URL (optional).
+    ///
+    /// Only requires a valid URL (the site is not enforced). If the URL matches a recognized provider
+    /// it is standardized, otherwise it is stored as-is.
+    /// See [Allowed video URL types](#allowed-video-url-types).
     pub raw_url: Option<String>,
     /// The mod menu used in this record
     pub mod_menu: Option<String>,
@@ -86,8 +106,12 @@ pub struct SubmissionWithPriority {
     pub priority: bool,
     /// Notes given by the reviewer when reviewing the record.
     pub reviewer_notes: Option<String>,
+    /// Private notes given by the reviewer when reviewing the record.
+    pub private_reviewer_notes: Option<String>,
     /// Any additional notes left by the submitter.
     pub user_notes: Option<String>,
+    /// Whether or not this submission has been locked by a staff member
+    pub locked: bool,
     /// Timestamp of when the submission was created.
     pub created_at: DateTime<Utc>,
     /// Timestamp of when the submission was last updated.
@@ -103,33 +127,44 @@ pub struct SubmissionResolved {
     /// The level this submission is for
     pub level: ExtendedBaseLevel,
     /// User who submitted this completion.
-    pub submitted_by: BaseUser,
+    pub submitted_by: ExtendedBaseUser,
     /// Whether the record was completed on mobile or not.
     pub mobile: bool,
     /// ID of the LDM used for the record, if any.
     pub ldm_id: Option<i32>,
-    /// Video link of the completion.
+    /// Completion video URL.
+    ///
+    /// The provider is enforced and the URL is stored in a standardized canonical form.
+    /// See [Allowed video URL types](#allowed-video-url-types).
     pub video_url: String,
-    /// Link to the raw video file of the completion.
+    /// Raw footage URL (optional).
+    ///
+    /// Only requires a valid URL (the site is not enforced). If the URL matches a recognized provider
+    /// it is standardized, otherwise it is stored as-is.
+    /// See [Allowed video URL types](#allowed-video-url-types).
     pub raw_url: Option<String>,
     /// The mod menu used in this record
     pub mod_menu: Option<String>,
     /// The status of this submission
     pub status: SubmissionStatus,
-    /// User who reviewed the record.
+    /// [MOD ONLY] User who reviewed the record.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub reviewer: Option<BaseUser>,
+    pub reviewer: Option<ExtendedBaseUser>,
+    /// [MOD ONLY] Private notes given by the reviewer when reviewing the record.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub private_reviewer_notes: Option<String>,
     /// Whether the record was submitted as a priority record.
     pub priority: bool,
     /// Notes given by the reviewer when reviewing the record.
     pub reviewer_notes: Option<String>,
     /// Any additional notes left by the submitter.
     pub user_notes: Option<String>,
+    /// Whether or not this submission has been locked by a staff member
+    pub locked: bool,
     /// Timestamp of when the submission was created.
     pub created_at: DateTime<Utc>,
     /// Timestamp of when the submission was last updated.
     pub updated_at: DateTime<Utc>,
-    ///
     pub priority_value: i64,
 }
 
@@ -139,26 +174,45 @@ pub struct SubmissionPage {
 }
 
 impl Submission {
+    pub fn claim_highest_priority(
+        conn: &mut DbConnection,
+        authenticated: Authenticated,
+    ) -> Result<SubmissionResolved, ApiError> {
+        conn.transaction(|conn| -> Result<SubmissionResolved, ApiError> {
+            let next_id: Uuid = submissions_with_priority::table
+                .filter(submissions_with_priority::status.eq(SubmissionStatus::Pending))
+                // prevent moderators from claiming their own submissions
+                .filter(submissions_with_priority::submitted_by.ne(authenticated.user_id))
+                .for_update()
+                .skip_locked()
+                .order((
+                    submissions_with_priority::priority.desc(),
+                    submissions_with_priority::priority_value.desc(),
+                    submissions_with_priority::created_at.asc(),
+                ))
+                .select(submissions_with_priority::id)
+                .first(conn)?;
+
+            diesel::update(submissions::table.filter(submissions::id.eq(next_id)))
+                .set((
+                    submissions::status.eq(SubmissionStatus::Claimed),
+                    submissions::reviewer_id.eq(authenticated.user_id),
+                    submissions::updated_at.eq(chrono::Utc::now()),
+                ))
+                .execute(conn)?;
+
+            let resolved = SubmissionResolved::find_one(conn, next_id, authenticated)?;
+
+            Ok(resolved)
+        })
+    }
+
     pub fn delete(
         conn: &mut DbConnection,
         submission_id: Uuid,
         authenticated: Authenticated,
     ) -> Result<(), ApiError> {
         conn.transaction(|connection| -> Result<(), ApiError> {
-            let history = SubmissionHistory {
-                id: Uuid::new_v4(),
-                submission_id,
-                record_id: None,
-                status: SubmissionStatus::Denied, // Or SubmissionStatus::Deleted if implemented
-                reviewer_notes: None,
-                reviewer_id: None,
-                user_notes: Some("Submission deleted".into()),
-                timestamp: chrono::Utc::now(),
-            };
-            diesel::insert_into(submission_history::table)
-                .values(&history)
-                .execute(connection)?;
-
             let mut query = diesel::delete(submissions::table)
                 .filter(submissions::id.eq(submission_id))
                 .into_boxed();
@@ -170,6 +224,7 @@ impl Submission {
             }
 
             query.execute(connection)?;
+
             Ok(())
         })?;
         Ok(())

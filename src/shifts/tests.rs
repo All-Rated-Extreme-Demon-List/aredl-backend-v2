@@ -17,11 +17,11 @@ use {
 
 #[actix_web::test]
 async fn get_shifts_list() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    create_test_shift(&mut conn, user_id, false).await;
+    create_test_shift(&db, user_id, false).await;
     let req = test::TestRequest::get()
         .uri("/shifts")
         .insert_header(("Authorization", format!("Bearer {}", token)))
@@ -34,11 +34,11 @@ async fn get_shifts_list() {
 
 #[actix_web::test]
 async fn get_my_shifts() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    create_test_shift(&mut conn, user_id, false).await;
+    create_test_shift(&db, user_id, false).await;
     let req = test::TestRequest::get()
         .uri("/shifts/@me")
         .insert_header(("Authorization", format!("Bearer {}", token)))
@@ -59,11 +59,11 @@ async fn get_my_shifts() {
 
 #[actix_web::test]
 async fn patch_shift() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let shift_id = create_test_shift(&mut conn, user_id, false).await;
+    let shift_id = create_test_shift(&db, user_id, false).await;
     let patch_data = json!({
         "status": "Completed"
     });
@@ -84,11 +84,11 @@ async fn patch_shift() {
 
 #[actix_web::test]
 async fn delete_shift() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let shift_id = create_test_shift(&mut conn, user_id, false).await;
+    let shift_id = create_test_shift(&db, user_id, false).await;
     let req = test::TestRequest::delete()
         .uri(&format!("/shifts/{}", shift_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
@@ -99,8 +99,8 @@ async fn delete_shift() {
 
 #[actix_web::test]
 async fn create_recurring_shift() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let insert_data = json!({
@@ -123,11 +123,11 @@ async fn create_recurring_shift() {
 
 #[actix_web::test]
 async fn list_recurring_shifts() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    create_test_recurring_shift(&mut conn, user_id).await;
+    create_test_recurring_shift(&db, user_id).await;
     let req = test::TestRequest::get()
         .uri("/shifts/recurring")
         .insert_header(("Authorization", format!("Bearer {}", token)))
@@ -144,11 +144,11 @@ async fn list_recurring_shifts() {
 
 #[actix_web::test]
 async fn patch_recurring_shift() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let recurring_id = create_test_recurring_shift(&mut conn, user_id).await;
+    let recurring_id = create_test_recurring_shift(&db, user_id).await;
     let patch_data = json!({
         "target_count": 42
     });
@@ -165,11 +165,11 @@ async fn patch_recurring_shift() {
 
 #[actix_web::test]
 async fn delete_recurring_shift() {
-    let (app, mut conn, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let recurring_id = create_test_recurring_shift(&mut conn, user_id).await;
+    let recurring_id = create_test_recurring_shift(&db, user_id).await;
     let req = test::TestRequest::delete()
         .uri(&format!("/shifts/recurring/{}", recurring_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
@@ -182,13 +182,13 @@ async fn delete_recurring_shift() {
 
 #[actix_web::test]
 async fn create_shifts_from_recurring() {
-    let (_, mut conn, _, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
+    let (_, db, _, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
 
-    create_test_recurring_shift(&mut conn, user_id).await;
+    create_test_recurring_shift(&db, user_id).await;
 
     let friday_date = NaiveDate::from_ymd_opt(2025, 7, 11).unwrap();
-    let created_shifts = RecurringShift::create_shifts(&mut conn, friday_date)
+    let created_shifts = RecurringShift::create_shifts(&mut db.connection().unwrap(), friday_date)
         .expect("Failed to create shifts from recurring template");
 
     assert_eq!(created_shifts.len(), 1, "Should create one shift");
@@ -203,7 +203,7 @@ async fn create_shifts_from_recurring() {
 
     let db_shifts: Vec<crate::shifts::Shift> = shifts::table
         .filter(shifts::user_id.eq(user_id))
-        .load(&mut conn)
+        .load(&mut db.connection().unwrap())
         .expect("Failed to load shifts from database");
 
     assert_eq!(db_shifts.len(), 1, "Should have one shift in database");
@@ -219,23 +219,20 @@ async fn create_shifts_from_recurring() {
 
 #[actix_web::test]
 async fn create_shifts_no_duplicates() {
-    use crate::schema::shifts;
-    use crate::shifts::recurring::RecurringShift;
-    use chrono::NaiveDate;
-    use diesel::{QueryDsl, RunQueryDsl};
+    let (_, db, _, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
 
-    let (_, mut conn, _, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
-
-    create_test_recurring_shift(&mut conn, user_id).await;
+    create_test_recurring_shift(&db, user_id).await;
 
     let friday_date = NaiveDate::from_ymd_opt(2025, 7, 11).unwrap();
 
-    let created_shifts_1 = RecurringShift::create_shifts(&mut conn, friday_date)
-        .expect("Failed to create shifts from recurring template (first call)");
+    let created_shifts_1 =
+        RecurringShift::create_shifts(&mut db.connection().unwrap(), friday_date)
+            .expect("Failed to create shifts from recurring template (first call)");
 
-    let created_shifts_2 = RecurringShift::create_shifts(&mut conn, friday_date)
-        .expect("Failed to create shifts from recurring template (second call)");
+    let created_shifts_2 =
+        RecurringShift::create_shifts(&mut db.connection().unwrap(), friday_date)
+            .expect("Failed to create shifts from recurring template (second call)");
 
     assert_eq!(
         created_shifts_1.len(),
@@ -250,7 +247,7 @@ async fn create_shifts_no_duplicates() {
 
     let db_shifts: Vec<crate::shifts::Shift> = shifts::table
         .filter(shifts::user_id.eq(user_id))
-        .load(&mut conn)
+        .load(&mut db.connection().unwrap())
         .expect("Failed to load shifts from database");
 
     assert_eq!(db_shifts.len(), 1, "Should have only one shift in database");
@@ -258,17 +255,14 @@ async fn create_shifts_no_duplicates() {
 
 #[actix_web::test]
 async fn create_shifts_wrong_weekday() {
-    use crate::shifts::recurring::RecurringShift;
-    use chrono::NaiveDate;
+    let (_, db, _, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
 
-    let (_, mut conn, _, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
-
-    create_test_recurring_shift(&mut conn, user_id).await;
+    create_test_recurring_shift(&db, user_id).await;
 
     let monday_date = NaiveDate::from_ymd_opt(2025, 7, 7).unwrap();
 
-    let created_shifts = RecurringShift::create_shifts(&mut conn, monday_date)
+    let created_shifts = RecurringShift::create_shifts(&mut db.connection().unwrap(), monday_date)
         .expect("Failed to create shifts from recurring template");
 
     assert_eq!(

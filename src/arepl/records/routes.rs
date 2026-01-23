@@ -1,19 +1,15 @@
-use crate::arepl::records::model::{RecordInsert, RecordUpdate};
-use crate::arepl::records::{
-    statistics, FullRecordResolved, FullRecordUnresolved, FullRecordUnresolvedDto,
-    FullResolvedRecordPage, FullUnresolvedRecordPage, Record, RecordsQueryOptions,
-};
+use crate::app_data::db::DbAppState;
+use crate::arepl::records::model::RecordInsert;
+use crate::arepl::records::{Record, RecordPatch, RecordsQueryOptions, ResolvedRecord};
 use crate::auth::{Authenticated, Permission, UserAuth};
-use crate::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
+use crate::providers::VideoProvidersAppState;
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
 use uuid::Uuid;
-
-use super::pemonlist;
 
 #[utoipa::path(
     get,
@@ -21,7 +17,7 @@ use super::pemonlist;
     description = "Fetch details of a specific record",
     tag = "AREDL (P) - Records",
     responses(
-        (status = 200, body = FullRecordResolved),
+        (status = 200, body = ResolvedRecord),
     ),
     security(
         ("access_token" = ["RecordModify"]),
@@ -34,8 +30,7 @@ async fn find(
     id: web::Path<Uuid>,
 ) -> Result<HttpResponse, ApiError> {
     let record =
-        web::block(move || FullRecordResolved::find(&mut db.connection()?, id.into_inner()))
-            .await??;
+        web::block(move || ResolvedRecord::find(&mut db.connection()?, id.into_inner())).await??;
     Ok(HttpResponse::Ok().json(record))
 }
 
@@ -57,11 +52,14 @@ async fn find(
 async fn create(
     db: web::Data<Arc<DbAppState>>,
     record: web::Json<RecordInsert>,
+    authenticated: Authenticated,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&record));
-    let record =
-        web::block(move || Record::create(&mut db.connection()?, record.into_inner())).await??;
+    let record = web::block(move || {
+        Record::create(&mut db.connection()?, record.into_inner(), authenticated)
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(record))
 }
 
@@ -70,7 +68,7 @@ async fn create(
     summary = "[Staff]Edit record",
     description = "Edit a specific record",
     tag = "AREDL (P) - Records",
-    request_body = RecordUpdate,
+    request_body = RecordPatch,
     params(
         ("id" = Uuid, description = "Internal record UUID")
     ),
@@ -86,14 +84,50 @@ async fn create(
 async fn update(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
-    record: web::Json<RecordUpdate>,
+    record: web::Json<RecordPatch>,
+    authenticated: Authenticated,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&record));
     let record = web::block(move || {
-        Record::update(&mut db.connection()?, id.into_inner(), record.into_inner())
+        Record::update(
+            &mut db.connection()?,
+            id.into_inner(),
+            record.into_inner(),
+            authenticated,
+        )
     })
     .await??;
+    Ok(HttpResponse::Ok().json(record))
+}
+
+#[utoipa::path(
+    patch,
+    summary = "[Staff]Update record completion timestamp",
+    description = "Tries to fetch and update the achieved_at timestamp for this record, by looking up the completion video's link",
+    tag = "AREDL (P) - Records",
+    params(
+        ("id" = Uuid, description = "Internal record UUID")
+    ),
+    responses(
+        (status = 200, body = Record)
+    ),
+    security(
+        ("access_token" = ["RecordModify"]),
+        ("api_key" = ["RecordModify"]),
+    )
+)]
+#[patch(
+    "/{id}/update-timestamp",
+    wrap = "UserAuth::require(Permission::RecordModify)"
+)]
+async fn update_timestamp(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<Uuid>,
+    providers: web::Data<Arc<VideoProvidersAppState>>,
+) -> Result<HttpResponse, ApiError> {
+    let record =
+        Record::update_timestamp(db, Some(id.into_inner()), None, providers.get_ref()).await?;
     Ok(HttpResponse::Ok().json(record))
 }
 
@@ -117,26 +151,28 @@ async fn update(
 async fn delete(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
+    authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let record =
-        web::block(move || Record::delete(&mut db.connection()?, id.into_inner())).await??;
+        web::block(move || Record::delete(&mut db.connection()?, id.into_inner(), authenticated))
+            .await??;
     Ok(HttpResponse::Ok().json(record))
 }
 
 #[utoipa::path(
     get,
     summary = "[Staff]List records",
-    description = "List a possibly filtered list of all records, unresolved",
+    description = "List a possibly filtered list of all records, with resolved levels and users data",
     tag = "AREDL (P) - Records",
     params(
         ("page" = Option<i64>, Query, description = "The page of the list to fetch"),
         ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page"),
         ("level_filter" = Option<Uuid>, Query, description = "The level internal UUID to filter by"),
         ("mobile_filter" = Option<bool>, Query, description = "Whether to show only/hide mobile records"),
-        ("submitter_filter" = Option<Uuid>, Query, description = "The submitter user internal UUID to filter by"),
+        ("submitter_filter" = Option<String>, Query, description = "The submitter user (UUID, discord ID, or username) to filter by"),
     ),
     responses(
-        (status = 200, body = Paginated<FullUnresolvedRecordPage>)
+        (status = 200, body = Paginated<ResolvedRecord>)
     ),
     security(
         ("access_token" = ["RecordModify"]),
@@ -150,49 +186,10 @@ async fn find_all(
     options: web::Query<RecordsQueryOptions>,
 ) -> Result<HttpResponse, ApiError> {
     let records = web::block(move || {
-        FullRecordUnresolved::find_all(
+        ResolvedRecord::find_all(
             &mut db.connection()?,
             page_query.into_inner(),
             options.into_inner(),
-            false,
-        )
-    })
-    .await??;
-    Ok(HttpResponse::Ok().json(records))
-}
-
-#[utoipa::path(
-    get,
-    summary = "[Staff]List full records",
-    description = "List a possibly filtered list of all records, with resolved levels and users data",
-    tag = "AREDL (P) - Records",
-    params(
-        ("page" = Option<i64>, Query, description = "The page of the list to fetch"),
-        ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page"),
-        ("level_filter" = Option<Uuid>, Query, description = "The level internal UUID to filter by"),
-        ("mobile_filter" = Option<bool>, Query, description = "Whether to show only/hide mobile records"),
-        ("submitter_filter" = Option<Uuid>, Query, description = "The submitter user internal UUID to filter by"),
-    ),
-    responses(
-        (status = 200, body = Paginated<FullResolvedRecordPage>)
-    ),
-    security(
-        ("access_token" = ["RecordModify"]),
-        ("api_key" = ["RecordModify"]),
-    )
-)]
-#[get("/full", wrap = "UserAuth::require(Permission::RecordModify)")]
-async fn find_all_full(
-    db: web::Data<Arc<DbAppState>>,
-    page_query: web::Query<PageQuery<100>>,
-    options: web::Query<RecordsQueryOptions>,
-) -> Result<HttpResponse, ApiError> {
-    let records = web::block(move || {
-        FullRecordResolved::find_all(
-            &mut db.connection()?,
-            page_query.into_inner(),
-            options.into_inner(),
-            false,
         )
     })
     .await??;
@@ -205,7 +202,7 @@ async fn find_all_full(
     description = "List all of the authenticated user's records",
     tag = "AREDL (P) - Records",
     responses(
-        (status = 200, body = [FullRecordUnresolvedDto])
+        (status = 200, body = [ResolvedRecord])
     ),
     params(
         ("page" = Option<i64>, Query, description = "The page of the list to fetch"),
@@ -223,16 +220,15 @@ async fn find_me(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let records = web::block(move || {
-        FullRecordResolved::find_all(
+        ResolvedRecord::find_all(
             &mut db.connection()?,
             page_query.into_inner(),
             RecordsQueryOptions {
                 level_filter: None,
                 mobile_filter: None,
-                submitter_filter: Some(authenticated.user_id),
-                reviewer_filter: None,
+                submitter_filter: Some(authenticated.user_id.to_string()),
+                sort: None,
             },
-            true,
         )
     })
     .await??;
@@ -244,25 +240,20 @@ async fn find_me(
     tags(
         (name = "AREDL (P) - Records", description = "Endpoints for fetching and managing platformer records")
     ),
-    nest(
-        (path = "/pemonlist", api=pemonlist::ApiDoc),
-        (path = "/statistics", api=statistics::ApiDoc),
-    ),
     components(
         schemas(
             Record,
-            RecordUpdate,
-            FullRecordResolved,
-            FullRecordUnresolvedDto
+            RecordPatch,
+            ResolvedRecord,
         )
     ),
     paths(
         create,
         update,
+        update_timestamp,
         delete,
         find,
         find_all,
-        find_all_full,
         find_me,
     )
 )]
@@ -271,13 +262,11 @@ pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/records")
-            .configure(pemonlist::init_routes)
-            .configure(statistics::init_routes)
             .service(create)
             .service(update)
+            .service(update_timestamp)
             .service(delete)
             .service(find_all)
-            .service(find_all_full)
             .service(find_me)
             .service(find),
     );

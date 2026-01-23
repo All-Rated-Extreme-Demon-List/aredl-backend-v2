@@ -1,5 +1,5 @@
+use crate::app_data::db::DbConnection;
 use crate::aredl::levels::ExtendedBaseLevel;
-use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::{
     aredl::levels, aredl::pack_levels, aredl::pack_tiers, aredl::packs_points, aredl::records,
@@ -124,7 +124,7 @@ impl PackTierResolved {
         let pack_levels = match user_id {
             Some(user) =>
             // join records and check if user has a record on the level.
-            // any column can be used, in this case we use records::placement_order because it is just an int.
+            // any column can be used
             {
                 levels_base_query
                     .left_join(
@@ -135,10 +135,10 @@ impl PackTierResolved {
                     .select((
                         pack_levels::pack_id,
                         ExtendedBaseLevel::as_select(),
-                        records::placement_order.nullable(),
+                        records::id.nullable(),
                     ))
-                    .load::<(Uuid, ExtendedBaseLevel, Option<i32>)>(conn)?
-                    // map Option<i32> into Option<bool> which is always Some.
+                    .load::<(Uuid, ExtendedBaseLevel, Option<Uuid>)>(conn)?
+                    // map Option<Uuid> into Option<bool> which is always Some.
                     // It will be Some(true) if user has completed the level and Some(false) otherwise.
                     // That's because None is used for non-authenticated queries.
                     .into_iter()

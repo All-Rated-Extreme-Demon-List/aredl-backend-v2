@@ -1,4 +1,4 @@
-use crate::db::DbAppState;
+use crate::app_data::db::DbAppState;
 use crate::get_secret;
 use crate::schema::matview_refresh_log;
 use chrono::Utc;
@@ -27,6 +27,8 @@ pub async fn start_matviews_refresher(db: Arc<DbAppState>) {
         "country_leaderboard",
         "clans_leaderboard",
         "submission_stats",
+        "record_totals",
+        "submission_totals",
     ];
 
     task::spawn(async move {

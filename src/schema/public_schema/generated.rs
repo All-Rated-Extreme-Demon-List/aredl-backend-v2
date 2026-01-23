@@ -129,6 +129,7 @@ pub mod public {
             id -> Int4,
             privilege_level -> Int4,
             role_desc -> Varchar,
+            hide -> Bool,
         }
     }
 

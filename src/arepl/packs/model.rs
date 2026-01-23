@@ -1,5 +1,5 @@
 use crate::arepl::packtiers::BasePackTier;
-use crate::db::DbConnection;
+use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::arepl::packs;
 use diesel::pg::Pg;

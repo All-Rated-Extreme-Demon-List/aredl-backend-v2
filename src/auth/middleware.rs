@@ -1,3 +1,4 @@
+use actix_http::header;
 use actix_web::body::BoxBody;
 use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
 use actix_web::{web, Error, HttpMessage, HttpRequest, HttpResponse, ResponseError};
@@ -6,10 +7,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use crate::auth::app_state::AuthAppState;
+use crate::app_data::auth::AuthAppState;
+use crate::app_data::db::DbAppState;
 use crate::auth::token::{decode_token, decode_user_claims, UserClaims};
 use crate::auth::{permission, Permission};
-use crate::db::DbAppState;
 
 use crate::auth::token::check_token_valid;
 use crate::error_handler::ApiError;
@@ -90,7 +91,7 @@ where
         let (http_req, payload) = req.into_parts();
         let token = http_req
             .headers()
-            .get(openidconnect::http::header::AUTHORIZATION)
+            .get(header::AUTHORIZATION)
             .map(|h| h.to_str().unwrap().split_at(7).1.to_string());
 
         if token.is_none() {
@@ -151,13 +152,21 @@ where
 
         match self.required_perm.clone() {
             Some(required_perm) => {
-                let has_permission = permission::check_permission(conn, user_id, required_perm);
+                let has_permission =
+                    permission::check_user_permission(conn, user_id, required_perm.clone());
                 match has_permission {
                     Ok(permission) => {
                         if !permission {
                             return Self::error_future(
                                 http_req,
-                                ApiError::new(403, "You are not allowed to access this endpoint"),
+                                ApiError::new(
+                                    403,
+                                    format!(
+                                        "You do not have the required permission ({}) to access this endpoint",
+                                        required_perm
+                                    )
+                                    .as_str(),
+                                ),
                             );
                         }
                     }

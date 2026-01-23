@@ -1,6 +1,6 @@
+use crate::app_data::db::DbConnection;
 use crate::aredl::levels::Level as AredlLevel;
 use crate::arepl::levels::Level as AreplLevel;
-use crate::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::{aredl, arepl, users};
 use crate::users::User;

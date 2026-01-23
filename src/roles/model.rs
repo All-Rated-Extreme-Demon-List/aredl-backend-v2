@@ -1,7 +1,12 @@
-use crate::db::DbConnection;
 use crate::error_handler::ApiError;
-use crate::schema::roles;
-use diesel::{ExpressionMethods, RunQueryDsl};
+use crate::schema::{roles, user_roles, users};
+use crate::users::BaseUser;
+use crate::{app_data::db::DbConnection, auth::Authenticated};
+use diesel::{
+    ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl,
+    SelectableHelper,
+};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -16,6 +21,8 @@ pub struct Role {
     pub privilege_level: i32,
     /// Name of the role.
     pub role_desc: String,
+    /// Whether this role should be hidden from public listings and only used to grant permissions.
+    pub hide: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Insertable, AsChangeset, ToSchema)]
@@ -25,6 +32,8 @@ pub struct RoleCreate {
     pub privilege_level: i32,
     /// Name of the role to create.
     pub role_desc: String,
+    /// Whether this role should be hidden from public listings and only used to grant permissions.
+    pub hide: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Insertable, AsChangeset, ToSchema)]
@@ -34,22 +43,68 @@ pub struct RoleUpdate {
     pub privilege_level: Option<i32>,
     /// New name of the role.
     pub role_desc: Option<String>,
+    /// Whether this role should be hidden from public listings and only used to grant permissions.
+    pub hide: Option<bool>,
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct RoleResolved {
+    #[serde(flatten)]
+    pub role: Role,
+    /// Users with this role.
+    pub users: Vec<BaseUser>,
 }
 
 impl Role {
-    pub fn find_all(conn: &mut DbConnection) -> Result<Vec<Self>, ApiError> {
-        let roles = roles::table.load(conn)?;
-        Ok(roles)
+    pub fn user_can_edit(
+        conn: &mut DbConnection,
+        authenticated: Authenticated,
+        target_role_id: i32,
+    ) -> Result<(), ApiError> {
+        let target_role = roles::table
+            .filter(roles::id.eq(target_role_id))
+            .first::<Role>(conn)?;
+
+        authenticated
+            .has_higher_privilege_than(conn, target_role.privilege_level)?
+            .then_some(())
+            .ok_or_else(|| {
+                ApiError::new(
+                    403,
+                    "You do not have sufficient permissions to edit this role.".into(),
+                )
+            })?;
+
+        Ok(())
     }
 
-    pub fn create(conn: &mut DbConnection, role: RoleCreate) -> Result<Self, ApiError> {
+    pub fn create(
+        conn: &mut DbConnection,
+        authenticated: Authenticated,
+        role: RoleCreate,
+    ) -> Result<Self, ApiError> {
+        authenticated
+            .has_higher_privilege_than(conn, role.privilege_level)?
+            .then_some(())
+            .ok_or_else(|| {
+                ApiError::new(
+                    403,
+                    "You can not create a role with higher permissions than yourself.".into(),
+                )
+            })?;
         let role = diesel::insert_into(roles::table)
             .values(role)
             .get_result(conn)?;
         Ok(role)
     }
 
-    pub fn update(conn: &mut DbConnection, id: i32, role: RoleUpdate) -> Result<Self, ApiError> {
+    pub fn update(
+        conn: &mut DbConnection,
+        authenticated: Authenticated,
+        id: i32,
+        role: RoleUpdate,
+    ) -> Result<Self, ApiError> {
+        Self::user_can_edit(conn, authenticated, id)?;
         let role = diesel::update(roles::table)
             .filter(roles::id.eq(id))
             .set(role)
@@ -57,10 +112,50 @@ impl Role {
         Ok(role)
     }
 
-    pub fn delete(conn: &mut DbConnection, id: i32) -> Result<Self, ApiError> {
+    pub fn delete(
+        conn: &mut DbConnection,
+        authenticated: Authenticated,
+        id: i32,
+    ) -> Result<Self, ApiError> {
+        Self::user_can_edit(conn, authenticated, id)?;
         let role = diesel::delete(roles::table)
             .filter(roles::id.eq(id))
             .get_result(conn)?;
         Ok(role)
+    }
+}
+
+impl RoleResolved {
+    pub fn find_all(conn: &mut DbConnection) -> Result<Vec<Self>, ApiError> {
+        let rows: Vec<(Role, Option<BaseUser>)> = roles::table
+            .left_join(user_roles::table.on(user_roles::role_id.eq(roles::id)))
+            .left_join(users::table.on(users::id.nullable().eq(user_roles::user_id.nullable())))
+            .select((Role::as_select(), Option::<BaseUser>::as_select()))
+            .order_by(roles::privilege_level.desc())
+            .load(conn)?;
+
+        let resolved = rows
+            .into_iter()
+            .chunk_by(|(role, _)| role.id)
+            .into_iter()
+            .map(|(_role_id, group)| {
+                let mut role: Option<Role> = None;
+                let mut users_vec = Vec::new();
+
+                for (r, u) in group {
+                    role.get_or_insert(r);
+                    if let Some(u) = u {
+                        users_vec.push(u);
+                    }
+                }
+
+                RoleResolved {
+                    role: role.expect("group always has at least one row"),
+                    users: users_vec,
+                }
+            })
+            .collect_vec();
+
+        Ok(resolved)
     }
 }

@@ -1,5 +1,6 @@
-use crate::arepl::records::{PublicRecordResolved, PublicRecordUnresolved};
-use crate::db::DbConnection;
+use crate::app_data::db::DbConnection;
+use crate::arepl::levels::records::LevelResolvedRecord;
+use crate::arepl::records::Record;
 use crate::error_handler::ApiError;
 use crate::schema::arepl::{levels, records};
 use crate::schema::users;
@@ -151,7 +152,7 @@ pub struct ResolvedLevel {
     /// User who published the level.
     pub publisher: BaseUser,
     /// Records that are marked as verifications for the level.
-    pub verifications: Vec<PublicRecordResolved>,
+    pub verifications: Vec<LevelResolvedRecord>,
 }
 
 impl Level {
@@ -192,18 +193,15 @@ impl ResolvedLevel {
         let verifications_rows = records::table
             .filter(records::level_id.eq(id))
             .filter(records::is_verification.eq(true))
-            .order(records::placement_order.asc())
+            .order(records::created_at.asc())
             .inner_join(users::table.on(records::submitted_by.eq(users::id)))
-            .select((
-                PublicRecordUnresolved::as_select(),
-                BaseUserWithBanLevel::as_select(),
-            ))
-            .load::<(PublicRecordUnresolved, BaseUserWithBanLevel)>(conn)?;
+            .select((Record::as_select(), BaseUserWithBanLevel::as_select()))
+            .load::<(Record, BaseUserWithBanLevel)>(conn)?;
 
         let verifications = verifications_rows
             .into_iter()
             .map(|(record, user)| {
-                PublicRecordResolved::from_data(
+                LevelResolvedRecord::from_data(
                     record,
                     BaseUser::from_base_user_with_ban_level(user),
                 )
@@ -221,7 +219,7 @@ impl ResolvedLevel {
     pub fn from_data(
         level: Level,
         publisher: BaseUser,
-        verifications: Vec<PublicRecordResolved>,
+        verifications: Vec<LevelResolvedRecord>,
     ) -> Self {
         Self {
             id: level.id,

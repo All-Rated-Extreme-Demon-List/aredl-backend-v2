@@ -1,5 +1,8 @@
 #[cfg(test)]
-use crate::db::DbConnection;
+use std::sync::Arc;
+
+#[cfg(test)]
+use crate::app_data::db::DbAppState;
 #[cfg(test)]
 use crate::schema::{clan_invites, clan_members, clans};
 use diesel::result::{DatabaseErrorKind, Error};
@@ -18,7 +21,8 @@ fn generate_random_tag() -> String {
 }
 
 #[cfg(test)]
-pub async fn create_test_clan(conn: &mut DbConnection) -> Uuid {
+pub async fn create_test_clan(db: &Arc<DbAppState>) -> Uuid {
+    let conn = &mut db.connection().unwrap();
     loop {
         let tag = generate_random_tag();
         match diesel::insert_into(clans::table)
@@ -37,11 +41,12 @@ pub async fn create_test_clan(conn: &mut DbConnection) -> Uuid {
 
 #[cfg(test)]
 pub async fn create_test_clan_member(
-    conn: &mut DbConnection,
+    db: &Arc<DbAppState>,
     clan_id: Uuid,
     user_id: Uuid,
     role: i32,
 ) {
+    let conn = &mut db.connection().unwrap();
     diesel::insert_into(clan_members::table)
         .values((
             clan_members::clan_id.eq(clan_id),
@@ -54,11 +59,12 @@ pub async fn create_test_clan_member(
 
 #[cfg(test)]
 pub async fn create_test_clan_invite(
-    conn: &mut DbConnection,
+    db: &Arc<DbAppState>,
     clan_id: Uuid,
     user_id: Uuid,
     invited_by: Uuid,
 ) -> Uuid {
+    let conn = &mut db.connection().unwrap();
     diesel::insert_into(clan_invites::table)
         .values((
             clan_invites::clan_id.eq(clan_id),

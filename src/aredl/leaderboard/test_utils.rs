@@ -1,10 +1,14 @@
 #[cfg(test)]
-use crate::db::DbConnection;
+use std::sync::Arc;
+
+#[cfg(test)]
+use crate::app_data::db::DbAppState;
 #[cfg(test)]
 use diesel::RunQueryDsl;
 
 #[cfg(test)]
-pub async fn refresh_test_leaderboards(conn: &mut DbConnection) {
+pub async fn refresh_test_leaderboards(db: &Arc<DbAppState>) {
+    let conn = &mut db.connection().unwrap();
     diesel::sql_query("REFRESH MATERIALIZED VIEW aredl.user_leaderboard")
         .execute(conn)
         .expect("Failed to update leaderboard");

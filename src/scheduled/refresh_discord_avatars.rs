@@ -1,4 +1,4 @@
-use crate::db::DbAppState;
+use crate::app_data::db::DbAppState;
 use crate::get_secret;
 use crate::schema::users;
 use chrono::Utc;

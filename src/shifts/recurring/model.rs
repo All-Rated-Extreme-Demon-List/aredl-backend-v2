@@ -1,5 +1,5 @@
 use crate::{
-    db::DbConnection,
+    app_data::db::DbConnection,
     error_handler::ApiError,
     schema::{recurrent_shifts, shifts, users},
     shifts::{ShiftInsert, Weekday},

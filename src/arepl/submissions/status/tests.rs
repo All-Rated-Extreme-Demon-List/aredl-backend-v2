@@ -1,24 +1,24 @@
 #[cfg(test)]
-use crate::{
-    arepl::{levels::test_utils::create_test_level, submissions::status::SubmissionsEnabled},
-    auth::{create_test_token, Permission},
+use {
+    crate::{
+        arepl::{levels::test_utils::create_test_level, submissions::status::SubmissionsEnabled},
+        auth::{create_test_token, Permission},
+        test_utils::{assert_error_response, init_test_app},
+        users::test_utils::create_test_user,
+    },
+    actix_web::test::{self, read_body_json},
+    serde_json::json,
 };
-#[cfg(test)]
-use crate::{test_utils::*, users::test_utils::create_test_user};
-#[cfg(test)]
-use actix_web::test;
-#[cfg(test)]
-use serde_json::json;
 
 #[actix_web::test]
 async fn enable_submissions() {
-    let (app, mut conn, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    SubmissionsEnabled::disable(&mut conn, user_id)
+    SubmissionsEnabled::disable(&mut db.connection().unwrap(), user_id)
         .expect("Failed to temporarily disable submissions");
 
     let req = test::TestRequest::post()
@@ -29,17 +29,17 @@ async fn enable_submissions() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
 
-    let status =
-        SubmissionsEnabled::is_enabled(&mut conn).expect("Failed to get submission status");
+    let status = SubmissionsEnabled::is_enabled(&mut db.connection().unwrap())
+        .expect("Failed to get submission status");
 
     assert_eq!(status, true)
 }
 
 #[actix_web::test]
 async fn disable_submissions() {
-    let (app, mut conn, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -51,17 +51,19 @@ async fn disable_submissions() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
 
-    let status =
-        SubmissionsEnabled::is_enabled(&mut conn).expect("Failed to get submission status");
+    let status = SubmissionsEnabled::is_enabled(&mut db.connection().unwrap())
+        .expect("Failed to get submission status");
 
     assert_eq!(status, false);
 
-    let level_id = create_test_level(&mut conn).await;
+    let level_id = create_test_level(&db).await;
 
     let data = json!({
         "level_id": level_id,
-        "video_url": "https://video.com",
-        "raw_url": "https://raw.com"
+        "video_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
+        "raw_url": "https://raw.com",
+        "mobile": false,
+        "completion_time": 1500
     });
 
     let req = test::TestRequest::post()
@@ -71,22 +73,18 @@ async fn disable_submissions() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert!(
-        resp.status().is_client_error(),
-        "status is {}",
-        resp.status()
-    );
+    assert_error_response(resp, 400, Some("Submissions are currently disabled")).await;
 }
 
 #[actix_web::test]
 async fn get_submission_status() {
-    let (app, mut conn, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    SubmissionsEnabled::disable(&mut conn, user_id)
+    SubmissionsEnabled::disable(&mut db.connection().unwrap(), user_id)
         .expect("Failed to temporarily disable submissions");
 
     let req = test::TestRequest::get()
@@ -96,11 +94,11 @@ async fn get_submission_status() {
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let status: serde_json::Value = test::read_body_json(resp).await;
+    let status: serde_json::Value = read_body_json(resp).await;
 
     assert_eq!(status.as_bool().unwrap(), false);
 
-    SubmissionsEnabled::enable(&mut conn, user_id)
+    SubmissionsEnabled::enable(&mut db.connection().unwrap(), user_id)
         .expect("Failed to temporarily disable submissions");
 
     let req = test::TestRequest::get()
@@ -110,20 +108,20 @@ async fn get_submission_status() {
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let status: serde_json::Value = test::read_body_json(resp).await;
+    let status: serde_json::Value = read_body_json(resp).await;
 
     assert_eq!(status.as_bool().unwrap(), true);
 }
 
 #[actix_web::test]
 async fn get_submission_status_full() {
-    let (app, mut conn, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    SubmissionsEnabled::disable(&mut conn, user_id)
+    SubmissionsEnabled::disable(&mut db.connection().unwrap(), user_id)
         .expect("Failed to temporarily disable submissions");
 
     let req = test::TestRequest::get()
@@ -133,7 +131,7 @@ async fn get_submission_status_full() {
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
 
     assert_eq!(body["moderator"]["id"], user_id.to_string());
     assert_eq!(body["enabled"], false);
@@ -141,15 +139,15 @@ async fn get_submission_status_full() {
 
 #[actix_web::test]
 async fn get_submission_status_history() {
-    let (app, mut conn, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&mut conn, Some(Permission::ShiftManage)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    SubmissionsEnabled::disable(&mut conn, user_id)
+    SubmissionsEnabled::disable(&mut db.connection().unwrap(), user_id)
         .expect("Failed to temporarily disable submissions");
-    SubmissionsEnabled::enable(&mut conn, user_id)
+    SubmissionsEnabled::enable(&mut db.connection().unwrap(), user_id)
         .expect("Failed to temporarily enable submissions");
 
     let req = test::TestRequest::get()
@@ -159,7 +157,7 @@ async fn get_submission_status_history() {
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
-    let body: serde_json::Value = test::read_body_json(resp).await;
+    let body: serde_json::Value = read_body_json(resp).await;
 
     assert_eq!(body[0]["enabled"], true);
     assert_eq!(body[1]["enabled"], false);

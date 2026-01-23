@@ -1,6 +1,6 @@
 use crate::aredl::leaderboard::LeaderboardOrder;
 use crate::aredl::levels::BaseLevel;
-use crate::db::DbConnection;
+use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::scheduled::refresh_matviews::MatviewRefreshLog;

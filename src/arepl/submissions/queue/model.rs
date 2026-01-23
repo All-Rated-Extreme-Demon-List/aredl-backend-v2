@@ -1,6 +1,6 @@
 use crate::{
     arepl::submissions::{Submission, SubmissionStatus},
-    db::DbConnection,
+    app_data::db::DbConnection,
     error_handler::ApiError,
     schema::arepl::{submissions, submissions_with_priority},
 };

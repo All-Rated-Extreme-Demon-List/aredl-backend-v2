@@ -1,5 +1,6 @@
 use crate::{
-    db::DbAppState, get_secret, notifications::WebsocketNotification, shifts::RecurringShift,
+    app_data::db::DbAppState, get_secret, notifications::WebsocketNotification,
+    shifts::RecurringShift,
 };
 use chrono::{NaiveDate, Utc};
 use cron::Schedule;

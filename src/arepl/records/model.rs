@@ -1,348 +1,485 @@
+use std::sync::Arc;
+
+use crate::app_data::db::{DbAppState, DbConnection};
 use crate::arepl::levels::ExtendedBaseLevel;
-use crate::db::DbConnection;
+use crate::arepl::submissions::patch::SubmissionPatchMod;
+use crate::arepl::submissions::post::SubmissionPostMod;
+use crate::arepl::submissions::{Submission, SubmissionStatus};
+use crate::auth::Authenticated;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
-use crate::schema::{arepl::levels, arepl::records, users};
-use crate::users::{BaseUser, ExtendedBaseUser};
+use crate::providers::VideoProvidersAppState;
+use crate::schema::{arepl::levels, arepl::records, arepl::submissions, users};
+use crate::users::{user_filter, ExtendedBaseUser};
+use actix_web::web;
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::query_dsl::JoinOnDsl;
 use diesel::{
-    ExpressionMethods, Insertable, NullableExpressionMethods, PgExpressionMethods, QueryDsl,
-    RunQueryDsl, Selectable, SelectableHelper,
+    Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl,
+    Selectable, SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
+#[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema, Clone)]
 #[diesel(table_name=records, check_for_backend(Pg))]
 pub struct Record {
     /// Internal UUID of the record.
     pub id: Uuid,
-    /// Level ID in the game. May not be unique for 2P levels.
+    /// Internal UUID of the submission this record is linked to.
+    pub submission_id: Uuid,
+    /// Level this record is for.
     pub level_id: Uuid,
-    /// Internal UUID of the user who submitted the record.
+    /// User who submitted the record.
     pub submitted_by: Uuid,
     /// Whether the record was completed on mobile or not.
     pub mobile: bool,
-    /// ID of the LDM used for the record, if any.
-    pub ldm_id: Option<i32>,
     /// Video link of the completion.
     pub video_url: String,
-    /// Whether the record's video should be hidden on the website.
-    pub hide_video: bool,
     /// Completion time of the record in milliseconds.
     pub completion_time: i64,
-    /// Link to the raw video file of the completion.
-    pub raw_url: Option<String>,
+    /// Whether the record's video should be hidden on the website.
+    pub hide_video: bool,
     /// Whether this record is the verification of this level or not.
     pub is_verification: bool,
-    /// Placement order of the record in the records list of this level.
-    pub placement_order: i32,
-    /// Name of the mod menu used for this record, if any.
-    pub mod_menu: Option<String>,
-    /// Internal UUID of the user who reviewed the record.
-    pub reviewer_id: Option<Uuid>,
-    /// Notes set by the reviewer when they accepted the record.
-    pub reviewer_notes: Option<String>,
-    /// Notes given by the user when they submitted the record.
-    pub user_notes: Option<String>,
+    /// Timestamp of when this record was achieved, used for ordering.
+    pub achieved_at: DateTime<Utc>,
     /// Timestamp of when the record was created (first accepted).
     pub created_at: DateTime<Utc>,
     /// Timestamp of when the record was last updated.
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Serialize, Deserialize, Insertable, Debug, ToSchema)]
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct ResolvedRecord {
+    /// Internal UUID of the record.
+    pub id: Uuid,
+    /// Internal UUID of the submission this record is linked to.
+    pub submission_id: Uuid,
+    /// Level this record is for.
+    pub level: ExtendedBaseLevel,
+    /// User who submitted the record.
+    pub submitted_by: ExtendedBaseUser,
+    /// Whether the record was completed on mobile or not.
+    pub mobile: bool,
+    /// Video link of the completion.
+    pub video_url: String,
+    /// Completion time of the record in milliseconds.
+    pub completion_time: i64,
+    /// Whether the record's video should be hidden on the website.
+    pub hide_video: bool,
+    /// Whether this record is the verification of this level or not.
+    pub is_verification: bool,
+    /// Timestamp of when this record was achieved, used for ordering.
+    pub achieved_at: DateTime<Utc>,
+    /// Timestamp of when the record was created (first accepted).
+    pub created_at: DateTime<Utc>,
+    /// Timestamp of when the record was last updated.
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Serialize, Deserialize, Insertable, Debug, ToSchema, Clone)]
 #[diesel(table_name=records, check_for_backend(Pg))]
 pub struct RecordInsert {
     /// Internal UUID of the user who submitted the record.
     pub submitted_by: Uuid,
     /// Whether the record was completed on mobile or not.
     pub mobile: bool,
-    /// ID of the LDM used for the record, if any.
-    pub ldm_id: Option<i32>,
     /// Internal UUID of the level the record is for.
     pub level_id: Uuid,
     /// Video link of the completion.
     pub video_url: String,
-    /// Whether the record's video should be hidden on the website.
-    pub hide_video: Option<bool>,
     /// Completion time of the record in milliseconds.
     pub completion_time: i64,
+    /// Whether the record's video should be hidden on the website.
+    pub hide_video: Option<bool>,
     /// Whether this record is the verification of this level or not.
     pub is_verification: Option<bool>,
-    /// Link to the raw video file of the completion.
-    pub raw_url: Option<String>,
-    /// Internal UUID of the user who reviewed the record.
-    pub reviewer_id: Option<Uuid>,
+    /// Timestamp of when this record was achieved, used for ordering.
+    pub achieved_at: Option<DateTime<Utc>>,
     /// Timestamp of when the record was created (first accepted).
     pub created_at: Option<DateTime<Utc>>,
     /// Timestamp of when the record was last updated.
     pub updated_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Serialize, Deserialize, AsChangeset, Debug, ToSchema)]
+#[derive(Serialize, Deserialize, AsChangeset, Debug, ToSchema, Clone)]
 #[diesel(table_name=records, check_for_backend(Pg))]
-pub struct RecordUpdate {
+pub struct RecordPatch {
     /// Internal UUID of the user who submitted the record.
     pub submitted_by: Option<Uuid>,
     /// Whether the record was completed on mobile or not.
     pub mobile: Option<bool>,
-    /// ID of the LDM used for the record, if any.
-    pub ldm_id: Option<i32>,
     /// Video link of the completion.
     pub video_url: Option<String>,
     /// Whether the record's video should be hidden on the website.
     pub hide_video: Option<bool>,
-    /// Internal UUID of the level the record is for.
-    pub level_id: Option<Uuid>,
     /// Completion time of the record in milliseconds.
     pub completion_time: Option<i64>,
+    /// Internal UUID of the level the record is for.
+    pub level_id: Option<Uuid>,
     /// Whether this record is the verification of this level or not.
     pub is_verification: Option<bool>,
-    /// Link to the raw video file of the completion.
-    pub raw_url: Option<String>,
+    /// Timestamp of when this record was achieved, used for ordering.
+    pub achieved_at: Option<DateTime<Utc>>,
     /// Timestamp of when the record was created (first accepted).
     pub created_at: Option<DateTime<Utc>>,
     /// Timestamp of when the record was last updated.
     pub updated_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
+#[derive(Serialize, Deserialize, AsChangeset, Debug, ToSchema, Default, PartialEq)]
 #[diesel(table_name=records, check_for_backend(Pg))]
-pub struct PublicRecordTemplate<T> {
-    /// Internal UUID of the record.
-    pub id: Uuid,
-    /// User who submitted the record.
-    pub submitted_by: T,
-    /// Whether the record was completed on mobile or not.
-    pub mobile: bool,
-    /// Completion time of the record in milliseconds.
-    pub completion_time: i64,
-    /// Video link of the completion.
-    pub video_url: String,
+pub struct RecordUpdate {
     /// Whether the record's video should be hidden on the website.
-    pub hide_video: bool,
-    /// Timestamp of when the record was created (first accepted).
-    pub created_at: DateTime<Utc>,
-}
-
-pub type PublicRecordUnresolved = PublicRecordTemplate<Uuid>;
-pub type PublicRecordResolved = PublicRecordTemplate<BaseUser>;
-pub type PublicRecordResolvedExtended = PublicRecordTemplate<ExtendedBaseUser>;
-
-#[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
-#[diesel(table_name=records, check_for_backend(Pg))]
-#[schema(bound = "LevelT: utoipa::ToSchema, UserT: utoipa::ToSchema")]
-pub struct FullRecordTemplate<LevelT, UserT> {
-    /// Internal UUID of the record.
-    pub id: Uuid,
-    /// Level this record is for.
-    #[serde(rename = "level")]
-    pub level_id: LevelT,
-    /// User who submitted the record.
-    pub submitted_by: UserT,
-    /// Whether the record was completed on mobile or not.
-    pub mobile: bool,
-    /// Completion time of the record in milliseconds.
-    pub completion_time: i64,
-    /// ID of the LDM used for the record, if any.
-    pub ldm_id: Option<i32>,
-    /// Video link of the completion.
-    pub video_url: String,
-    /// Whether the record's video should be hidden on the website.
-    pub hide_video: bool,
-    /// Link to the raw video file of the completion.
-    pub raw_url: Option<String>,
-    /// Name of the mod menu used for this record, if any.
-    pub mod_menu: Option<String>,
+    pub hide_video: Option<bool>,
     /// Whether this record is the verification of this level or not.
-    pub is_verification: bool,
-    /// Placement order of the record in the records list of this level.
-    #[serde(skip_serializing)]
-    pub placement_order: i32,
-    /// Internal UUID of the user who reviewed the record.
-    #[serde(rename = "reviewer")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reviewer_id: Option<UserT>,
-    /// Notes set by the reviewer when they accepted the record.
-    pub reviewer_notes: Option<String>,
-    /// Notes given by the user when they submitted the record.
-    pub user_notes: Option<String>,
-    /// Timestamp of when the record was created (first accepted).
-    pub created_at: DateTime<Utc>,
-    /// Timestamp of when the record was last updated.
-    pub updated_at: DateTime<Utc>,
+    pub is_verification: Option<bool>,
+    /// Timestamp of when this record was achieved, used for ordering.
+    pub achieved_at: Option<DateTime<Utc>>,
 }
 
-pub type FullRecordUnresolved = FullRecordTemplate<Uuid, Uuid>;
-pub type FullRecordResolved = FullRecordTemplate<ExtendedBaseLevel, BaseUser>;
-
-// Weird shenanigans type to get the FullRecordTemplate with UUID to work with ToSchema for Utoipa.
 #[derive(Serialize, Deserialize, ToSchema)]
-#[schema(title = "FullRecordUnresolved")]
-pub struct FullRecordUnresolvedDto {
-    #[serde(flatten)]
-    #[schema(inline)]
-    pub record: FullRecordTemplate<Uuid, Uuid>,
+pub enum RecordSortField {
+    OldestCreatedAt,
+    NewestCreatedAt,
+    OldestAchievedAt,
+    NewestAchievedAt,
+    OldestUpdatedAt,
+    NewestUpdatedAt,
+    ShortestCompletionTime,
+    LongestCompletionTime,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct RecordsQueryOptions {
     pub mobile_filter: Option<bool>,
     pub level_filter: Option<Uuid>,
-    pub submitter_filter: Option<Uuid>,
-    pub reviewer_filter: Option<Uuid>,
+    pub submitter_filter: Option<String>,
+    pub sort: Option<RecordSortField>,
+}
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct ResolvedRecordPage {
+    data: Vec<ResolvedRecord>,
 }
 
-#[derive(Serialize, Deserialize, ToSchema)]
-pub struct FullUnresolvedRecordPage {
-    data: Vec<FullRecordUnresolvedDto>,
+impl SubmissionPostMod {
+    pub fn from_record_insert(record: RecordInsert) -> Self {
+        Self {
+            submitted_by: Some(record.submitted_by),
+            level_id: record.level_id,
+            mobile: record.mobile,
+            video_url: record.video_url,
+            status: Some(SubmissionStatus::Accepted),
+            reviewer_notes: Some("Added by a moderator".to_string()),
+            ..Default::default()
+        }
+    }
 }
 
-#[derive(Serialize, Deserialize, ToSchema)]
-pub struct FullResolvedRecordPage {
-    data: Vec<FullRecordResolved>,
+impl SubmissionPatchMod {
+    pub fn from_record_insert(record: RecordInsert) -> Self {
+        Self {
+            mobile: Some(record.mobile),
+            video_url: Some(record.video_url),
+            status: Some(SubmissionStatus::Accepted),
+            reviewer_notes: Some("Added by a moderator".to_string()),
+            ..Default::default()
+        }
+    }
+
+    pub fn from_record_update(record: RecordPatch) -> Self {
+        Self {
+            mobile: record.mobile,
+            video_url: record.video_url,
+            reviewer_notes: Some("Updated by a moderator".to_string()),
+            status: Some(SubmissionStatus::Accepted),
+            ..Default::default()
+        }
+    }
+}
+
+impl RecordUpdate {
+    pub fn from_record_insert(record: RecordInsert) -> Self {
+        Self {
+            hide_video: record.hide_video,
+            is_verification: record.is_verification,
+            achieved_at: record.achieved_at,
+        }
+    }
+
+    pub fn from_record_patch(record: RecordPatch) -> Self {
+        Self {
+            hide_video: record.hide_video,
+            is_verification: record.is_verification,
+            achieved_at: record.achieved_at,
+        }
+    }
+}
+
+impl Submission {
+    pub fn upsert_from_record_insert(
+        conn: &mut DbConnection,
+        record: RecordInsert,
+        authenticated: Authenticated,
+    ) -> Result<Self, ApiError> {
+        let existing_submission_id = submissions::table
+            .filter(submissions::submitted_by.eq(record.submitted_by))
+            .filter(submissions::level_id.eq(record.level_id))
+            .select(submissions::id)
+            .first::<Uuid>(conn)
+            .optional()?;
+
+        match existing_submission_id {
+            Some(submission_id) => {
+                let submission_update = (
+                    SubmissionPatchMod::from_record_insert(record),
+                    submissions::reviewer_id.eq(Some(authenticated.user_id)),
+                );
+                return Ok(diesel::update(
+                    submissions::table.filter(submissions::id.eq(submission_id)),
+                )
+                .set(submission_update)
+                .returning(Submission::as_select())
+                .get_result::<Self>(conn)?);
+            }
+            None => {
+                let submission_insert = (
+                    SubmissionPostMod::from_record_insert(record),
+                    submissions::reviewer_id.eq(Some(authenticated.user_id)),
+                );
+                return Ok(diesel::insert_into(submissions::table)
+                    .values(submission_insert)
+                    .returning(Submission::as_select())
+                    .get_result::<Self>(conn)?);
+            }
+        }
+    }
 }
 
 impl Record {
-    pub fn create(conn: &mut DbConnection, record: RecordInsert) -> Result<Self, ApiError> {
-        let record = diesel::insert_into(records::table)
-            .values(record)
-            .returning(Record::as_select())
-            .get_result::<Self>(conn)?;
-        Ok(record)
+    pub fn create(
+        conn: &mut DbConnection,
+        record: RecordInsert,
+        authenticated: Authenticated,
+    ) -> Result<Self, ApiError> {
+        conn.transaction(|conn| -> Result<Self, ApiError> {
+            if authenticated.user_id == record.submitted_by {
+                return Err(ApiError::new(400, "You cannot create records for yourself"));
+            }
+            // Create the corresponding submission first and let triggers initialize the record
+            let submission =
+                Submission::upsert_from_record_insert(conn, record.clone(), authenticated)?;
+
+            // Then update the record-specific fields
+            let record_patch = RecordUpdate::from_record_insert(record.clone());
+
+            let result = diesel::update(records::table)
+                .filter(records::submission_id.eq(submission.id))
+                .set(&record_patch)
+                .returning(Record::as_select())
+                .get_result::<Self>(conn)?;
+
+            Ok(result)
+        })
     }
 
     pub fn update(
         conn: &mut DbConnection,
         record_id: Uuid,
-        record: RecordUpdate,
+        record: RecordPatch,
+        authenticated: Authenticated,
     ) -> Result<Self, ApiError> {
-        let record = diesel::update(records::table)
-            .filter(records::id.eq(record_id))
-            .set(record)
-            .returning(Record::as_select())
-            .get_result::<Self>(conn)?;
-        Ok(record)
+        conn.transaction(|conn| -> Result<Self, ApiError> {
+            // Update the corresponding submission first and let triggers update the record
+            let submission_patch = (
+                SubmissionPatchMod::from_record_update(record.clone()),
+                submissions::reviewer_id.eq(Some(authenticated.user_id)),
+            );
+
+            let (submission_id, submitted_by): (Uuid, Uuid) = records::table
+                .filter(records::id.eq(record_id))
+                .select((records::submission_id, records::submitted_by))
+                .first(conn)?;
+
+            if authenticated.user_id == submitted_by {
+                return Err(ApiError::new(400, "You cannot update records for yourself"));
+            }
+
+            diesel::update(submissions::table)
+                .filter(submissions::id.eq(submission_id))
+                .set(submission_patch)
+                .execute(conn)?;
+
+            // Then update the record-specific fields
+            let record_update = RecordUpdate::from_record_patch(record.clone());
+
+            let result = match record_update == RecordUpdate::default() {
+                true => records::table
+                    .filter(records::id.eq(record_id))
+                    .select(Record::as_select())
+                    .first::<Self>(conn)?,
+                false => diesel::update(records::table.filter(records::id.eq(record_id)))
+                    .set(&record_update)
+                    .returning(Record::as_select())
+                    .get_result::<Self>(conn)?,
+            };
+
+            Ok(result)
+        })
     }
 
-    pub fn delete(conn: &mut DbConnection, record_id: Uuid) -> Result<Self, ApiError> {
-        let record = diesel::delete(records::table)
-            .filter(records::id.eq(record_id))
-            .returning(Record::as_select())
-            .get_result::<Self>(conn)?;
-        Ok(record)
+    pub fn delete(
+        conn: &mut DbConnection,
+        record_id: Uuid,
+        authenticated: Authenticated,
+    ) -> Result<(), ApiError> {
+        conn.transaction(|conn| -> Result<(), ApiError> {
+            let submission_id: Uuid = records::table
+                .filter(records::id.eq(record_id))
+                .select(records::submission_id)
+                .first(conn)?;
+
+            diesel::update(submissions::table)
+                .filter(submissions::id.eq(submission_id))
+                .set((
+                    submissions::status.eq(SubmissionStatus::Denied),
+                    submissions::reviewer_id.eq(Some(authenticated.user_id)),
+                    submissions::reviewer_notes
+                        .eq(Some("Record deleted by a moderator".to_string())),
+                ))
+                .execute(conn)?;
+            Ok(())
+        })
     }
 }
 
-impl FullRecordUnresolved {
-    pub fn find_all<const D: i64>(
-        conn: &mut DbConnection,
-        page_query: PageQuery<D>,
-        mut options: RecordsQueryOptions,
-        hide_reviewer: bool,
-    ) -> Result<Paginated<FullUnresolvedRecordPage>, ApiError> {
-        if hide_reviewer {
-            options.reviewer_filter = None;
+// Helpers for updating the achieved_at timestamp
+impl Record {
+    pub async fn fetch_completion_timestamp(
+        record: Record,
+        providers: &VideoProvidersAppState,
+    ) -> DateTime<Utc> {
+        let result = async {
+            let matched = providers.parse_url(&record.video_url)?;
+            let metadata = providers
+                .fetch_metadata(&matched)
+                .await?
+                .ok_or_else(|| ApiError::new(422, "Failed to fetch metadata"))?;
+            Ok::<_, ApiError>(metadata.published_at)
+        }
+        .await;
+
+        match result {
+            Ok(Some(timestamp)) => timestamp,
+            Ok(None) => {
+                tracing::warn!(
+                    %record.id,
+                    %record.video_url,
+                    "Fetched metadata does not contain publication timestamp"
+                );
+                record.created_at
+            }
+            Err(e) => {
+                tracing::warn!(
+                    error = %e.error_message,
+                    %record.id,
+                    %record.video_url,
+                    "Failed to fetch metadata"
+                );
+                record.created_at
+            }
+        }
+    }
+
+    pub async fn update_timestamp(
+        db: web::Data<Arc<DbAppState>>,
+        record_id: Option<Uuid>,
+        submission_id: Option<Uuid>,
+        providers: &VideoProvidersAppState,
+    ) -> Result<Self, ApiError> {
+        let db_clone = db.clone();
+        let record = web::block(move || {
+            let conn = &mut db.connection()?;
+            let record = match (record_id, submission_id) {
+                (Some(record_id), _) => records::table
+                    .filter(records::id.eq(record_id))
+                    .select(Record::as_select())
+                    .first::<Record>(conn)?,
+                (None, Some(submission_id)) => records::table
+                    .filter(records::submission_id.eq(submission_id))
+                    .select(Record::as_select())
+                    .first::<Record>(conn)?,
+                _ => return Err(ApiError::new(400, "No record or submission ID provided")),
+            };
+            Ok(record)
+        })
+        .await??;
+
+        if record.achieved_at < record.created_at - chrono::Duration::seconds(1) {
+            return Ok(record);
         }
 
-        let build_filtered = || {
-            let mut q = records::table.into_boxed::<Pg>();
-            if let Some(mobile) = options.mobile_filter {
-                q = q.filter(records::mobile.eq(mobile));
-            }
-            if let Some(level) = options.level_filter {
-                q = q.filter(records::level_id.eq(level));
-            }
-            if let Some(submitter) = options.submitter_filter {
-                q = q.filter(records::submitted_by.eq(submitter));
-            }
-            if let Some(reviewer) = options.reviewer_filter {
-                q = q.filter(records::reviewer_id.is_not_distinct_from(reviewer));
-            }
-            q
-        };
+        let achieved_at = Record::fetch_completion_timestamp(record.clone(), providers).await;
 
-        let total_count: i64 = build_filtered().count().get_result(conn)?;
+        let result = web::block(move || -> Result<Record, ApiError> {
+            let conn = &mut db_clone.connection()?;
+            let result = diesel::update(records::table.filter(records::id.eq(record.id)))
+                .set(records::achieved_at.eq(achieved_at))
+                .returning(Record::as_select())
+                .get_result::<Record>(conn)?;
+            Ok(result)
+        })
+        .await??;
 
-        let raw_records = build_filtered()
-            .limit(page_query.per_page())
-            .offset(page_query.offset())
-            .select(FullRecordUnresolved::as_select())
-            .load::<FullRecordUnresolved>(conn)?;
+        Ok(result)
+    }
 
-        let records: Vec<FullRecordUnresolvedDto> = raw_records
-            .into_iter()
-            .map(|record| FullRecordUnresolvedDto {
-                record: {
-                    if hide_reviewer {
-                        Self {
-                            reviewer_id: None,
-                            ..record
-                        }
-                    } else {
-                        record
-                    }
-                },
-            })
-            .collect();
-
-        Ok(Paginated::from_data(
-            page_query,
-            total_count,
-            FullUnresolvedRecordPage { data: records },
-        ))
+    pub async fn fire_and_forget_fetch_completion_timestamp(
+        db: web::Data<Arc<DbAppState>>,
+        record_id: Option<Uuid>,
+        submission_id: Option<Uuid>,
+        providers: web::Data<Arc<VideoProvidersAppState>>,
+    ) {
+        tokio::spawn(async move {
+            if let Err(error) =
+                Record::update_timestamp(db, record_id, submission_id, providers.get_ref()).await
+            {
+                tracing::warn!(
+                    error = %error.error_message,
+                    ?record_id,
+                    ?submission_id,
+                    "Failed to fetch completion timestamp in background task"
+                );
+            }
+        });
     }
 }
 
-impl FullRecordResolved {
+impl ResolvedRecord {
     pub fn find(conn: &mut DbConnection, record_id: Uuid) -> Result<Self, ApiError> {
-        let reviewers = alias!(users as reviewers);
-
-        let (record, user, level, reviewer): (
-            FullRecordTemplate<Uuid, Uuid>,
-            BaseUser,
-            ExtendedBaseLevel,
-            Option<BaseUser>,
-        ) = records::table
+        let (record, user, level): (Record, ExtendedBaseUser, ExtendedBaseLevel) = records::table
             .filter(records::id.eq(record_id))
             .inner_join(users::table.on(records::submitted_by.eq(users::id)))
             .inner_join(levels::table.on(records::level_id.eq(levels::id)))
             .order_by(records::completion_time.asc())
-            .left_join(
-                reviewers.on(reviewers
-                    .field(users::id)
-                    .nullable()
-                    .eq(records::reviewer_id.nullable())),
-            )
             .select((
-                FullRecordTemplate::<Uuid, Uuid>::as_select(),
-                BaseUser::as_select(),
+                Record::as_select(),
+                ExtendedBaseUser::as_select(),
                 ExtendedBaseLevel::as_select(),
-                reviewers
-                    .fields(<BaseUser as Selectable<Pg>>::construct_selection())
-                    .nullable(),
             ))
             .first(conn)?;
 
-        Ok(Self::from_data(record, user, level, reviewer))
+        Ok(Self::from_data(record, user, level))
     }
 
     pub fn find_all<const D: i64>(
         conn: &mut DbConnection,
         page_query: PageQuery<D>,
-        mut options: RecordsQueryOptions,
-        hide_reviewer: bool,
-    ) -> Result<Paginated<FullResolvedRecordPage>, ApiError> {
-        if hide_reviewer {
-            options.reviewer_filter = None;
-        }
-
-        let reviewers = alias!(users as reviewers);
-
+        options: RecordsQueryOptions,
+    ) -> Result<Paginated<ResolvedRecordPage>, ApiError> {
         let build_filtered = || {
             let mut q = records::table.into_boxed::<Pg>();
             if let Some(mobile) = options.mobile_filter {
@@ -351,88 +488,87 @@ impl FullRecordResolved {
             if let Some(level) = options.level_filter {
                 q = q.filter(records::level_id.eq(level));
             }
-            if let Some(submitter) = options.submitter_filter {
-                q = q.filter(records::submitted_by.eq(submitter));
-            }
-            if let Some(reviewer) = options.reviewer_filter {
-                q = q.filter(records::reviewer_id.is_not_distinct_from(reviewer));
+            if let Some(ref submitter) = options.submitter_filter {
+                q = q.filter(
+                    records::submitted_by.eq_any(user_filter(&submitter).select(users::id)),
+                );
             }
             q
         };
 
         let total_count: i64 = build_filtered().count().get_result(conn)?;
 
-        let records = build_filtered()
+        let mut records_query = build_filtered()
             .inner_join(users::table.on(records::submitted_by.eq(users::id)))
             .inner_join(levels::table.on(records::level_id.eq(levels::id)))
-            .left_join(
-                reviewers.on(reviewers
-                    .field(users::id)
-                    .nullable()
-                    .eq(records::reviewer_id.nullable())),
-            )
-            .order_by(records::completion_time.asc())
             .limit(page_query.per_page())
             .offset(page_query.offset())
             .select((
-                FullRecordUnresolved::as_select(),
-                BaseUser::as_select(),
+                Record::as_select(),
+                ExtendedBaseUser::as_select(),
                 ExtendedBaseLevel::as_select(),
-                reviewers
-                    .fields(<BaseUser as Selectable<Pg>>::construct_selection())
-                    .nullable(),
-            ))
-            .load::<(
-                FullRecordUnresolved,
-                BaseUser,
-                ExtendedBaseLevel,
-                Option<BaseUser>,
-            )>(conn)?;
+            ));
 
-        let mut records_resolved: Vec<Self> = records
-            .into_iter()
-            .map(|(record, user, level, reviewer)| Self::from_data(record, user, level, reviewer))
-            .collect();
-
-        if hide_reviewer {
-            for record in records_resolved.iter_mut() {
-                record.reviewer_id = None;
-            }
+        if let Some(sort) = &options.sort {
+            records_query = match sort {
+                RecordSortField::OldestCreatedAt => {
+                    records_query.order_by(records::created_at.asc())
+                }
+                RecordSortField::NewestCreatedAt => {
+                    records_query.order_by(records::created_at.desc())
+                }
+                RecordSortField::OldestAchievedAt => {
+                    records_query.order_by(records::achieved_at.asc())
+                }
+                RecordSortField::NewestAchievedAt => {
+                    records_query.order_by(records::achieved_at.desc())
+                }
+                RecordSortField::OldestUpdatedAt => {
+                    records_query.order_by(records::updated_at.asc())
+                }
+                RecordSortField::NewestUpdatedAt => {
+                    records_query.order_by(records::updated_at.desc())
+                }
+                RecordSortField::ShortestCompletionTime => {
+                    records_query.order_by(records::completion_time.asc())
+                }
+                RecordSortField::LongestCompletionTime => {
+                    records_query.order_by(records::completion_time.desc())
+                }
+            };
+        } else {
+            records_query = records_query.order_by(records::created_at.desc());
         }
+
+        let records = records_query.load::<(Record, ExtendedBaseUser, ExtendedBaseLevel)>(conn)?;
+        let records_resolved: Vec<Self> = records
+            .into_iter()
+            .map(|(record, user, level)| Self::from_data(record, user, level))
+            .collect();
 
         Ok(Paginated::from_data(
             page_query,
             total_count,
-            FullResolvedRecordPage {
+            ResolvedRecordPage {
                 data: records_resolved,
             },
         ))
     }
 
-    fn from_data(
-        record: FullRecordUnresolved,
-        user: BaseUser,
-        level: ExtendedBaseLevel,
-        reviewer: Option<BaseUser>,
-    ) -> Self {
+    pub fn from_data(record: Record, user: ExtendedBaseUser, level: ExtendedBaseLevel) -> Self {
         Self {
             id: record.id,
+            submission_id: record.submission_id,
             submitted_by: user,
-            level_id: level,
+            level,
             mobile: record.mobile,
-            ldm_id: record.ldm_id,
             video_url: record.video_url,
-            raw_url: record.raw_url,
             completion_time: record.completion_time,
             is_verification: record.is_verification,
-            placement_order: record.placement_order,
-            reviewer_id: reviewer,
-            reviewer_notes: record.reviewer_notes,
-            user_notes: record.user_notes,
-            mod_menu: record.mod_menu,
             created_at: record.created_at,
             updated_at: record.updated_at,
             hide_video: record.hide_video,
+            achieved_at: record.achieved_at,
         }
     }
 }

@@ -62,6 +62,12 @@ services:
       GOOGLE_API_KEY: /run/secrets/google_api_key
       EDEL_SHEET_ID: /run/secrets/edel_sheet_id
       NLW_SHEET_ID: /run/secrets/nlw_sheet_id
+
+      GOOGLE_OAUTH_CLIENT: /run/secrets/google_oauth_client
+      GOOGLE_OAUTH_REFRESH: /run/secrets/google_oauth_refresh
+      TWITCH_OAUTH_CLIENT_ID: /run/secrets/twitch_oauth_client_id
+      TWITCH_OAUTH_CLIENT_SECRET: /run/secrets/twitch_oauth_client_secret
+
     logging:
       driver: loki
       options:
@@ -92,6 +98,10 @@ services:
       - google_api_key
       - edel_sheet_id
       - nlw_sheet_id
+      - google_oauth_client
+      - google_oauth_refresh
+      - twitch_oauth_client_id
+      - twitch_oauth_client_secret
       
     networks:
       - api_net
@@ -132,6 +142,14 @@ secrets:
   edel_sheet_id:
     external: true
   nlw_sheet_id:
+    external: true
+  google_oauth_client:
+    external: true
+  google_oauth_refresh:
+    external: true
+  twitch_oauth_client_id:
+    external: true
+  twitch_oauth_client_secret:
     external: true
 networks:
   api_net:

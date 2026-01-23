@@ -1,4 +1,4 @@
-use crate::db::DbConnection;
+use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::{permissions, roles, user_roles};
 use diesel::dsl::max;
@@ -16,6 +16,7 @@ pub enum Permission {
     PlaceholderCreate,
     UserModify,
     UserBan,
+    UserRedact,
     RoleManage,
     MergeReview,
     DirectMerge,
@@ -25,7 +26,7 @@ pub enum Permission {
     NotificationsSubscribe,
 }
 
-fn get_privilege_level(conn: &mut DbConnection, user_id: Uuid) -> Result<i32, ApiError> {
+pub fn get_privilege_level(conn: &mut DbConnection, user_id: Uuid) -> Result<i32, ApiError> {
     let privilege_level: Option<i32> = user_roles::table
         .inner_join(roles::table.on(roles::id.eq(user_roles::role_id)))
         .filter(user_roles::user_id.eq(user_id))
@@ -35,7 +36,7 @@ fn get_privilege_level(conn: &mut DbConnection, user_id: Uuid) -> Result<i32, Ap
     Ok(privilege_level.unwrap_or(0))
 }
 
-pub fn check_permission(
+pub fn check_user_permission(
     conn: &mut DbConnection,
     user_id: Uuid,
     permission: Permission,
@@ -49,22 +50,4 @@ pub fn check_permission(
         .select(permissions::privilege_level)
         .first::<i32>(conn)?;
     Ok(required_privilege <= max_privilege)
-}
-
-pub fn check_higher_privilege(
-    conn: &mut DbConnection,
-    acting_user_id: Uuid,
-    target_user_id: Uuid,
-) -> Result<(), ApiError> {
-    let acting_user_privilege = get_privilege_level(conn, acting_user_id)?;
-    let target_user_privilege = get_privilege_level(conn, target_user_id)?;
-
-    if acting_user_privilege <= target_user_privilege {
-        return Err(ApiError::new(
-            403,
-            "You do not have sufficient privilege to affect this user.",
-        ));
-    }
-
-    Ok(())
 }

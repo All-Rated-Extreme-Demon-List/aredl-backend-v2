@@ -4,7 +4,7 @@ use crate::{
         Submission,
     },
     auth::{Authenticated, UserAuth},
-    db::DbAppState,
+    app_data::db::DbAppState,
     error_handler::ApiError,
 };
 use actix_web::{get, web, HttpResponse};
