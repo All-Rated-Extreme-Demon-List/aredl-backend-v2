@@ -132,6 +132,8 @@ impl RoleResolved {
             .left_join(users::table.on(users::id.nullable().eq(user_roles::user_id.nullable())))
             .select((Role::as_select(), Option::<BaseUser>::as_select()))
             .order_by(roles::privilege_level.desc())
+            .then_order_by(roles::id.asc())
+            .then_order_by(users::id.asc())
             .load(conn)?;
 
         let resolved = rows
