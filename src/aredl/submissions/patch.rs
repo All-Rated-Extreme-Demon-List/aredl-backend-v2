@@ -266,7 +266,8 @@ impl SubmissionPatchMod {
         }
 
         if let Some(video_url) = patch.video_url.as_ref() {
-            patch.video_url = Some(providers.validate_completion_video_url(video_url).map_err(
+            // for reviewers, only validate that the URL is valid like for raw footage, provider isn't enforced
+            patch.video_url = Some(providers.validate_raw_footage_url(video_url).map_err(
                 |mut e| {
                     e.error_message = format!("Invalid completion video URL: {}", e.error_message);
                     e
