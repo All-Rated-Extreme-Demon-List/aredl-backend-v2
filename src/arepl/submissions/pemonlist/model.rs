@@ -120,22 +120,36 @@ impl PemonlistPlayer {
             let now = Utc::now();
             let timestamp = Self::parse_formatted_ms(&pemonlist_record.formatted_time)?;
 
-            let video_url = format!("https://youtu.be/{}", pemonlist_record.video_id);
+            let video_url = format!(
+                "https://www.youtube.com/watch?v={}",
+                pemonlist_record.video_id
+            );
 
             // ensure there is an Accepted submission with the correct data
+            // if exists, only update if relevant data has changed (avoid triggering a submission history log entry)
             let submission = if let Some(old) = existing_submission {
-                diesel::update(submissions::table.filter(submissions::id.eq(old.id)))
-                    .set((
-                        submissions::mobile.eq(pemonlist_record.mobile),
-                        submissions::video_url.eq(video_url),
-                        submissions::completion_time.eq(timestamp),
-                        submissions::status.eq(SubmissionStatus::Accepted),
-                        submissions::reviewer_id.eq::<Option<uuid::Uuid>>(None),
-                        submissions::reviewer_notes.eq::<Option<String>>(None),
-                        submissions::updated_at.eq(now),
-                    ))
-                    .returning(Submission::as_select())
-                    .get_result::<Submission>(conn)?
+                if old.status != SubmissionStatus::Accepted
+                    || old.completion_time != timestamp
+                    || old.mobile != pemonlist_record.mobile
+                    || old.video_url != video_url
+                {
+                    diesel::update(submissions::table.filter(submissions::id.eq(old.id)))
+                        .set((
+                            submissions::mobile.eq(pemonlist_record.mobile),
+                            submissions::video_url.eq(video_url),
+                            submissions::completion_time.eq(timestamp),
+                            submissions::status.eq(SubmissionStatus::Accepted),
+                            submissions::reviewer_id.eq::<Option<uuid::Uuid>>(None),
+                            submissions::reviewer_notes.eq::<Option<String>>(Some(String::from(
+                                "Accepted via pemonlist sync",
+                            ))),
+                            submissions::updated_at.eq(now),
+                        ))
+                        .returning(Submission::as_select())
+                        .get_result::<Submission>(conn)?
+                } else {
+                    old
+                }
             } else {
                 diesel::insert_into(submissions::table)
                     .values((
@@ -145,13 +159,15 @@ impl PemonlistPlayer {
                         submissions::ldm_id.eq::<Option<i32>>(None),
                         submissions::video_url.eq(video_url),
                         submissions::raw_url.eq::<Option<String>>(None),
-                        submissions::mod_menu.eq::<Option<String>>(None),
+                        submissions::mod_menu.eq::<Option<String>>(Some(String::from("None"))),
                         submissions::user_notes.eq::<Option<String>>(None),
                         submissions::priority.eq(false),
                         submissions::status.eq(SubmissionStatus::Accepted),
                         submissions::completion_time.eq(timestamp),
                         submissions::reviewer_id.eq::<Option<uuid::Uuid>>(None),
-                        submissions::reviewer_notes.eq::<Option<String>>(None),
+                        submissions::reviewer_notes.eq::<Option<String>>(Some(String::from(
+                            "Accepted via pemonlist sync",
+                        ))),
                         submissions::created_at.eq(now),
                         submissions::updated_at.eq(now),
                     ))
