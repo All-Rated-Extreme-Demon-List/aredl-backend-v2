@@ -337,18 +337,18 @@ impl Record {
         authenticated: Authenticated,
     ) -> Result<(), ApiError> {
         conn.transaction(|conn| -> Result<(), ApiError> {
-            let submission_id: Uuid = records::table
-                .filter(records::id.eq(record_id))
-                .select(records::submission_id)
-                .first(conn)?;
+            let record = diesel::delete(records::table.filter(records::id.eq(record_id)))
+                .returning(Record::as_select())
+                .get_result::<Record>(conn)?;
 
             diesel::update(submissions::table)
-                .filter(submissions::id.eq(submission_id))
+                .filter(submissions::id.eq(record.submission_id))
+                .filter(submissions::status.ne(SubmissionStatus::Denied)) // only update if not already denied
                 .set((
                     submissions::status.eq(SubmissionStatus::Denied),
                     submissions::reviewer_id.eq(Some(authenticated.user_id)),
                     submissions::reviewer_notes
-                        .eq(Some("Record deleted by a moderator".to_string())),
+                        .eq(Some("Record removed by a moderator".to_string())),
                 ))
                 .execute(conn)?;
             Ok(())
