@@ -15,6 +15,9 @@ on:
       GDRIVE_RCLONE_CONFIG:
         required: true
 
+permissions:
+  contents: read
+
 jobs:
   backup:
     runs-on: ubuntu-latest

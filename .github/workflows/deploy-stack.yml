@@ -1,5 +1,8 @@
 name: Deploy docker stack to host
 
+permissions:
+  contents: read
+
 on:
   workflow_call:
     inputs:

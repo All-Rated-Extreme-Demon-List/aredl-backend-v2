@@ -4,6 +4,9 @@ on:
   workflow_dispatch:
   push:
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
   TEST_DATABASE_URL: postgres://postgres:password@localhost:5432/aredl_test
@@ -141,6 +144,9 @@ jobs:
   pre_deploy_backup:
     if: github.ref == 'refs/heads/main'
     needs: build-api
+    permissions:
+      contents: read
+      actions: read
     uses: ./.github/workflows/db-backup.yml
     secrets:
       DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
@@ -151,6 +157,9 @@ jobs:
   deploy:
     if: github.ref == 'refs/heads/main'
     needs: [build-api, pre_deploy_backup]
+    permissions:
+      contents: read
+      actions: read
     uses: ./.github/workflows/deploy-stack.yml
     with:
       stack_name: aredl_backend_stack
@@ -208,6 +217,9 @@ jobs:
   deploy-dev:
     if: github.ref == 'refs/heads/dev'
     needs: build-api-dev
+    permissions:
+      contents: read
+      actions: read
     uses: ./.github/workflows/deploy-stack.yml
     with:
       stack_name: aredl_backend_dev_stack
@@ -229,6 +241,9 @@ jobs:
   migrate-dev-db:
     if: github.ref == 'refs/heads/dev'
     needs: deploy-dev
+    permissions:
+      contents: read
+      actions: read
     uses: ./.github/workflows/migrate-dev-db.yml
     secrets:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
