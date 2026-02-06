@@ -106,6 +106,8 @@ pub struct LevelUpdate {
     pub name: Option<String>,
     /// Internal user UUID of the person who published the level in the game.
     pub publisher_id: Option<Uuid>,
+    /// Level ID in the game. May not be unique for 2P levels.
+    pub level_id: Option<i32>,
     /// Whether this level has been rerated to insane and is now in the legacy list, or not.
     pub legacy: Option<bool>,
     /// Whether this is the 2P version of a level or not.
