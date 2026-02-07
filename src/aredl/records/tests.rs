@@ -263,6 +263,30 @@ async fn get_records_mobile_filter() {
 }
 
 #[actix_web::test]
+async fn get_records_verification_filter() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
+    let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
+    let (_, verification_record) = create_test_level_with_record(&db, user_id).await;
+
+    create_test_level_with_record(&db, user_id).await;
+    diesel::update(records::table.filter(records::id.eq(verification_record)))
+        .set(records::is_verification.eq(true))
+        .execute(&mut db.connection().unwrap())
+        .unwrap();
+
+    let req = test::TestRequest::get()
+        .uri("/aredl/records?verification_filter=true")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["data"].as_array().unwrap().len(), 1);
+    assert_eq!(body["data"][0]["id"], verification_record.to_string());
+}
+
+#[actix_web::test]
 async fn get_records_level_filter() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;

@@ -11,6 +11,9 @@ on:
       DEPLOY_KEY:
         required: true
 
+permissions:
+  contents: read
+
 concurrency:
   group: db-migrate-dev
   cancel-in-progress: false

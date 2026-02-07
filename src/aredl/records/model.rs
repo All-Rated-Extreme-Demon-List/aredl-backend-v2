@@ -146,6 +146,7 @@ pub enum RecordSortField {
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct RecordsQueryOptions {
     pub mobile_filter: Option<bool>,
+    pub verification_filter: Option<bool>,
     pub level_filter: Option<Uuid>,
     pub submitter_filter: Option<String>,
     pub sort: Option<RecordSortField>,
@@ -473,6 +474,9 @@ impl ResolvedRecord {
             let mut q = records::table.into_boxed::<Pg>();
             if let Some(mobile) = options.mobile_filter {
                 q = q.filter(records::mobile.eq(mobile));
+            }
+            if let Some(verification) = options.verification_filter {
+                q = q.filter(records::is_verification.eq(verification));
             }
             if let Some(level) = options.level_filter {
                 q = q.filter(records::level_id.eq(level));

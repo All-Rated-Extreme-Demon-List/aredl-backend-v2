@@ -226,6 +226,7 @@ async fn find_me(
             RecordsQueryOptions {
                 level_filter: None,
                 mobile_filter: None,
+                verification_filter: None,
                 submitter_filter: Some(authenticated.user_id.to_string()),
                 sort: None,
             },

@@ -183,18 +183,21 @@ impl ResolvedSubmissionPage {
             }
 
             if let Some(note_text) = options.note_filter.as_deref() {
-                query = query.filter(
-                    submissions_with_priority::id.eq_any(
-                        submission_history::table
-                            .filter(
-                                submission_history::user_notes
-                                    .ilike(note_text)
-                                    .or(submission_history::reviewer_notes.ilike(note_text)),
-                            )
-                            .select(submission_history::submission_id)
-                            .distinct(),
-                    ),
-                );
+                query =
+                    query.filter(
+                        submissions_with_priority::id.eq_any(
+                            submission_history::table
+                                .filter(
+                                    submission_history::user_notes
+                                        .ilike(note_text)
+                                        .or(submission_history::reviewer_notes.ilike(note_text))
+                                        .or(submission_history::private_reviewer_notes
+                                            .ilike(note_text)),
+                                )
+                                .select(submission_history::submission_id)
+                                .distinct(),
+                        ),
+                    );
             }
             query
         };

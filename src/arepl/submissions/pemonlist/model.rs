@@ -1,4 +1,4 @@
-use chrono::{NaiveTime, Timelike, Utc};
+use chrono::Utc;
 use diesel::prelude::*;
 use serde::Deserialize;
 
@@ -182,28 +182,54 @@ impl PemonlistPlayer {
     }
 
     fn parse_formatted_ms(s: &str) -> Result<i64, ApiError> {
-        let mut parts = s.split('.');
-        let time_part = parts
+        let (hms, millis) = s.split_once('.').unwrap_or((s, "0"));
+
+        let mut parts = hms.split(':');
+        let hours = parts
             .next()
-            .ok_or_else(|| ApiError::new(500, "Malformed formatted_time"))?;
-        let ms_part = parts.next().unwrap_or("0");
-        let t = NaiveTime::parse_from_str(time_part, "%H:%M:%S")
-            .map_err(|e| ApiError::new(500, &format!("Time parse error: {}", e)))?;
-        let ms = {
-            let mut ms = ms_part.to_string();
-            if ms.len() > 3 {
-                ms.truncate(3);
+            .ok_or_else(|| ApiError::new(500, "Malformed hour timestamp"))?;
+        let minutes = parts
+            .next()
+            .ok_or_else(|| ApiError::new(500, "Malformed minute timestamp"))?;
+        let seconds = parts
+            .next()
+            .ok_or_else(|| ApiError::new(500, "Malformed second timestamp"))?;
+        if parts.next().is_some() {
+            return Err(ApiError::new(500, "Malformed formatted_time"));
+        }
+
+        let hours: i64 = hours
+            .parse()
+            .map_err(|e| ApiError::new(500, &format!("Failed to parse hours: {e}")))?;
+        let minutes: i64 = minutes
+            .parse()
+            .map_err(|e| ApiError::new(500, &format!("Failed to parse minutes: {e}")))?;
+        let seconds: i64 = seconds
+            .parse()
+            .map_err(|e| ApiError::new(500, &format!("Failed to parse seconds: {e}")))?;
+
+        if hours < 0 || !(0..60).contains(&minutes) || !(0..60).contains(&seconds) {
+            return Err(ApiError::new(
+                500,
+                "Malformed formatted_time (out of range)",
+            ));
+        }
+
+        // normalize fraction to milliseconds
+        let milliseconds = {
+            let mut millis = millis.to_string();
+            if millis.len() > 3 {
+                millis.truncate(3);
             } else {
-                while ms.len() < 3 {
-                    ms.push('0');
+                while millis.len() < 3 {
+                    millis.push('0');
                 }
             }
-            ms.parse::<i64>()
-                .map_err(|e| ApiError::new(500, &format!("MS parse error: {}", e)))?
+            millis
+                .parse::<i64>()
+                .map_err(|e| ApiError::new(500, &format!("Failed to parse milliseconds: {}", e)))?
         };
-        Ok((t.hour() as i64) * 3_600_000
-            + (t.minute() as i64) * 60_000
-            + (t.second() as i64) * 1_000
-            + ms)
+
+        Ok(hours * 3_600_000 + minutes * 60_000 + seconds * 1_000 + milliseconds)
     }
 }

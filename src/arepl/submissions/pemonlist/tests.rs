@@ -19,10 +19,10 @@ async fn sync_pemonlist() {
     let response_body = json!({
         "records": [
             {
-                "formatted_time": "00:00:05.100",
+                "formatted_time": "29:00:05.100",
                 "level": {"level_id": 12345},
                 "mobile": false,
-                "video_id": "abcd"
+                "video_id": "abcdefghijk"
             }
         ]
     });
@@ -65,7 +65,32 @@ async fn sync_pemonlist() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let body: serde_json::Value = read_body_json(resp).await;
-    assert_eq!(body.as_array().unwrap().len(), 1);
+    let arr = body.as_array().expect("expected JSON array");
+    assert_eq!(arr.len(), 1);
+
+    let submission = &arr[0];
+
+    assert_eq!(
+        submission.get("completion_time").and_then(|v| v.as_i64()),
+        Some(104_405_100),
+        "unexpected completion_time: {}",
+        submission
+            .get("completion_time")
+            .unwrap_or(&serde_json::Value::Null)
+    );
+
+    assert_eq!(
+        submission.get("mobile").and_then(|v| v.as_bool()),
+        Some(false)
+    );
+    assert_eq!(
+        submission.get("video_url").and_then(|v| v.as_str()),
+        Some("https://www.youtube.com/watch?v=abcdefghijk")
+    );
+    assert_eq!(
+        submission.get("status").and_then(|v| v.as_str()),
+        Some("Accepted")
+    );
 }
 
 #[actix_web::test]

@@ -30,7 +30,6 @@ impl Submission {
         conn: &mut DbConnection,
         submission_id: Uuid,
     ) -> Result<(i64, i64), ApiError> {
-        // Get the priority and created_at of the target submission
         let (target_priority, target_priority_value, target_created_at): (
             bool,
             i64,
