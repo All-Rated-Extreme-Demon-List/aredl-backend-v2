@@ -155,7 +155,7 @@ pub trait Provider: Send + Sync {
     }
 }
 
-pub const FETCH_RANGE_CHUNK_SIZE: u64 = 8 * 1024 * 1024;
+pub const FETCH_RANGE_CHUNK_SIZE: u64 = 16 * 1024 * 1024;
 
 impl ContentDataLocation {
     async fn fetch_range(&self, start: u64, len: u64) -> Result<Vec<u8>, ApiError> {
