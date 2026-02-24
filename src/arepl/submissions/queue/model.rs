@@ -2,7 +2,7 @@ use crate::{
     app_data::db::DbConnection,
     arepl::submissions::{Submission, SubmissionStatus},
     error_handler::ApiError,
-    schema::arepl::{submissions, submissions_with_priority},
+    schema::arepl::submissions,
 };
 use chrono::{DateTime, Utc};
 use diesel::{BoolExpressionMethods, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
@@ -11,8 +11,10 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct SubmissionQueue {
-    /// The amount of pending submissions in the database.
-    pub submissions_in_queue: i32,
+    /// The amount of pending submissions that are not marked as priority.
+    pub regular_submissions_in_queue: i32,
+    /// The amount of pending submissions that are marked as priority.
+    pub priority_submissions_in_queue: i32,
     /// The amount of submissions currently under consideration.
     pub uc_submissions: i32,
     /// The timestamp of the oldest pending submission in the queue, if any.
@@ -21,61 +23,50 @@ pub struct SubmissionQueue {
 
 #[derive(serde::Serialize, utoipa::ToSchema)]
 pub struct QueuePositionResponse {
+    /// The position of the submission in its queue (regular or priority).
     pub position: i64,
-    pub total: i64,
+    /// Whether the submission is in the priority queue or not.
+    pub priority: bool,
 }
 
 impl Submission {
     pub fn get_queue_position(
         conn: &mut DbConnection,
         submission_id: Uuid,
-    ) -> Result<(i64, i64), ApiError> {
-        let (target_priority, target_priority_value, target_created_at): (
-            bool,
-            i64,
-            DateTime<Utc>,
-        ) = submissions_with_priority::table
-            .filter(submissions_with_priority::id.eq(submission_id))
-            .filter(submissions_with_priority::status.eq(SubmissionStatus::Pending))
-            .select((
-                submissions_with_priority::priority,
-                submissions_with_priority::priority_value,
-                submissions_with_priority::created_at,
-            ))
+    ) -> Result<(i64, bool), ApiError> {
+        let (target_priority, target_created_at): (bool, DateTime<Utc>) = submissions::table
+            .filter(submissions::id.eq(submission_id))
+            .filter(submissions::status.eq(SubmissionStatus::Pending))
+            .select((submissions::priority, submissions::created_at))
             .first(conn)?;
 
         // Count how many pending submissions come before this one
-        let position = submissions_with_priority::table
-            .filter(submissions_with_priority::status.eq(SubmissionStatus::Pending))
+        let position = submissions::table
+            .filter(submissions::status.eq(SubmissionStatus::Pending))
             .filter(
-                submissions_with_priority::priority
-                    .gt(target_priority)
-                    .or(submissions_with_priority::priority
-                        .eq(target_priority)
-                        .and(submissions_with_priority::priority_value.gt(target_priority_value)))
-                    .or(submissions_with_priority::priority
-                        .eq(target_priority)
-                        .and(submissions_with_priority::priority_value.eq(target_priority_value))
-                        .and(submissions_with_priority::created_at.lt(target_created_at))),
+                submissions::priority
+                    .eq(target_priority)
+                    .and(submissions::created_at.lt(target_created_at)),
             )
             .count()
             .get_result::<i64>(conn)?
             + 1;
 
-        // Total number of pending submissions
-        let total = submissions_with_priority::table
-            .filter(submissions_with_priority::status.eq(SubmissionStatus::Pending))
-            .count()
-            .get_result::<i64>(conn)?;
-
-        Ok((position, total))
+        Ok((position, target_priority))
     }
 }
 
 impl SubmissionQueue {
     pub fn get_queue(conn: &mut DbConnection) -> Result<Self, ApiError> {
-        let submissions_in_queue = submissions::table
+        let regular_submissions_in_queue = submissions::table
             .filter(submissions::status.eq(SubmissionStatus::Pending))
+            .filter(submissions::priority.eq(false))
+            .count()
+            .get_result::<i64>(conn)? as i32;
+
+        let priority_submissions_in_queue = submissions::table
+            .filter(submissions::status.eq(SubmissionStatus::Pending))
+            .filter(submissions::priority.eq(true))
             .count()
             .get_result::<i64>(conn)? as i32;
 
@@ -92,7 +83,8 @@ impl SubmissionQueue {
             .optional()?;
 
         Ok(Self {
-            submissions_in_queue,
+            regular_submissions_in_queue,
+            priority_submissions_in_queue,
             uc_submissions,
             oldest_submission,
         })
