@@ -320,7 +320,22 @@ async fn submission_aredlplus_boost() {
         claim_resp.status()
     );
     let body: serde_json::Value = read_body_json(claim_resp).await;
-    assert_eq!(body["id"], submission2["id"])
+    assert_eq!(body["id"], submission2["id"]);
+
+    // next claim should alternate to a non-priority submission when available.
+    let claim_req = test::TestRequest::get()
+        .uri("/arepl/submissions/claim")
+        .insert_header(("Authorization", format!("Bearer {}", token_mod)))
+        .to_request();
+
+    let claim_resp = test::call_service(&app, claim_req).await;
+    assert!(
+        claim_resp.status().is_success(),
+        "Second claim request failed: {}",
+        claim_resp.status()
+    );
+    let body: serde_json::Value = read_body_json(claim_resp).await;
+    assert_eq!(body["id"], submission1["id"])
 }
 
 #[actix_web::test]

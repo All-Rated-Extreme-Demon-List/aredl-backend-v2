@@ -7,11 +7,31 @@ use crate::{
     users::ExtendedBaseUser,
 };
 use chrono::{DateTime, Utc};
-use diesel::{pg::Pg, Connection, ExpressionMethods, QueryDsl, RunQueryDsl, Selectable};
+use diesel::{
+    pg::Pg, Connection, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, Selectable,
+};
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
+use std::{
+    collections::HashMap,
+    sync::{Mutex, OnceLock},
+};
 use utoipa::ToSchema;
 use uuid::Uuid;
+
+static CLAIM_PREFER_PRIORITY: OnceLock<Mutex<HashMap<Uuid, bool>>> = OnceLock::new();
+
+fn prefer_priority_next(reviewer_id: Uuid) -> bool {
+    let lock = CLAIM_PREFER_PRIORITY.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut state = lock.lock().expect("claim preference lock poisoned");
+    *state.entry(reviewer_id).or_insert(true)
+}
+
+fn set_prefer_priority_next(reviewer_id: Uuid, prefer_priority: bool) {
+    let lock = CLAIM_PREFER_PRIORITY.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut state = lock.lock().expect("claim preference lock poisoned");
+    state.insert(reviewer_id, prefer_priority);
+}
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq, Default)]
 #[ExistingTypePath = "crate::schema::aredl::sql_types::SubmissionStatus"]
@@ -125,20 +145,50 @@ pub struct SubmissionPage {
 }
 
 impl Submission {
+    fn find_next_claimable_id(
+        conn: &mut DbConnection,
+        reviewer_id: Uuid,
+        priority: bool,
+    ) -> Result<Option<Uuid>, ApiError> {
+        let next_id = submissions::table
+            .filter(submissions::status.eq(SubmissionStatus::Pending))
+            // prevent moderators from claiming their own submissions
+            .filter(submissions::submitted_by.ne(reviewer_id))
+            .filter(submissions::priority.eq(priority))
+            .for_update()
+            .skip_locked()
+            .order(submissions::created_at.asc())
+            .select(submissions::id)
+            .first::<Uuid>(conn)
+            .optional()?;
+
+        Ok(next_id)
+    }
+
     pub fn claim_highest_priority(
         conn: &mut DbConnection,
         authenticated: Authenticated,
     ) -> Result<SubmissionResolved, ApiError> {
         conn.transaction(|conn| -> Result<SubmissionResolved, ApiError> {
-            let next_id: Uuid = submissions::table
-                .filter(submissions::status.eq(SubmissionStatus::Pending))
-                // prevent moderators from claiming their own submissions
-                .filter(submissions::submitted_by.ne(authenticated.user_id))
-                .for_update()
-                .skip_locked()
-                .order((submissions::priority.desc(), submissions::created_at.asc()))
-                .select(submissions::id)
-                .first(conn)?;
+            let prefer_priority = prefer_priority_next(authenticated.user_id);
+
+            let preferred_id =
+                Self::find_next_claimable_id(conn, authenticated.user_id, prefer_priority)?;
+
+            let (next_id, claimed_priority) = if let Some(id) = preferred_id {
+                (id, prefer_priority)
+            } else if let Some(id) =
+                Self::find_next_claimable_id(conn, authenticated.user_id, !prefer_priority)?
+            {
+                (id, !prefer_priority)
+            } else {
+                return Err(ApiError::new(
+                    404,
+                    "There are no submissions available to claim",
+                ));
+            };
+
+            set_prefer_priority_next(authenticated.user_id, !claimed_priority);
 
             diesel::update(submissions::table.filter(submissions::id.eq(next_id)))
                 .set((
