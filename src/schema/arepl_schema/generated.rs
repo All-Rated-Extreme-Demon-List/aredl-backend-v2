@@ -11,6 +11,10 @@ pub mod arepl {
         pub struct CustomIdType;
 
         #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+        #[diesel(postgres_type(name = "level_notes_type", schema = "arepl"))]
+        pub struct LevelNotesType;
+
+        #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
         #[diesel(postgres_type(name = "submission_status"))]
         pub struct SubmissionStatus;
     }
@@ -36,6 +40,21 @@ pub mod arepl {
             created_at -> Timestamptz,
             id_type -> CustomIdType,
             status -> CustomIdStatus,
+        }
+    }
+
+    diesel::table! {
+        use diesel::sql_types::*;
+        use super::sql_types::LevelNotesType;
+
+        arepl.level_notes (id) {
+            id -> Uuid,
+            level_id -> Uuid,
+            note -> Text,
+            note_type -> LevelNotesType,
+            timestamp -> Nullable<Timestamptz>,
+            added_by -> Uuid,
+            created_at -> Timestamptz,
         }
     }
 
@@ -180,12 +199,14 @@ pub mod arepl {
     }
 
     diesel::joinable!(level_ldms -> levels (level_id));
+    diesel::joinable!(level_notes -> levels (level_id));
     diesel::joinable!(records -> submissions (submission_id));
     diesel::joinable!(submission_history -> submissions (submission_id));
 
     diesel::allow_tables_to_appear_in_same_query!(
         last_gddl_update,
         level_ldms,
+        level_notes,
         levels,
         levels_created,
         pack_levels,

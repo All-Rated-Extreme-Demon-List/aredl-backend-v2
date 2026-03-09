@@ -151,6 +151,14 @@ pub mod public {
     }
 
     diesel::table! {
+        stage_denied_submission_ids (level_id, submitted_by) {
+            level_id -> Uuid,
+            submitted_by -> Uuid,
+            submission_id -> Uuid,
+        }
+    }
+
+    diesel::table! {
         user_roles (role_id, user_id) {
             role_id -> Int4,
             user_id -> Uuid,
@@ -200,6 +208,7 @@ pub mod public {
         recurrent_shifts,
         roles,
         shifts,
+        stage_denied_submission_ids,
         user_roles,
         users,
     );

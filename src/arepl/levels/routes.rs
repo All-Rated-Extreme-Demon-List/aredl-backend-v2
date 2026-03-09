@@ -1,10 +1,11 @@
+use crate::app_data::db::DbAppState;
+use crate::arepl::levels::notes;
 use crate::arepl::levels::{
     creators, history, id_resolver::resolve_level_id, ldms, packs, records, Level, LevelPlace,
     LevelUpdate, ResolvedLevel,
 };
 use crate::auth::{Permission, UserAuth};
 use crate::cache_control::CacheController;
-use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
 use actix_web::{get, patch, post, web, HttpResponse};
 use std::sync::Arc;
@@ -118,6 +119,7 @@ async fn find(
         (path = "/{level_id}/records", api = records::ApiDoc),
         (path = "/{level_id}/packs", api = packs::ApiDoc),
         (path = "/ldms", api = ldms::ApiDoc),
+        (path = "/notes", api = notes::ApiDoc),
     ),
     tags(
         (name = "AREDL (P) - Levels", description="Endpoints for fetching and managing platformer levels on the AREDL")
@@ -143,6 +145,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .configure(records::init_routes)
             .configure(creators::init_routes)
             .configure(ldms::init_routes)
+            .configure(notes::init_routes)
             .service(list)
             .service(create)
             .service(update)

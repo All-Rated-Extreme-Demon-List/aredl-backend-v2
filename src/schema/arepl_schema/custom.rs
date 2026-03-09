@@ -2,7 +2,7 @@
 // diesel won't autogenerate in schema.rs
 
 use crate::schema::arepl::{
-    level_ldms, levels, levels_created, pack_levels, pack_tiers, packs, records,
+    level_ldms, level_notes, levels, levels_created, pack_levels, pack_tiers, packs, records,
     submission_history, submissions, submissions_enabled,
 };
 use crate::schema::{clan_members, clans, users};
@@ -185,11 +185,12 @@ diesel::allow_tables_to_appear_in_same_query!(min_placement_clans_records, level
 diesel::allow_tables_to_appear_in_same_query!(min_placement_clans_records, clans,);
 
 diesel::joinable!(users -> level_ldms (id));
+diesel::joinable!(users -> level_notes (id));
 
 diesel::allow_tables_to_appear_in_same_query!(users, submissions_enabled);
 diesel::allow_tables_to_appear_in_same_query!(users, level_ldms);
 diesel::allow_tables_to_appear_in_same_query!(users, submissions);
-
+diesel::allow_tables_to_appear_in_same_query!(users, level_notes);
 diesel::table! {
     arepl.submission_stats (day, reviewer_id) {
         day -> Date,
