@@ -320,7 +320,22 @@ async fn submission_aredlplus_boost() {
         claim_resp.status()
     );
     let body: serde_json::Value = read_body_json(claim_resp).await;
-    assert_eq!(body["id"], submission2["id"])
+    assert_eq!(body["id"], submission2["id"]);
+
+    // next claim should alternate to a non-priority submission when available.
+    let claim_req = test::TestRequest::get()
+        .uri("/arepl/submissions/claim")
+        .insert_header(("Authorization", format!("Bearer {}", token_mod)))
+        .to_request();
+
+    let claim_resp = test::call_service(&app, claim_req).await;
+    assert!(
+        claim_resp.status().is_success(),
+        "Second claim request failed: {}",
+        claim_resp.status()
+    );
+    let body: serde_json::Value = read_body_json(claim_resp).await;
+    assert_eq!(body["id"], submission1["id"])
 }
 
 #[actix_web::test]
@@ -582,7 +597,7 @@ async fn get_global_queue() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
     let body: serde_json::Value = read_body_json(resp).await;
-    assert_eq!(body["submissions_in_queue"].as_i64().unwrap(), 1);
+    assert_eq!(body["regular_submissions_in_queue"].as_i64().unwrap(), 1);
     assert_eq!(body["uc_submissions"].as_i64().unwrap(), 0);
 }
 
@@ -590,9 +605,11 @@ async fn get_global_queue() {
 async fn get_submission_queue() {
     let (app, db, auth, _) = init_test_app().await;
     let (user, _) = create_test_user(&db, None).await;
+    let (other_user, _) = create_test_user(&db, None).await;
     let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, user, &db).await;
+    create_test_submission(level, other_user, &db).await;
 
     let req = test::TestRequest::get()
         .uri(&format!("/arepl/submissions/{submission}/queue"))
@@ -601,7 +618,7 @@ async fn get_submission_queue() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
     let body: serde_json::Value = read_body_json(resp).await;
-    assert_eq!(body["total"].as_i64().unwrap(), 1);
+    assert_eq!(body["position"].as_i64().unwrap(), 1);
 }
 
 #[actix_web::test]

@@ -1,10 +1,10 @@
 use crate::{
+    app_data::db::DbAppState,
     arepl::submissions::{
         queue::{QueuePositionResponse, SubmissionQueue},
         Submission,
     },
     auth::{Authenticated, UserAuth},
-    app_data::db::DbAppState,
     error_handler::ApiError,
 };
 use actix_web::{get, web, HttpResponse};
@@ -35,11 +35,11 @@ async fn get_queue_position(
     id: web::Path<Uuid>,
     _auth: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let (position, total) =
+    let (position, priority) =
         web::block(move || Submission::get_queue_position(&mut db.connection()?, id.into_inner()))
             .await??;
 
-    Ok(HttpResponse::Ok().json(QueuePositionResponse { position, total }))
+    Ok(HttpResponse::Ok().json(QueuePositionResponse { position, priority }))
 }
 
 #[utoipa::path(

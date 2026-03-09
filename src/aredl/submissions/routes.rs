@@ -92,7 +92,7 @@ async fn patch(
 #[utoipa::path(
     get,
     summary = "[Staff]Claim a submission",
-    description = "Claim the submission with the highest priority to be checked.",
+    description = "Claim the next submission to be checked. Alternates between priority and non-priority submissions when possible.",
     tag = "AREDL - Submissions",
     responses(
         (status = 200, body = SubmissionResolved)

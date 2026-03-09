@@ -184,42 +184,11 @@ diesel::allow_tables_to_appear_in_same_query!(min_placement_clans_records, level
 
 diesel::allow_tables_to_appear_in_same_query!(min_placement_clans_records, clans,);
 
-diesel::table! {
-    use diesel::sql_types::*;
-    use crate::schema::arepl::sql_types::SubmissionStatus;
-    arepl.submissions_with_priority (id) {
-        id -> Uuid,
-        level_id -> Uuid,
-        submitted_by -> Uuid,
-        mobile -> Bool,
-        ldm_id -> Nullable<Int4>,
-        video_url -> Varchar,
-        raw_url -> Nullable<Varchar>,
-        reviewer_id -> Nullable<Uuid>,
-        priority -> Bool,
-        priority_value -> Bigint,
-        reviewer_notes -> Nullable<Varchar>,
-        private_reviewer_notes -> Nullable<Varchar>,
-        user_notes -> Nullable<Varchar>,
-
-        locked -> Bool,
-        created_at -> Timestamptz,
-        updated_at -> Timestamptz,
-        status -> SubmissionStatus,
-        mod_menu -> Nullable<Varchar>,
-        completion_time -> Int8,
-    }
-}
-
-diesel::joinable!(submissions -> submissions_with_priority (id));
 diesel::joinable!(users -> level_ldms (id));
 
-diesel::allow_tables_to_appear_in_same_query!(submissions, submissions_with_priority);
-diesel::allow_tables_to_appear_in_same_query!(submission_history, submissions_with_priority);
-diesel::allow_tables_to_appear_in_same_query!(levels, submissions_with_priority);
-diesel::allow_tables_to_appear_in_same_query!(users, submissions_with_priority);
 diesel::allow_tables_to_appear_in_same_query!(users, submissions_enabled);
 diesel::allow_tables_to_appear_in_same_query!(users, level_ldms);
+diesel::allow_tables_to_appear_in_same_query!(users, submissions);
 
 diesel::table! {
     arepl.submission_stats (day, reviewer_id) {

@@ -5,7 +5,7 @@ use crate::{
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
     schema::{
-        aredl::{levels, submission_history, submissions_with_priority},
+        aredl::{levels, submission_history, submissions},
         users,
     },
     users::{user_filter, ExtendedBaseUser},
@@ -23,7 +23,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 pub type ResolvedSubmissionRow = (
-    SubmissionWithPriority,
+    Submission,
     ExtendedBaseLevel,
     ExtendedBaseUser,
     Option<ExtendedBaseUser>,
@@ -57,10 +57,10 @@ pub struct ResolvedSubmissionPage {
 diesel::alias!(users as reviewers: Reviewers);
 
 #[auto_type]
-fn resolve_query<'a>(q: submissions_with_priority::BoxedQuery<'a, Pg>) -> _ {
+fn resolve_query<'a>(q: submissions::BoxedQuery<'a, Pg>) -> _ {
     // annoying type shenanigans to get around Diesel not being able to infer types properly
     let selection: (
-        AsSelect<SubmissionWithPriority, Pg>,
+        AsSelect<Submission, Pg>,
         AsSelect<ExtendedBaseLevel, Pg>,
         AsSelect<ExtendedBaseUser, Pg>,
         Nullable<
@@ -70,7 +70,7 @@ fn resolve_query<'a>(q: submissions_with_priority::BoxedQuery<'a, Pg>) -> _ {
             >,
         >,
     ) = (
-        SubmissionWithPriority::as_select(),
+        Submission::as_select(),
         ExtendedBaseLevel::as_select(),
         ExtendedBaseUser::as_select(),
         reviewers
@@ -78,13 +78,13 @@ fn resolve_query<'a>(q: submissions_with_priority::BoxedQuery<'a, Pg>) -> _ {
             .nullable(),
     );
 
-    q.inner_join(levels::table.on(submissions_with_priority::level_id.eq(levels::id)))
-        .inner_join(users::table.on(submissions_with_priority::submitted_by.eq(users::id)))
+    q.inner_join(levels::table.on(submissions::level_id.eq(levels::id)))
+        .inner_join(users::table.on(submissions::submitted_by.eq(users::id)))
         .left_join(
             reviewers.on(reviewers
                 .field(users::id)
                 .nullable()
-                .eq(submissions_with_priority::reviewer_id.nullable())),
+                .eq(submissions::reviewer_id.nullable())),
         )
         .select(selection)
 }
@@ -111,7 +111,6 @@ impl SubmissionResolved {
             locked: submission.locked,
             created_at: submission.created_at,
             updated_at: submission.updated_at,
-            priority_value: submission.priority_value,
         }
     }
 
@@ -120,14 +119,14 @@ impl SubmissionResolved {
         id: Uuid,
         authenticated: Authenticated,
     ) -> Result<SubmissionResolved, ApiError> {
-        let mut query = submissions_with_priority::table
-            .filter(submissions_with_priority::id.eq(id))
+        let mut query = submissions::table
+            .filter(submissions::id.eq(id))
             .into_boxed();
 
         let is_reviewer = authenticated.has_permission(conn, Permission::SubmissionReview)?;
 
         if !is_reviewer {
-            query = query.filter(submissions_with_priority::submitted_by.eq(authenticated.user_id));
+            query = query.filter(submissions::submitted_by.eq(authenticated.user_id));
         }
 
         let mut resolved =
@@ -150,34 +149,33 @@ impl ResolvedSubmissionPage {
         authenticated: Authenticated,
     ) -> Result<Paginated<Self>, ApiError> {
         let build_filtered = || {
-            let mut query = submissions_with_priority::table.into_boxed::<Pg>();
+            let mut query = submissions::table.into_boxed::<Pg>();
 
             if let Some(status) = options.status_filter.clone() {
-                query = query.filter(submissions_with_priority::status.eq(status));
+                query = query.filter(submissions::status.eq(status));
             }
 
             if let Some(mobile) = options.mobile_filter.clone() {
-                query = query.filter(submissions_with_priority::mobile.eq(mobile));
+                query = query.filter(submissions::mobile.eq(mobile));
             }
 
             if let Some(level) = options.level_filter.clone() {
-                query = query.filter(submissions_with_priority::level_id.eq(level));
+                query = query.filter(submissions::level_id.eq(level));
             }
 
             if let Some(ref submitter) = options.submitter_filter {
                 query = query.filter(
-                    submissions_with_priority::submitted_by
-                        .eq_any(user_filter(&submitter).select(users::id)),
+                    submissions::submitted_by.eq_any(user_filter(&submitter).select(users::id)),
                 );
             }
 
             if let Some(priority) = options.priority_filter.clone() {
-                query = query.filter(submissions_with_priority::priority.eq(priority));
+                query = query.filter(submissions::priority.eq(priority));
             }
 
             if let Some(ref reviewer) = options.reviewer_filter {
                 query = query.filter(
-                    submissions_with_priority::reviewer_id
+                    submissions::reviewer_id
                         .eq_any(user_filter(&reviewer).select(users::id.nullable())),
                 );
             }
@@ -185,7 +183,7 @@ impl ResolvedSubmissionPage {
             if let Some(note_text) = options.note_filter.as_deref() {
                 query =
                     query.filter(
-                        submissions_with_priority::id.eq_any(
+                        submissions::id.eq_any(
                             submission_history::table
                                 .filter(
                                     submission_history::user_notes
@@ -206,25 +204,20 @@ impl ResolvedSubmissionPage {
         if let Some(sort_field) = options.sort {
             match sort_field {
                 SubmissionsSortField::OldestCreatedAt => {
-                    submissions_query =
-                        submissions_query.order_by(submissions_with_priority::created_at.asc())
+                    submissions_query = submissions_query.order_by(submissions::created_at.asc())
                 }
                 SubmissionsSortField::NewestCreatedAt => {
-                    submissions_query =
-                        submissions_query.order_by(submissions_with_priority::created_at.desc())
+                    submissions_query = submissions_query.order_by(submissions::created_at.desc())
                 }
                 SubmissionsSortField::OldestUpdatedAt => {
-                    submissions_query =
-                        submissions_query.order_by(submissions_with_priority::updated_at.asc())
+                    submissions_query = submissions_query.order_by(submissions::updated_at.asc())
                 }
                 SubmissionsSortField::NewestUpdatedAt => {
-                    submissions_query =
-                        submissions_query.order_by(submissions_with_priority::updated_at.desc())
+                    submissions_query = submissions_query.order_by(submissions::updated_at.desc())
                 }
             }
         } else {
-            submissions_query =
-                submissions_query.order_by(submissions_with_priority::created_at.desc());
+            submissions_query = submissions_query.order_by(submissions::created_at.desc());
         }
 
         let submissions: Vec<ResolvedSubmissionRow> = resolve_query(
