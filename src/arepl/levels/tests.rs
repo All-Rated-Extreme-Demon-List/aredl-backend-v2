@@ -1,3 +1,9 @@
+use {
+    crate::arepl::levels::test_utils::refresh_test_position_history,
+    chrono::{DateTime, Utc},
+    std::time::Duration,
+    tokio::time::sleep,
+};
 #[cfg(test)]
 use {
     crate::{
@@ -6,12 +12,12 @@ use {
             packs::test_utils::create_test_pack,
         },
         auth::{create_test_token, Permission},
-        schema::arepl::{levels_created, pack_levels},
+        schema::arepl::{levels_created, pack_levels, position_history},
         test_utils::*,
         users::test_utils::create_test_user,
     },
     actix_web::test::{self, read_body_json},
-    diesel::{ExpressionMethods, RunQueryDsl},
+    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
     serde_json::json,
 };
 
@@ -66,6 +72,62 @@ async fn list_levels() {
         1,
         "First level returned is not the top 1!"
     )
+}
+
+#[actix_web::test]
+async fn list_levels_at_timestamp() {
+    let (app, db, _, _) = init_test_app().await;
+
+    let first_level = create_test_level(&db).await;
+    refresh_test_position_history(&db).await;
+
+    let at: DateTime<Utc> = position_history::table
+        .filter(position_history::affected_level.eq(first_level))
+        .order_by(position_history::i.desc())
+        .select(position_history::created_at)
+        .first(&mut db.connection().unwrap())
+        .expect("Failed to fetch first level position history timestamp");
+
+    sleep(Duration::from_millis(50)).await;
+    let second_level = create_test_level(&db).await;
+    refresh_test_position_history(&db).await;
+
+    let second_at: DateTime<Utc> = position_history::table
+        .filter(position_history::affected_level.eq(second_level))
+        .order_by(position_history::i.desc())
+        .select(position_history::created_at)
+        .first(&mut db.connection().unwrap())
+        .expect("Failed to fetch second level position history timestamp");
+
+    let req = test::TestRequest::get()
+        .uri(&format!(
+            "/arepl/levels?at={}",
+            at.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true)
+        ))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+
+    let body: serde_json::Value = read_body_json(resp).await;
+    let previous_list = body
+        .as_array()
+        .expect("Time machine response should be an array");
+
+    let first_level = first_level.to_string();
+    let second_level = second_level.to_string();
+
+    assert!(
+        previous_list
+            .iter()
+            .any(|entry| entry["id"].as_str() == Some(first_level.as_str())),
+        "time machine response should contain the first level; first_at={at:?}; second_at={second_at:?}"
+    );
+    assert!(
+        !previous_list
+            .iter()
+            .any(|entry| entry["id"].as_str() == Some(second_level.as_str())),
+        "time machine response should not contain the second level; first_at={at:?}; second_at={second_at:?}"
+    );
 }
 
 #[actix_web::test]

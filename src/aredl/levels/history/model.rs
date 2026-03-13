@@ -1,5 +1,5 @@
-use crate::aredl::levels::BaseLevel;
 use crate::app_data::db::DbConnection;
+use crate::aredl::levels::BaseLevel;
 use crate::error_handler::ApiError;
 use crate::schema::aredl::levels;
 use crate::schema::aredl::position_history_full_view;

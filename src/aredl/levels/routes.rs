@@ -1,7 +1,8 @@
 use crate::app_data::db::DbAppState;
 use crate::aredl::levels::id_resolver::resolve_level_id;
 use crate::aredl::levels::{
-    creators, history, ldms, notes, packs, records, Level, LevelPlace, LevelUpdate, ResolvedLevel,
+    creators, history, ldms, notes, packs, records, Level, LevelPlace, LevelQueryOptions,
+    LevelUpdate, ResolvedLevel,
 };
 use crate::auth::{Permission, UserAuth};
 use crate::cache_control::CacheController;
@@ -11,11 +12,6 @@ use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
 
-#[derive(serde::Deserialize)]
-struct LevelQueryOptions {
-    exclude_legacy: Option<bool>,
-}
-
 #[utoipa::path(
     get,
     summary = "List all levels",
@@ -23,6 +19,7 @@ struct LevelQueryOptions {
     tag = "AREDL - Levels",
     params(
         ("exclude_legacy" = Option<bool>, Query, description = "Whether levels on the legacy list should be excluded"),
+        ("at" = Option<DateTime<Utc>>, Query, description = "Return the state of the list at the provided timestamp"),
     ),
     responses((status = 200, body = [Level]))
 )]
@@ -32,7 +29,7 @@ async fn list(
     query: web::Query<LevelQueryOptions>,
 ) -> Result<HttpResponse, ApiError> {
     let levels =
-        web::block(move || Level::find_all(&mut db.connection()?, query.exclude_legacy)).await??;
+        web::block(move || Level::find_all(&mut db.connection()?, query.into_inner())).await??;
     Ok(HttpResponse::Ok().json(levels))
 }
 

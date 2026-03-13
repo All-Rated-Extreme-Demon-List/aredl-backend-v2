@@ -2,10 +2,12 @@ use crate::app_data::db::DbConnection;
 use crate::arepl::levels::records::LevelResolvedRecord;
 use crate::arepl::records::Record;
 use crate::error_handler::ApiError;
-use crate::schema::arepl::{levels, records};
+use crate::schema::arepl::{levels, position_history, position_history_full_view, records};
 use crate::schema::users;
 use crate::users::{BaseUser, BaseUserWithBanLevel};
+use chrono::{DateTime, Utc};
 use diesel::prelude::*;
+use diesel::NullableExpressionMethods;
 use diesel::{ExpressionMethods, RunQueryDsl};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -157,13 +159,76 @@ pub struct ResolvedLevel {
     pub verifications: Vec<LevelResolvedRecord>,
 }
 
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct LevelQueryOptions {
+    pub exclude_legacy: Option<bool>,
+    pub at: Option<DateTime<Utc>>,
+}
+
 impl Level {
-    pub fn find_all(conn: &mut DbConnection) -> Result<Vec<Self>, ApiError> {
-        let levels = levels::table
-            .select(Level::as_select())
-            .order(levels::position)
-            .load::<Self>(conn)?;
+    pub fn find_all(
+        conn: &mut DbConnection,
+        query: LevelQueryOptions,
+    ) -> Result<Vec<Self>, ApiError> {
+        let mut levels = if let Some(at) = query.at {
+            Self::get_all_levels_at_timestamp(conn, at)?
+        } else {
+            levels::table
+                .select(Level::as_select())
+                .order(levels::position)
+                .load::<Self>(conn)?
+        };
+
+        if let Some(true) = query.exclude_legacy {
+            levels.retain(|level| !level.legacy);
+        }
+
         Ok(levels)
+    }
+
+    fn get_all_levels_at_timestamp(
+        conn: &mut DbConnection,
+        at: DateTime<Utc>,
+    ) -> Result<Vec<Self>, ApiError> {
+        let cutoff = position_history::table
+            .filter(position_history::created_at.le(at))
+            .count()
+            .get_result::<i64>(conn)? as i32;
+
+        if cutoff == 0 {
+            return Ok(Vec::new());
+        }
+
+        let mut time_machine_levels = position_history_full_view::table
+            .filter(position_history_full_view::ord.le(cutoff))
+            .filter(position_history_full_view::position.is_not_null())
+            .distinct_on(position_history_full_view::affected_level)
+            .order_by((
+                position_history_full_view::affected_level.asc(),
+                position_history_full_view::ord.desc(),
+            ))
+            .inner_join(levels::table.on(position_history_full_view::affected_level.eq(levels::id)))
+            .select((
+                levels::id,
+                levels::name,
+                position_history_full_view::position.assume_not_null(),
+                levels::publisher_id,
+                levels::points,
+                position_history_full_view::legacy,
+                levels::level_id,
+                levels::two_player,
+                levels::tags,
+                levels::description,
+                levels::song,
+                levels::edel_enjoyment,
+                levels::is_edel_pending,
+                levels::gddl_tier,
+                levels::nlw_tier,
+            ))
+            .load::<Self>(conn)?;
+
+        time_machine_levels.sort_by_key(|level| level.position);
+        Ok(time_machine_levels)
     }
 
     pub fn create(conn: &mut DbConnection, level: LevelPlace) -> Result<Self, ApiError> {

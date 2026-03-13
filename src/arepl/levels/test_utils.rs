@@ -8,7 +8,7 @@ use crate::users::test_utils::create_test_user;
 #[cfg(test)]
 use crate::{app_data::db::DbAppState, arepl::records::test_utils::create_test_record};
 #[cfg(test)]
-use diesel::{ExpressionMethods, RunQueryDsl};
+use diesel::{sql_query, ExpressionMethods, RunQueryDsl};
 #[cfg(test)]
 use rand::Rng;
 #[cfg(test)]
@@ -42,4 +42,11 @@ pub async fn create_test_level_with_record(db: &Arc<DbAppState>, user_id: Uuid) 
     let level_id = create_test_level(db).await;
     let record_id = create_test_record(db, user_id, level_id).await;
     (level_id, record_id)
+}
+
+#[cfg(test)]
+pub async fn refresh_test_position_history(db: &Arc<DbAppState>) {
+    sql_query("REFRESH MATERIALIZED VIEW arepl.position_history_full_view")
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to refresh position history view");
 }
