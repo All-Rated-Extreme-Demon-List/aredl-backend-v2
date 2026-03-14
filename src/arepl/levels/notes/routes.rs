@@ -16,11 +16,16 @@ use uuid::Uuid;
 
 #[utoipa::path(
     get,
-    summary = "List Notes",
+    summary = "[AuthPublic]List Notes",
     description = "List all notes for a level",
     tag = "AREDL (P) - Level Notes",
     responses(
         (status = 200, body = LevelNotesResolvedPage)
+    ),
+    security(
+        (),
+        ("access_token" = []),
+        ("api_key" = []),
     ),
     params(
         ("page" = Option<i64>, Query, description = "The page of the notes list to fetch."),
@@ -32,14 +37,14 @@ use uuid::Uuid;
 )]
 #[get(
     "",
-    wrap = "CacheController::public_with_max_age(900)",
+    wrap = "CacheController::private_with_max_age(900)",
     wrap = "UserAuth::load()"
 )]
 async fn find_all(
     db: web::Data<Arc<DbAppState>>,
     query: web::Query<LevelNotesQueryOptions>,
     page_query: web::Query<PageQuery<50>>,
-    authenticated: Authenticated,
+    authenticated: Option<Authenticated>,
 ) -> Result<HttpResponse, ApiError> {
     let notes = web::block(move || {
         LevelNotes::find_all(

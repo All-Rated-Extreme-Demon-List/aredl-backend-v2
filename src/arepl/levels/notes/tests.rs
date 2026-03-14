@@ -182,7 +182,7 @@ async fn reviewer_notes_are_private() {
         create_resp.status()
     );
 
-    // non-reviewer should not see ReviewerNotes
+    // non-reviewer and unauthenticated users should not see ReviewerNotes
     let (normal_user_id, _) = create_test_user(&db, None).await;
     let normal_token = create_test_token(normal_user_id, &auth.jwt_encoding_key)
         .expect("Failed to generate token");
@@ -201,6 +201,22 @@ async fn reviewer_notes_are_private() {
     let list_body: serde_json::Value = read_body_json(list_resp).await;
     let data = list_body["data"].as_array().unwrap();
     assert!(data.iter().all(|x| x["note_type"] != "ReviewerNotes"));
+
+    let list_req_unauth = test::TestRequest::get()
+        .uri(format!("/aredl/levels/notes?level_id={}", level_id).as_str())
+        .to_request();
+
+    let list_resp_unauth = test::call_service(&app, list_req_unauth).await;
+    assert!(
+        list_resp_unauth.status().is_success(),
+        "status is {}",
+        list_resp_unauth.status()
+    );
+    let list_body_unauth: serde_json::Value = read_body_json(list_resp_unauth).await;
+    let data_unauth = list_body_unauth["data"].as_array().unwrap();
+    assert!(data_unauth
+        .iter()
+        .all(|x| x["note_type"] != "ReviewerNotes"));
 
     // reviewer should see ReviewerNotes
     let reviewer_list_req = test::TestRequest::get()

@@ -96,9 +96,12 @@ impl LevelNotes {
         conn: &mut DbConnection,
         filters: LevelNotesQueryOptions,
         page_query: PageQuery<D>,
-        authenticated: Authenticated,
+        authenticated: Option<Authenticated>,
     ) -> Result<Paginated<LevelNotesResolvedPage>, ApiError> {
-        let is_reviewer = authenticated.has_permission(conn, Permission::LevelModify)?;
+        let is_reviewer = match authenticated {
+            Some(authenticated) => authenticated.has_permission(conn, Permission::LevelModify)?,
+            None => false,
+        };
 
         let build_filtered = || {
             let mut q = level_notes::table.into_boxed::<Pg>();
