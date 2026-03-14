@@ -30,12 +30,12 @@ use super::{history, queue, resolved};
     request_body = SubmissionPostMod,
 )]
 #[post("", wrap="UserAuth::load()")]
-async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionPostMod>, authenticated: Authenticated, providers: web::Data<Arc<VideoProvidersAppState>>, root_span: RootSpan) -> Result<HttpResponse, ApiError> {
+async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionPostMod>, authenticated: Authenticated, providers: web::Data<Arc<VideoProvidersAppState>>, root_span: RootSpan, notify_tx: web::Data<broadcast::Sender<WebsocketNotification>>) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&body));
     let created = web::block(move || {
         let conn = &mut db.connection()?;
         authenticated.ensure_not_banned(conn)?;
-        Submission::create(conn, body.into_inner(), authenticated, providers.get_ref())
+        Submission::create(conn, body.into_inner(), authenticated, providers.get_ref(), notify_tx.get_ref().clone())
     }).await??;
     Ok(HttpResponse::Created().json(created))
 }
