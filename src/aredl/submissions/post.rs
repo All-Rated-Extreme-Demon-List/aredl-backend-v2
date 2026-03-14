@@ -12,6 +12,8 @@ use diesel::{
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
+use crate::notifications::WebsocketNotification;
+use tokio::sync::broadcast;
 
 #[derive(Serialize, Deserialize, Debug, Insertable, ToSchema)]
 #[diesel(table_name=submissions, check_for_backend(Pg))]
@@ -183,6 +185,7 @@ impl Submission {
         mut submission_body: SubmissionPostMod,
         authenticated: Authenticated,
         providers: &VideoProvidersAppState,
+        notify_tx: broadcast::Sender<WebsocketNotification>,
     ) -> Result<Self, ApiError> {
         submission_body.video_url = providers
             .validate_completion_video_url(&submission_body.video_url)
@@ -255,6 +258,12 @@ impl Submission {
                 .values(&inserted_submission)
                 .returning(Self::as_select())
                 .get_result(connection)?;
+
+            let notification = WebsocketNotification {
+                notification_type: "SUBMISSION_CREATED".into(),
+                data: serde_json::to_value(&submission).expect("Failed to serialize submission"),
+            };
+            let _ = notify_tx.send(notification);
 
             Ok(submission)
         })
