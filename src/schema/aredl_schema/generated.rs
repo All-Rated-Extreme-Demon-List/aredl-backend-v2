@@ -207,6 +207,7 @@ pub mod aredl {
     diesel::joinable!(level_ldms -> levels (level_id));
     diesel::joinable!(level_notes -> levels (level_id));
     diesel::joinable!(records -> submissions (submission_id));
+    diesel::joinable!(submission_history -> submissions (submission_id));
 
     diesel::allow_tables_to_appear_in_same_query!(
         guideline_updates,
