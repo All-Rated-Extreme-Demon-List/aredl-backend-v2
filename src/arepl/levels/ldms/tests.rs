@@ -1,10 +1,7 @@
 #[cfg(test)]
 use {
     crate::{
-        arepl::{
-            levels::ldms::test_utils::create_test_ldm,
-            levels::test_utils::create_test_level,
-        },
+        arepl::{levels::ldms::test_utils::create_test_ldm, levels::test_utils::create_test_level},
         auth::{create_test_token, Permission},
         test_utils::{assert_error_response, init_test_app},
         users::test_utils::create_test_user,

@@ -1,9 +1,7 @@
 #[cfg(test)]
 use {
     crate::{
-        arepl::levels::test_utils::create_test_level_with_record,
-        schema::users,
-        test_utils::*,
+        arepl::levels::test_utils::create_test_level_with_record, schema::users, test_utils::*,
         users::test_utils::create_test_user,
     },
     actix_web::test::{self, read_body_json},

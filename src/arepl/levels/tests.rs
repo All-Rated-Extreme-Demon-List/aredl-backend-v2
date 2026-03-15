@@ -11,7 +11,7 @@ use {
             levels::test_utils::{create_test_level, create_test_level_with_record},
             packs::test_utils::create_test_pack,
         },
-        auth::{create_test_token, Permission},
+        auth::{Permission, create_test_token},
         schema::arepl::{levels_created, pack_levels, position_history},
         test_utils::*,
         users::test_utils::create_test_user,
@@ -71,7 +71,55 @@ async fn list_levels() {
         body[0].as_object().unwrap()["position"].as_i64().unwrap(),
         1,
         "First level returned is not the top 1!"
-    )
+    );
+    assert!(
+        body[0]
+            .as_object()
+            .unwrap()
+            .get("completed_by_user")
+            .is_none(),
+        "Unauthenticated response should not include completed_by_user"
+    );
+}
+
+#[actix_web::test]
+async fn list_levels_with_completion_status_when_authenticated() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let (completed_level_id, _) = create_test_level_with_record(&db, user_id).await;
+    let incomplete_level_id = create_test_level(&db).await;
+
+    let req = test::TestRequest::get()
+        .uri("/arepl/levels")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+
+    let body: serde_json::Value = read_body_json(resp).await;
+    let levels = body.as_array().expect("Response should be an array");
+
+    let completed_level = levels
+        .iter()
+        .find(|level| level["id"].as_str() == Some(completed_level_id.to_string().as_str()))
+        .expect("Completed level should be present");
+    assert_eq!(
+        completed_level["completed_by_user"].as_bool(),
+        Some(true),
+        "Completed level should be marked as completed"
+    );
+
+    let incomplete_level = levels
+        .iter()
+        .find(|level| level["id"].as_str() == Some(incomplete_level_id.to_string().as_str()))
+        .expect("Incomplete level should be present");
+    assert_eq!(
+        incomplete_level["completed_by_user"].as_bool(),
+        Some(false),
+        "Incomplete level should be marked as not completed"
+    );
 }
 
 #[actix_web::test]
@@ -237,11 +285,12 @@ async fn add_and_remove_creators() {
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let body: serde_json::Value = read_body_json(resp).await;
     assert!(body.is_array(), "Response is not an array");
-    assert!(body
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|u| u.as_str().unwrap() == user_id.to_string()));
+    assert!(
+        body.as_array()
+            .unwrap()
+            .iter()
+            .any(|u| u.as_str().unwrap() == user_id.to_string())
+    );
     // Remove creator
     let req = test::TestRequest::delete()
         .uri(&format!("/arepl/levels/{}/creators", level_id))

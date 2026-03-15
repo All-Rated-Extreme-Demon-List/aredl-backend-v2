@@ -2,9 +2,7 @@
 use {
     crate::{
         arepl::changelog::test_utils::insert_history_entry,
-        arepl::levels::test_utils::create_test_level,
-        schema::arepl::levels,
-        test_utils::*,
+        arepl::levels::test_utils::create_test_level, schema::arepl::levels, test_utils::*,
     },
     actix_web::test::{self, read_body_json},
     diesel::{query_dsl::methods::FilterDsl, ExpressionMethods, RunQueryDsl},

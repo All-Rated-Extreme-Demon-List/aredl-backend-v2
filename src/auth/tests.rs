@@ -9,7 +9,10 @@ use {
         test_utils::init_test_app,
         users::test_utils::create_test_user,
     },
-    actix_web::{http::header, test::{self, read_body_json}},
+    actix_web::{
+        http::header,
+        test::{self, read_body_json},
+    },
     diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
     httpmock::prelude::*,
     serial_test::serial,

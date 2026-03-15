@@ -1,4 +1,5 @@
 use crate::{
+    CacheController,
     app_data::db::DbAppState,
     aredl::levels::notes::{
         LevelNotePost, LevelNoteUpdate, LevelNotes, LevelNotesQueryOptions, LevelNotesResolvedPage,
@@ -7,9 +8,8 @@ use crate::{
     auth::{Authenticated, Permission, UserAuth},
     error_handler::ApiError,
     page_helper::PageQuery,
-    CacheController,
 };
-use actix_web::{delete, get, patch, post, web, HttpResponse};
+use actix_web::{HttpResponse, delete, get, patch, post, web};
 use std::sync::Arc;
 use utoipa::OpenApi;
 use uuid::Uuid;
@@ -37,7 +37,7 @@ use uuid::Uuid;
 )]
 #[get(
     "",
-    wrap = "CacheController::private_with_max_age(900)",
+    wrap = "CacheController::auth_public_with_max_age(900)",
     wrap = "UserAuth::load()"
 )]
 async fn find_all(

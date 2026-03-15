@@ -1,7 +1,7 @@
-mod routes;
-mod model;
 mod clan;
+mod model;
 pub mod notifications;
+mod routes;
 mod tests;
 
 pub use model::*;

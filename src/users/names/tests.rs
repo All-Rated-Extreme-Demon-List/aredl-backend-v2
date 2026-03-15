@@ -4,7 +4,10 @@ use {
         roles::test_utils::create_test_role_with_user, roles::RoleResolved, schema::roles,
         test_utils::init_test_app,
     },
-    actix_web::{self, test::{self, read_body_json}},
+    actix_web::{
+        self,
+        test::{self, read_body_json},
+    },
     diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
 };
 

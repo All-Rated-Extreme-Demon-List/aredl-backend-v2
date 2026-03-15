@@ -1,12 +1,12 @@
 #[cfg(test)]
 use {
+    super::*,
     crate::{
         error_handler::ApiError,
         page_helper::{PageQuery, Paginated},
         test_utils::assert_error_response,
     },
-    actix_web::{http::header, test, web, App, HttpResponse},
-    super::*,
+    actix_web::{App, HttpResponse, http::header, test, web},
 };
 
 #[test]
@@ -87,6 +87,57 @@ async fn cache_control_replaces_existing_header_when_requested() {
     assert_eq!(header_val, "public, max-age=60");
 }
 
+#[actix_web::test]
+async fn cache_control_auth_public_uses_public_cache_without_authorization() {
+    let app = test::init_service(
+        App::new()
+            .wrap(CacheController::auth_public_with_max_age(60))
+            .route("/", web::get().to(|| async { HttpResponse::Ok().finish() })),
+    )
+    .await;
+
+    let resp = test::call_service(&app, test::TestRequest::get().uri("/").to_request()).await;
+    let cache_control = resp
+        .headers()
+        .get(header::CACHE_CONTROL)
+        .unwrap()
+        .to_str()
+        .unwrap();
+    let vary = resp.headers().get(header::VARY).unwrap().to_str().unwrap();
+
+    assert_eq!(cache_control, "public, max-age=60");
+    assert_eq!(vary, "Authorization");
+}
+
+#[actix_web::test]
+async fn cache_control_auth_public_uses_private_cache_with_authorization() {
+    let app = test::init_service(
+        App::new()
+            .wrap(CacheController::auth_public_with_max_age(60))
+            .route("/", web::get().to(|| async { HttpResponse::Ok().finish() })),
+    )
+    .await;
+
+    let resp = test::call_service(
+        &app,
+        test::TestRequest::get()
+            .uri("/")
+            .insert_header((header::AUTHORIZATION, "Bearer test-token"))
+            .to_request(),
+    )
+    .await;
+    let cache_control = resp
+        .headers()
+        .get(header::CACHE_CONTROL)
+        .unwrap()
+        .to_str()
+        .unwrap();
+    let vary = resp.headers().get(header::VARY).unwrap().to_str().unwrap();
+
+    assert_eq!(cache_control, "private, max-age=60");
+    assert_eq!(vary, "Authorization");
+}
+
 #[test]
 async fn error_handler_api_error_new_and_display() {
     let err = ApiError::new(404, "Not found");
@@ -96,12 +147,13 @@ async fn error_handler_api_error_new_and_display() {
 
 #[actix_web::test]
 async fn error_handler_client_error_response_preserves_message() {
-    let app = test::init_service(App::new().route(
-        "/",
-        web::get().to(|| async {
-            Err::<HttpResponse, ApiError>(ApiError::new(400, "bad request"))
-        }),
-    ))
+    let app = test::init_service(
+        App::new().route(
+            "/",
+            web::get()
+                .to(|| async { Err::<HttpResponse, ApiError>(ApiError::new(400, "bad request")) }),
+        ),
+    )
     .await;
 
     let resp = test::call_service(&app, test::TestRequest::get().uri("/").to_request()).await;

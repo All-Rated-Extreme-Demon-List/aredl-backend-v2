@@ -1,35 +1,26 @@
-use uuid::Uuid;
-use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
-use chrono::{DateTime, Utc};
 use crate::{
-    auth::Authenticated,
     app_data::db::DbConnection,
+    auth::Authenticated,
     error_handler::ApiError,
-    schema::{
-        aredl::level_ldms,
-        users
-    },
+    page_helper::{PageQuery, Paginated},
+    schema::{aredl::level_ldms, users},
     users::BaseUser,
-    page_helper::{PageQuery, Paginated}
 };
+use chrono::{DateTime, Utc};
 use diesel::{
-    pg::Pg,
-    ExpressionMethods,
-    RunQueryDsl,
-    Selectable,
-    QueryDsl,
-    SelectableHelper,
-    JoinOnDsl,
-    PgTextExpressionMethods,
+    pg::Pg, ExpressionMethods, JoinOnDsl, PgTextExpressionMethods, QueryDsl, RunQueryDsl,
+    Selectable, SelectableHelper,
 };
 use diesel_derive_enum::DbEnum;
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq)]
 #[ExistingTypePath = "crate::schema::aredl::sql_types::CustomIdStatus"]
 #[DbValueStyle = "PascalCase"]
 pub enum LevelLDMStatus {
-    /// This ID is the one suggested for use. Levels can only have 1 
+    /// This ID is the one suggested for use. Levels can only have 1
     /// "Published" ID per type per level (e.g. one bugfix, one globed copy, etc.)
     Published,
     /// This ID is not the one suggested for use, but is allowed in records
@@ -48,7 +39,7 @@ pub enum LevelLDMType {
     GlobedCopy,
     /// This level is a Low Detail Mode of the official level
     Ldm,
-    Other
+    Other,
 }
 
 #[derive(Serialize, Deserialize, Queryable, Selectable, ToSchema)]
@@ -65,7 +56,7 @@ pub struct LevelLDM {
     pub id_type: LevelLDMType,
     pub status: LevelLDMStatus,
     pub description: Option<String>,
-    pub created_at: DateTime<Utc>
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
@@ -77,7 +68,7 @@ pub struct LevelLDMResolved {
     pub id_type: LevelLDMType,
     pub description: Option<String>,
     pub status: LevelLDMStatus,
-    pub created_at: DateTime<Utc>
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
@@ -93,7 +84,7 @@ pub struct LevelLDMInsert {
     pub id_type: LevelLDMType,
     pub added_by: Uuid,
     pub status: LevelLDMStatus,
-    pub description: Option<String>
+    pub description: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, AsChangeset, ToSchema)]
@@ -110,7 +101,7 @@ pub struct LevelLDMBody {
     pub ldm_id: i32,
     pub id_type: LevelLDMType,
     pub status: LevelLDMStatus,
-    pub description: Option<String>
+    pub description: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
@@ -119,7 +110,7 @@ pub struct LevelLDMQueryOptions {
     pub type_filter: Option<LevelLDMType>,
     pub status_filter: Option<LevelLDMStatus>,
     pub description_filter: Option<Option<String>>,
-    pub added_by: Option<Uuid>
+    pub added_by: Option<Uuid>,
 }
 
 macro_rules! aredl_apply_ldm_filters {
@@ -142,12 +133,11 @@ macro_rules! aredl_apply_ldm_filters {
         if let Some(desc) = &filters.description_filter {
             match desc {
                 Some(desc) => new_query = new_query.filter(level_ldms::description.ilike(desc)),
-                None => new_query = new_query.filter(level_ldms::description.is_null())
+                None => new_query = new_query.filter(level_ldms::description.is_null()),
             }
         }
 
         new_query
-
     }};
 }
 
@@ -167,45 +157,45 @@ impl LevelLDM {
 
         query = aredl_apply_ldm_filters!(query, filters);
 
-        let count = aredl_apply_ldm_filters!(
-            level_ldms::table
-                .count()
-                .into_boxed::<Pg>(), filters)
+        let count = aredl_apply_ldm_filters!(level_ldms::table.count().into_boxed::<Pg>(), filters)
             .get_result::<i64>(conn)?;
 
         let ldms: Vec<(LevelLDM, BaseUser)> = query.load(conn)?;
 
         let ldms = ldms
             .into_iter()
-            .map(
-                |(ldm, moderator)| LevelLDMResolved {
-                    id: ldm.id,
-                    level_id: ldm.level_id,
-                    ldm_id: ldm.ldm_id,
-                    added_by: moderator,
-                    id_type: ldm.id_type,
-                    description: ldm.description,
-                    status: ldm.status,
-                    created_at: ldm.created_at,
-                }
-            )
+            .map(|(ldm, moderator)| LevelLDMResolved {
+                id: ldm.id,
+                level_id: ldm.level_id,
+                ldm_id: ldm.ldm_id,
+                added_by: moderator,
+                id_type: ldm.id_type,
+                description: ldm.description,
+                status: ldm.status,
+                created_at: ldm.created_at,
+            })
             .collect::<Vec<LevelLDMResolved>>();
 
         Ok(Paginated::from_data(
             page_query,
             count,
-            LevelLDMResolvedPage { data: ldms }
+            LevelLDMResolvedPage { data: ldms },
         ))
     }
-    
-    pub fn create(conn: &mut DbConnection, body: LevelLDMBody, level_id: Uuid, auth: Authenticated) -> Result<LevelLDM, ApiError> {
+
+    pub fn create(
+        conn: &mut DbConnection,
+        body: LevelLDMBody,
+        level_id: Uuid,
+        auth: Authenticated,
+    ) -> Result<LevelLDM, ApiError> {
         let data = LevelLDMInsert {
             level_id,
             ldm_id: body.ldm_id,
             id_type: body.id_type,
             status: body.status,
             description: body.description,
-            added_by: auth.user_id
+            added_by: auth.user_id,
         };
         let ldm = diesel::insert_into(level_ldms::table)
             .values(data)
@@ -214,7 +204,11 @@ impl LevelLDM {
 
         Ok(ldm)
     }
-    pub fn update(conn: &mut DbConnection, data: LevelLDMUpdate, id: Uuid) -> Result<LevelLDM, ApiError> {
+    pub fn update(
+        conn: &mut DbConnection,
+        data: LevelLDMUpdate,
+        id: Uuid,
+    ) -> Result<LevelLDM, ApiError> {
         let ldm = diesel::update(level_ldms::table)
             .filter(level_ldms::id.eq(id))
             .set(data)

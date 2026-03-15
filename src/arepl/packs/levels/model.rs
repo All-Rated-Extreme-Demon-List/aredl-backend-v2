@@ -1,5 +1,5 @@
-use crate::arepl::levels::BaseLevel;
 use crate::app_data::db::DbConnection;
+use crate::arepl::levels::BaseLevel;
 use crate::error_handler::ApiError;
 use crate::schema::{arepl::levels, arepl::pack_levels};
 use diesel::{

@@ -1,6 +1,6 @@
+use crate::auth::{apikey, discord, logout};
 use actix_web::web;
 use utoipa::OpenApi;
-use crate::auth::{discord, apikey, logout};
 #[derive(OpenApi)]
 #[openapi(
     tags(

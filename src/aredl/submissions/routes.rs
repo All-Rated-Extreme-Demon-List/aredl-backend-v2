@@ -1,19 +1,26 @@
-use actix_web::{HttpResponse, delete, get, patch, post, web};
-use tracing_actix_web::RootSpan;
-use std::sync::Arc;
-use uuid::Uuid;
-use utoipa::OpenApi;
-use tokio::sync::broadcast;
 use crate::{
-    app_data::db::DbAppState, aredl::{
-        records::Record, submissions::{
-            Submission, SubmissionPage, SubmissionResolved, SubmissionStatus, patch::{SubmissionPatchMod, SubmissionPatchUser}, post::{SubmissionInsert, SubmissionPostMod}, status
-        }
-    }, auth::{Authenticated, Permission, UserAuth}, error_handler::ApiError, notifications::WebsocketNotification, providers::VideoProvidersAppState
+    app_data::db::DbAppState,
+    aredl::{
+        records::Record,
+        submissions::{
+            patch::{SubmissionPatchMod, SubmissionPatchUser},
+            post::{SubmissionInsert, SubmissionPostMod},
+            status, Submission, SubmissionPage, SubmissionResolved, SubmissionStatus,
+        },
+    },
+    auth::{Authenticated, Permission, UserAuth},
+    error_handler::ApiError,
+    notifications::WebsocketNotification,
+    providers::VideoProvidersAppState,
 };
+use actix_web::{delete, get, patch, post, web, HttpResponse};
+use std::sync::Arc;
+use tokio::sync::broadcast;
+use tracing_actix_web::RootSpan;
+use utoipa::OpenApi;
+use uuid::Uuid;
 
 use super::{history, queue, resolved};
-
 
 #[utoipa::path(
     post,
@@ -29,14 +36,28 @@ use super::{history, queue, resolved};
     ),
     request_body = SubmissionPostMod,
 )]
-#[post("", wrap="UserAuth::load()")]
-async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionPostMod>, authenticated: Authenticated, providers: web::Data<Arc<VideoProvidersAppState>>, root_span: RootSpan, notify_tx: web::Data<broadcast::Sender<WebsocketNotification>>) -> Result<HttpResponse, ApiError> {
+#[post("", wrap = "UserAuth::load()")]
+async fn create(
+    db: web::Data<Arc<DbAppState>>,
+    body: web::Json<SubmissionPostMod>,
+    authenticated: Authenticated,
+    providers: web::Data<Arc<VideoProvidersAppState>>,
+    root_span: RootSpan,
+    notify_tx: web::Data<broadcast::Sender<WebsocketNotification>>,
+) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&body));
     let created = web::block(move || {
         let conn = &mut db.connection()?;
         authenticated.ensure_not_banned(conn)?;
-        Submission::create(conn, body.into_inner(), authenticated, providers.get_ref(), notify_tx.get_ref().clone())
-    }).await??;
+        Submission::create(
+            conn,
+            body.into_inner(),
+            authenticated,
+            providers.get_ref(),
+            notify_tx.get_ref().clone(),
+        )
+    })
+    .await??;
     Ok(HttpResponse::Created().json(created))
 }
 
@@ -57,11 +78,11 @@ async fn create(db: web::Data<Arc<DbAppState>>, body: web::Json<SubmissionPostMo
     ),
     request_body = SubmissionPatchMod,
 )]
-#[patch("/{id}", wrap="UserAuth::load()")]
+#[patch("/{id}", wrap = "UserAuth::load()")]
 async fn patch(
-    db: web::Data<Arc<DbAppState>>, 
-    id: web::Path<Uuid>, 
-    body: web::Json<SubmissionPatchMod>, 
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<Uuid>,
+    body: web::Json<SubmissionPatchMod>,
     authenticated: Authenticated,
     root_span: RootSpan,
     notify_tx: web::Data<broadcast::Sender<WebsocketNotification>>,
@@ -72,22 +93,41 @@ async fn patch(
     let providers_clone = providers.clone();
     let patched = web::block(move || {
         let conn = &mut db.connection()?;
-        match authenticated.has_permission( conn, Permission::SubmissionReview)? {
-            true => SubmissionPatchMod::patch(body.into_inner(), id.into_inner(), conn, authenticated, notify_tx.get_ref().clone(), providers.get_ref()),
+        match authenticated.has_permission(conn, Permission::SubmissionReview)? {
+            true => SubmissionPatchMod::patch(
+                body.into_inner(),
+                id.into_inner(),
+                conn,
+                authenticated,
+                notify_tx.get_ref().clone(),
+                providers.get_ref(),
+            ),
             false => {
                 let user_patch = SubmissionPatchMod::downgrade(body.into_inner());
-                SubmissionPatchUser::patch(user_patch, id.into_inner(), conn, authenticated, providers.get_ref())
+                SubmissionPatchUser::patch(
+                    user_patch,
+                    id.into_inner(),
+                    conn,
+                    authenticated,
+                    providers.get_ref(),
+                )
             }
         }
-    }).await??;
+    })
+    .await??;
 
     // if the status submission is changed to accepted, we may need to fetch the record's achieved_at timestamp
     if patched.status == SubmissionStatus::Accepted {
-        let _ = Record::fire_and_forget_fetch_completion_timestamp(db_clone, None, Some(patched.id), providers_clone).await;
+        let _ = Record::fire_and_forget_fetch_completion_timestamp(
+            db_clone,
+            None,
+            Some(patched.id),
+            providers_clone,
+        )
+        .await;
     }
     Ok(HttpResponse::Ok().json(patched))
 }
-
 
 #[utoipa::path(
     get,
@@ -131,15 +171,16 @@ async fn claim(
         ("id" = Uuid, description = "The ID of the submission")
     ),
 )]
-#[delete("/{id}", wrap="UserAuth::load()")]
-async fn delete(db: web::Data<Arc<DbAppState>>, id: web::Path<Uuid>, authenticated: Authenticated) -> Result<HttpResponse, ApiError> {
-    web::block(
-        move || Submission::delete(&mut db.connection()?, id.into_inner(), authenticated)
-    ).await??;
+#[delete("/{id}", wrap = "UserAuth::load()")]
+async fn delete(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<Uuid>,
+    authenticated: Authenticated,
+) -> Result<HttpResponse, ApiError> {
+    web::block(move || Submission::delete(&mut db.connection()?, id.into_inner(), authenticated))
+        .await??;
     Ok(HttpResponse::NoContent().finish())
 }
-
-
 
 #[derive(OpenApi)]
 #[openapi(
@@ -182,6 +223,6 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .configure(resolved::init_routes)
             .service(create)
             .service(patch)
-            .service(delete)
+            .service(delete),
     );
 }

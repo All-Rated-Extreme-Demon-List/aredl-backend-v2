@@ -10,6 +10,7 @@ use diesel::prelude::*;
 use diesel::NullableExpressionMethods;
 use diesel::{ExpressionMethods, RunQueryDsl};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -74,6 +75,15 @@ pub struct Level {
     pub gddl_tier: Option<f64>,
     /// NLW tier for the level, fetched from NLW (Non List Worthy).
     pub nlw_tier: Option<String>,
+}
+
+#[derive(Serialize, Debug, ToSchema)]
+pub struct LevelWithUserCompletionStatus {
+    #[serde(flatten)]
+    pub level: Level,
+    /// Whether the requesting user has completed this level or not.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed_by_user: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Insertable, ToSchema, Debug)]
@@ -246,6 +256,39 @@ impl Level {
             .returning(Self::as_select())
             .get_result(conn)?;
         Ok(level)
+    }
+}
+
+impl LevelWithUserCompletionStatus {
+    pub fn find_all(
+        conn: &mut DbConnection,
+        query: LevelQueryOptions,
+        user_id: Option<Uuid>,
+    ) -> Result<Vec<Self>, ApiError> {
+        let levels = Level::find_all(conn, query)?;
+
+        let completed_level_ids = match user_id {
+            Some(user_id) if !levels.is_empty() => {
+                let level_ids = levels.iter().map(|level| level.id).collect::<Vec<_>>();
+                records::table
+                    .filter(records::submitted_by.eq(user_id))
+                    .filter(records::level_id.eq_any(level_ids))
+                    .select(records::level_id)
+                    .distinct()
+                    .load::<Uuid>(conn)?
+                    .into_iter()
+                    .collect::<HashSet<_>>()
+            }
+            _ => HashSet::new(),
+        };
+
+        Ok(levels
+            .into_iter()
+            .map(|level| Self {
+                completed_by_user: user_id.map(|_| completed_level_ids.contains(&level.id)),
+                level,
+            })
+            .collect())
     }
 }
 

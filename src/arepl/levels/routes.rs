@@ -1,20 +1,20 @@
 use crate::app_data::db::DbAppState;
 use crate::arepl::levels::{
-    creators, history, id_resolver::resolve_level_id, ldms, packs, records, Level, LevelPlace,
-    LevelUpdate, ResolvedLevel,
+    Level, LevelPlace, LevelUpdate, LevelWithUserCompletionStatus, ResolvedLevel, creators,
+    history, id_resolver::resolve_level_id, ldms, packs, records,
 };
-use crate::arepl::levels::{notes, LevelQueryOptions};
-use crate::auth::{Permission, UserAuth};
+use crate::arepl::levels::{LevelQueryOptions, notes};
+use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::cache_control::CacheController;
 use crate::error_handler::ApiError;
-use actix_web::{get, patch, post, web, HttpResponse};
+use actix_web::{HttpResponse, get, patch, post, web};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
 
 #[utoipa::path(
     get,
-    summary = "List all levels",
+    summary = "[AuthPublic]List all levels",
     description = "List all the levels on the list",
     tag = "AREDL (P) - Levels",
     params(
@@ -22,16 +22,32 @@ use utoipa::OpenApi;
         ("at" = Option<DateTime<Utc>>, Query, description = "Return the state of the list at the provided timestamp"),
     ),
     responses(
-        (status = 200, body = [Level])
+        (status = 200, body = [LevelWithUserCompletionStatus])
     ),
+    security(
+        (),
+        ("access_token" = []),
+        ("api_key" = []),
+    )
 )]
-#[get("", wrap = "CacheController::public_with_max_age(900)")]
+#[get(
+    "",
+    wrap = "UserAuth::load()",
+    wrap = "CacheController::auth_public_with_max_age(900)"
+)]
 async fn list(
     db: web::Data<Arc<DbAppState>>,
     query: web::Query<LevelQueryOptions>,
+    authenticated: Option<Authenticated>,
 ) -> Result<HttpResponse, ApiError> {
-    let levels =
-        web::block(move || Level::find_all(&mut db.connection()?, query.into_inner())).await??;
+    let levels = web::block(move || {
+        LevelWithUserCompletionStatus::find_all(
+            &mut db.connection()?,
+            query.into_inner(),
+            authenticated.map(|user| user.user_id),
+        )
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(levels))
 }
 
@@ -135,6 +151,7 @@ async fn find(
     components(
         schemas(
             Level,
+            LevelWithUserCompletionStatus,
         )
     ),
     paths(

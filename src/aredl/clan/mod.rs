@@ -1,5 +1,5 @@
-mod routes;
 mod model;
+mod routes;
 
 #[cfg(test)]
 mod tests;

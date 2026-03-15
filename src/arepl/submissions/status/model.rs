@@ -2,10 +2,13 @@ use crate::{
     app_data::db::DbConnection,
     error_handler::ApiError,
     schema::{arepl::submissions_enabled, users},
-    users::BaseUser
+    users::BaseUser,
 };
 use chrono::{DateTime, Utc};
-use diesel::{pg::Pg, ExpressionMethods, RunQueryDsl, JoinOnDsl, Selectable, QueryDsl, SelectableHelper, result::Error as DieselError};
+use diesel::{
+    pg::Pg, result::Error as DieselError, ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl,
+    Selectable, SelectableHelper,
+};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -18,7 +21,7 @@ pub struct SubmissionsEnabled {
     /// The moderator that performed this change
     moderator: Uuid,
     /// Timestamp of when submissions were toggled on or off
-    created_at: DateTime<Utc>
+    created_at: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -28,59 +31,49 @@ pub struct SubmissionsEnabledFull {
     /// The moderator that performed this change
     moderator: BaseUser,
     /// Timestamp of when submissions were toggled on or off
-    created_at: DateTime<Utc>
+    created_at: DateTime<Utc>,
 }
 
 impl SubmissionsEnabled {
-    pub fn enable(
-        conn: &mut DbConnection,
-        user_id: Uuid
-    ) -> Result<(), ApiError> {
+    pub fn enable(conn: &mut DbConnection, user_id: Uuid) -> Result<(), ApiError> {
         diesel::insert_into(submissions_enabled::table)
             .values((
                 submissions_enabled::enabled.eq(true),
-                submissions_enabled::moderator.eq(user_id)
+                submissions_enabled::moderator.eq(user_id),
             ))
             .execute(conn)?;
         Ok(())
     }
 
-    pub fn disable(
-        conn: &mut DbConnection,
-        user_id: Uuid
-    ) -> Result<(), ApiError> {
+    pub fn disable(conn: &mut DbConnection, user_id: Uuid) -> Result<(), ApiError> {
         diesel::insert_into(submissions_enabled::table)
             .values((
                 submissions_enabled::enabled.eq(false),
-                submissions_enabled::moderator.eq(user_id)
+                submissions_enabled::moderator.eq(user_id),
             ))
             .execute(conn)?;
         Ok(())
     }
 
-    pub fn is_enabled(
-        conn: &mut DbConnection
-    ) -> Result<bool, ApiError> {
+    pub fn is_enabled(conn: &mut DbConnection) -> Result<bool, ApiError> {
         let status = submissions_enabled::table
             .order_by(submissions_enabled::created_at.desc())
             .select(submissions_enabled::enabled)
             .first::<bool>(conn);
-        
+
         // If submissions have never been disabled before, there will be no rows
         // returned from the table. In this case, submissions are assumed to be
         // enabled by default.
         Ok(match status {
             Ok(status) => status,
             Err(DieselError::NotFound) => true,
-            Err(e) => return Err(ApiError::from(e))
+            Err(e) => return Err(ApiError::from(e)),
         })
     }
 }
 
 impl SubmissionsEnabledFull {
-    pub fn get_status(
-        conn: &mut DbConnection
-    ) -> Result<Self, ApiError> {
+    pub fn get_status(conn: &mut DbConnection) -> Result<Self, ApiError> {
         let status = submissions_enabled::table
             .order_by(submissions_enabled::created_at.desc())
             .select(SubmissionsEnabled::as_select())
@@ -98,9 +91,7 @@ impl SubmissionsEnabledFull {
         })
     }
 
-    pub fn get_statuses(
-        conn: &mut DbConnection
-    ) -> Result<Vec<Self>, ApiError> {
+    pub fn get_statuses(conn: &mut DbConnection) -> Result<Vec<Self>, ApiError> {
         let status = submissions_enabled::table
             .order_by(submissions_enabled::created_at.desc())
             .inner_join(users::table.on(users::id.eq(submissions_enabled::moderator)))
@@ -109,13 +100,11 @@ impl SubmissionsEnabledFull {
 
         Ok(status
             .into_iter()
-            .map(|(status, user)| 
-                SubmissionsEnabledFull {
-                    enabled: status.enabled,
-                    moderator: user,
-                    created_at: status.created_at
-                })
-            .collect::<Vec<SubmissionsEnabledFull>>()
-        )
+            .map(|(status, user)| SubmissionsEnabledFull {
+                enabled: status.enabled,
+                moderator: user,
+                created_at: status.created_at,
+            })
+            .collect::<Vec<SubmissionsEnabledFull>>())
     }
 }

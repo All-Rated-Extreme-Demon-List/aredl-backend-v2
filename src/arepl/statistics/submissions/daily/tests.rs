@@ -13,7 +13,10 @@ use {
         test_utils::init_test_app,
         users::test_utils::create_test_user,
     },
-    actix_web::{http::header, test::{self, read_body_json}},
+    actix_web::{
+        http::header,
+        test::{self, read_body_json},
+    },
     diesel::{sql_query, RunQueryDsl},
     serde_json::Value,
     uuid::Uuid,
@@ -39,7 +42,7 @@ async fn submission_stats_filter_moderator() {
         "/arepl/statistics/submissions/daily?reviewer_id={}&page=1&per_page=10",
         mod_id
     );
-        let req = test::TestRequest::get()
+    let req = test::TestRequest::get()
         .uri(&uri)
         .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
         .to_request();
@@ -106,7 +109,7 @@ async fn submission_leaderboard_counts_and_ordering() {
         .execute(&mut db.connection().unwrap())
         .unwrap();
 
-        let req = test::TestRequest::get()
+    let req = test::TestRequest::get()
         .uri("/arepl/statistics/submissions/daily/leaderboard")
         .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
         .to_request();
@@ -141,7 +144,7 @@ async fn submission_leaderboard_only_active_filters_out() {
         .unwrap();
 
     let uri = "/arepl/statistics/submissions/daily/leaderboard?only_active=true";
-        let req = test::TestRequest::get()
+    let req = test::TestRequest::get()
         .uri(uri)
         .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
         .to_request();
@@ -175,7 +178,7 @@ async fn submission_leaderboard_since_filters_out_future_date() {
         tomorrow
     );
 
-        let req = test::TestRequest::get()
+    let req = test::TestRequest::get()
         .uri(&uri)
         .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
         .to_request();

@@ -167,7 +167,12 @@ async fn create_merge_request_rejects_self_merge() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_error_response(resp, 400, Some("You cannot merge your account with itself.")).await;
+    assert_error_response(
+        resp,
+        400,
+        Some("You cannot merge your account with itself."),
+    )
+    .await;
 }
 
 #[actix_web::test]

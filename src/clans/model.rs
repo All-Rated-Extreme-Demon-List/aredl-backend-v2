@@ -1,5 +1,5 @@
-use crate::auth::Authenticated;
 use crate::app_data::db::DbConnection;
+use crate::auth::Authenticated;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::{clan_invites, clan_members, clans};

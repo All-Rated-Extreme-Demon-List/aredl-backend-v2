@@ -1,3 +1,4 @@
+use crate::notifications::WebsocketNotification;
 use crate::{
     app_data::db::DbConnection,
     aredl::submissions::{status::SubmissionsEnabled, *},
@@ -10,10 +11,9 @@ use diesel::{
     Connection, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
+use tokio::sync::broadcast;
 use utoipa::ToSchema;
 use uuid::Uuid;
-use crate::notifications::WebsocketNotification;
-use tokio::sync::broadcast;
 
 #[derive(Serialize, Deserialize, Debug, Insertable, ToSchema)]
 #[diesel(table_name=submissions, check_for_backend(Pg))]

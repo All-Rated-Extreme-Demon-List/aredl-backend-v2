@@ -1,10 +1,10 @@
+use crate::app_data::db::DbAppState;
 use crate::aredl::packtiers::PackTierResolved;
 use crate::aredl::packtiers::{PackTier, PackTierCreate, PackTierUpdate};
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::cache_control::CacheController;
-use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
-use actix_web::{delete, get, patch, post, web, HttpResponse};
+use actix_web::{HttpResponse, delete, get, patch, post, web};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
@@ -27,7 +27,7 @@ use uuid::Uuid;
 #[get(
     "",
     wrap = "UserAuth::load()",
-    wrap = "CacheController::private_with_max_age(900)"
+    wrap = "CacheController::auth_public_with_max_age(900)"
 )]
 async fn find_all(
     db: web::Data<Arc<DbAppState>>,
