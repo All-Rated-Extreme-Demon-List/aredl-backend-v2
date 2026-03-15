@@ -22,6 +22,7 @@ pub enum ShiftStatus {
     Running,
     Completed,
     Expired,
+    Excused,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq)]
