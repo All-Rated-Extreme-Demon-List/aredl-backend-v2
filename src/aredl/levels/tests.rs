@@ -7,7 +7,7 @@ use {
             },
             packs::test_utils::create_test_pack,
         },
-        auth::{Permission, create_test_token},
+        auth::{create_test_token, Permission},
         schema::aredl::{levels_created, pack_levels, position_history},
         test_utils::*,
         users::test_utils::create_test_user,
@@ -16,7 +16,7 @@ use {
     chrono::{DateTime, Utc},
     diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
     serde_json::json,
-    tokio::time::{Duration, sleep},
+    tokio::time::{sleep, Duration},
 };
 
 #[actix_web::test]
@@ -291,12 +291,11 @@ async fn add_and_remove_creators() {
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let body: serde_json::Value = read_body_json(resp).await;
     assert!(body.is_array(), "Response is not an array");
-    assert!(
-        body.as_array()
-            .unwrap()
-            .iter()
-            .any(|u| u.as_str().unwrap() == user_id.to_string())
-    );
+    assert!(body
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|u| u.as_str().unwrap() == user_id.to_string()));
     // Remove creator
     let req = test::TestRequest::delete()
         .uri(&format!("/aredl/levels/{}/creators", level_id))

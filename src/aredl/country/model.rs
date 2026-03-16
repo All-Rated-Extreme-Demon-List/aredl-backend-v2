@@ -3,7 +3,7 @@ use crate::aredl::levels::ExtendedBaseLevel;
 use crate::aredl::records::ResolvedRecord;
 use crate::error_handler::ApiError;
 use crate::schema::{
-    aredl::{country_leaderboard, levels, min_placement_country_records},
+    aredl::{country_created_levels, country_leaderboard, levels, min_placement_country_records},
     users,
 };
 use crate::users::{BaseUser, ExtendedBaseUser};
@@ -13,6 +13,7 @@ use diesel::{
     ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -60,6 +61,23 @@ pub struct ResolvedCountryProfileLevel {
     pub publisher: BaseUser,
 }
 
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct ResolvedCountryProfileCreatedLevel {
+    #[serde(flatten)]
+    pub level: ExtendedBaseLevel,
+    /// Users from this country who are listed as creators for the level.
+    pub creators: Vec<BaseUser>,
+}
+
+#[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
+#[diesel(table_name=country_created_levels, check_for_backend(Pg))]
+pub struct CountryCreatedLevelEntry {
+    pub country: i32,
+    pub level_id: Uuid,
+    pub creator_id: Uuid,
+    pub order_pos: i32,
+}
+
 impl ResolvedRecord {
     pub fn from_country_data(
         record: CountryProfileRecord,
@@ -90,6 +108,8 @@ pub struct CountryProfileResolved {
     pub rank: Option<Rank>,
     /// Records of users from the country.
     pub records: Vec<ResolvedRecord>,
+    /// Levels created by users from the country.
+    pub created: Vec<ResolvedCountryProfileCreatedLevel>,
     /// Levels published by users from the country.
     pub published: Vec<ResolvedCountryProfileLevel>,
 }
@@ -117,6 +137,36 @@ impl CountryProfileResolved {
             .map(|(record, user, level)| ResolvedRecord::from_country_data(record, level, user))
             .collect();
 
+        let created_rows: Vec<(CountryCreatedLevelEntry, ExtendedBaseLevel, BaseUser)> =
+            country_created_levels::table
+                .filter(country_created_levels::country.eq(country))
+                .inner_join(levels::table.on(levels::id.eq(country_created_levels::level_id)))
+                .inner_join(users::table.on(users::id.eq(country_created_levels::creator_id)))
+                .order_by((
+                    country_created_levels::order_pos.asc(),
+                    users::global_name.asc(),
+                    users::id.asc(),
+                ))
+                .select((
+                    CountryCreatedLevelEntry::as_select(),
+                    ExtendedBaseLevel::as_select(),
+                    BaseUser::as_select(),
+                ))
+                .load(conn)?;
+
+        let mut created_by_level = HashMap::<Uuid, usize>::new();
+        let mut created = Vec::<ResolvedCountryProfileCreatedLevel>::new();
+        for (_, level, user) in created_rows {
+            let index = *created_by_level.entry(level.id).or_insert_with(|| {
+                created.push(ResolvedCountryProfileCreatedLevel {
+                    level,
+                    creators: Vec::new(),
+                });
+                created.len() - 1
+            });
+            created[index].creators.push(user);
+        }
+
         let published = levels::table
             .inner_join(users::table.on(users::id.eq(levels::publisher_id)))
             .filter(users::country.eq(country))
@@ -134,6 +184,7 @@ impl CountryProfileResolved {
             country,
             rank,
             records,
+            created,
             published,
         })
     }

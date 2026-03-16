@@ -2,7 +2,7 @@
 use std::sync::Arc;
 
 #[cfg(test)]
-use crate::schema::arepl::levels;
+use crate::schema::arepl::{levels, levels_created};
 #[cfg(test)]
 use crate::users::test_utils::create_test_user;
 #[cfg(test)]
@@ -35,6 +35,37 @@ pub async fn create_test_level(db: &Arc<DbAppState>) -> Uuid {
         .expect("Failed to create test arepl level");
 
     level_uuid
+}
+
+#[cfg(test)]
+pub async fn create_test_level_with_publisher(db: &Arc<DbAppState>, publisher: Uuid) -> Uuid {
+    let level_id = create_test_level(db).await;
+
+    diesel::update(levels::table)
+        .filter(levels::id.eq(level_id))
+        .set(levels::publisher_id.eq(publisher))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to update test arepl level publisher");
+
+    level_id
+}
+
+#[cfg(test)]
+pub async fn add_test_level_creators(db: &Arc<DbAppState>, level_id: Uuid, creators: &[Uuid]) {
+    diesel::insert_into(levels_created::table)
+        .values(
+            creators
+                .iter()
+                .map(|creator| {
+                    (
+                        levels_created::level_id.eq(level_id),
+                        levels_created::user_id.eq(*creator),
+                    )
+                })
+                .collect::<Vec<_>>(),
+        )
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to create arepl level creators");
 }
 
 #[cfg(test)]

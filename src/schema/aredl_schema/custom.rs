@@ -84,16 +84,29 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    aredl.country_created_levels (country, level_id, creator_id) {
+        country -> Int4,
+        level_id -> Uuid,
+        creator_id -> Uuid,
+        order_pos -> Int4,
+    }
+}
+
 diesel::joinable!(user_leaderboard -> users (user_id));
 diesel::joinable!(user_leaderboard -> levels (hardest));
 diesel::joinable!(user_leaderboard -> clans (clan_id));
 diesel::joinable!(country_leaderboard -> levels (hardest));
+diesel::joinable!(country_created_levels -> levels (level_id));
+diesel::joinable!(country_created_levels -> users (creator_id));
 
 diesel::allow_tables_to_appear_in_same_query!(user_leaderboard, levels,);
 
 diesel::allow_tables_to_appear_in_same_query!(country_leaderboard, levels,);
+diesel::allow_tables_to_appear_in_same_query!(country_created_levels, levels,);
 
 diesel::allow_tables_to_appear_in_same_query!(user_leaderboard, users,);
+diesel::allow_tables_to_appear_in_same_query!(country_created_levels, users,);
 
 diesel::allow_tables_to_appear_in_same_query!(user_leaderboard, clans,);
 
@@ -148,11 +161,26 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    aredl.clans_created_levels (clan_id, level_id, creator_id) {
+        clan_id -> Uuid,
+        level_id -> Uuid,
+        creator_id -> Uuid,
+        order_pos -> Int4,
+    }
+}
+
 diesel::joinable!(clans_leaderboard -> levels (hardest));
+diesel::joinable!(clans_created_levels -> clans (clan_id));
+diesel::joinable!(clans_created_levels -> levels (level_id));
+diesel::joinable!(clans_created_levels -> users (creator_id));
 
 diesel::allow_tables_to_appear_in_same_query!(clans_leaderboard, levels,);
+diesel::allow_tables_to_appear_in_same_query!(clans_created_levels, levels,);
 
 diesel::allow_tables_to_appear_in_same_query!(clans_leaderboard, clans,);
+diesel::allow_tables_to_appear_in_same_query!(clans_created_levels, clans,);
+diesel::allow_tables_to_appear_in_same_query!(clans_created_levels, users,);
 
 diesel::table! {
     aredl.min_placement_clans_records (id) {

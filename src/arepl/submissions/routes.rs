@@ -189,9 +189,9 @@ async fn delete(
     ),
     components(
         schemas(
-            Submission, 
-            SubmissionPage, 
-            SubmissionResolved, 
+            Submission,
+            SubmissionPage,
+            SubmissionResolved,
             SubmissionStatus,
             Record,
             SubmissionPatchMod,
@@ -204,7 +204,6 @@ async fn delete(
         create,
         patch,
         delete,
-        
     )
 )]
 pub struct ApiDoc;

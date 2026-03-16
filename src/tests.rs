@@ -6,7 +6,7 @@ use {
         page_helper::{PageQuery, Paginated},
         test_utils::assert_error_response,
     },
-    actix_web::{App, HttpResponse, http::header, test, web},
+    actix_web::{http::header, test, web, App, HttpResponse},
 };
 
 #[test]

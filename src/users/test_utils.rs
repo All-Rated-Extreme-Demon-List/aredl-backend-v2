@@ -97,3 +97,12 @@ pub fn get_permission_privilege_level(db: &DbAppState, permission: Permission) -
         .first::<i32>(conn)
         .expect("Failed to get privilege level from permissions table")
 }
+
+#[cfg(test)]
+pub async fn set_test_user_country(db: &Arc<DbAppState>, user_id: Uuid, country: Option<i32>) {
+    diesel::update(users::table)
+        .filter(users::id.eq(user_id))
+        .set(users::country.eq(country))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to assign country to user");
+}

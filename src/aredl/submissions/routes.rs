@@ -195,9 +195,9 @@ async fn delete(
     ),
     components(
         schemas(
-            Submission, 
-            SubmissionPage, 
-            SubmissionResolved, 
+            Submission,
+            SubmissionPage,
+            SubmissionResolved,
             SubmissionStatus,
             Record,
             SubmissionPatchMod,

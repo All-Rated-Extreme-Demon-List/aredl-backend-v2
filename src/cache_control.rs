@@ -1,10 +1,10 @@
 use actix_web::{
-    Error,
     body::MessageBody,
     dev::{Service, ServiceRequest, ServiceResponse, Transform},
     http::header::{self, CacheControl, CacheDirective, HeaderValue, TryIntoHeaderValue},
+    Error,
 };
-use futures_util::future::{LocalBoxFuture, Ready, ready};
+use futures_util::future::{ready, LocalBoxFuture, Ready};
 use std::{
     marker::PhantomData,
     rc::Rc,

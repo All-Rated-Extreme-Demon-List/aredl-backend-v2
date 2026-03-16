@@ -26,6 +26,8 @@ pub async fn start_matviews_refresher(db: Arc<DbAppState>) {
         "user_leaderboard",
         "country_leaderboard",
         "clans_leaderboard",
+        "country_created_levels",
+        "clans_created_levels",
         "submission_stats",
         "record_totals",
         "submission_totals",

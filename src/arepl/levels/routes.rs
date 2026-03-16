@@ -1,13 +1,13 @@
 use crate::app_data::db::DbAppState;
 use crate::arepl::levels::{
-    Level, LevelPlace, LevelUpdate, LevelWithUserCompletionStatus, ResolvedLevel, creators,
-    history, id_resolver::resolve_level_id, ldms, packs, records,
+    creators, history, id_resolver::resolve_level_id, ldms, packs, records, Level, LevelPlace,
+    LevelUpdate, LevelWithUserCompletionStatus, ResolvedLevel,
 };
-use crate::arepl::levels::{LevelQueryOptions, notes};
+use crate::arepl::levels::{notes, LevelQueryOptions};
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::cache_control::CacheController;
 use crate::error_handler::ApiError;
-use actix_web::{HttpResponse, get, patch, post, web};
+use actix_web::{get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;

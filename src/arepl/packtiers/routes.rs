@@ -4,7 +4,7 @@ use crate::arepl::packtiers::{PackTier, PackTierCreate, PackTierUpdate};
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::cache_control::CacheController;
 use crate::error_handler::ApiError;
-use actix_web::{HttpResponse, delete, get, patch, post, web};
+use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
