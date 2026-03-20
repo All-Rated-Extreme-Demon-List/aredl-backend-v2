@@ -170,7 +170,7 @@ impl Submission {
         authenticated: Authenticated,
     ) -> Result<SubmissionResolved, ApiError> {
         conn.transaction(|conn| -> Result<SubmissionResolved, ApiError> {
-            let prefer_priority = prefer_priority_next(authenticated.user_id);
+            let prefer_priority = true; // prefer_priority_next(authenticated.user_id);
 
             let preferred_id =
                 Self::find_next_claimable_id(conn, authenticated.user_id, prefer_priority)?;
