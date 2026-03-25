@@ -20,7 +20,7 @@ use {
 
 #[actix_web::test]
 async fn discord_auth_redirects_to_discord() {
-    std::env::remove_var("AUTH_CALLBACK_ALLOWED_DOMAINS");
+    std::env::set_var("AUTH_CALLBACK_ALLOWED_DOMAINS", "example.com");
     std::env::remove_var("AUTH_CALLBACK_ALLOW_LOCALHOST");
     let discord_base_url = "https://test-discord.com";
     std::env::set_var("DISCORD_BASE_URL", discord_base_url);
