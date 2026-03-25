@@ -11,6 +11,7 @@ use openidconnect::{
 };
 
 use serde::{Deserialize, Serialize};
+use url::Url;
 use utoipa::{OpenApi, ToSchema};
 
 use crate::app_data::auth::{AuthAppState, DiscordClient};
@@ -18,7 +19,7 @@ use crate::app_data::db::{DbAppState, DbConnection};
 use crate::auth::token::UserClaims;
 use crate::auth::token::{self, check_token_valid};
 use crate::error_handler::ApiError;
-use crate::get_secret;
+use crate::{get_optional_secret, get_secret};
 use crate::roles::Role;
 use crate::schema::{oauth_requests, permissions, roles, user_roles};
 use crate::users::{User, UserUpsert};
@@ -122,6 +123,47 @@ struct AuthOptions {
     pub callback: Option<String>,
 }
 
+impl AuthOptions {
+    fn validate(&self) -> Result<(), ApiError> {
+        if let Some(callback) = &self.callback {
+            let Ok(url) = Url::parse(callback) else {
+                return Err(ApiError::new(400, "Invalid callback URL"));
+            };
+
+            if !matches!(url.scheme(), "http" | "https") {
+                return Err(ApiError::new(400, "Invalid callback URL"));
+            }
+
+            let Some(host) = url.host_str().map(|host| host.to_ascii_lowercase()) else {
+                return Err(ApiError::new(400, "Invalid callback URL"));
+            };
+
+            let allow_localhost = get_optional_secret("AUTH_CALLBACK_ALLOW_LOCALHOST")
+                .map(|value| value != "0" && !value.eq_ignore_ascii_case("false"))
+                .unwrap_or(true);
+
+            if allow_localhost && matches!(host.as_str(), "localhost" | "127.0.0.1" | "::1") {
+                return Ok(());
+            }
+
+            let allowed_domains = get_secret("AUTH_CALLBACK_ALLOWED_DOMAINS");
+            if allowed_domains
+                .split(',')
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(|value| value.to_ascii_lowercase())
+                .any(|domain| host == *domain || host.ends_with(&format!(".{}", domain)))
+            {
+                return Ok(());
+            }
+
+            return Err(ApiError::new(400, "Invalid callback URL"));
+        }
+
+        Ok(())
+    }
+}
+
 #[utoipa::path(
     get,
     summary = "Login with Discord",
@@ -137,6 +179,10 @@ async fn discord_auth(
     db: web::Data<Arc<DbAppState>>,
     options: web::Query<AuthOptions>,
 ) -> Result<HttpResponse, ApiError> {
+    if options.callback.is_some() {
+        options.validate()?;
+    }
+
     let authorize_url = web::block(move || {
         let client = &data.discord_client;
         let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
