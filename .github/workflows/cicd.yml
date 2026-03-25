@@ -168,6 +168,7 @@ jobs:
       api_net: api_net
       db_alias: db_prod
       discord_redirect_uri: discord_redirect_uri_prod
+      auth_callback_allow_localhost: false
     secrets:
       API_HOST: ${{ secrets.API_HOST }}
       API_PORT: ${{ secrets.API_PORT }}
@@ -228,6 +229,7 @@ jobs:
       api_net: api_net_dev
       db_alias: db_dev
       discord_redirect_uri: discord_redirect_uri_dev
+      auth_callback_allow_localhost: true
     secrets:
       API_HOST: ${{ secrets.DEV_API_HOST }}
       API_PORT: ${{ secrets.DEV_API_PORT }}
