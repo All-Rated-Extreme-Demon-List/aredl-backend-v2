@@ -24,6 +24,11 @@ on:
       discord_redirect_uri:
         required: true
         type: string
+      auth_callback_allow_localhost:
+        required: false
+        default: true
+        type: boolean
+        
 
 
     secrets:
@@ -68,6 +73,7 @@ jobs:
             echo "API_NET=${{ inputs.api_net }}"
             echo "DB_ALIAS=${{ inputs.db_alias }}"
             echo "DISCORD_REDIRECT_URI=${{ inputs.discord_redirect_uri }}"
+            echo "AUTH_CALLBACK_ALLOW_LOCALHOST=${{ inputs.auth_callback_allow_localhost }}"
           } >> .env
 
       - name: Check if remote directory exists
@@ -96,6 +102,7 @@ jobs:
             API_NET='${{ inputs.api_net }}' \
             DB_ALIAS='${{ inputs.db_alias }}' \
             DISCORD_REDIRECT_URI='${{ inputs.discord_redirect_uri }}' \
+            AUTH_CALLBACK_ALLOW_LOCALHOST='${{ inputs.auth_callback_allow_localhost }}' \
             docker stack deploy \
               --with-registry-auth \
               --compose-file \"\${REMOTE_PATH}/docker-stack.yml\" \

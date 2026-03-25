@@ -54,6 +54,7 @@ services:
       DISCORD_BOT_TOKEN: /run/secrets/discord_bot_token
 
       AUTH_CALLBACK_ALLOWED_DOMAINS: /run/secrets/auth_callback_allowed_domains
+      AUTH_CALLBACK_ALLOW_LOCALHOST: ${AUTH_CALLBACK_ALLOW_LOCALHOST}
 
       MATVIEWS_REFRESH_SCHEDULE: /run/secrets/matviews_refresh_schedule
       LEVEL_DATA_REFRESH_SCHEDULE: /run/secrets/level_data_refresh_schedule
@@ -90,7 +91,7 @@ services:
       - discord_client_id
       - discord_client_secret
       - discord_bot_token
-      - allowed_callback_domains
+      - auth_callback_allowed_domains
       - source: ${DISCORD_REDIRECT_URI}
         target: discord_redirect_uri
       - matviews_refresh_schedule
@@ -128,7 +129,7 @@ secrets:
     external: true
   discord_redirect_uri_dev:
     external: true
-  allowed_callback_domains:
+  auth_callback_allowed_domains:
     external: true
   discord_bot_token:
     external: true
