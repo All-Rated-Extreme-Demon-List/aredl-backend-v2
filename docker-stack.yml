@@ -90,6 +90,7 @@ services:
       - discord_client_id
       - discord_client_secret
       - discord_bot_token
+      - allowed_callback_domains
       - source: ${DISCORD_REDIRECT_URI}
         target: discord_redirect_uri
       - matviews_refresh_schedule
