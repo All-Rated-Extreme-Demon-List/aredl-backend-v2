@@ -9,7 +9,10 @@ use {
         test_utils::init_test_app,
         users::test_utils::create_test_user,
     },
-    actix_web::{http::header, test::{self, read_body_json}},
+    actix_web::{
+        http::header,
+        test::{self, read_body_json},
+    },
     diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
     httpmock::prelude::*,
     serial_test::serial,
@@ -17,6 +20,8 @@ use {
 
 #[actix_web::test]
 async fn discord_auth_redirects_to_discord() {
+    std::env::remove_var("AUTH_CALLBACK_ALLOWED_DOMAINS");
+    std::env::remove_var("AUTH_CALLBACK_ALLOW_LOCALHOST");
     let discord_base_url = "https://test-discord.com";
     std::env::set_var("DISCORD_BASE_URL", discord_base_url);
 
@@ -41,6 +46,54 @@ async fn discord_auth_redirects_to_discord() {
     assert!(location_header.contains("code_challenge_method=S256"));
     assert!(location_header.contains("redirect_uri="));
     assert!(location_header.contains("identify"));
+}
+
+#[actix_web::test]
+#[serial]
+async fn discord_auth_allows_localhost_callback_by_default() {
+    std::env::set_var("AUTH_CALLBACK_ALLOWED_DOMAINS", "example.com");
+    std::env::remove_var("AUTH_CALLBACK_ALLOW_LOCALHOST");
+
+    let (app, _, _, _) = init_test_app().await;
+
+    let req = test::TestRequest::get()
+        .uri("/auth/discord?callback=http://localhost:3000/login")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), actix_web::http::StatusCode::FOUND);
+}
+
+#[actix_web::test]
+#[serial]
+async fn discord_auth_rejects_untrusted_callback() {
+    std::env::set_var("AUTH_CALLBACK_ALLOWED_DOMAINS", "example.com");
+    std::env::remove_var("AUTH_CALLBACK_ALLOW_LOCALHOST");
+
+    let (app, _, _, _) = init_test_app().await;
+
+    let req = test::TestRequest::get()
+        .uri("/auth/discord?callback=https://unauthorized.com")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), actix_web::http::StatusCode::BAD_REQUEST);
+}
+
+#[actix_web::test]
+#[serial]
+async fn discord_auth_allows_configured_subdomain_callback() {
+    std::env::set_var("AUTH_CALLBACK_ALLOWED_DOMAINS", "example.com");
+    std::env::remove_var("AUTH_CALLBACK_ALLOW_LOCALHOST");
+
+    let (app, _, _, _) = init_test_app().await;
+
+    let req = test::TestRequest::get()
+        .uri("/auth/discord?callback=https://app.example.com/login")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), actix_web::http::StatusCode::FOUND);
 }
 
 #[actix_web::test]
@@ -306,6 +359,9 @@ async fn discord_callback_returns_auth() {
 #[actix_web::test]
 #[serial]
 async fn discord_callback_with_callback_url_redirects() {
+    std::env::set_var("AUTH_CALLBACK_ALLOWED_DOMAINS", "example.com");
+    std::env::remove_var("AUTH_CALLBACK_ALLOW_LOCALHOST");
+
     let server = MockServer::start_async().await;
 
     server

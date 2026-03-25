@@ -53,6 +53,8 @@ services:
       DISCORD_REDIRECT_URI: /run/secrets/discord_redirect_uri
       DISCORD_BOT_TOKEN: /run/secrets/discord_bot_token
 
+      AUTH_CALLBACK_ALLOWED_DOMAIN: /run/secrets/auth_callback_allowed_domain
+
       MATVIEWS_REFRESH_SCHEDULE: /run/secrets/matviews_refresh_schedule
       LEVEL_DATA_REFRESH_SCHEDULE: /run/secrets/level_data_refresh_schedule
       DISCORD_AVATARS_REFRESH_SCHEDULE: /run/secrets/discord_avatars_refresh_schedule
@@ -124,6 +126,8 @@ secrets:
   discord_redirect_uri_prod:
     external: true
   discord_redirect_uri_dev:
+    external: true
+  allowed_callback_domains:
     external: true
   discord_bot_token:
     external: true
