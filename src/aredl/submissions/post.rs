@@ -156,7 +156,7 @@ impl SubmissionInsert {
     ) -> Result<Self, ApiError> {
         let submitted_by = body.submitted_by.unwrap_or(authenticated.user_id);
 
-        if !authenticated.has_permission(conn, Permission::SubmissionReview)?
+        if !authenticated.has_permission(conn, Permission::SubmissionReviewFull)?
             || submitted_by == authenticated.user_id
         {
             return SubmissionInsert::from_user(conn, body.downgrade(), authenticated);

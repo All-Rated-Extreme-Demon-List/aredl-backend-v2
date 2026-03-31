@@ -9,7 +9,7 @@ use crate::{
     utils::probe::model::ProbeRequest,
 };
 
-#[post("", wrap = "UserAuth::require(Permission::SubmissionReview)")]
+#[post("", wrap = "UserAuth::require(Permission::SubmissionReviewFull)")]
 pub async fn probe_file(
     req: web::Json<ProbeRequest>,
     providers_state: web::Data<Arc<VideoProvidersAppState>>,

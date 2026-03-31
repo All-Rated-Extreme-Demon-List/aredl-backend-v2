@@ -3,7 +3,7 @@ use crate::{
     arepl::statistics::submissions::daily::{
         stats_mod_leaderboard, DailyStatsPage, ResolvedLeaderboardRow,
     },
-    auth::{Permission, UserAuth},
+    auth::{Authenticated, Permission, UserAuth},
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
 };
@@ -30,19 +30,21 @@ pub struct StatsQuery {
         ("reviewer_id" = Option<Uuid>, Query, description = "Filter for a specific moderator")
     ),
     responses((status = 200, body = Paginated<DailyStatsPage>)),
-    security(("access_token" = ["SubmissionReview"]), ("api_key" = ["SubmissionReview"]))
+    security(("access_token" = ["SubmissionReviewFull"]), ("api_key" = ["SubmissionReviewFull"]))
 )]
-#[get("", wrap = "UserAuth::require(Permission::SubmissionReview)")]
+#[get("", wrap = "UserAuth::require(Permission::SubmissionReviewFull)")]
 pub async fn stats(
     db: web::Data<Arc<DbAppState>>,
     page: web::Query<PageQuery<20>>,
     query: web::Query<StatsQuery>,
+    authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let stats = web::block(move || {
         DailyStatsPage::find(
             &mut db.connection()?,
             page.into_inner(),
             query.into_inner().reviewer_id,
+            &authenticated,
         )
     })
     .await??;
@@ -65,11 +67,11 @@ pub struct LeaderboardQuery {
         ("only_active" = Option<bool>, Query, description = "Whether or not to exclude moderators that aren't staff anymore"),
     ),
     responses((status = 200, body = [ResolvedLeaderboardRow])),
-    security(("access_token" = ["SubmissionReview"]), ("api_key" = ["SubmissionReview"]))
+    security(("access_token" = ["SubmissionReviewFull"]), ("api_key" = ["SubmissionReviewFull"]))
 )]
 #[get(
     "/leaderboard",
-    wrap = "UserAuth::require(Permission::SubmissionReview)"
+    wrap = "UserAuth::require(Permission::SubmissionReviewFull)"
 )]
 pub async fn leaderboard_route(
     db: web::Data<Arc<DbAppState>>,

@@ -1,7 +1,7 @@
 use crate::{
     app_data::db::DbConnection,
     aredl::submissions::{status::SubmissionsEnabled, *},
-    auth::Authenticated,
+    auth::{Authenticated, Permission},
     error_handler::ApiError,
     notifications::WebsocketNotification,
     providers::VideoProvidersAppState,
@@ -289,6 +289,9 @@ impl SubmissionPatchMod {
             .select(Submission::as_select())
             .first::<Submission>(conn)?;
 
+        let is_full_reviewer =
+            authenticated.has_permission(conn, Permission::SubmissionReviewFull)?;
+
         if old_submission.submitted_by == authenticated.user_id {
             return SubmissionPatchUser::patch(
                 SubmissionPatchMod::downgrade(patch),
@@ -297,6 +300,17 @@ impl SubmissionPatchMod {
                 authenticated,
                 providers,
             );
+        }
+
+        if !is_full_reviewer
+            && (old_submission.raw_url.is_some()
+                || old_submission.status != SubmissionStatus::Claimed
+                || old_submission.reviewer_id != Some(authenticated.user_id))
+        {
+            return Err(ApiError::new(
+                403,
+                "You do not have permission to edit this submission.",
+            ));
         }
 
         let result = conn.transaction(|connection| -> Result<Submission, ApiError> {

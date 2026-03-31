@@ -38,7 +38,7 @@ use crate::{
         ("reviewer_filter" = Option<String>, Query, description = "Filter submissions to a specific reviewer (UUID, discord ID, or username)"),
         ("note_filter" = Option<String>, Query, description = "Filter submissions that contain a specific note substring"),
 ))]
-#[get("", wrap = "UserAuth::require(Permission::SubmissionReview)")]
+#[get("", wrap = "UserAuth::require(Permission::SubmissionReviewFull)")]
 async fn find_all(
     db: web::Data<Arc<DbAppState>>,
     page_query: web::Query<PageQuery<50>>,

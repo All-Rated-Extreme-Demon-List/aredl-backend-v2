@@ -16,7 +16,7 @@ use utoipa::OpenApi;
 		(status = 200, body = [RoleResolved])
 	),
 )]
-#[get("")]
+#[get("", wrap = "UserAuth::require(Permission::RoleManage)")]
 async fn find_all(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
     let roles = web::block(move || RoleResolved::find_all(&mut db.connection()?)).await??;
     Ok(HttpResponse::Ok().json(roles))

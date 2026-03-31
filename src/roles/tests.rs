@@ -2,7 +2,10 @@
 use {
     crate::{
         auth::{create_test_token, Permission},
-        roles::{test_utils::create_test_role, Role},
+        roles::{
+            test_utils::{add_user_to_role, create_test_role},
+            Role, RoleResolved,
+        },
         test_utils::{assert_error_response, init_test_app},
         users::test_utils::{create_test_user, get_permission_privilege_level},
     },
@@ -12,16 +15,21 @@ use {
 
 #[actix_web::test]
 async fn list_roles() {
-    let (app, db, _, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
+    let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
     let role1 = create_test_role(&db, 10).await;
     let role2 = create_test_role(&db, 20).await;
 
-    let req = test::TestRequest::get().uri("/roles").to_request();
+    let req = test::TestRequest::get()
+        .uri("/roles")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let roles: Vec<Role> = read_body_json(resp).await;
-    let ids: Vec<i32> = roles.iter().map(|r| r.id).collect();
+    let roles: Vec<RoleResolved> = read_body_json(resp).await;
+    let ids: Vec<i32> = roles.iter().map(|r| r.role.id).collect();
     assert!(ids.contains(&role1));
     assert!(ids.contains(&role2));
 }
@@ -80,11 +88,14 @@ async fn delete_role() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let req = test::TestRequest::get().uri("/roles").to_request();
+    let req = test::TestRequest::get()
+        .uri("/roles")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
     let resp = test::call_service(&app, req).await;
-    let roles: Vec<Role> = read_body_json(resp).await;
+    let roles: Vec<RoleResolved> = read_body_json(resp).await;
     assert!(
-        !roles.iter().any(|r| r.id == role_id),
+        !roles.iter().any(|r| r.role.id == role_id),
         "Role {} should be deleted",
         role_id
     );
@@ -187,4 +198,27 @@ async fn delete_role_fails_when_target_role_has_same_privilege_as_user() {
         Some("You do not have sufficient permissions to edit this role."),
     )
     .await;
+}
+
+#[actix_web::test]
+async fn find_all_base_reviewers_excludes_full_reviewers_and_mixed_role_users() {
+    let (_app, db, _auth, _) = init_test_app().await;
+
+    let (base_only_user, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
+    let (full_user, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (mixed_user, _) = create_test_user(&db, None).await;
+
+    let base_level = get_permission_privilege_level(&db, Permission::SubmissionReviewBase);
+    let full_level = get_permission_privilege_level(&db, Permission::SubmissionReviewFull);
+
+    let base_role = create_test_role(&db, base_level).await;
+    let full_role = create_test_role(&db, full_level).await;
+    add_user_to_role(&db, base_role, mixed_user).await;
+    add_user_to_role(&db, full_role, mixed_user).await;
+
+    let ids = RoleResolved::find_all_base_reviewers(&mut db.connection().unwrap()).unwrap();
+
+    assert!(ids.contains(&base_only_user));
+    assert!(!ids.contains(&full_user));
+    assert!(!ids.contains(&mixed_user));
 }

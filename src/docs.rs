@@ -146,7 +146,8 @@ Each permission then requires the user's privilege level to be higher or equal t
 
 | Permission | Required Level |
 |---|---|
-| **SubmissionReview** | 15 |
+| **SubmissionReviewBase** | 10 |
+| **SubmissionReviewFull** | 15 |
 | **RecordModify** | 20 |
 | **UserModify** | 25 |
 | **PlaceholderCreate** | 25 |
@@ -159,6 +160,8 @@ Each permission then requires the user's privilege level to be higher or equal t
 | **NotificationsSubscribe** | 70 |
 | **UserRedact** | 75 |
 | **DirectMerge** | 80 |
+| **SubmissionStatusManage** | 80 |
+| **ReviewersAudit** | 85 |
 | **RoleManage** | 85 |
 | **ShiftManage** | 90 |
 "#;

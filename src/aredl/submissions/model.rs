@@ -8,7 +8,8 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use diesel::{
-    pg::Pg, Connection, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, Selectable,
+    pg::Pg, BoolExpressionMethods, Connection, ExpressionMethods, OptionalExtension, QueryDsl,
+    RunQueryDsl, Selectable,
 };
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
@@ -148,19 +149,39 @@ impl Submission {
     fn find_next_claimable_id(
         conn: &mut DbConnection,
         reviewer_id: Uuid,
+        is_full_reviewer: bool,
         priority: bool,
     ) -> Result<Option<Uuid>, ApiError> {
-        let next_id = submissions::table
-            .filter(submissions::status.eq(SubmissionStatus::Pending))
-            // prevent moderators from claiming their own submissions
-            .filter(submissions::submitted_by.ne(reviewer_id))
-            .filter(submissions::priority.eq(priority))
-            .for_update()
-            .skip_locked()
-            .order(submissions::created_at.asc())
-            .select(submissions::id)
-            .first::<Uuid>(conn)
-            .optional()?;
+        let next_id = if is_full_reviewer {
+            submissions::table
+                .filter(
+                    submissions::status
+                        .eq(SubmissionStatus::Pending)
+                        .or(submissions::status.eq(SubmissionStatus::UnderReview)),
+                )
+                // prevent full reviewers from claiming their own submissions
+                .filter(submissions::submitted_by.ne(reviewer_id))
+                .filter(submissions::priority.eq(priority))
+                .for_update()
+                .skip_locked()
+                .order(submissions::created_at.asc())
+                .select(submissions::id)
+                .first::<Uuid>(conn)
+                .optional()?
+        } else {
+            submissions::table
+                .filter(submissions::status.eq(SubmissionStatus::Pending))
+                // prevent base reviewers from claiming their own submissions or any submission with a raw field that isn't null
+                .filter(submissions::submitted_by.ne(reviewer_id))
+                .filter(submissions::priority.eq(priority))
+                .filter(submissions::raw_url.is_null())
+                .for_update()
+                .skip_locked()
+                .order(submissions::created_at.asc())
+                .select(submissions::id)
+                .first::<Uuid>(conn)
+                .optional()?
+        };
 
         Ok(next_id)
     }
@@ -171,15 +192,24 @@ impl Submission {
     ) -> Result<SubmissionResolved, ApiError> {
         conn.transaction(|conn| -> Result<SubmissionResolved, ApiError> {
             let prefer_priority = true; // prefer_priority_next(authenticated.user_id);
+            let is_full_reviewer =
+                authenticated.has_permission(conn, Permission::SubmissionReviewFull)?;
 
-            let preferred_id =
-                Self::find_next_claimable_id(conn, authenticated.user_id, prefer_priority)?;
+            let preferred_id = Self::find_next_claimable_id(
+                conn,
+                authenticated.user_id,
+                is_full_reviewer,
+                prefer_priority,
+            )?;
 
             let (next_id, claimed_priority) = if let Some(id) = preferred_id {
                 (id, prefer_priority)
-            } else if let Some(id) =
-                Self::find_next_claimable_id(conn, authenticated.user_id, !prefer_priority)?
-            {
+            } else if let Some(id) = Self::find_next_claimable_id(
+                conn,
+                authenticated.user_id,
+                is_full_reviewer,
+                !prefer_priority,
+            )? {
                 (id, !prefer_priority)
             } else {
                 return Err(ApiError::new(
@@ -214,7 +244,7 @@ impl Submission {
                 .filter(submissions::id.eq(submission_id))
                 .into_boxed();
 
-            if !authenticated.has_permission(connection, Permission::SubmissionReview)? {
+            if !authenticated.has_permission(connection, Permission::SubmissionReviewFull)? {
                 query = query
                     .filter(submissions::submitted_by.eq(authenticated.user_id))
                     .filter(submissions::status.eq(SubmissionStatus::Pending));

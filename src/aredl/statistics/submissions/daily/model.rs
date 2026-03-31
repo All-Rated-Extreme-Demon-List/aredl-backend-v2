@@ -1,8 +1,9 @@
 use crate::app_data::db::DbConnection;
-use crate::auth::{permission, Permission};
+use crate::auth::{permission, Authenticated, Permission};
 use crate::page_helper::{PageQuery, Paginated};
 use crate::{
     error_handler::ApiError,
+    roles::RoleResolved,
     schema::{aredl::submission_stats, users},
     users::{BaseUser, ExtendedBaseUser},
 };
@@ -69,7 +70,17 @@ impl DailyStatsPage {
         conn: &mut DbConnection,
         page_query: PageQuery<D>,
         reviewer_id: Option<Uuid>,
+        authenticated: &Authenticated,
     ) -> Result<Paginated<Self>, ApiError> {
+        if let Some(filter) = reviewer_id.as_ref() {
+            if !authenticated.has_permission(conn, Permission::ReviewersAudit)? {
+                let base_reviewers = RoleResolved::find_all_base_reviewers(conn)?;
+                if base_reviewers.contains(filter) {
+                    return Ok(Paginated::from_data(page_query, 0, Self { data: Vec::new() }));
+                }
+            }
+        }
+
         let build_filtered_query = || {
             let mut q = submission_stats::table
                 .left_join(users::table.on(users::id.nullable().eq(submission_stats::reviewer_id)))
@@ -122,13 +133,23 @@ pub fn stats_mod_leaderboard(
     let all_rows: Vec<(DailyStats, ExtendedBaseUser)> = query.load(conn)?;
 
     let rows = all_rows.into_iter().filter_map(|(stats, user)| {
-        if only_active {
-            match permission::check_user_permission(conn, user.id, Permission::SubmissionReview) {
+        // Hide base reviewers. If only_active, also hide full reviewers that aren't staff anymore
+        match permission::check_user_permission(conn, user.id, Permission::SubmissionReviewBase) {
+            Ok(true) => match permission::check_user_permission(
+                conn,
+                user.id,
+                Permission::SubmissionReviewFull,
+            ) {
                 Ok(true) => Some((stats, user)),
                 _ => None,
+            },
+            _ => {
+                if only_active {
+                    None
+                } else {
+                    Some((stats, user))
+                }
             }
-        } else {
-            Some((stats, user))
         }
     });
 

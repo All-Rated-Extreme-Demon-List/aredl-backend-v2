@@ -3,12 +3,13 @@ use {
     crate::{
         aredl::{
             levels::test_utils::{
-                create_test_level, create_test_level_with_record, refresh_test_position_history,
+                add_test_level_creators, create_test_level, create_test_level_with_record,
+                refresh_test_position_history,
             },
             packs::test_utils::create_test_pack,
         },
         auth::{create_test_token, Permission},
-        schema::aredl::{levels_created, pack_levels, position_history},
+        schema::aredl::{pack_levels, position_history},
         test_utils::*,
         users::test_utils::create_test_user,
     },
@@ -230,13 +231,7 @@ async fn list_creators() {
     let level_id = create_test_level(&db).await;
     let (creator_id, _) = create_test_user(&db, None).await;
 
-    diesel::insert_into(levels_created::table)
-        .values((
-            levels_created::level_id.eq(level_id),
-            levels_created::user_id.eq(creator_id),
-        ))
-        .execute(&mut db.connection().unwrap())
-        .expect("Failed to add creator to level!");
+    add_test_level_creators(&db, level_id, &[creator_id]).await;
 
     let req = test::TestRequest::get()
         .uri(&format!("/aredl/levels/{}/creators", level_id))

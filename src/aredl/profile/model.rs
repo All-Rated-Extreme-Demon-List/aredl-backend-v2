@@ -3,6 +3,7 @@ use crate::aredl::levels::ExtendedBaseLevel;
 use crate::aredl::packs::{BasePack, PackWithTierResolved};
 use crate::aredl::packtiers::BasePackTier;
 use crate::aredl::records::Record;
+use crate::auth::{Authenticated, Permission};
 use crate::clans::Clan;
 use crate::error_handler::ApiError;
 use crate::roles::Role;
@@ -101,12 +102,20 @@ impl ProfileRecordResolved {
 }
 
 impl ProfileResolved {
-    pub fn from_str(conn: &mut DbConnection, user_id: &str) -> Result<Self, ApiError> {
+    pub fn from_str(
+        conn: &mut DbConnection,
+        user_id: &str,
+        authenticated: Option<Authenticated>,
+    ) -> Result<Self, ApiError> {
         let user = User::from_str(conn, user_id)?;
-        Self::from_user(conn, user)
+        Self::from_user(conn, user, authenticated)
     }
 
-    pub fn from_user(conn: &mut DbConnection, user: User) -> Result<Self, ApiError> {
+    pub fn from_user(
+        conn: &mut DbConnection,
+        user: User,
+        authenticated: Option<Authenticated>,
+    ) -> Result<Self, ApiError> {
         let clan = clans::table
             .inner_join(clan_members::table.on(clans::id.eq(clan_members::clan_id)))
             .filter(clan_members::user_id.eq(user.id))
@@ -114,12 +123,19 @@ impl ProfileResolved {
             .first::<Clan>(conn)
             .optional()?;
 
-        let roles = roles::table
+        let mut roles = roles::table
             .inner_join(user_roles::table.on(user_roles::role_id.eq(roles::id)))
             .filter(user_roles::user_id.eq(user.id))
             .order(roles::privilege_level.desc())
             .select(Role::as_select())
             .load::<Role>(conn)?;
+
+        if !authenticated
+            .map(|auth| auth.has_permission(conn, Permission::RoleManage))
+            .unwrap_or(Ok(false))?
+        {
+            roles = roles.into_iter().filter(|role| !role.hide).collect();
+        }
 
         let rank = user_leaderboard::table
             .filter(user_leaderboard::user_id.eq(user.id))

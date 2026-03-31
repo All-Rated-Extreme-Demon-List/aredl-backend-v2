@@ -3,6 +3,7 @@ use crate::{
     arepl::submissions::SubmissionStatus,
     auth::{Authenticated, Permission},
     error_handler::ApiError,
+    roles::RoleResolved,
     schema::{arepl::submission_history, users},
     users::BaseUser,
 };
@@ -99,10 +100,22 @@ impl SubmissionHistoryResolved {
             .map(SubmissionHistoryResolved::from_data)
             .collect::<Vec<_>>();
 
-        if !authenticated.has_permission(conn, Permission::SubmissionReview)? {
+        let base_reviewers = RoleResolved::find_all_base_reviewers(conn)?;
+
+        if !authenticated.has_permission(conn, Permission::SubmissionReviewFull)? {
             resolved_history.iter_mut().for_each(|h| {
                 h.reviewer = None;
                 h.private_reviewer_notes = None;
+            });
+        }
+
+        if !authenticated.has_permission(conn, Permission::ReviewersAudit)? {
+            resolved_history.iter_mut().for_each(|h| {
+                if let Some(ref reviewer) = h.reviewer {
+                    if base_reviewers.contains(&reviewer.id) {
+                        h.reviewer = Some(BaseUser::redacted());
+                    }
+                }
             });
         }
 

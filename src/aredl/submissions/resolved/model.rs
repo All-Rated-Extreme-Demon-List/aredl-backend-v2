@@ -4,6 +4,7 @@ use crate::{
     auth::{Authenticated, Permission},
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
+    roles::RoleResolved,
     schema::{
         aredl::{levels, submission_history, submissions},
         users,
@@ -123,7 +124,9 @@ impl SubmissionResolved {
             .filter(submissions::id.eq(id))
             .into_boxed();
 
-        let is_reviewer = authenticated.has_permission(conn, Permission::SubmissionReview)?;
+        let is_reviewer = authenticated.has_permission(conn, Permission::SubmissionReviewBase)?;
+        let is_full_reviewer =
+            authenticated.has_permission(conn, Permission::SubmissionReviewFull)?;
 
         if !is_reviewer {
             query = query.filter(submissions::submitted_by.eq(authenticated.user_id));
@@ -132,9 +135,19 @@ impl SubmissionResolved {
         let mut resolved =
             Self::from_data(resolve_query(query).first::<ResolvedSubmissionRow>(conn)?);
 
-        if !is_reviewer {
+        if !is_full_reviewer {
             resolved.reviewer = None;
             resolved.private_reviewer_notes = None;
+        }
+
+        // hide base reviewer
+        let base_reviewers = RoleResolved::find_all_base_reviewers(conn)?;
+        if !authenticated.has_permission(conn, Permission::ReviewersAudit)? {
+            if let Some(ref reviewer) = resolved.reviewer {
+                if base_reviewers.contains(&reviewer.id) {
+                    resolved.reviewer = None;
+                }
+            }
         }
 
         Ok(resolved)
@@ -148,6 +161,12 @@ impl ResolvedSubmissionPage {
         options: SubmissionQueryOptions,
         authenticated: Authenticated,
     ) -> Result<Paginated<Self>, ApiError> {
+        let base_reviewers = RoleResolved::find_all_base_reviewers(conn)?;
+
+        let can_audit_reviewers = authenticated.has_permission(conn, Permission::ReviewersAudit)?;
+        let can_full_review =
+            authenticated.has_permission(conn, Permission::SubmissionReviewFull)?;
+
         let build_filtered = || {
             let mut query = submissions::table.into_boxed::<Pg>();
 
@@ -174,9 +193,14 @@ impl ResolvedSubmissionPage {
             }
 
             if let Some(ref reviewer) = options.reviewer_filter {
+                let mut reviewer_query = user_filter(&reviewer);
+                if !can_audit_reviewers {
+                    reviewer_query =
+                        reviewer_query.filter(users::id.ne_all(base_reviewers.iter().copied()));
+                }
+
                 query = query.filter(
-                    submissions::reviewer_id
-                        .eq_any(user_filter(&reviewer).select(users::id.nullable())),
+                    submissions::reviewer_id.eq_any(reviewer_query.select(users::id.nullable())),
                 );
             }
 
@@ -234,13 +258,23 @@ impl ResolvedSubmissionPage {
 
         let total_count: i64 = build_filtered().count().get_result(conn)?;
 
-        if !authenticated.has_permission(conn, Permission::SubmissionReview)? {
+        if !can_full_review {
             submissions
                 .iter_mut()
                 .for_each(|s: &mut SubmissionResolved| {
                     s.reviewer = None;
                     s.private_reviewer_notes = None;
                 });
+        }
+
+        if !can_audit_reviewers {
+            submissions.iter_mut().for_each(|s| {
+                if let Some(ref reviewer) = s.reviewer {
+                    if base_reviewers.contains(&reviewer.id) {
+                        s.reviewer = Some(ExtendedBaseUser::redacted())
+                    }
+                }
+            });
         }
 
         Ok(Paginated::<Self>::from_data(
