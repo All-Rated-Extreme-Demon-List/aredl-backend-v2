@@ -24,14 +24,20 @@ use uuid::Uuid;
         (status = 200, body = UserResolved)
     ),
 )]
-#[get("/{id}")]
+#[get("/{id}", wrap = "UserAuth::load()")]
 async fn find(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<String>,
+    authenticated: Option<Authenticated>,
 ) -> Result<HttpResponse, ApiError> {
-    let result =
-        web::block(move || UserResolved::from_str(&mut db.connection()?, id.into_inner().as_str()))
-            .await??;
+    let result = web::block(move || {
+        UserResolved::from_str(
+            &mut db.connection()?,
+            id.into_inner().as_str(),
+            authenticated,
+        )
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(result))
 }
 

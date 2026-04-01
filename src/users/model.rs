@@ -1,5 +1,5 @@
 use crate::app_data::db::DbConnection;
-use crate::auth::Authenticated;
+use crate::auth::{Authenticated, Permission};
 use crate::clans::Clan;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
@@ -408,17 +408,29 @@ impl From<User> for BaseUser {
 }
 
 impl UserResolved {
-    pub fn from_uuid(conn: &mut DbConnection, uuid: Uuid) -> Result<Self, ApiError> {
+    pub fn from_uuid(
+        conn: &mut DbConnection,
+        uuid: Uuid,
+        authenticated: Option<Authenticated>,
+    ) -> Result<Self, ApiError> {
         let user = User::from_uuid(conn, uuid)?;
-        Self::from_user(conn, user)
+        Self::from_user(conn, user, authenticated)
     }
 
-    pub fn from_str(conn: &mut DbConnection, user_id: &str) -> Result<Self, ApiError> {
+    pub fn from_str(
+        conn: &mut DbConnection,
+        user_id: &str,
+        authenticated: Option<Authenticated>,
+    ) -> Result<Self, ApiError> {
         let user = User::from_str(conn, user_id)?;
-        Self::from_user(conn, user)
+        Self::from_user(conn, user, authenticated)
     }
 
-    pub fn from_user(conn: &mut DbConnection, user: User) -> Result<Self, ApiError> {
+    pub fn from_user(
+        conn: &mut DbConnection,
+        user: User,
+        authenticated: Option<Authenticated>,
+    ) -> Result<Self, ApiError> {
         let clan = clans::table
             .inner_join(clan_members::table.on(clans::id.eq(clan_members::clan_id)))
             .filter(clan_members::user_id.eq(user.id))
@@ -426,11 +438,21 @@ impl UserResolved {
             .first::<Clan>(conn)
             .optional()?;
 
-        let roles = user_roles::table
+        let mut roles = user_roles::table
             .inner_join(roles::table.on(user_roles::role_id.eq(roles::id)))
             .filter(user_roles::user_id.eq(user.id))
             .select(Role::as_select())
             .load::<Role>(conn)?;
+
+        let can_view_hidden_roles = match authenticated.as_ref() {
+            Some(auth) if auth.user_id == user.id => true,
+            Some(auth) => auth.has_permission(conn, Permission::RoleManage)?,
+            None => false,
+        };
+
+        if !can_view_hidden_roles {
+            roles = roles.into_iter().filter(|role| !role.hide).collect();
+        }
 
         let user_privilege_level: i32 = roles
             .iter()
