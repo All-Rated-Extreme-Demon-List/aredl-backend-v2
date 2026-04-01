@@ -21,8 +21,11 @@ pub enum Permission {
     MergeReview,
     DirectMerge,
     ClanModify,
-    SubmissionReview,
+    SubmissionReviewFull,
+    SubmissionReviewBase,
     ShiftManage,
+    SubmissionStatusManage,
+    ReviewersAudit,
     NotificationsSubscribe,
 }
 
@@ -50,4 +53,15 @@ pub fn check_user_permission(
         .select(permissions::privilege_level)
         .first::<i32>(conn)?;
     Ok(required_privilege <= max_privilege)
+}
+
+pub fn get_permission_privilege_level(
+    conn: &mut DbConnection,
+    permission: Permission,
+) -> Result<i32, ApiError> {
+    let required_privilege = permissions::table
+        .filter(permissions::permission.eq(permission.to_string()))
+        .select(permissions::privilege_level)
+        .first::<i32>(conn)?;
+    Ok(required_privilege)
 }

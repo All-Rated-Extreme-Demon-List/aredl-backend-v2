@@ -183,19 +183,35 @@ pub fn user_filter<'a>(input: &'a String) -> users::BoxedQuery<'a, Pg> {
 }
 
 impl BaseUser {
-    pub fn from_base_user_with_ban_level(user: BaseUserWithBanLevel) -> Self {
+    pub fn redacted() -> Self {
         BaseUser {
-            id: user.id,
-            username: if user.ban_level == 3 {
-                "REDACTED".to_string()
-            } else {
-                user.username
-            },
-            global_name: if user.ban_level == 3 {
-                "REDACTED".to_string()
-            } else {
-                user.global_name
-            },
+            id: "00000000-0000-0000-0000-000000000000".parse().unwrap(),
+            username: "-".to_string(),
+            global_name: "-".to_string(),
+        }
+    }
+    pub fn from_base_user_with_ban_level(user: BaseUserWithBanLevel) -> Self {
+        if user.ban_level == 3 {
+            return BaseUser::redacted();
+        } else {
+            return BaseUser {
+                id: user.id,
+                username: user.username,
+                global_name: user.global_name,
+            };
+        }
+    }
+}
+
+impl ExtendedBaseUser {
+    pub fn redacted() -> Self {
+        ExtendedBaseUser {
+            id: "00000000-0000-0000-0000-000000000000".parse().unwrap(),
+            username: "-".to_string(),
+            global_name: "-".to_string(),
+            country: None,
+            discord_id: None,
+            discord_avatar: None,
         }
     }
 }

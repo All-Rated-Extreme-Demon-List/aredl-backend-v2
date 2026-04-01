@@ -14,7 +14,7 @@ use {
 async fn enable_submissions() {
     let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::SubmissionStatusManage)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -36,10 +36,31 @@ async fn enable_submissions() {
 }
 
 #[actix_web::test]
+async fn submission_status_routes_reject_base_reviewer_without_status_manage() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    let req = test::TestRequest::post()
+        .uri("/arepl/submissions/status/enable")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_error_response(
+        resp,
+        403,
+        Some("You do not have the required permission (submission_status_manage) to access this endpoint"),
+    )
+    .await;
+}
+
+#[actix_web::test]
 async fn disable_submissions() {
     let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::SubmissionStatusManage)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -80,7 +101,7 @@ async fn disable_submissions() {
 async fn get_submission_status() {
     let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::SubmissionStatusManage)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -117,7 +138,7 @@ async fn get_submission_status() {
 async fn get_submission_status_full() {
     let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::SubmissionStatusManage)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -141,7 +162,7 @@ async fn get_submission_status_full() {
 async fn get_submission_status_history() {
     let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::SubmissionStatusManage)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 

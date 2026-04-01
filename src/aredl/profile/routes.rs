@@ -1,7 +1,10 @@
 use crate::aredl::profile::ProfileResolved;
 use crate::cache_control::CacheController;
-use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
+use crate::{
+    app_data::db::DbAppState,
+    auth::{Authenticated, UserAuth},
+};
 use actix_web::{get, web, HttpResponse};
 use std::sync::Arc;
 use utoipa::OpenApi;
@@ -18,13 +21,20 @@ use utoipa::OpenApi;
         (status = 200, body = ProfileResolved)
     ),
 )]
-#[get("/{id}", wrap = "CacheController::private_with_max_age(300)")]
+#[get(
+    "/{id}",
+    wrap = "UserAuth::load()",
+    wrap = "CacheController::private_with_max_age(300)"
+)]
 async fn find(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<String>,
+    authenticated: Option<Authenticated>,
 ) -> Result<HttpResponse, ApiError> {
-    let profile =
-        web::block(move || ProfileResolved::from_str(&mut db.connection()?, id.as_str())).await??;
+    let profile = web::block(move || {
+        ProfileResolved::from_str(&mut db.connection()?, id.as_str(), authenticated)
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(profile))
 }
 

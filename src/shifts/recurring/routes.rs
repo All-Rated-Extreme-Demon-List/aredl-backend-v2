@@ -1,6 +1,6 @@
 use crate::{
     app_data::db::DbAppState,
-    auth::{Permission, UserAuth},
+    auth::{Authenticated, Permission, UserAuth},
     error_handler::ApiError,
     shifts::{
         recurring::{RecurringShift, RecurringShiftInsert, RecurringShiftPatch},
@@ -22,16 +22,19 @@ use uuid::Uuid;
         (status = 200, body = Vec<ResolvedRecurringShift>)
     ),
     security(
-        ("access_token" = ["SubmissionReview"]),
-        ("api_key" = ["SubmissionReview"]),
+        ("access_token" = ["SubmissionReviewFull"]),
+        ("api_key" = ["SubmissionReviewFull"]),
     ),
 )]
-#[get("", wrap = "UserAuth::require(Permission::SubmissionReview)")]
+#[get("", wrap = "UserAuth::require(Permission::SubmissionReviewFull)")]
 async fn find_all_recurring_shifts(
     db: web::Data<Arc<DbAppState>>,
+    authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let shifts =
-        web::block(move || ResolvedRecurringShift::find_all(&mut db.connection()?)).await??;
+    let shifts = web::block(move || {
+        ResolvedRecurringShift::find_all_for_user(&mut db.connection()?, &authenticated)
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(shifts))
 }
 

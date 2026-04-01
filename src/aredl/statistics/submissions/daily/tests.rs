@@ -9,8 +9,10 @@ use {
                 SubmissionStatus,
             },
         },
+        auth::permission::get_permission_privilege_level,
         auth::{create_test_token, Permission},
-        test_utils::init_test_app,
+        roles::test_utils::{add_user_to_role, create_test_role},
+        test_utils::{assert_error_response, init_test_app},
         users::test_utils::create_test_user,
     },
     actix_web::{http::header, test::{self, read_body_json}},
@@ -22,7 +24,7 @@ use {
 #[actix_web::test]
 async fn submission_stats_filter_moderator() {
     let (app, db, auth, _db) = init_test_app().await;
-    let (mod1, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
+    let (mod1, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
     let token = create_test_token(mod1, &auth.jwt_encoding_key).unwrap();
 
     let level_id = create_test_level(&db).await;
@@ -55,10 +57,103 @@ async fn submission_stats_filter_moderator() {
 }
 
 #[actix_web::test]
+async fn submission_stats_hides_base_reviewer_filter_for_non_auditor() {
+    let (app, db, auth, _db) = init_test_app().await;
+
+    let (base_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
+    let (requester_non_auditor, _) =
+        create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (requester_auditor, _) =
+        create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+
+    let reviewers_audit_level =
+        get_permission_privilege_level(&mut db.connection().unwrap(), Permission::ReviewersAudit)
+            .unwrap();
+    let reviewers_audit_role = create_test_role(&db, reviewers_audit_level).await;
+    add_user_to_role(&db, reviewers_audit_role, requester_auditor).await;
+
+    let non_auditor_token = create_test_token(requester_non_auditor, &auth.jwt_encoding_key)
+        .expect("Failed to generate token");
+    let auditor_token = create_test_token(requester_auditor, &auth.jwt_encoding_key)
+        .expect("Failed to generate token");
+
+    let level_id = create_test_level(&db).await;
+    let sub = create_test_submission(level_id, Uuid::new_v4(), &db).await;
+    insert_history_entry(sub, Some(base_reviewer), SubmissionStatus::Accepted, &db).await;
+
+    sql_query("REFRESH MATERIALIZED VIEW aredl.submission_stats")
+        .execute(&mut db.connection().unwrap())
+        .unwrap();
+
+    let uri = format!(
+        "/aredl/statistics/submissions/daily?reviewer_id={}&page=1&per_page=10",
+        base_reviewer
+    );
+
+    let req = test::TestRequest::get()
+        .uri(&uri)
+        .insert_header((
+            header::AUTHORIZATION,
+            format!("Bearer {}", non_auditor_token),
+        ))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "Status: {}", resp.status());
+    let body: Value = read_body_json(resp).await;
+    let entries = body["data"].as_array().expect("`data` should be array");
+    assert_eq!(entries.len(), 0);
+
+    let req = test::TestRequest::get()
+        .uri(&uri)
+        .insert_header((header::AUTHORIZATION, format!("Bearer {}", auditor_token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "Status: {}", resp.status());
+    let body: Value = read_body_json(resp).await;
+    let entries = body["data"].as_array().expect("`data` should be array");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(
+        entries[0]["moderator"]["id"].as_str().unwrap(),
+        base_reviewer.to_string()
+    );
+}
+
+#[actix_web::test]
+async fn submission_stats_endpoints_require_full_review_permission() {
+    let (app, db, auth, _db) = init_test_app().await;
+    let (base_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
+    let token = create_test_token(base_reviewer, &auth.jwt_encoding_key).unwrap();
+
+    let req = test::TestRequest::get()
+        .uri("/aredl/statistics/submissions/daily?page=1&per_page=10")
+        .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_error_response(
+        resp,
+        403,
+        Some("You do not have the required permission (submission_review_full) to access this endpoint"),
+    )
+    .await;
+
+    let req = test::TestRequest::get()
+        .uri("/aredl/statistics/submissions/daily/leaderboard")
+        .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_error_response(
+        resp,
+        403,
+        Some("You do not have the required permission (submission_review_full) to access this endpoint"),
+    )
+    .await;
+}
+
+#[actix_web::test]
 async fn submission_leaderboard_counts_and_ordering() {
     let (app, db, auth, _db) = init_test_app().await;
-    let (mod1, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
-    let (mod2, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
+    let (mod1, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (mod2, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
     let token = create_test_token(mod1, &auth.jwt_encoding_key).unwrap();
 
     let lvl = create_test_level(&db).await;
@@ -125,7 +220,7 @@ async fn submission_leaderboard_counts_and_ordering() {
 #[actix_web::test]
 async fn submission_leaderboard_only_active_filters_out() {
     let (app, db, auth, _db) = init_test_app().await;
-    let (mod_active, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
+    let (mod_active, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
     let (mod_inactive, _) = create_test_user(&db, None).await;
     let token = create_test_token(mod_active, &auth.jwt_encoding_key).unwrap();
 
@@ -158,7 +253,7 @@ async fn submission_leaderboard_only_active_filters_out() {
 #[actix_web::test]
 async fn submission_leaderboard_since_filters_out_future_date() {
     let (app, db, auth, _db) = init_test_app().await;
-    let (mod1, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
+    let (mod1, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
     let token = create_test_token(mod1, &auth.jwt_encoding_key).unwrap();
 
     let lvl = create_test_level(&db).await;

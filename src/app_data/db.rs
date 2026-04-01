@@ -69,7 +69,8 @@ fn init_test_db_schema_and_seed() {
             .expect("Failed to run migrations");
 
         let permissions_data = vec![
-            ("submission_review", 15),
+            ("submission_review_base", 10),
+            ("submission_review_full", 15),
             ("record_modify", 20),
             ("placeholder_create", 25),
             ("user_modify", 25),
@@ -82,6 +83,8 @@ fn init_test_db_schema_and_seed() {
             ("notifications_subscribe", 70),
             ("user_redact", 75),
             ("direct_merge", 80),
+            ("submission_status_manage", 80),
+            ("reviewers_audit", 85),
             ("role_manage", 85),
             ("shift_manage", 90),
         ];

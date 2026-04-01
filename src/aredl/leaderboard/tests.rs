@@ -3,13 +3,13 @@ use {
     crate::{
         aredl::leaderboard::test_utils::refresh_test_leaderboards,
         aredl::levels::test_utils::create_test_level_with_record,
-        schema::{aredl::levels, clan_members, clans, users},
+        clans::test_utils::{create_test_clan, create_test_clan_member},
+        schema::{aredl::levels, users},
         test_utils::*,
         users::test_utils::create_test_user,
     },
     actix_web::test::{self, read_body_json},
     diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
-    uuid::Uuid,
 };
 
 #[actix_web::test]
@@ -110,19 +110,8 @@ async fn get_clans_leaderboard() {
     let (user, _) = create_test_user(&db, None).await;
     create_test_level_with_record(&db, user).await;
 
-    let clan_id = diesel::insert_into(clans::table)
-        .values((clans::global_name.eq("Test Clan"), clans::tag.eq("TS")))
-        .returning(clans::id)
-        .get_result::<Uuid>(&mut db.connection().unwrap())
-        .expect("Failed to create clan");
-
-    diesel::insert_into(clan_members::table)
-        .values((
-            clan_members::clan_id.eq(clan_id),
-            clan_members::user_id.eq(user),
-        ))
-        .execute(&mut db.connection().unwrap())
-        .expect("Failed to add user to clan");
+    let clan_id = create_test_clan(&db).await;
+    create_test_clan_member(&db, clan_id, user, 0).await;
 
     refresh_test_leaderboards(&db).await;
 
@@ -162,18 +151,8 @@ async fn leaderboard_filters() {
         .execute(&mut db.connection().unwrap())
         .unwrap();
 
-    let clan_id = diesel::insert_into(clans::table)
-        .values((clans::global_name.eq("Clan"), clans::tag.eq("CL")))
-        .returning(clans::id)
-        .get_result::<Uuid>(&mut db.connection().unwrap())
-        .unwrap();
-    diesel::insert_into(clan_members::table)
-        .values((
-            clan_members::clan_id.eq(clan_id),
-            clan_members::user_id.eq(u1),
-        ))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    let clan_id = create_test_clan(&db).await;
+    create_test_clan_member(&db, clan_id, u1, 0).await;
 
     refresh_test_leaderboards(&db).await;
 
@@ -233,18 +212,8 @@ async fn country_clan_leaderboard_orders() {
         .execute(&mut db.connection().unwrap())
         .unwrap();
 
-    let clan_id = diesel::insert_into(clans::table)
-        .values((clans::global_name.eq("Clan"), clans::tag.eq("CL")))
-        .returning(clans::id)
-        .get_result::<Uuid>(&mut db.connection().unwrap())
-        .unwrap();
-    diesel::insert_into(clan_members::table)
-        .values((
-            clan_members::clan_id.eq(clan_id),
-            clan_members::user_id.eq(u1),
-        ))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    let clan_id = create_test_clan(&db).await;
+    create_test_clan_member(&db, clan_id, u1, 0).await;
 
     refresh_test_leaderboards(&db).await;
 

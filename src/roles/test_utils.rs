@@ -7,7 +7,7 @@ use crate::{
     schema::{roles, user_roles},
 };
 #[cfg(test)]
-use diesel::{ExpressionMethods, RunQueryDsl};
+use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 #[cfg(test)]
 use uuid::Uuid;
 
@@ -25,6 +25,18 @@ pub async fn create_test_role(db: &Arc<DbAppState>, privilege_level: i32) -> i32
 }
 
 #[cfg(test)]
+pub async fn create_test_hidden_role(db: &Arc<DbAppState>, privilege_level: i32) -> i32 {
+    let role_id = create_test_role(db, privilege_level).await;
+
+    diesel::update(roles::table.filter(roles::id.eq(role_id)))
+        .set(roles::hide.eq(true))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to hide test role!");
+
+    role_id
+}
+
+#[cfg(test)]
 pub async fn create_test_role_with_user(db: &Arc<DbAppState>, privilege_level: i32) -> (i32, Uuid) {
     use crate::users::test_utils::create_test_user;
 
@@ -37,6 +49,19 @@ pub async fn create_test_role_with_user(db: &Arc<DbAppState>, privilege_level: i
         ))
         .execute(&mut db.connection().unwrap())
         .expect("Failed to assign role to user!");
+    (role_id, user_id)
+}
+
+#[cfg(test)]
+pub async fn create_test_hidden_role_with_user(
+    db: &Arc<DbAppState>,
+    privilege_level: i32,
+) -> (i32, Uuid) {
+    use crate::users::test_utils::create_test_user;
+
+    let role_id = create_test_hidden_role(db, privilege_level).await;
+    let (user_id, _) = create_test_user(db, None).await;
+    add_user_to_role(db, role_id, user_id).await;
     (role_id, user_id)
 }
 

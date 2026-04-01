@@ -66,7 +66,7 @@ async fn find_all_shifts(
         ("api_key" = ["ShiftManage"]),
     ),
 )]
-#[get("/@me", wrap = "UserAuth::require(Permission::SubmissionReview)")]
+#[get("/@me", wrap = "UserAuth::require(Permission::SubmissionReviewBase)")]
 async fn find_all_shifts_me(
     db: web::Data<Arc<DbAppState>>,
     page_query: web::Query<PageQuery<50>>,

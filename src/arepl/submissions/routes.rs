@@ -71,8 +71,15 @@ async fn patch(
     let providers_clone = providers.clone();
     let patched = web::block(move || {
         let conn = &mut db.connection()?;
-        match authenticated.has_permission( conn, Permission::SubmissionReview)? {
-            true => SubmissionPatchMod::patch(body.into_inner(), id.into_inner(), conn, authenticated, notify_tx.get_ref().clone(), providers.as_ref()),
+        match authenticated.has_permission(conn, Permission::SubmissionReviewBase)? {
+            true => SubmissionPatchMod::patch(
+                body.into_inner(),
+                id.into_inner(),
+                conn,
+                authenticated,
+                notify_tx.get_ref().clone(),
+                providers.as_ref(),
+            ),
             false => {
                 let user_patch = SubmissionPatchMod::downgrade(body.into_inner());
                 SubmissionPatchUser::patch(user_patch, id.into_inner(), conn, authenticated, providers.as_ref())
@@ -101,7 +108,7 @@ async fn patch(
         ("api_key" = []),
     ),
 )]
-#[get("/claim", wrap = "UserAuth::require(Permission::SubmissionReview)")]
+#[get("/claim", wrap = "UserAuth::require(Permission::SubmissionReviewBase)")]
 async fn claim(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,

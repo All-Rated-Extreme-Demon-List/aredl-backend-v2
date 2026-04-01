@@ -1,6 +1,8 @@
 use crate::{
     app_data::db::DbConnection,
+    auth::{Authenticated, Permission},
     error_handler::ApiError,
+    roles::RoleResolved,
     schema::{recurrent_shifts, shifts, users},
     shifts::{ShiftInsert, Weekday},
     users::BaseUser,
@@ -97,7 +99,10 @@ impl ResolvedRecurringShift {
         }
     }
 
-    pub fn find_all(conn: &mut DbConnection) -> Result<Vec<Self>, ApiError> {
+    pub fn find_all_for_user(
+        conn: &mut DbConnection,
+        authenticated: &Authenticated,
+    ) -> Result<Vec<Self>, ApiError> {
         let result_rows = recurrent_shifts::table
             .inner_join(users::table.on(recurrent_shifts::user_id.eq(users::id)))
             .order((
@@ -107,10 +112,15 @@ impl ResolvedRecurringShift {
             .select((RecurringShift::as_select(), BaseUser::as_select()))
             .load::<(RecurringShift, BaseUser)>(conn)?;
 
-        let result = result_rows
+        let mut result = result_rows
             .into_iter()
             .map(ResolvedRecurringShift::from_data)
             .collect::<Vec<_>>();
+
+        if !authenticated.has_permission(conn, Permission::ReviewersAudit)? {
+            let base_reviewers = RoleResolved::find_all_base_reviewers(conn)?;
+            result.retain(|shift| !base_reviewers.contains(&shift.user.id));
+        }
 
         Ok(result)
     }

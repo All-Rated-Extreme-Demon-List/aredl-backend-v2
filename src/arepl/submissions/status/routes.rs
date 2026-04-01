@@ -21,7 +21,10 @@ use utoipa::OpenApi;
         ("api_key" = []),
     ),
 )]
-#[post("/enable", wrap = "UserAuth::require(Permission::ShiftManage)")]
+#[post(
+    "/enable",
+    wrap = "UserAuth::require(Permission::SubmissionStatusManage)"
+)]
 async fn enable(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,
@@ -44,7 +47,10 @@ async fn enable(
         ("api_key" = []),
     ),
 )]
-#[post("/disable", wrap = "UserAuth::require(Permission::ShiftManage)")]
+#[post(
+    "/disable",
+    wrap = "UserAuth::require(Permission::SubmissionStatusManage)"
+)]
 async fn disable(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,
@@ -67,7 +73,10 @@ async fn disable(
         ("api_key" = []),
     ),
 )]
-#[get("/full", wrap = "UserAuth::require(Permission::ShiftManage)")]
+#[get(
+    "/full",
+    wrap = "UserAuth::require(Permission::SubmissionStatusManage)"
+)]
 async fn get_status_full(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
     let res =
         web::block(move || SubmissionsEnabledFull::get_status(&mut db.connection()?)).await??;

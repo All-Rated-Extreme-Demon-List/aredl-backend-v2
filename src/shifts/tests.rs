@@ -1,7 +1,9 @@
 #[cfg(test)]
 use {
     crate::{
+        auth::permission::get_permission_privilege_level,
         auth::{create_test_token, Permission},
+        roles::test_utils::{add_user_to_role, create_test_role},
         schema::shifts,
         shifts::{
             recurring::RecurringShift,
@@ -55,6 +57,43 @@ async fn get_my_shifts() {
             .unwrap()
             .to_string()
             == user_id.to_string()))
+}
+
+#[actix_web::test]
+async fn get_my_shifts_requires_submission_review_base() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (plain_user, _) = create_test_user(&db, None).await;
+    let token =
+        create_test_token(plain_user, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    let req = test::TestRequest::get()
+        .uri("/shifts/@me")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_error_response(
+            resp,
+            403,
+            Some("You do not have the required permission (submission_review_base) to access this endpoint"),
+        )
+        .await;
+}
+
+#[actix_web::test]
+async fn get_my_shifts_accepts_base_reviewer() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (base_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
+    let token =
+        create_test_token(base_reviewer, &auth.jwt_encoding_key).expect("Failed to generate token");
+    create_test_shift(&db, base_reviewer, false).await;
+
+    let req = test::TestRequest::get()
+        .uri("/shifts/@me")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
 }
 
 #[actix_web::test]
@@ -140,6 +179,86 @@ async fn list_recurring_shifts() {
         .unwrap()
         .iter()
         .any(|x| x["user"]["id"].as_str().unwrap() == user_id.to_string()));
+}
+
+#[actix_web::test]
+async fn list_recurring_shifts_hides_base_reviewers_for_non_auditor() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (requester_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (base_reviewer_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
+    let (full_reviewer_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let token =
+        create_test_token(requester_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    create_test_recurring_shift(&db, base_reviewer_id).await;
+    create_test_recurring_shift(&db, full_reviewer_id).await;
+
+    let req = test::TestRequest::get()
+        .uri("/shifts/recurring")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+    let body: serde_json::Value = read_body_json(resp).await;
+    let arr = body.as_array().unwrap();
+
+    assert!(!arr
+        .iter()
+        .any(|x| x["user"]["id"].as_str().unwrap() == base_reviewer_id.to_string()));
+    assert!(arr
+        .iter()
+        .any(|x| x["user"]["id"].as_str().unwrap() == full_reviewer_id.to_string()));
+}
+
+#[actix_web::test]
+async fn list_recurring_shifts_keeps_base_reviewers_for_auditor() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (requester_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let token =
+        create_test_token(requester_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    let reviewers_audit_level =
+        get_permission_privilege_level(&mut db.connection().unwrap(), Permission::ReviewersAudit)
+            .unwrap();
+    let reviewers_audit_role = create_test_role(&db, reviewers_audit_level).await;
+    add_user_to_role(&db, reviewers_audit_role, requester_id).await;
+
+    let (base_reviewer_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
+    create_test_recurring_shift(&db, base_reviewer_id).await;
+
+    let req = test::TestRequest::get()
+        .uri("/shifts/recurring")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+    let body: serde_json::Value = read_body_json(resp).await;
+    let arr = body.as_array().unwrap();
+
+    assert!(arr
+        .iter()
+        .any(|x| x["user"]["id"].as_str().unwrap() == base_reviewer_id.to_string()));
+}
+
+#[actix_web::test]
+async fn list_recurring_shifts_requires_submission_review_full() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (base_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
+    let token =
+        create_test_token(base_reviewer, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    let req = test::TestRequest::get()
+        .uri("/shifts/recurring")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_error_response(
+            resp,
+            403,
+            Some("You do not have the required permission (submission_review_full) to access this endpoint"),
+        )
+        .await;
 }
 
 #[actix_web::test]

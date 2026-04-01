@@ -1,3 +1,5 @@
+use crate::auth::permission::get_permission_privilege_level;
+use crate::auth::Permission;
 use crate::error_handler::ApiError;
 use crate::schema::{roles, user_roles, users};
 use crate::users::BaseUser;
@@ -8,7 +10,9 @@ use diesel::{
 };
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 #[derive(
     Serialize, Deserialize, Queryable, Selectable, Identifiable, PartialEq, Debug, ToSchema,
@@ -159,5 +163,33 @@ impl RoleResolved {
             .collect_vec();
 
         Ok(resolved)
+    }
+
+    pub fn find_all_base_reviewers(conn: &mut DbConnection) -> Result<HashSet<Uuid>, ApiError> {
+        let base_reviewer_privilege_level =
+            get_permission_privilege_level(conn, Permission::SubmissionReviewBase)?;
+
+        let full_reviewer_privilege_level =
+            get_permission_privilege_level(conn, Permission::SubmissionReviewFull)?;
+
+        let all_reviewers: Vec<Self> = Self::find_all(conn)?
+            .into_iter()
+            .filter(|resolved| resolved.role.privilege_level >= base_reviewer_privilege_level)
+            .collect();
+
+        let full_reviewer_ids: HashSet<Uuid> = all_reviewers
+            .iter()
+            .filter(|resolved| resolved.role.privilege_level >= full_reviewer_privilege_level)
+            .flat_map(|resolved| resolved.users.iter().map(|user| user.id))
+            .collect();
+
+        let base_reviewer_ids: HashSet<Uuid> = all_reviewers
+            .iter()
+            .filter(|resolved| resolved.role.privilege_level < full_reviewer_privilege_level)
+            .flat_map(|resolved| resolved.users.iter().map(|user| user.id))
+            .filter(|user_id| !full_reviewer_ids.contains(user_id))
+            .collect();
+
+        Ok(base_reviewer_ids)
     }
 }
