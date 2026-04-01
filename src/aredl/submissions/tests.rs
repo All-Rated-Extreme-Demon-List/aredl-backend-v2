@@ -35,7 +35,7 @@ use {
     serde_json::json,
     serial_test::serial,
     std::sync::Arc,
-    tokio::time::{sleep, Duration},
+    tokio::time::{sleep, timeout, Duration},
     uuid::Uuid,
 };
 
@@ -1238,6 +1238,41 @@ async fn submission_under_consideration() {
         under_consideration_data["reviewer_notes"].as_str().unwrap(),
         "Submission history reviewer notes do not match!"
     );
+}
+
+#[actix_web::test]
+async fn submission_under_review_sends_websocket_notification() {
+    let (app, db, auth, notify_tx) = init_test_app().await;
+
+    let (user_id, _) = create_test_user(&db, None).await;
+    let (moderator_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let token =
+        create_test_token(moderator_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let level_id = create_test_level(&db).await;
+    let submission: Uuid = create_test_submission(level_id, user_id, &db).await;
+    let mut rx = notify_tx.subscribe();
+
+    let req = test::TestRequest::patch()
+        .uri(format!("/aredl/submissions/{submission}").as_str())
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&json!({"status": "UnderReview"}))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert!(
+        resp.status().is_success(),
+        "status of req is {}",
+        resp.status()
+    );
+
+    let notification = timeout(Duration::from_secs(1), rx.recv())
+        .await
+        .expect("Timed out waiting for websocket notification")
+        .expect("Failed to receive websocket notification");
+
+    assert_eq!(notification.notification_type, "SUBMISSION_UNDER_REVIEW");
+    assert_eq!(notification.data["id"].as_str().unwrap(), submission.to_string());
+    assert_eq!(notification.data["reviewer_id"].as_str().unwrap(), moderator_id.to_string());
 }
 
 #[actix_web::test]
