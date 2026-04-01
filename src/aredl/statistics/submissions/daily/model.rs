@@ -1,5 +1,5 @@
 use crate::app_data::db::DbConnection;
-use crate::auth::{permission, Authenticated, Permission};
+use crate::auth::{Authenticated, Permission};
 use crate::page_helper::{PageQuery, Paginated};
 use crate::{
     error_handler::ApiError,
@@ -74,9 +74,13 @@ impl DailyStatsPage {
     ) -> Result<Paginated<Self>, ApiError> {
         if let Some(filter) = reviewer_id.as_ref() {
             if !authenticated.has_permission(conn, Permission::ReviewersAudit)? {
-                let base_reviewers = RoleResolved::find_all_base_reviewers(conn)?;
-                if base_reviewers.contains(filter) {
-                    return Ok(Paginated::from_data(page_query, 0, Self { data: Vec::new() }));
+                let reviewer_sets = RoleResolved::find_all_base_reviewers(conn)?;
+                if reviewer_sets.base_reviewers.contains(filter) {
+                    return Ok(Paginated::from_data(
+                        page_query,
+                        0,
+                        Self { data: Vec::new() },
+                    ));
                 }
             }
         }
@@ -120,6 +124,7 @@ pub fn stats_mod_leaderboard(
     conn: &mut DbConnection,
     since: Option<NaiveDate>,
     only_active: bool,
+    include_base_reviewers: bool,
 ) -> Result<Vec<ResolvedLeaderboardRow>, ApiError> {
     let mut query = submission_stats::table
         .inner_join(users::table.on(users::id.nullable().eq(submission_stats::reviewer_id)))
@@ -131,25 +136,17 @@ pub fn stats_mod_leaderboard(
     }
 
     let all_rows: Vec<(DailyStats, ExtendedBaseUser)> = query.load(conn)?;
+    let reviewer_sets = RoleResolved::find_all_base_reviewers(conn)?;
 
     let rows = all_rows.into_iter().filter_map(|(stats, user)| {
-        // Hide base reviewers. If only_active, also hide full reviewers that aren't staff anymore
-        match permission::check_user_permission(conn, user.id, Permission::SubmissionReviewBase) {
-            Ok(true) => match permission::check_user_permission(
-                conn,
-                user.id,
-                Permission::SubmissionReviewFull,
-            ) {
-                Ok(true) => Some((stats, user)),
-                _ => None,
-            },
-            _ => {
-                if only_active {
-                    None
-                } else {
-                    Some((stats, user))
-                }
-            }
+        if reviewer_sets.full_reviewers.contains(&user.id) {
+            Some((stats, user))
+        } else if reviewer_sets.base_reviewers.contains(&user.id) {
+            include_base_reviewers.then_some((stats, user))
+        } else if only_active {
+            None
+        } else {
+            Some((stats, user))
         }
     });
 

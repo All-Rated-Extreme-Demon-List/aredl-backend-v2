@@ -40,10 +40,11 @@ pub async fn stats(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let stats = web::block(move || {
+        let query = query.into_inner();
         DailyStatsPage::find(
             &mut db.connection()?,
             page.into_inner(),
-            query.into_inner().reviewer_id,
+            query.reviewer_id,
             &authenticated,
         )
     })
@@ -55,6 +56,7 @@ pub async fn stats(
 pub struct LeaderboardQuery {
     pub since: Option<NaiveDate>,
     pub only_active: Option<bool>,
+    pub include_base_reviewers: Option<bool>,
 }
 
 #[utoipa::path(
@@ -65,6 +67,7 @@ pub struct LeaderboardQuery {
     params(
         ("since" = Option<NaiveDate>, Query, description = "Only include data since this date"),
         ("only_active" = Option<bool>, Query, description = "Whether or not to exclude moderators that aren't staff anymore"),
+        ("include_base_reviewers" = Option<bool>, Query, description = "Whether to include base reviewers in the results. Requires `ReviewersAudit`; otherwise forced to false."),
     ),
     responses((status = 200, body = [ResolvedLeaderboardRow])),
     security(("access_token" = ["SubmissionReviewFull"]), ("api_key" = ["SubmissionReviewFull"]))
@@ -76,14 +79,19 @@ pub struct LeaderboardQuery {
 pub async fn leaderboard_route(
     db: web::Data<Arc<DbAppState>>,
     query: web::Query<LeaderboardQuery>,
+    authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let query = query.into_inner();
 
     let data = web::block(move || {
+        let conn = &mut db.connection()?;
+        let include_base_reviewers = query.include_base_reviewers.unwrap_or(false)
+            && authenticated.has_permission(conn, Permission::ReviewersAudit)?;
         stats_mod_leaderboard(
-            &mut db.connection()?,
+            conn,
             query.since,
             query.only_active.unwrap_or(false),
+            include_base_reviewers,
         )
     })
     .await??;

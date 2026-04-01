@@ -102,7 +102,7 @@ impl SubmissionHistoryResolved {
             .map(SubmissionHistoryResolved::from_data)
             .collect::<Vec<_>>();
 
-        let base_reviewers = RoleResolved::find_all_base_reviewers(conn)?;
+        let base_reviewers = RoleResolved::find_all_base_reviewers(conn)?.base_reviewers;
 
         if !authenticated.has_permission(conn, Permission::SubmissionReviewFull)? {
             resolved_history.iter_mut().for_each(|h| {

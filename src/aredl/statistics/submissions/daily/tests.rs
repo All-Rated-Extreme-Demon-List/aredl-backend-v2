@@ -119,6 +119,72 @@ async fn submission_stats_hides_base_reviewer_filter_for_non_auditor() {
 }
 
 #[actix_web::test]
+async fn submission_leaderboard_include_base_reviewers_requires_audit() {
+    let (app, db, auth, _db) = init_test_app().await;
+    let (base_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
+    let (full_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (requester_non_auditor, _) =
+        create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (requester_auditor, _) =
+        create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+
+    let reviewers_audit_level =
+        get_permission_privilege_level(&mut db.connection().unwrap(), Permission::ReviewersAudit)
+            .unwrap();
+    let reviewers_audit_role = create_test_role(&db, reviewers_audit_level).await;
+    add_user_to_role(&db, reviewers_audit_role, requester_auditor).await;
+
+    let non_auditor_token = create_test_token(requester_non_auditor, &auth.jwt_encoding_key)
+        .expect("Failed to generate token");
+    let auditor_token = create_test_token(requester_auditor, &auth.jwt_encoding_key)
+        .expect("Failed to generate token");
+
+    let lvl = create_test_level(&db).await;
+
+    let base_sub = create_test_submission(lvl, Uuid::new_v4(), &db).await;
+    insert_history_entry(
+        base_sub,
+        Some(base_reviewer),
+        SubmissionStatus::Accepted,
+        &db,
+    )
+    .await;
+
+    let full_sub = create_test_submission(lvl, Uuid::new_v4(), &db).await;
+    insert_history_entry(full_sub, Some(full_reviewer), SubmissionStatus::Denied, &db).await;
+
+    diesel::sql_query("REFRESH MATERIALIZED VIEW aredl.submission_stats")
+        .execute(&mut db.connection().unwrap())
+        .unwrap();
+
+    let uri = "/aredl/statistics/submissions/daily/leaderboard?include_base_reviewers=true";
+
+    let req = test::TestRequest::get()
+        .uri(uri)
+        .insert_header((
+            header::AUTHORIZATION,
+            format!("Bearer {}", non_auditor_token),
+        ))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    let arr: Vec<ResolvedLeaderboardRow> = read_body_json(resp).await;
+    assert_eq!(arr.len(), 1);
+    assert_eq!(arr[0].moderator.id, full_reviewer);
+
+    let req = test::TestRequest::get()
+        .uri(uri)
+        .insert_header((header::AUTHORIZATION, format!("Bearer {}", auditor_token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    let arr: Vec<ResolvedLeaderboardRow> = read_body_json(resp).await;
+    assert_eq!(arr.len(), 2);
+    assert!(arr.iter().any(|row| row.moderator.id == base_reviewer));
+    assert!(arr.iter().any(|row| row.moderator.id == full_reviewer));
+}
+
+#[actix_web::test]
 async fn submission_stats_endpoints_require_full_review_permission() {
     let (app, db, auth, _db) = init_test_app().await;
     let (base_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
