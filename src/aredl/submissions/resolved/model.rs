@@ -141,7 +141,7 @@ impl SubmissionResolved {
         }
 
         // hide base reviewer
-        let base_reviewers = RoleResolved::find_all_base_reviewers(conn)?;
+        let base_reviewers = RoleResolved::find_all_base_reviewers(conn)?.base_reviewers;
         if !authenticated.has_permission(conn, Permission::ReviewersAudit)? {
             if let Some(ref reviewer) = resolved.reviewer {
                 if base_reviewers.contains(&reviewer.id) {
@@ -161,7 +161,7 @@ impl ResolvedSubmissionPage {
         options: SubmissionQueryOptions,
         authenticated: Authenticated,
     ) -> Result<Paginated<Self>, ApiError> {
-        let base_reviewers = RoleResolved::find_all_base_reviewers(conn)?;
+        let base_reviewers = RoleResolved::find_all_base_reviewers(conn)?.base_reviewers;
 
         let can_audit_reviewers = authenticated.has_permission(conn, Permission::ReviewersAudit)?;
         let can_full_review =

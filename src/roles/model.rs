@@ -59,6 +59,12 @@ pub struct RoleResolved {
     pub users: Vec<BaseUser>,
 }
 
+#[derive(Debug, Default, Clone)]
+pub struct ReviewerSets {
+    pub base_reviewers: HashSet<Uuid>,
+    pub full_reviewers: HashSet<Uuid>,
+}
+
 impl Role {
     pub fn user_can_edit(
         conn: &mut DbConnection,
@@ -165,7 +171,7 @@ impl RoleResolved {
         Ok(resolved)
     }
 
-    pub fn find_all_base_reviewers(conn: &mut DbConnection) -> Result<HashSet<Uuid>, ApiError> {
+    pub fn find_all_base_reviewers(conn: &mut DbConnection) -> Result<ReviewerSets, ApiError> {
         let base_reviewer_privilege_level =
             get_permission_privilege_level(conn, Permission::SubmissionReviewBase)?;
 
@@ -177,19 +183,22 @@ impl RoleResolved {
             .filter(|resolved| resolved.role.privilege_level >= base_reviewer_privilege_level)
             .collect();
 
-        let full_reviewer_ids: HashSet<Uuid> = all_reviewers
+        let full_reviewers: HashSet<Uuid> = all_reviewers
             .iter()
             .filter(|resolved| resolved.role.privilege_level >= full_reviewer_privilege_level)
             .flat_map(|resolved| resolved.users.iter().map(|user| user.id))
             .collect();
 
-        let base_reviewer_ids: HashSet<Uuid> = all_reviewers
+        let base_reviewers: HashSet<Uuid> = all_reviewers
             .iter()
             .filter(|resolved| resolved.role.privilege_level < full_reviewer_privilege_level)
             .flat_map(|resolved| resolved.users.iter().map(|user| user.id))
-            .filter(|user_id| !full_reviewer_ids.contains(user_id))
+            .filter(|user_id| !full_reviewers.contains(user_id))
             .collect();
 
-        Ok(base_reviewer_ids)
+        Ok(ReviewerSets {
+            base_reviewers,
+            full_reviewers,
+        })
     }
 }

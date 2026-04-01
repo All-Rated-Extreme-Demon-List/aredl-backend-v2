@@ -216,9 +216,12 @@ async fn find_all_base_reviewers_excludes_full_reviewers_and_mixed_role_users() 
     add_user_to_role(&db, base_role, mixed_user).await;
     add_user_to_role(&db, full_role, mixed_user).await;
 
-    let ids = RoleResolved::find_all_base_reviewers(&mut db.connection().unwrap()).unwrap();
+    let reviewer_sets =
+        RoleResolved::find_all_base_reviewers(&mut db.connection().unwrap()).unwrap();
 
-    assert!(ids.contains(&base_only_user));
-    assert!(!ids.contains(&full_user));
-    assert!(!ids.contains(&mixed_user));
+    assert!(reviewer_sets.base_reviewers.contains(&base_only_user));
+    assert!(reviewer_sets.full_reviewers.contains(&full_user));
+    assert!(reviewer_sets.full_reviewers.contains(&mixed_user));
+    assert!(!reviewer_sets.base_reviewers.contains(&full_user));
+    assert!(!reviewer_sets.base_reviewers.contains(&mixed_user));
 }

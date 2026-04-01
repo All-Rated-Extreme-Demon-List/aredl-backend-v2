@@ -118,7 +118,7 @@ impl ResolvedRecurringShift {
             .collect::<Vec<_>>();
 
         if !authenticated.has_permission(conn, Permission::ReviewersAudit)? {
-            let base_reviewers = RoleResolved::find_all_base_reviewers(conn)?;
+            let base_reviewers = RoleResolved::find_all_base_reviewers(conn)?.base_reviewers;
             result.retain(|shift| !base_reviewers.contains(&shift.user.id));
         }
 
