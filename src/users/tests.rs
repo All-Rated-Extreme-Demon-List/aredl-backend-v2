@@ -3,9 +3,13 @@ use {
     crate::{
         auth::{create_test_token, Permission},
         diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper},
+        roles::test_utils::{add_user_to_role, create_test_hidden_role, create_test_role},
         schema::users,
         test_utils::{assert_error_response, init_test_app},
-        users::{test_utils::create_test_user, User, UserUpsert},
+        users::{
+            test_utils::{create_test_user, get_permission_privilege_level},
+            User, UserUpsert,
+        },
     },
     actix_web::test::{self, read_body_json},
     chrono::Utc,
@@ -205,6 +209,93 @@ async fn find_user_by_discord_id() {
 
     let user: serde_json::Value = read_body_json(resp).await;
     assert_eq!(user["username"], username);
+}
+
+#[actix_web::test]
+async fn find_user_hides_hidden_roles_and_hidden_scopes_except_for_role_manage() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (target_user, _) = create_test_user(&db, None).await;
+    let (normal_requester, _) = create_test_user(&db, None).await;
+    let (manager_requester, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
+
+    let visible_role_id = create_test_role(&db, 1).await;
+    let hidden_role_id = create_test_hidden_role(
+        &db,
+        get_permission_privilege_level(&db, Permission::SubmissionReviewBase),
+    )
+    .await;
+
+    add_user_to_role(&db, visible_role_id, target_user).await;
+    add_user_to_role(&db, hidden_role_id, target_user).await;
+
+    let normal_token = create_test_token(normal_requester, &auth.jwt_encoding_key).unwrap();
+    let manager_token = create_test_token(manager_requester, &auth.jwt_encoding_key).unwrap();
+
+    let assert_hidden_data_is_not_exposed = |body: &serde_json::Value| {
+        let roles = body["roles"]
+            .as_array()
+            .expect("roles should be an array in user response");
+        let scopes = body["scopes"]
+            .as_array()
+            .expect("scopes should be an array in user response");
+
+        assert!(
+            !roles.iter().any(|role| role["id"] == hidden_role_id),
+            "Hidden role should not be present in user response"
+        );
+        assert!(
+            roles.iter().any(|role| role["id"] == visible_role_id),
+            "Visible role should be present in user response"
+        );
+        assert!(
+            !scopes.iter().any(|scope| scope == "submission_review_base"),
+            "Hidden-role-derived scope should not be present in user response"
+        );
+    };
+
+    let assert_hidden_data_is_exposed = |body: &serde_json::Value| {
+        let roles = body["roles"]
+            .as_array()
+            .expect("roles should be an array in user response");
+        let scopes = body["scopes"]
+            .as_array()
+            .expect("scopes should be an array in user response");
+
+        assert!(
+            roles.iter().any(|role| role["id"] == hidden_role_id),
+            "Hidden role should be present for role_manage users"
+        );
+        assert!(
+            scopes.iter().any(|scope| scope == "submission_review_base"),
+            "Hidden-role-derived scope should be present for role_manage users"
+        );
+    };
+
+    let anon_req = test::TestRequest::get()
+        .uri(&format!("/users/{}", target_user))
+        .to_request();
+    let anon_resp = test::call_service(&app, anon_req).await;
+    assert!(anon_resp.status().is_success());
+    let anon_body: serde_json::Value = read_body_json(anon_resp).await;
+    assert_hidden_data_is_not_exposed(&anon_body);
+
+    let normal_req = test::TestRequest::get()
+        .uri(&format!("/users/{}", target_user))
+        .insert_header(("Authorization", format!("Bearer {}", normal_token)))
+        .to_request();
+    let normal_resp = test::call_service(&app, normal_req).await;
+    assert!(normal_resp.status().is_success());
+    let normal_body: serde_json::Value = read_body_json(normal_resp).await;
+    assert_hidden_data_is_not_exposed(&normal_body);
+
+    let manager_req = test::TestRequest::get()
+        .uri(&format!("/users/{}", target_user))
+        .insert_header(("Authorization", format!("Bearer {}", manager_token)))
+        .to_request();
+    let manager_resp = test::call_service(&app, manager_req).await;
+    assert!(manager_resp.status().is_success());
+    let manager_body: serde_json::Value = read_body_json(manager_resp).await;
+    assert_hidden_data_is_exposed(&manager_body);
 }
 
 #[actix_web::test]

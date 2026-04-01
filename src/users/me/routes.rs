@@ -26,9 +26,14 @@ async fn find(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let user =
-        web::block(move || UserResolved::from_uuid(&mut db.connection()?, authenticated.user_id))
-            .await??;
+    let user = web::block(move || {
+        UserResolved::from_uuid(
+            &mut db.connection()?,
+            authenticated.user_id,
+            Some(authenticated),
+        )
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(user))
 }
 
