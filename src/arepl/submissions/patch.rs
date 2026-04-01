@@ -360,20 +360,26 @@ impl SubmissionPatchMod {
                 };
 
                 Notification::create(connection, updated.submitted_by, message, notif_type)?;
+            }
 
-                // Send websocket notification
-
+            // Send websocket notification
+            if old_status != new_status {
                 let ws_type = match new_status {
                     SubmissionStatus::Accepted => "SUBMISSION_ACCEPTED",
                     SubmissionStatus::Denied => "SUBMISSION_DENIED",
-                    _ => "SUBMISSION_UNDER_CONSIDERATION",
+                    SubmissionStatus::UnderConsideration => "SUBMISSION_UNDER_CONSIDERATION",
+                    SubmissionStatus::UnderReview => "SUBMISSION_UNDER_REVIEW",
+                    _ => "",
                 };
 
-                let notification = WebsocketNotification {
-                    notification_type: ws_type.into(),
-                    data: serde_json::to_value(&updated).expect("Failed to serialize submission"),
-                };
-                let _ = notify_tx.send(notification);
+                if !ws_type.is_empty() {
+                    let notification = WebsocketNotification {
+                        notification_type: ws_type.into(),
+                        data: serde_json::to_value(&updated)
+                            .expect("Failed to serialize submission"),
+                    };
+                    let _ = notify_tx.send(notification);
+                }
             }
 
             Submission::update_user_shift(
