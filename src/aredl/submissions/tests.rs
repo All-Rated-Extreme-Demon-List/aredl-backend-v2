@@ -19,7 +19,7 @@ use {
             },
             VideoProvidersAppState,
         },
-        roles::test_utils::{add_user_to_role, create_test_role},
+        roles::test_utils::{add_user_to_role, create_test_role_with_desc},
         schema::{
             aredl::{levels, records, submission_history, submissions},
             shifts, users,
@@ -228,7 +228,7 @@ async fn submission_aredlplus_boost() {
     let (user_id_2, _) = create_test_user(&db, None).await;
     let (user_id_mod, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
 
-    let role_id = create_test_role(&db, 5).await;
+    let role_id = create_test_role_with_desc(&db, 5, "plus").await;
     add_user_to_role(&db, role_id, user_id_2).await;
 
     let token =
@@ -601,7 +601,8 @@ async fn patch_submission_base_reviewer_can_edit_claimed_submission_without_raw(
 }
 
 #[actix_web::test]
-async fn patch_submission_base_reviewer_cannot_edit_claimed_submission_assigned_to_other_reviewer() {
+async fn patch_submission_base_reviewer_cannot_edit_claimed_submission_assigned_to_other_reviewer()
+{
     let (app, db, auth, _) = init_test_app().await;
     let (base_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
     let (other_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
@@ -1271,8 +1272,14 @@ async fn submission_under_review_sends_websocket_notification() {
         .expect("Failed to receive websocket notification");
 
     assert_eq!(notification.notification_type, "SUBMISSION_UNDER_REVIEW");
-    assert_eq!(notification.data["id"].as_str().unwrap(), submission.to_string());
-    assert_eq!(notification.data["reviewer_id"].as_str().unwrap(), moderator_id.to_string());
+    assert_eq!(
+        notification.data["id"].as_str().unwrap(),
+        submission.to_string()
+    );
+    assert_eq!(
+        notification.data["reviewer_id"].as_str().unwrap(),
+        moderator_id.to_string()
+    );
 }
 
 #[actix_web::test]

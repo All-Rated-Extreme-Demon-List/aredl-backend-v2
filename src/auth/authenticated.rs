@@ -148,7 +148,7 @@ impl Authenticated {
             .select(Role::as_select())
             .load::<Role>(conn)?;
 
-        let has_role = roles.iter().any(|role| role.privilege_level == 5);
+        let has_role = roles.iter().any(|role| role.role_desc == "plus");
 
         Ok(has_role)
     }
