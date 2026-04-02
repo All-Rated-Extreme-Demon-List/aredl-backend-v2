@@ -14,9 +14,18 @@ use uuid::Uuid;
 #[cfg(test)]
 pub async fn create_test_role(db: &Arc<DbAppState>, privilege_level: i32) -> i32 {
     let role_name = format!("Test Role {}", privilege_level);
+    create_test_role_with_desc(db, privilege_level, &role_name).await
+}
+
+#[cfg(test)]
+pub async fn create_test_role_with_desc(
+    db: &Arc<DbAppState>,
+    privilege_level: i32,
+    role_desc: &str,
+) -> i32 {
     diesel::insert_into(roles::table)
         .values((
-            roles::role_desc.eq(role_name),
+            roles::role_desc.eq(role_desc),
             roles::privilege_level.eq(privilege_level),
         ))
         .returning(roles::id)
