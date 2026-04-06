@@ -282,7 +282,7 @@ impl ResolvedSubmissionPage {
             submissions.iter_mut().for_each(|s| {
                 if let Some(ref reviewer) = s.reviewer {
                     if base_reviewers.contains(&reviewer.id) {
-                        s.reviewer = Some(ExtendedBaseUser::redacted())
+                        s.reviewer = Some(ExtendedBaseUser::hidden())
                     }
                 }
             });

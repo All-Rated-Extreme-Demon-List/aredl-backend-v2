@@ -110,8 +110,7 @@ async fn resolved_find_all_reviewer_filter_hides_base_reviewer_for_non_auditor()
     let (app, db, auth, _) = init_test_app().await;
     let (owner, _) = create_test_user(&db, None).await;
     let (base_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
-    let (full_non_auditor, _) =
-        create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (full_non_auditor, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
 
     let token = create_test_token(full_non_auditor, &auth.jwt_encoding_key).unwrap();
 
@@ -139,8 +138,7 @@ async fn resolved_find_all_redacts_base_reviewer_but_auditor_can_filter_and_see(
     let (app, db, auth, _) = init_test_app().await;
     let (owner, _) = create_test_user(&db, None).await;
     let (base_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
-    let (full_non_auditor, _) =
-        create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (full_non_auditor, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
     let (auditor, _) = create_test_user(&db, Some(Permission::ReviewersAudit)).await;
 
     let full_token = create_test_token(full_non_auditor, &auth.jwt_encoding_key).unwrap();
@@ -169,8 +167,11 @@ async fn resolved_find_all_redacts_base_reviewer_but_auditor_can_filter_and_see(
         .iter()
         .find(|s| s["id"] == submission.to_string())
         .unwrap();
-    assert_eq!(entry["reviewer"]["id"], "00000000-0000-0000-0000-000000000000");
-    assert_eq!(entry["reviewer"]["username"], "-");
+    assert_eq!(
+        entry["reviewer"]["id"],
+        "00000000-0000-0000-0000-000000000000"
+    );
+    assert_eq!(entry["reviewer"]["username"], "Hidden user");
 
     // Auditors can filter by base reviewer and see the real reviewer.
     let req = test::TestRequest::get()
@@ -217,8 +218,7 @@ async fn resolved_find_one_hides_base_reviewer_for_non_auditor_but_not_for_audit
     let (app, db, auth, _) = init_test_app().await;
     let (owner, _) = create_test_user(&db, None).await;
     let (base_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
-    let (full_non_auditor, _) =
-        create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (full_non_auditor, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
     let (auditor, _) = create_test_user(&db, Some(Permission::ReviewersAudit)).await;
 
     let full_token = create_test_token(full_non_auditor, &auth.jwt_encoding_key).unwrap();
