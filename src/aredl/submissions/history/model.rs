@@ -116,7 +116,7 @@ impl SubmissionHistoryResolved {
             resolved_history.iter_mut().for_each(|h| {
                 if let Some(ref reviewer) = h.reviewer {
                     if base_reviewers.contains(&reviewer.id) {
-                        h.reviewer = Some(BaseUser::redacted());
+                        h.reviewer = Some(BaseUser::hidden());
                     }
                 }
             });

@@ -170,7 +170,7 @@ async fn resolved_find_all_redacts_base_reviewer_but_auditor_can_filter_and_see(
         entry["reviewer"]["id"],
         "00000000-0000-0000-0000-000000000000"
     );
-    assert_eq!(entry["reviewer"]["username"], "-");
+    assert_eq!(entry["reviewer"]["username"], "Hidden user");
 
     let req = test::TestRequest::get()
         .uri(format!("/arepl/submissions?reviewer_filter={}", base_reviewer).as_str())
