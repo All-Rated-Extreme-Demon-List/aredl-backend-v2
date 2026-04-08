@@ -193,7 +193,7 @@ async fn ban(
 #[derive(OpenApi)]
 #[openapi(
     nest(
-        (path = "/badges", api = badges::ApiDoc),
+        (path = "/{id}/badges", api = badges::ApiDoc),
         (path = "/names", api = names::ApiDoc),
         (path = "/@me", api = me::ApiDoc),
         (path = "/merge", api = merge::ApiDoc),

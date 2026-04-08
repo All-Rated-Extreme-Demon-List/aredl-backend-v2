@@ -171,7 +171,7 @@ pub struct ApiDoc;
 
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
-        web::scope("/badges/{id}")
+        web::scope("/{id}/badges")
             .service(find_all)
             .service(sync)
             .service(grant)

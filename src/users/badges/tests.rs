@@ -18,7 +18,7 @@ async fn get_user_badges() {
         create_test_token(staff_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
     let grant_req = test::TestRequest::patch()
-        .uri(&format!("/users/badges/{user_id}"))
+        .uri(&format!("/users/{user_id}/badges"))
         .insert_header(("Authorization", format!("Bearer {}", staff_token)))
         .set_json(json!({
             "badge_code": "global.level_completion.1",
@@ -30,7 +30,7 @@ async fn get_user_badges() {
     assert!(grant_resp.status().is_success());
 
     let get_req = test::TestRequest::get()
-        .uri(&format!("/users/badges/{user_id}"))
+        .uri(&format!("/users/{user_id}/badges"))
         .to_request();
 
     let get_resp = test::call_service(&app, get_req).await;
@@ -51,7 +51,7 @@ async fn grant_user_badge() {
         create_test_token(staff_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
     let req = test::TestRequest::patch()
-        .uri(&format!("/users/badges/{user_id}"))
+        .uri(&format!("/users/{user_id}/badges"))
         .insert_header(("Authorization", format!("Bearer {}", staff_token)))
         .set_json(json!({
             "badge_code": "global.level_completion.1",
@@ -77,7 +77,7 @@ async fn remove_user_badge() {
         create_test_token(staff_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
     let grant_req = test::TestRequest::patch()
-        .uri(&format!("/users/badges/{user_id}"))
+        .uri(&format!("/users/{user_id}/badges"))
         .insert_header(("Authorization", format!("Bearer {}", staff_token)))
         .set_json(json!({
             "badge_code": "global.level_completion.1",
@@ -89,7 +89,7 @@ async fn remove_user_badge() {
     assert!(grant_resp.status().is_success());
 
     let remove_req = test::TestRequest::delete()
-        .uri(&format!("/users/badges/{user_id}"))
+        .uri(&format!("/users/{user_id}/badges"))
         .insert_header(("Authorization", format!("Bearer {}", staff_token)))
         .set_json(json!(["global.level_completion.1"]))
         .to_request();
@@ -116,7 +116,7 @@ async fn sync_user_badges() {
     create_test_level_with_record(&db, user_id).await;
 
     let req = test::TestRequest::post()
-        .uri(&format!("/users/badges/{user_id}/sync"))
+        .uri(&format!("/users/{user_id}/badges/sync"))
         .insert_header(("Authorization", format!("Bearer {}", staff_token)))
         .to_request();
 
@@ -140,7 +140,7 @@ async fn grant_user_badge_rejects_invalid_code() {
         create_test_token(staff_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
     let req = test::TestRequest::patch()
-        .uri(&format!("/users/badges/{user_id}"))
+        .uri(&format!("/users/{user_id}/badges"))
         .insert_header(("Authorization", format!("Bearer {}", staff_token)))
         .set_json(json!({
             "badge_code": "global.invalid_badge",
