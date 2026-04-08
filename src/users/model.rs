@@ -8,6 +8,7 @@ use crate::schema::{
     aredl::submissions, arepl::submissions as plat_submissions, clan_members, clans, permissions,
     roles, user_roles, users,
 };
+use crate::users::badges::UserBadge;
 use crate::{
     aredl::submissions::SubmissionStatus,
     arepl::submissions::SubmissionStatus as PlatSubmissionStatus,
@@ -59,7 +60,7 @@ pub struct ExtendedBaseUser {
     pub discord_avatar: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Queryable, Selectable, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, Queryable, Selectable, ToSchema)]
 #[diesel(table_name=users, check_for_backend(Pg))]
 pub struct User {
     /// Internal UUID of the user.
@@ -91,6 +92,8 @@ pub struct User {
     pub access_valid_after: DateTime<Utc>,
     /// The level the user has beaten and chosen as their profile background.
     pub background_level: i32,
+    /// The badge the user has unlocked and chosen to feature on their profile.
+    pub featured_badge_code: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Insertable, AsChangeset, ToSchema)]
@@ -128,6 +131,8 @@ pub struct UserResolved {
     pub roles: Vec<Role>,
     /// Permissions scopes the user has.
     pub scopes: Vec<String>,
+    /// All unlocked badges for the user.
+    pub badges: Vec<UserBadge>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Insertable, AsChangeset, ToSchema)]
@@ -479,11 +484,15 @@ impl UserResolved {
                 }
             })
             .collect::<Vec<String>>();
+
+        let badges = UserBadge::find_all(conn, user.id)?;
+
         Ok(UserResolved {
             user,
             clan,
             roles,
             scopes,
+            badges,
         })
     }
 }

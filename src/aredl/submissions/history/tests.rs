@@ -267,17 +267,28 @@ async fn get_submission_history_redacts_base_reviewer_for_non_auditor_but_not_fo
         .insert_header(("Authorization", format!("Bearer {}", full_token)))
         .to_request();
     let res = test::call_service(&app, req).await;
-    assert!(res.status().is_success(), "status of req is {}", res.status());
+    assert!(
+        res.status().is_success(),
+        "status of req is {}",
+        res.status()
+    );
     let body: serde_json::Value = read_body_json(res).await;
     let latest = &body.as_array().unwrap()[0];
-    assert_eq!(latest["reviewer"]["id"], "00000000-0000-0000-0000-000000000000");
+    assert_eq!(
+        latest["reviewer"]["id"],
+        "00000000-0000-0000-0000-000000000000"
+    );
 
     let req = test::TestRequest::get()
         .uri(format!("/aredl/submissions/{submission}/history").as_str())
         .insert_header(("Authorization", format!("Bearer {}", auditor_token)))
         .to_request();
     let res = test::call_service(&app, req).await;
-    assert!(res.status().is_success(), "status of req is {}", res.status());
+    assert!(
+        res.status().is_success(),
+        "status of req is {}",
+        res.status()
+    );
     let body: serde_json::Value = read_body_json(res).await;
     let latest = &body.as_array().unwrap()[0];
     assert_eq!(latest["reviewer"]["id"], base_reviewer_id.to_string());

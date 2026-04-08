@@ -3,6 +3,7 @@ use crate::aredl::levels::Level as AredlLevel;
 use crate::arepl::levels::Level as AreplLevel;
 use crate::error_handler::ApiError;
 use crate::schema::{aredl, arepl, users};
+use crate::users::badges::UserBadge;
 use crate::users::User;
 use chrono::{DateTime, Utc};
 use diesel::dsl::now;
@@ -26,6 +27,8 @@ pub struct UserMeUpdate {
     pub ban_level: Option<i32>,
     /// Your new background level. Must be the GD level ID of a level you have beaten. Can be a classic or platformer level. If the ID is 0, it will be reset to default (uses the hardest beaten level)
     pub background_level: Option<i32>,
+    /// Your new featured badge code.
+    pub featured_badge_code: Option<String>,
 }
 
 impl User {
@@ -100,6 +103,18 @@ impl User {
                     return Err(ApiError::new(
                         400,
                         "You have not beaten the selected level.",
+                    ));
+                }
+            }
+        }
+
+        if user.featured_badge_code.is_some() {
+            let code = user.featured_badge_code.as_ref().unwrap();
+            if !code.is_empty() {
+                if !UserBadge::has_code(conn, id, code)? {
+                    return Err(ApiError::new(
+                        400,
+                        "You have not unlocked the selected badge.",
                     ));
                 }
             }

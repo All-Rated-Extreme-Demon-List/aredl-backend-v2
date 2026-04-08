@@ -1,6 +1,7 @@
 #[cfg(test)]
 use {
     crate::{
+        aredl::levels::test_utils::create_test_level_with_record,
         auth::{create_test_token, Permission},
         roles::test_utils::{add_user_to_role, create_test_hidden_role, create_test_role},
         schema::users,
@@ -118,4 +119,44 @@ async fn get_profile_hides_hidden_roles_except_for_role_manage() {
     let manager_body: serde_json::Value = read_body_json(manager_resp).await;
     let manager_roles = manager_body["roles"].as_array().unwrap();
     assert_hidden_role_is_exposed(manager_roles);
+}
+
+#[actix_web::test]
+async fn get_profile_includes_badges_and_featured_badge() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    create_test_level_with_record(&db, user_id).await;
+
+    let sync_req = test::TestRequest::post()
+        .uri("/users/@me/sync")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+    let sync_resp = test::call_service(&app, sync_req).await;
+    assert!(sync_resp.status().is_success());
+
+    let badge_code = "global.level_completion.1";
+    let feature_req = test::TestRequest::patch()
+        .uri("/users/@me")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&serde_json::json!({ "featured_badge_code": badge_code }))
+        .to_request();
+    let feature_resp = test::call_service(&app, feature_req).await;
+    assert!(feature_resp.status().is_success());
+
+    let profile_req = test::TestRequest::get()
+        .uri(format!("/aredl/profile/{user_id}").as_str())
+        .to_request();
+    let profile_resp = test::call_service(&app, profile_req).await;
+    assert!(profile_resp.status().is_success());
+
+    let body: serde_json::Value = read_body_json(profile_resp).await;
+    assert_eq!(body["featured_badge_code"], badge_code);
+    assert!(body["badges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|badge| badge["badge_code"] == badge_code));
 }

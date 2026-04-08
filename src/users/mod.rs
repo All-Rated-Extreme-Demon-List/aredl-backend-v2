@@ -1,3 +1,4 @@
+pub mod badges;
 pub mod me;
 mod merge;
 mod model;

@@ -19,10 +19,10 @@ use crate::app_data::db::{DbAppState, DbConnection};
 use crate::auth::token::UserClaims;
 use crate::auth::token::{self, check_token_valid};
 use crate::error_handler::ApiError;
-use crate::{get_optional_secret, get_secret};
 use crate::roles::Role;
 use crate::schema::{oauth_requests, permissions, roles, user_roles};
 use crate::users::{User, UserUpsert};
+use crate::{get_optional_secret, get_secret};
 
 #[derive(Deserialize)]
 struct OAuthCallbackQuery {

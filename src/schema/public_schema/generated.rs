@@ -151,6 +151,14 @@ pub mod public {
     }
 
     diesel::table! {
+        user_badges (user_id, badge_code) {
+            user_id -> Uuid,
+            badge_code -> Varchar,
+            unlocked_at -> Timestamptz,
+        }
+    }
+
+    diesel::table! {
         user_roles (role_id, user_id) {
             role_id -> Int4,
             user_id -> Uuid,
@@ -176,6 +184,7 @@ pub mod public {
             created_at -> Timestamptz,
             background_level -> Int4,
             last_discord_avatar_update -> Nullable<Timestamp>,
+            featured_badge_code -> Nullable<Varchar>,
         }
     }
 
@@ -184,6 +193,7 @@ pub mod public {
     diesel::joinable!(clan_members -> users (user_id));
     diesel::joinable!(merge_logs -> users (primary_user));
     diesel::joinable!(notifications -> users (user_id));
+    diesel::joinable!(user_badges -> users (user_id));
     diesel::joinable!(user_roles -> roles (role_id));
     diesel::joinable!(user_roles -> users (user_id));
 
@@ -200,6 +210,7 @@ pub mod public {
         recurrent_shifts,
         roles,
         shifts,
+        user_badges,
         user_roles,
         users,
     );

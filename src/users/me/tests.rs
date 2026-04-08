@@ -293,3 +293,71 @@ async fn reset_background_level_to_zero() {
     let updated: serde_json::Value = read_body_json(resp).await;
     assert!(updated["background_level"] == 0);
 }
+
+#[actix_web::test]
+async fn sync_badges_and_feature_badge() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    create_test_aredl_level_with_record(&db, user_id).await;
+
+    let sync_req = test::TestRequest::post()
+        .uri("/users/@me/sync")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let sync_resp = test::call_service(&app, sync_req).await;
+    assert!(sync_resp.status().is_success());
+
+    let sync_body: serde_json::Value = read_body_json(sync_resp).await;
+    let badge_code = "global.level_completion.1";
+    assert!(sync_body
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|badge| badge["badge_code"] == badge_code));
+
+    let patch_req = test::TestRequest::patch()
+        .uri("/users/@me")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&json!({ "featured_badge_code": badge_code }))
+        .to_request();
+
+    let patch_resp = test::call_service(&app, patch_req).await;
+    assert!(patch_resp.status().is_success());
+
+    let me_req = test::TestRequest::get()
+        .uri("/users/@me")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let me_resp = test::call_service(&app, me_req).await;
+    assert!(me_resp.status().is_success());
+
+    let me_body: serde_json::Value = read_body_json(me_resp).await;
+    assert_eq!(me_body["featured_badge_code"], badge_code);
+    assert!(me_body["badges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|badge| badge["badge_code"] == badge_code));
+}
+
+#[actix_web::test]
+async fn cannot_feature_locked_badge() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    let req = test::TestRequest::patch()
+        .uri("/users/@me")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(&json!({ "featured_badge_code": "global.level_completion.1" }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status().as_u16(), 400);
+}

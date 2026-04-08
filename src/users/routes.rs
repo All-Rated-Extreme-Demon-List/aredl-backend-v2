@@ -3,8 +3,8 @@ use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::users::{
-    me, merge, names, PlaceholderOptions, User, UserBanUpdate, UserListQueryOptions, UserPage,
-    UserResolved, UserUpdate,
+    badges, me, merge, names, PlaceholderOptions, User, UserBanUpdate, UserListQueryOptions,
+    UserPage, UserResolved, UserUpdate,
 };
 use actix_web::{get, patch, post, web, HttpResponse};
 use std::sync::Arc;
@@ -193,6 +193,7 @@ async fn ban(
 #[derive(OpenApi)]
 #[openapi(
     nest(
+        (path = "/badges", api = badges::ApiDoc),
         (path = "/names", api = names::ApiDoc),
         (path = "/@me", api = me::ApiDoc),
         (path = "/merge", api = merge::ApiDoc),
@@ -217,6 +218,7 @@ pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/users")
+            .configure(badges::init_routes)
             .configure(me::init_routes)
             .configure(names::init_routes)
             .configure(merge::init_routes)

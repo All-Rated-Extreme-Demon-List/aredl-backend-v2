@@ -10,6 +10,7 @@ use crate::{
         shifts, users,
     },
     shifts::{Shift, ShiftStatus},
+    users::badges::UserBadge,
     users::me::notifications::{Notification, NotificationType},
 };
 use chrono::Utc;
@@ -380,6 +381,10 @@ impl SubmissionPatchMod {
                     };
                     let _ = notify_tx.send(notification);
                 }
+            }
+
+            if new_status == SubmissionStatus::Accepted {
+                UserBadge::update_user_badges(connection, updated.submitted_by)?;
             }
 
             Submission::update_user_shift(

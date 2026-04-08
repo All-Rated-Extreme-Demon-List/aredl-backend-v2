@@ -2,6 +2,7 @@ use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::merge_logs;
+use crate::users::badges::UserBadge;
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::prelude::*;
@@ -39,6 +40,7 @@ pub fn merge_users(
         .bind::<DieselUuid, _>(primary_user)
         .bind::<DieselUuid, _>(secondary_user)
         .execute(conn)?;
+    UserBadge::update_user_badges(conn, primary_user)?;
     Ok(())
 }
 

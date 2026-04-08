@@ -13,6 +13,7 @@ use crate::schema::{
     },
     clan_members, clans, roles, user_roles,
 };
+use crate::users::badges::UserBadge;
 use crate::users::User;
 use chrono::{DateTime, Utc};
 use diesel::{
@@ -84,6 +85,8 @@ pub struct ProfileResolved {
     pub created: Vec<ExtendedBaseLevel>,
     /// Levels the user has published in game.
     pub published: Vec<ExtendedBaseLevel>,
+    /// All unlocked badges for the user.
+    pub badges: Vec<UserBadge>,
 }
 
 impl ProfileRecordResolved {
@@ -190,6 +193,8 @@ impl ProfileResolved {
             .map(|(pack, tier)| PackWithTierResolved { pack, tier })
             .collect::<Vec<_>>();
 
+        let badges = UserBadge::find_all(conn, user.id)?;
+
         Ok(Self {
             user,
             clan,
@@ -199,6 +204,7 @@ impl ProfileResolved {
             records,
             created,
             published,
+            badges,
         })
     }
 }

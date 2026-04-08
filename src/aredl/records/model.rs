@@ -10,6 +10,7 @@ use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::providers::VideoProvidersAppState;
 use crate::schema::{aredl::levels, aredl::records, aredl::submissions, users};
+use crate::users::badges::UserBadge;
 use crate::users::{user_filter, ExtendedBaseUser};
 use actix_web::web;
 use chrono::{DateTime, Utc};
@@ -273,6 +274,8 @@ impl Record {
                 .returning(Record::as_select())
                 .get_result::<Self>(conn)?;
 
+            UserBadge::update_user_badges(conn, result.submitted_by)?;
+
             Ok(result)
         })
     }
@@ -317,6 +320,8 @@ impl Record {
                     .returning(Record::as_select())
                     .get_result::<Self>(conn)?,
             };
+
+            UserBadge::update_user_badges(conn, submitted_by)?;
 
             Ok(result)
         })
