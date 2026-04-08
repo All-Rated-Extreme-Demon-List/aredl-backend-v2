@@ -1,3 +1,4 @@
+mod badges_list;
 mod model;
 mod routes;
 mod statistics;

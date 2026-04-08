@@ -1,6 +1,9 @@
 use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::user_badges;
+use crate::users::badges::badges_list::{
+    AvailableBadges, TagBadgeMode, HARDEST_PACK_TIERS, LEVEL_TAG_BADGES,
+};
 use crate::users::badges::statistics::UserStatistics;
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
@@ -12,87 +15,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use utoipa::ToSchema;
 use uuid::Uuid;
-
-const BADGES: &[&str] = &[
-    "classic.hardest_level.800",
-    "classic.hardest_level.400",
-    "classic.hardest_level.250",
-    "classic.hardest_level.150",
-    "classic.hardest_level.75",
-    "platformer.level_completion.1",
-    "global.level_completion.1",
-    "global.level_completion.5",
-    "global.level_completion.10",
-    "global.level_completion.25",
-    "global.level_completion.50",
-    "global.level_completion.100",
-    "global.pack_completion.1",
-    "global.pack_completion.5",
-    "global.pack_completion.10",
-    "global.hardest_pack_tier.iron",
-    "global.hardest_pack_tier.gold",
-    "global.hardest_pack_tier.ruby",
-    "global.hardest_pack_tier.sapphire",
-    "global.hardest_pack_tier.pearl",
-    "global.hardest_pack_tier.diamond",
-    "global.publisher_levels.3",
-    "global.publisher_levels.5",
-    "global.level_tags.xxlplus",
-    "global.level_tags.bossfight",
-    "global.level_tags.alltags",
-    "global.alphabet",
-    "global.first_victor",
-    "global.creator",
-    "global.verifier",
-];
-
-// (badge code, [(level tag, required count)])
-const LEVEL_TAG_BADGES: &[(&str, &[(&str, i64)])] = &[
-    (
-        "alltags",
-        &[
-            ("2P", 1),
-            ("Circles", 1),
-            ("Clicksync", 1),
-            ("Fast-Paced", 1),
-            ("Timings", 1),
-            ("Chokepoints", 1),
-            ("Learny", 1),
-            ("Memory", 1),
-            ("High CPS", 1),
-            ("Gimmicky", 1),
-            ("Flow", 1),
-            ("Slow-Paced", 1),
-            ("Precision", 1),
-            ("Bossfight", 1),
-            ("Mirror", 1),
-            ("Nerve Control", 1),
-            ("Cube", 1),
-            ("Ship", 1),
-            ("Ball", 1),
-            ("UFO", 1),
-            ("Wave", 1),
-            ("Robot", 1),
-            ("Spider", 1),
-            ("Old Swing", 1),
-            ("New Swing", 1),
-            ("Duals", 1),
-            ("Overall", 1),
-        ],
-    ),
-    ("xxlplus", &[("XXL+", 5)]),
-    ("bossfight", &[("Bossfight", 5)]),
-];
-
-// hardcoded here to not bother with dynamic fetching, they never change
-const HARDEST_PACK_TIERS: &[(&str, &str)] = &[
-    ("iron", "Iron Tier"),
-    ("gold", "Gold Tier"),
-    ("ruby", "Ruby Tier"),
-    ("sapphire", "Sapphire Tier"),
-    ("pearl", "Pearl Tier"),
-    ("diamond", "Diamond Tier"),
-];
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, Queryable, Selectable, Insertable)]
 #[diesel(table_name = user_badges, check_for_backend(Pg))]
@@ -223,7 +145,10 @@ impl UserBadge {
     }
 
     fn validate_badge_code(badge_code: &str) -> Result<(), ApiError> {
-        if !BADGES.contains(&badge_code) {
+        if !AvailableBadges::get_all()
+            .iter()
+            .any(|badge| badge == badge_code)
+        {
             return Err(ApiError::new(
                 400,
                 &format!("Unknown badge code: {badge_code}"),
@@ -244,7 +169,7 @@ impl UserBadge {
 
 impl UserStatistics {
     fn get_unlocked_badges(&self) -> HashMap<String, Option<String>> {
-        BADGES
+        AvailableBadges::get_all()
             .iter()
             .filter(|badge_code| self.is_badge_unlocked(badge_code))
             .map(|badge_code| (badge_code.to_string(), self.badge_description(badge_code)))
@@ -288,16 +213,28 @@ impl UserStatistics {
                         >= threshold
                 })
             }
-            (_, ["level_tags", preset_code]) => LEVEL_TAG_BADGES
-                .iter()
-                .find(|(code, _)| *code == *preset_code)
-                .map(|(_, required_tags)| {
-                    required_tags.iter().all(|(tag_name, required_count)| {
+            (_, ["level_tags", alias, threshold]) => threshold
+                .parse::<i64>()
+                .ok()
+                .zip(
+                    LEVEL_TAG_BADGES
+                        .iter()
+                        .find(|(level_tag_alias, _, _)| *level_tag_alias == *alias),
+                )
+                .map(|(threshold, (_, level_tags, mode))| match mode {
+                    TagBadgeMode::And => level_tags.iter().all(|tag_name| {
                         scope_statistics
                             .level_tag_counts
                             .get(*tag_name)
-                            .is_some_and(|count| *count >= *required_count)
-                    })
+                            .is_some_and(|count| *count >= threshold)
+                    }),
+                    TagBadgeMode::Or => {
+                        level_tags
+                            .iter()
+                            .filter_map(|tag_name| scope_statistics.level_tag_counts.get(*tag_name))
+                            .sum::<i64>()
+                            >= threshold
+                    }
                 })
                 .unwrap_or(false),
             (_, ["hardest_level", threshold]) => {
