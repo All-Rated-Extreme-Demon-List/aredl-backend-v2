@@ -58,6 +58,8 @@ pub struct ExtendedBaseUser {
     pub discord_id: Option<String>,
     /// Discord avatar hash of the user. Updated on every login.
     pub discord_avatar: Option<String>,
+    /// The badge the user has unlocked and chosen to feature on their profile.
+    pub featured_badge_code: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Queryable, Selectable, ToSchema)]
@@ -222,6 +224,7 @@ impl ExtendedBaseUser {
             country: None,
             discord_id: None,
             discord_avatar: None,
+            featured_badge_code: None,
         }
     }
 }
