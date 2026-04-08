@@ -154,6 +154,7 @@ pub mod public {
         user_badges (user_id, badge_code) {
             user_id -> Uuid,
             badge_code -> Varchar,
+            description -> Nullable<Varchar>,
             unlocked_at -> Timestamptz,
         }
     }

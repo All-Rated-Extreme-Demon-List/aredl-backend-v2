@@ -101,31 +101,21 @@ pub struct UserBadge {
     pub user_id: Uuid,
     /// The code identifying the badge, e.g. "global.level_completion.10".
     pub badge_code: String,
+    /// Additional user-specific badge information.
+    pub description: Option<String>,
     /// The timestamp when the badge was first unlocked.
     pub unlocked_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct UserBadgeGrant {
+    /// The code identifying the badge, e.g. "global.level_completion.10".
+    pub badge_code: String,
+    /// Additional user-specific badge information.
+    pub description: Option<String>,
+}
+
 impl UserBadge {
-    pub fn update_user_badges(conn: &mut DbConnection, user_id: Uuid) -> Result<(), ApiError> {
-        let badge_codes = UserStatistics::load(conn, user_id)?.get_unlocked_badges();
-        Self::insert_missing(conn, user_id, badge_codes)
-    }
-
-    pub fn has_code(
-        conn: &mut DbConnection,
-        user_id: Uuid,
-        badge_code: &str,
-    ) -> Result<bool, ApiError> {
-        let exists = user_badges::table
-            .filter(user_badges::user_id.eq(user_id))
-            .filter(user_badges::badge_code.eq(badge_code))
-            .select(user_badges::user_id)
-            .first::<Uuid>(conn)
-            .optional()?;
-
-        Ok(exists.is_some())
-    }
-
     pub fn find_all(conn: &mut DbConnection, user_id: Uuid) -> Result<Vec<Self>, ApiError> {
         Ok(user_badges::table
             .filter(user_badges::user_id.eq(user_id))
@@ -137,29 +127,22 @@ impl UserBadge {
             .load::<UserBadge>(conn)?)
     }
 
-    pub fn grant_all(
+    pub fn grant(
         conn: &mut DbConnection,
         user_id: Uuid,
-        badge_codes: Vec<String>,
+        badge: UserBadgeGrant,
     ) -> Result<Vec<Self>, ApiError> {
-        Self::validate_badge_codes(&badge_codes)?;
+        Self::validate_badge_code(&badge.badge_code)?;
 
-        let now = Utc::now();
-        let new_rows = badge_codes
-            .into_iter()
-            .map(|badge_code| UserBadge {
+        insert_into(user_badges::table)
+            .values(UserBadge {
                 user_id,
-                badge_code,
-                unlocked_at: now,
+                badge_code: badge.badge_code,
+                description: badge.description,
+                unlocked_at: Utc::now(),
             })
-            .collect::<Vec<_>>();
-
-        if !new_rows.is_empty() {
-            insert_into(user_badges::table)
-                .values(&new_rows)
-                .on_conflict_do_nothing()
-                .execute(conn)?;
-        }
+            .on_conflict_do_nothing()
+            .execute(conn)?;
 
         Self::find_all(conn, user_id)
     }
@@ -182,11 +165,33 @@ impl UserBadge {
 
         Self::find_all(conn, user_id)
     }
+}
+
+impl UserBadge {
+    pub fn update_user_badges(conn: &mut DbConnection, user_id: Uuid) -> Result<(), ApiError> {
+        let badge_data = UserStatistics::load(conn, user_id)?.get_unlocked_badges();
+        Self::insert_missing(conn, user_id, badge_data)
+    }
+
+    pub fn has_code(
+        conn: &mut DbConnection,
+        user_id: Uuid,
+        badge_code: &str,
+    ) -> Result<bool, ApiError> {
+        let exists = user_badges::table
+            .filter(user_badges::user_id.eq(user_id))
+            .filter(user_badges::badge_code.eq(badge_code))
+            .select(user_badges::user_id)
+            .first::<Uuid>(conn)
+            .optional()?;
+
+        Ok(exists.is_some())
+    }
 
     fn insert_missing(
         conn: &mut DbConnection,
         user_id: Uuid,
-        badge_codes: HashSet<String>,
+        badges: HashMap<String, Option<String>>,
     ) -> Result<(), ApiError> {
         let existing_codes = user_badges::table
             .filter(user_badges::user_id.eq(user_id))
@@ -196,12 +201,13 @@ impl UserBadge {
             .collect::<HashSet<_>>();
 
         let now = Utc::now();
-        let new_rows = badge_codes
-            .into_iter()
-            .filter(|code| !existing_codes.contains(code))
-            .map(|badge_code| UserBadge {
+        let new_rows = badges
+            .iter()
+            .filter(|(badge_code, _)| !existing_codes.contains(*badge_code))
+            .map(|(badge_code, description)| UserBadge {
                 user_id,
-                badge_code,
+                badge_code: badge_code.clone(),
+                description: description.clone(),
                 unlocked_at: now,
             })
             .collect::<Vec<_>>();
@@ -216,15 +222,20 @@ impl UserBadge {
         Ok(())
     }
 
-    fn validate_badge_codes(badge_codes: &[String]) -> Result<(), ApiError> {
-        if let Some(invalid_badge_code) = badge_codes
-            .iter()
-            .find(|badge_code| !BADGES.contains(&badge_code.as_str()))
-        {
+    fn validate_badge_code(badge_code: &str) -> Result<(), ApiError> {
+        if !BADGES.contains(&badge_code) {
             return Err(ApiError::new(
                 400,
-                &format!("Unknown badge code: {invalid_badge_code}"),
+                &format!("Unknown badge code: {badge_code}"),
             ));
+        }
+
+        Ok(())
+    }
+
+    fn validate_badge_codes(badge_codes: &[String]) -> Result<(), ApiError> {
+        for badge_code in badge_codes {
+            Self::validate_badge_code(badge_code)?;
         }
 
         Ok(())
@@ -232,11 +243,11 @@ impl UserBadge {
 }
 
 impl UserStatistics {
-    fn get_unlocked_badges(&self) -> HashSet<String> {
+    fn get_unlocked_badges(&self) -> HashMap<String, Option<String>> {
         BADGES
             .iter()
-            .map(|badge_code| badge_code.to_string())
             .filter(|badge_code| self.is_badge_unlocked(badge_code))
+            .map(|badge_code| (badge_code.to_string(), self.badge_description(badge_code)))
             .collect()
     }
 
@@ -354,6 +365,95 @@ impl UserStatistics {
                 .iter()
                 .any(|level| level.is_verification),
             _ => false,
+        }
+    }
+
+    fn badge_description(&self, badge_code: &str) -> Option<String> {
+        let parts = badge_code.split('.').collect::<Vec<_>>();
+
+        match parts.as_slice() {
+            ["classic", "hardest_level", _] => self
+                .classic
+                .levels_records
+                .iter()
+                .min_by(|left, right| {
+                    left.position
+                        .cmp(&right.position)
+                        .then(left.name.cmp(&right.name))
+                })
+                .map(|level| level.name.clone()),
+            // description should be the longest list of levels by the same publisher completed by the user
+            ["global", "publisher_levels", _] => {
+                let mut publisher_levels = HashMap::new();
+                for level in &self.global.levels_records {
+                    publisher_levels
+                        .entry(level.publisher_id)
+                        .or_insert_with(Vec::new)
+                        .push(level);
+                }
+
+                let levels = publisher_levels.into_values().max_by(|left, right| {
+                    left.len().cmp(&right.len()).then_with(|| {
+                        right
+                            .iter()
+                            .map(|level| level.position)
+                            .min()
+                            .cmp(&left.iter().map(|level| level.position).min())
+                    })
+                })?;
+
+                Self::levels_to_text(
+                    levels
+                        .into_iter()
+                        .map(|level| (level.position, level.name.as_str()))
+                        .collect(),
+                )
+            }
+            ["global", "first_victor"] => Self::levels_to_text(
+                self.global
+                    .levels_records
+                    .iter()
+                    .filter(|level| level.is_first_victor)
+                    .map(|level| (level.position, level.name.as_str()))
+                    .collect(),
+            ),
+            ["global", "creator"] => Self::levels_to_text(
+                self.global
+                    .created_levels
+                    .iter()
+                    .map(|level| (level.position, level.name.as_str()))
+                    .collect(),
+            ),
+            ["global", "verifier"] => Self::levels_to_text(
+                self.global
+                    .levels_records
+                    .iter()
+                    .filter(|level| level.is_verification)
+                    .map(|level| (level.position, level.name.as_str()))
+                    .collect(),
+            ),
+            _ => None,
+        }
+    }
+
+    // creates a text list of levels names from a list of levels
+    fn levels_to_text(mut levels: Vec<(i32, &str)>) -> Option<String> {
+        if levels.is_empty() {
+            return None;
+        }
+
+        levels.sort_by(|left, right| left.0.cmp(&right.0).then(left.1.cmp(right.1)));
+
+        let level_names = levels.into_iter().map(|(_, name)| name).collect::<Vec<_>>();
+
+        match level_names.as_slice() {
+            [] => None,
+            [level_name] => Some(level_name.to_string()),
+            [first_level, second_level] => Some(format!("{first_level} and {second_level}")),
+            _ => {
+                let (last_level, other_levels) = level_names.split_last()?;
+                Some(format!("{}, and {}", other_levels.join(", "), last_level))
+            }
         }
     }
 }

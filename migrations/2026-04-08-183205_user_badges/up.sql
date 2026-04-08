@@ -2,6 +2,7 @@ CREATE TABLE user_badges (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     badge_code VARCHAR NOT NULL,
     unlocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    description VARCHAR NULL,
     PRIMARY KEY (user_id, badge_code)
 );
 

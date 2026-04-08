@@ -1,13 +1,14 @@
 use crate::app_data::db::DbAppState;
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::error_handler::ApiError;
+use crate::users::User;
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
 use uuid::Uuid;
 
-use super::UserBadge;
+use super::{UserBadge, UserBadgeGrant};
 
 #[utoipa::path(
     get,
@@ -15,7 +16,7 @@ use super::UserBadge;
     description = "Get all unlocked badges for a user.",
     tag = "Users - Badges",
     params(
-        ("id" = Uuid, description = "The internal UUID of the user")
+        ("id" = String, description = "The internal UUID, username or discord ID of the user")
     ),
     responses(
         (status = 200, body = [UserBadge])
@@ -28,11 +29,12 @@ use super::UserBadge;
 #[get("")]
 async fn find_all(
     db: web::Data<Arc<DbAppState>>,
-    id: web::Path<Uuid>,
+    user_id: web::Path<String>,
 ) -> Result<HttpResponse, ApiError> {
     let badges = web::block(move || {
         let conn = &mut db.connection()?;
-        UserBadge::find_all(conn, id.into_inner())
+        let user = User::from_str(conn, &user_id.into_inner())?;
+        UserBadge::find_all(conn, user.id)
     })
     .await??;
 
@@ -81,7 +83,7 @@ async fn sync(
     params(
         ("id" = Uuid, description = "The internal UUID of the user")
     ),
-    request_body = [String],
+    request_body = UserBadgeGrant,
     responses(
         (status = 200, body = [UserBadge])
     ),
@@ -95,14 +97,14 @@ async fn grant(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
     authenticated: Authenticated,
-    badge_codes: web::Json<Vec<String>>,
+    badge: web::Json<UserBadgeGrant>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&badge_codes));
+    root_span.record("body", &tracing::field::debug(&badge));
     let badges = web::block(move || {
         let conn = &mut db.connection()?;
         authenticated.ensure_has_higher_privilege_than_user(conn, id.clone())?;
-        let badges = UserBadge::grant_all(conn, id.into_inner(), badge_codes.into_inner())?;
+        let badges = UserBadge::grant(conn, id.into_inner(), badge.into_inner())?;
         Ok::<_, ApiError>(badges)
     })
     .await??;
@@ -155,6 +157,7 @@ async fn remove(
     components(
         schemas(
             UserBadge,
+            UserBadgeGrant,
         )
     ),
     paths(
