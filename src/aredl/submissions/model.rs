@@ -9,7 +9,7 @@ use crate::{
 use chrono::{DateTime, Utc};
 use diesel::{
     pg::Pg, BoolExpressionMethods, Connection, ExpressionMethods, OptionalExtension, QueryDsl,
-    RunQueryDsl, Selectable,
+    RunQueryDsl, Selectable, SelectableHelper,
 };
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
@@ -191,25 +191,19 @@ impl Submission {
         authenticated: Authenticated,
     ) -> Result<SubmissionResolved, ApiError> {
         conn.transaction(|conn| -> Result<SubmissionResolved, ApiError> {
+            let reviewer_id = authenticated.user_id;
             let prefer_priority = true; // prefer_priority_next(authenticated.user_id);
             let is_full_reviewer =
                 authenticated.has_permission(conn, Permission::SubmissionReviewFull)?;
 
-            let preferred_id = Self::find_next_claimable_id(
-                conn,
-                authenticated.user_id,
-                is_full_reviewer,
-                prefer_priority,
-            )?;
+            let preferred_id =
+                Self::find_next_claimable_id(conn, reviewer_id, is_full_reviewer, prefer_priority)?;
 
             let (next_id, claimed_priority) = if let Some(id) = preferred_id {
                 (id, prefer_priority)
-            } else if let Some(id) = Self::find_next_claimable_id(
-                conn,
-                authenticated.user_id,
-                is_full_reviewer,
-                !prefer_priority,
-            )? {
+            } else if let Some(id) =
+                Self::find_next_claimable_id(conn, reviewer_id, is_full_reviewer, !prefer_priority)?
+            {
                 (id, !prefer_priority)
             } else {
                 return Err(ApiError::new(
@@ -218,17 +212,44 @@ impl Submission {
                 ));
             };
 
-            set_prefer_priority_next(authenticated.user_id, !claimed_priority);
+            set_prefer_priority_next(reviewer_id, !claimed_priority);
+
+            tracing::info!(
+                reviewer_id = %reviewer_id,
+                is_full_reviewer,
+                claimed_priority,
+                submission_id = %next_id,
+                "Claim selected submission"
+            );
 
             diesel::update(submissions::table.filter(submissions::id.eq(next_id)))
                 .set((
                     submissions::status.eq(SubmissionStatus::Claimed),
-                    submissions::reviewer_id.eq(authenticated.user_id),
+                    submissions::reviewer_id.eq(reviewer_id),
                     submissions::updated_at.eq(chrono::Utc::now()),
                 ))
                 .execute(conn)?;
 
-            let resolved = SubmissionResolved::find_one(conn, next_id, authenticated)?;
+            let updated_row = submissions::table
+                .filter(submissions::id.eq(next_id))
+                .select(Submission::as_select())
+                .first::<Submission>(conn)
+                .optional()?;
+
+            let resolved =
+                SubmissionResolved::find_one(conn, next_id, authenticated).map_err(|error| {
+                    tracing::error!(
+                        reviewer_id = %reviewer_id,
+                        is_full_reviewer,
+                        claimed_priority,
+                        submission_id = %next_id,
+                        updated_row = ?updated_row,
+                        error_status_code = error.error_status_code,
+                        error_message = %error.error_message,
+                        "Claim failed while resolving selected submission"
+                    );
+                    error
+                })?;
 
             Ok(resolved)
         })
