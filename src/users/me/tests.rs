@@ -301,7 +301,9 @@ async fn sync_badges_and_feature_badge() {
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    create_test_aredl_level_with_record(&db, user_id).await;
+    for _ in 0..5 {
+        create_test_aredl_level_with_record(&db, user_id).await;
+    }
 
     let sync_req = test::TestRequest::post()
         .uri("/users/@me/sync")
@@ -312,7 +314,7 @@ async fn sync_badges_and_feature_badge() {
     assert!(sync_resp.status().is_success());
 
     let sync_body: serde_json::Value = read_body_json(sync_resp).await;
-    let badge_code = "global.level_completion.1";
+    let badge_code = "global.level_completion.5";
     assert!(sync_body
         .as_array()
         .unwrap()
@@ -355,7 +357,7 @@ async fn cannot_feature_locked_badge() {
     let req = test::TestRequest::patch()
         .uri("/users/@me")
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({ "featured_badge_code": "global.level_completion.1" }))
+        .set_json(&json!({ "featured_badge_code": "global.level_completion.5" }))
         .to_request();
 
     let resp = test::call_service(&app, req).await;

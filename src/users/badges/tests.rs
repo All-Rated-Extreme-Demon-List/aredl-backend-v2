@@ -21,7 +21,7 @@ async fn get_user_badges() {
         .uri(&format!("/users/{user_id}/badges"))
         .insert_header(("Authorization", format!("Bearer {}", staff_token)))
         .set_json(json!({
-            "badge_code": "global.level_completion.1",
+            "badge_code": "global.level_completion.5",
             "description": "Test level",
         }))
         .to_request();
@@ -38,7 +38,7 @@ async fn get_user_badges() {
 
     let badges: serde_json::Value = read_body_json(get_resp).await;
     assert!(badges.as_array().unwrap().iter().any(|badge| {
-        badge["badge_code"] == "global.level_completion.1" && badge["description"] == "Test level"
+        badge["badge_code"] == "global.level_completion.5" && badge["description"] == "Test level"
     }));
 }
 
@@ -54,7 +54,7 @@ async fn grant_user_badge() {
         .uri(&format!("/users/{user_id}/badges"))
         .insert_header(("Authorization", format!("Bearer {}", staff_token)))
         .set_json(json!({
-            "badge_code": "global.level_completion.1",
+            "badge_code": "global.level_completion.5",
             "description": "Manual grant",
         }))
         .to_request();
@@ -64,7 +64,7 @@ async fn grant_user_badge() {
 
     let badges: serde_json::Value = read_body_json(resp).await;
     assert!(badges.as_array().unwrap().iter().any(|badge| {
-        badge["badge_code"] == "global.level_completion.1" && badge["description"] == "Manual grant"
+        badge["badge_code"] == "global.level_completion.5" && badge["description"] == "Manual grant"
     }));
 }
 
@@ -80,7 +80,7 @@ async fn remove_user_badge() {
         .uri(&format!("/users/{user_id}/badges"))
         .insert_header(("Authorization", format!("Bearer {}", staff_token)))
         .set_json(json!({
-            "badge_code": "global.level_completion.1",
+            "badge_code": "global.level_completion.5",
             "description": "Manual grant",
         }))
         .to_request();
@@ -91,7 +91,7 @@ async fn remove_user_badge() {
     let remove_req = test::TestRequest::delete()
         .uri(&format!("/users/{user_id}/badges"))
         .insert_header(("Authorization", format!("Bearer {}", staff_token)))
-        .set_json(json!(["global.level_completion.1"]))
+        .set_json(json!(["global.level_completion.5"]))
         .to_request();
 
     let remove_resp = test::call_service(&app, remove_req).await;
@@ -102,7 +102,7 @@ async fn remove_user_badge() {
         .as_array()
         .unwrap()
         .iter()
-        .any(|badge| badge["badge_code"] == "global.level_completion.1"));
+        .any(|badge| badge["badge_code"] == "global.level_completion.5"));
 }
 
 #[actix_web::test]
@@ -113,7 +113,9 @@ async fn sync_user_badges() {
     let staff_token =
         create_test_token(staff_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    create_test_level_with_record(&db, user_id).await;
+    for _ in 0..5 {
+        create_test_level_with_record(&db, user_id).await;
+    }
 
     let req = test::TestRequest::post()
         .uri(&format!("/users/{user_id}/badges/sync"))
@@ -128,7 +130,7 @@ async fn sync_user_badges() {
         .as_array()
         .unwrap()
         .iter()
-        .any(|badge| badge["badge_code"] == "global.level_completion.1"));
+        .any(|badge| badge["badge_code"] == "global.level_completion.5"));
 }
 
 #[actix_web::test]

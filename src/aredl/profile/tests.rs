@@ -128,7 +128,9 @@ async fn get_profile_includes_badges_and_featured_badge() {
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    create_test_level_with_record(&db, user_id).await;
+    for _ in 0..5 {
+        create_test_level_with_record(&db, user_id).await;
+    }
 
     let sync_req = test::TestRequest::post()
         .uri("/users/@me/sync")
@@ -137,7 +139,7 @@ async fn get_profile_includes_badges_and_featured_badge() {
     let sync_resp = test::call_service(&app, sync_req).await;
     assert!(sync_resp.status().is_success());
 
-    let badge_code = "global.level_completion.1";
+    let badge_code = "global.level_completion.5";
     let feature_req = test::TestRequest::patch()
         .uri("/users/@me")
         .insert_header(("Authorization", format!("Bearer {}", token)))

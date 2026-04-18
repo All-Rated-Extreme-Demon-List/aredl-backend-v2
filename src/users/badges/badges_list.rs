@@ -6,64 +6,53 @@ pub const TIERED_BADGES: &[(&str, &[&str])] = &[
         ],
     ),
     (
-        "global.level_completion",
-        &["1", "5", "10", "25", "50", "75", "100", "150", "200", "250"],
+        "platformer.hardest_level",
+        &["150", "125", "100", "75", "50", "25", "10"],
     ),
-    ("global.pack_completion", &["1", "3", "5", "10", "15"]),
+    (
+        "global.level_completion",
+        &["5", "10", "25", "50", "75", "100", "150", "200", "250"],
+    ),
+    (
+        "classic.leaderboard_rank",
+        &["2000", "1000", "500", "250", "100", "50", "20"],
+    ),
+    ("global.pack_completion", &["3", "5", "10", "15"]),
     (
         "global.hardest_pack_tier",
         &["iron", "gold", "ruby", "sapphire", "pearl", "diamond"],
     ),
     ("global.publisher_levels", &["4", "8"]),
-    (
-        "global.level_tags.timings",
-        &["10", "25", "50", "100", "150"],
-    ),
-    (
-        "global.level_tags.overall",
-        &["10", "25", "50", "100", "150"],
-    ),
+    ("global.level_tags.timings", &["5", "10", "25", "35", "50"]),
+    ("global.level_tags.overall", &["5", "10", "25", "35", "50"]),
     (
         "global.level_tags.chokepoints",
-        &["10", "25", "50", "100", "150"],
+        &["5", "10", "25", "35", "50"],
     ),
     (
         "global.level_tags.fastpaced",
-        &["10", "25", "50", "100", "150"],
+        &["5", "10", "25", "35", "50"],
     ),
-    (
-        "global.level_tags.learny",
-        &["10", "25", "50", "100", "150"],
-    ),
-    (
-        "global.level_tags.memory",
-        &["10", "25", "50", "100", "150"],
-    ),
-    ("global.level_tags.wave", &["10", "25", "50", "100", "150"]),
-    ("global.level_tags.22", &["10", "25", "50", "100", "150"]),
-    ("global.level_tags.ship", &["10", "25", "50", "100", "150"]),
+    ("global.level_tags.learny", &["5", "10", "25", "35", "50"]),
+    ("global.level_tags.memory", &["5", "10", "25", "35", "50"]),
+    ("global.level_tags.wave", &["5", "10", "25", "35", "50"]),
+    ("global.level_tags.22", &["5", "10", "25", "35", "50"]),
+    ("global.level_tags.ship", &["5", "10", "25", "35", "50"]),
     (
         "global.level_tags.nervecontrol",
-        &["10", "25", "50", "100", "150"],
+        &["5", "10", "25", "35", "50"],
     ),
-    ("global.level_tags.xl", &["10", "25", "50", "100", "150"]),
+    ("global.level_tags.xl", &["5", "10", "25", "35", "50"]),
     (
         "global.level_tags.clicksync",
-        &["10", "25", "50", "100", "150"],
+        &["5", "10", "25", "35", "50"],
     ),
-    (
-        "global.level_tags.highcps",
-        &["10", "25", "50", "100", "150"],
-    ),
-    ("global.level_tags.duals", &["5", "10", "25", "50", "100"]),
-    ("global.level_tags.nong", &["5", "10", "25", "50", "100"]),
-    ("global.level_tags.cube", &["5", "10", "25", "50", "100"]),
-    (
-        "global.level_tags.gimmicky",
-        &["5", "10", "25", "50", "100"],
-    ),
-    ("global.level_tags.flow", &["5", "10", "25", "50", "75"]),
-    ("global.level_tags.memory", &["5", "10", "25", "50", "75"]),
+    ("global.level_tags.highcps", &["5", "10", "25", "35", "50"]),
+    ("global.level_tags.duals", &["5", "10", "15", "20", "25"]),
+    ("global.level_tags.nong", &["5", "10", "15", "20", "25"]),
+    ("global.level_tags.cube", &["5", "10", "15", "20", "25"]),
+    ("global.level_tags.gimmicky", &["5", "10", "15", "20", "25"]),
+    ("global.level_tags.flow", &["5", "10", "25", "35", "50"]),
     (
         "global.level_tags.slowpaced",
         &["5", "10", "25", "35", "50"],
@@ -73,10 +62,10 @@ pub const TIERED_BADGES: &[(&str, &[&str])] = &[
         &["5", "10", "25", "35", "50"],
     ),
     ("global.level_tags.xxl", &["5", "10", "25", "35", "50"]),
-    ("global.level_tags.19", &["3", "5", "10", "20", "30"]),
-    ("global.level_tags.medium", &["3", "5", "10", "20", "30"]),
-    ("global.level_tags.20", &["3", "5", "10", "20", "30"]),
-    ("global.level_tags.circles", &["3", "5", "10", "20", "30"]),
+    ("global.level_tags.19", &["5", "10", "15", "20", "30"]),
+    ("global.level_tags.medium", &["5", "10", "15", "20", "30"]),
+    ("global.level_tags.20", &["5", "10", "15", "20", "30"]),
+    ("global.level_tags.circles", &["5", "10", "15", "20", "30"]),
     ("global.level_tags.2p", &["3", "5", "10", "15", "20"]),
     ("global.level_tags.ufo", &["3", "5", "10", "15", "20"]),
     ("global.level_tags.ball", &["3", "5", "10", "15", "20"]),
@@ -85,17 +74,21 @@ pub const TIERED_BADGES: &[(&str, &[&str])] = &[
     ("global.level_tags.bossfight", &["3", "5", "10", "15", "20"]),
     ("global.level_tags.mirror", &["3", "5", "10", "15", "20"]),
     ("global.level_tags.xxlplus", &["3", "5", "10", "15", "20"]),
-    ("global.level_tags.oldswing", &["3", "5", "8", "12", "16"]),
-    ("global.level_tags.newswing", &["2", "4", "6", "8", "10"]),
+    ("global.level_tags.oldswing", &["5", "10", "15"]),
+    ("global.level_tags.newswing", &["3", "5", "10"]),
 ];
 
 pub const SINGLE_BADGES: &[&str] = &[
-    "platformer.level_completion.1",
     "global.level_tags.alltags.1",
+    "global.all_nlw",
+    "global.edel_high",
+    "global.edel_low",
+    "global.2p_and_solo",
     "global.alphabet",
     "global.first_victor",
     "global.creator",
     "global.verifier",
+    "platformer.fastest_time",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -184,6 +177,23 @@ pub const HARDEST_PACK_TIERS: &[(&str, &str)] = &[
     ("sapphire", "Sapphire Tier"),
     ("pearl", "Pearl Tier"),
     ("diamond", "Diamond Tier"),
+];
+
+pub const NLW_TIERS: &[&str] = &[
+    "Beginner",
+    "Easy",
+    "Medium",
+    "Hard",
+    "Very Hard",
+    "Insane",
+    "Extreme",
+    "Remorseless",
+    "Relentless",
+    "Terrifying",
+    "Catastrophic",
+    "Inexorable",
+    "Excruciating",
+    "Fuck",
 ];
 
 pub struct AvailableBadges;

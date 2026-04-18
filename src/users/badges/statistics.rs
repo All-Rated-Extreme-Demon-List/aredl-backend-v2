@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl};
+use diesel::{ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl};
 use uuid::Uuid;
 
 use crate::{
@@ -25,6 +25,7 @@ pub struct UserListStatistics {
     pub created_levels: Vec<BadgeCreatedLevelStatistics>,
     pub packs: Vec<BadgePackStatistics>,
     pub level_tag_counts: HashMap<String, i64>,
+    pub leaderboard_rank: Option<i32>,
 }
 
 #[derive(Debug, Clone)]
@@ -33,9 +34,14 @@ pub struct BadgeLevelStatistics {
     pub id: Uuid,
     pub name: String,
     pub position: i32,
+    pub level_id: i32,
+    pub two_player: bool,
     pub publisher_id: Uuid,
+    pub edel_enjoyment: Option<f64>,
+    pub nlw_tier: Option<String>,
     pub is_verification: bool,
     pub is_first_victor: bool,
+    pub is_fastest_time: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -70,6 +76,12 @@ impl UserStatistics {
 
 impl UserListStatistics {
     fn load_classic(conn: &mut DbConnection, user_id: Uuid) -> Result<Self, ApiError> {
+        let leaderboard_rank = aredl::user_leaderboard::table
+            .filter(aredl::user_leaderboard::user_id.eq(user_id))
+            .select(aredl::user_leaderboard::rank)
+            .first::<i32>(conn)
+            .optional()?;
+
         let first_victor_level_ids = aredl::records::table
             .inner_join(aredl::levels::table.on(aredl::levels::id.eq(aredl::records::level_id)))
             .filter(aredl::levels::legacy.eq(false))
@@ -87,8 +99,7 @@ impl UserListStatistics {
             .filter_map(|(level_id, submitted_by)| (submitted_by == user_id).then_some(level_id))
             .collect::<HashSet<_>>();
 
-        let mut levels_records = HashMap::new();
-        for (id, name, position, publisher_id, is_verification) in aredl::records::table
+        let levels_records = aredl::records::table
             .inner_join(aredl::levels::table.on(aredl::levels::id.eq(aredl::records::level_id)))
             .filter(aredl::records::submitted_by.eq(user_id))
             .filter(aredl::levels::legacy.eq(false))
@@ -97,33 +108,52 @@ impl UserListStatistics {
                 aredl::levels::id,
                 aredl::levels::name,
                 aredl::levels::position,
+                aredl::levels::level_id,
+                aredl::levels::two_player,
                 aredl::levels::publisher_id,
+                aredl::levels::edel_enjoyment,
+                aredl::levels::nlw_tier,
                 aredl::records::is_verification,
             ))
-            .load::<(Uuid, String, i32, Uuid, bool)>(conn)?
-        {
-            levels_records
-                .entry(id)
-                .and_modify(|level: &mut BadgeLevelStatistics| {
-                    level.is_verification |= is_verification;
-                })
-                .or_insert(BadgeLevelStatistics {
+            .load::<(
+                Uuid,
+                String,
+                i32,
+                i32,
+                bool,
+                Uuid,
+                Option<f64>,
+                Option<String>,
+                bool,
+            )>(conn)?
+            .into_iter()
+            .map(
+                |(
+                    id,
+                    name,
+                    position,
+                    level_id,
+                    two_player,
+                    publisher_id,
+                    edel_enjoyment,
+                    nlw_tier,
+                    is_verification,
+                )| BadgeLevelStatistics {
                     scope: "classic",
                     id,
                     name,
                     position,
+                    level_id,
+                    two_player,
                     publisher_id,
+                    edel_enjoyment,
+                    nlw_tier,
                     is_verification,
                     is_first_victor: first_victor_level_ids.contains(&id),
-                });
-        }
-
-        let mut levels_records = levels_records.into_values().collect::<Vec<_>>();
-        levels_records.sort_by(|left, right| {
-            left.position
-                .cmp(&right.position)
-                .then(left.name.cmp(&right.name))
-        });
+                    is_fastest_time: false,
+                },
+            )
+            .collect::<Vec<_>>();
 
         let packs = classic_completed_packs::table
             .inner_join(
@@ -214,10 +244,28 @@ impl UserListStatistics {
             created_levels,
             packs,
             level_tag_counts,
+            leaderboard_rank,
         })
     }
 
     fn load_platformer(conn: &mut DbConnection, user_id: Uuid) -> Result<Self, ApiError> {
+        let fastest_time_level_ids = arepl::records::table
+            .inner_join(arepl::levels::table.on(arepl::levels::id.eq(arepl::records::level_id)))
+            .filter(arepl::levels::legacy.eq(false))
+            .filter(arepl::records::is_verification.eq(false))
+            .distinct_on(arepl::records::level_id)
+            .order_by((
+                arepl::records::level_id.asc(),
+                arepl::records::completion_time.asc(),
+                arepl::records::achieved_at.asc(),
+                arepl::records::id.asc(),
+            ))
+            .select((arepl::records::level_id, arepl::records::submitted_by))
+            .load::<(Uuid, Uuid)>(conn)?
+            .into_iter()
+            .filter_map(|(level_id, submitted_by)| (submitted_by == user_id).then_some(level_id))
+            .collect::<HashSet<_>>();
+
         let first_victor_level_ids = arepl::records::table
             .inner_join(arepl::levels::table.on(arepl::levels::id.eq(arepl::records::level_id)))
             .filter(arepl::levels::legacy.eq(false))
@@ -235,8 +283,7 @@ impl UserListStatistics {
             .filter_map(|(level_id, submitted_by)| (submitted_by == user_id).then_some(level_id))
             .collect::<HashSet<_>>();
 
-        let mut levels_records = HashMap::new();
-        for (id, name, position, publisher_id, is_verification) in arepl::records::table
+        let levels_records = arepl::records::table
             .inner_join(arepl::levels::table.on(arepl::levels::id.eq(arepl::records::level_id)))
             .filter(arepl::records::submitted_by.eq(user_id))
             .filter(arepl::levels::legacy.eq(false))
@@ -245,33 +292,52 @@ impl UserListStatistics {
                 arepl::levels::id,
                 arepl::levels::name,
                 arepl::levels::position,
+                arepl::levels::level_id,
+                arepl::levels::two_player,
                 arepl::levels::publisher_id,
+                arepl::levels::edel_enjoyment,
+                arepl::levels::nlw_tier,
                 arepl::records::is_verification,
             ))
-            .load::<(Uuid, String, i32, Uuid, bool)>(conn)?
-        {
-            levels_records
-                .entry(id)
-                .and_modify(|level: &mut BadgeLevelStatistics| {
-                    level.is_verification |= is_verification;
-                })
-                .or_insert(BadgeLevelStatistics {
+            .load::<(
+                Uuid,
+                String,
+                i32,
+                i32,
+                bool,
+                Uuid,
+                Option<f64>,
+                Option<String>,
+                bool,
+            )>(conn)?
+            .into_iter()
+            .map(
+                |(
+                    id,
+                    name,
+                    position,
+                    level_id,
+                    two_player,
+                    publisher_id,
+                    edel_enjoyment,
+                    nlw_tier,
+                    is_verification,
+                )| BadgeLevelStatistics {
                     scope: "platformer",
                     id,
                     name,
                     position,
+                    level_id,
+                    two_player,
                     publisher_id,
+                    edel_enjoyment,
+                    nlw_tier,
                     is_verification,
                     is_first_victor: first_victor_level_ids.contains(&id),
-                });
-        }
-
-        let mut levels_records = levels_records.into_values().collect::<Vec<_>>();
-        levels_records.sort_by(|left, right| {
-            left.position
-                .cmp(&right.position)
-                .then(left.name.cmp(&right.name))
-        });
+                    is_fastest_time: fastest_time_level_ids.contains(&id),
+                },
+            )
+            .collect::<Vec<_>>();
 
         let packs = platformer_completed_packs::table
             .inner_join(
@@ -362,6 +428,7 @@ impl UserListStatistics {
             created_levels,
             packs,
             level_tag_counts,
+            leaderboard_rank: None,
         })
     }
 
@@ -412,6 +479,7 @@ impl UserListStatistics {
             created_levels,
             packs,
             level_tag_counts,
+            leaderboard_rank: None,
         }
     }
 }

@@ -2,7 +2,7 @@ use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::user_badges;
 use crate::users::badges::badges_list::{
-    AvailableBadges, TagBadgeMode, HARDEST_PACK_TIERS, LEVEL_TAG_BADGES,
+    AvailableBadges, TagBadgeMode, HARDEST_PACK_TIERS, LEVEL_TAG_BADGES, NLW_TIERS,
 };
 use crate::users::badges::statistics::UserStatistics;
 use chrono::{DateTime, Utc};
@@ -247,6 +247,13 @@ impl UserStatistics {
                         .is_some_and(|position| position <= threshold)
                 })
             }
+            (_, ["leaderboard_rank", threshold]) => {
+                threshold.parse::<i32>().ok().is_some_and(|threshold| {
+                    scope_statistics
+                        .leaderboard_rank
+                        .is_some_and(|rank| rank <= threshold)
+                })
+            }
             (_, ["hardest_pack_tier", tier_code]) => scope_statistics
                 .packs
                 .iter()
@@ -292,10 +299,67 @@ impl UserStatistics {
 
                 ('A'..='Z').all(|letter| initials.contains(&letter))
             }
+            ("global", ["all_nlw"]) => {
+                !NLW_TIERS.is_empty()
+                    && NLW_TIERS.iter().all(|required_tier| {
+                        scope_statistics.levels_records.iter().any(|level| {
+                            level
+                                .nlw_tier
+                                .as_deref()
+                                .is_some_and(|tier| tier == *required_tier)
+                        })
+                    })
+            }
+            ("global", ["edel_high"]) => {
+                scope_statistics
+                    .levels_records
+                    .iter()
+                    .filter(|level| {
+                        level
+                            .edel_enjoyment
+                            .is_some_and(|edel_enjoyment| edel_enjoyment >= 90.0)
+                    })
+                    .count()
+                    >= 3
+            }
+            ("global", ["edel_low"]) => {
+                scope_statistics
+                    .levels_records
+                    .iter()
+                    .filter(|level| {
+                        level
+                            .edel_enjoyment
+                            .is_some_and(|edel_enjoyment| edel_enjoyment <= 40.0)
+                    })
+                    .count()
+                    >= 3
+            }
+            ("global", ["2p_and_solo"]) => {
+                let mut level_versions = HashMap::new();
+                for level in &scope_statistics.levels_records {
+                    let versions = level_versions
+                        .entry((level.scope, level.level_id))
+                        .or_insert((false, false));
+
+                    if level.two_player {
+                        versions.1 = true;
+                    } else {
+                        versions.0 = true;
+                    }
+                }
+
+                level_versions
+                    .into_values()
+                    .any(|(has_solo, has_two_player)| has_solo && has_two_player)
+            }
             ("global", ["first_victor"]) => scope_statistics
                 .levels_records
                 .iter()
                 .any(|level| level.is_first_victor),
+            ("platformer", ["fastest_time"]) => scope_statistics
+                .levels_records
+                .iter()
+                .any(|level| level.is_fastest_time),
             ("global", ["creator"]) => !scope_statistics.created_levels.is_empty(),
             ("global", ["verifier"]) => scope_statistics
                 .levels_records
@@ -351,6 +415,14 @@ impl UserStatistics {
                     .levels_records
                     .iter()
                     .filter(|level| level.is_first_victor)
+                    .map(|level| (level.position, level.name.as_str()))
+                    .collect(),
+            ),
+            ["platformer", "fastest_time"] => Self::levels_to_text(
+                self.platformer
+                    .levels_records
+                    .iter()
+                    .filter(|level| level.is_fastest_time)
                     .map(|level| (level.position, level.name.as_str()))
                     .collect(),
             ),
