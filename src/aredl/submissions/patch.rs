@@ -289,8 +289,8 @@ impl SubmissionPatchMod {
             .select(Submission::as_select())
             .first::<Submission>(conn)?;
 
-        let is_full_reviewer =
-            authenticated.has_permission(conn, Permission::SubmissionReviewFull)?;
+        let can_edit_non_claimed =
+            authenticated.has_permission(conn, Permission::EditNonClaimedSubmissions)?;
 
         if old_submission.submitted_by == authenticated.user_id {
             return SubmissionPatchUser::patch(
@@ -302,7 +302,7 @@ impl SubmissionPatchMod {
             );
         }
 
-        if !is_full_reviewer
+        if !can_edit_non_claimed
             && (old_submission.raw_url.is_some()
                 || old_submission.status != SubmissionStatus::Claimed
                 || old_submission.reviewer_id != Some(authenticated.user_id))
