@@ -147,6 +147,7 @@ Each permission then requires the user's privilege level to be higher or equal t
 | Permission | Required Level |
 |---|---|
 | **SubmissionReviewBase** | 10 |
+| **EditNonClaimedSubmissions** | 11 |
 | **SubmissionReviewFull** | 15 |
 | **RecordModify** | 20 |
 | **UserModify** | 25 |
