@@ -289,9 +289,6 @@ impl SubmissionPatchMod {
             .select(Submission::as_select())
             .first::<Submission>(conn)?;
 
-        let can_edit_non_claimed =
-            authenticated.has_permission(conn, Permission::EditNonClaimedSubmissions)?;
-
         if old_submission.submitted_by == authenticated.user_id {
             return SubmissionPatchUser::patch(
                 SubmissionPatchMod::downgrade(patch),
@@ -302,10 +299,15 @@ impl SubmissionPatchMod {
             );
         }
 
-        if !can_edit_non_claimed
-            && (old_submission.raw_url.is_some()
-                || old_submission.status != SubmissionStatus::Claimed
-                || old_submission.reviewer_id != Some(authenticated.user_id))
+        let is_full_staff = authenticated.has_permission(conn, Permission::SubmissionReviewFull)?;
+
+        let can_edit_non_claimed =
+            is_full_staff || authenticated.has_permission(conn, Permission::EditNonClaimedSubmissions)?;
+
+        if (!can_edit_non_claimed
+            && (old_submission.status != SubmissionStatus::Claimed
+                || old_submission.reviewer_id != Some(authenticated.user_id)))
+            || (!is_full_staff && old_submission.raw_url.is_some())
         {
             return Err(ApiError::new(
                 403,
