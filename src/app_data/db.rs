@@ -70,6 +70,7 @@ fn init_test_db_schema_and_seed() {
 
         let permissions_data = vec![
             ("submission_review_base", 10),
+            ("edit_non_claimed_submissions", 11),
             ("submission_review_full", 15),
             ("record_modify", 20),
             ("placeholder_create", 25),
