@@ -22,7 +22,6 @@ pub enum Permission {
     DirectMerge,
     ClanModify,
     SubmissionReviewFull,
-    EditNonClaimedSubmissions,
     SubmissionReviewBase,
     ShiftManage,
     SubmissionStatusManage,
