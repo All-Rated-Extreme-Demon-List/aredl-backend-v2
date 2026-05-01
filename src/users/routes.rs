@@ -10,7 +10,6 @@ use actix_web::{get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
-use uuid::Uuid;
 
 #[utoipa::path(
     get,
@@ -108,7 +107,7 @@ async fn create_placeholder(
     description = "Edit a user's base information. Your privilege level needs to be strictly higher than the one of the user you are trying to edit.",
     tag = "Users",
     params(
-        ("id" = Uuid, description = "The internal UUID of the user")
+        ("id" = String, description = "The internal UUID, username or discord ID of the user")
     ),
     request_body = UserUpdate,
     responses(
@@ -122,7 +121,7 @@ async fn create_placeholder(
 #[patch("/{id}", wrap = "UserAuth::require(Permission::UserModify)")]
 async fn update(
     db: web::Data<Arc<DbAppState>>,
-    id: web::Path<Uuid>,
+    id: web::Path<String>,
     user: web::Json<UserUpdate>,
     authenticated: Authenticated,
     root_span: RootSpan,
@@ -130,8 +129,9 @@ async fn update(
     root_span.record("body", &tracing::field::debug(&user));
     let result = web::block(move || {
         let conn = &mut db.connection()?;
-        authenticated.ensure_has_higher_privilege_than_user(conn, id.clone())?;
-        User::update(conn, id.into_inner(), user.into_inner())
+        let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
+        authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
+        User::update(conn, user_id, user.into_inner())
     })
     .await??;
 
@@ -152,7 +152,7 @@ async fn update(
     ",
     tag = "Users",
     params(
-        ("id" = Uuid, description = "The internal UUID of the user")
+        ("id" = String, description = "The internal UUID, username or discord ID of the user")
     ),
     request_body = UserBanUpdate,
     responses(
@@ -166,7 +166,7 @@ async fn update(
 #[patch("/{id}/ban", wrap = "UserAuth::require(Permission::UserBan)")]
 async fn ban(
     db: web::Data<Arc<DbAppState>>,
-    id: web::Path<Uuid>,
+    id: web::Path<String>,
     user: web::Json<UserBanUpdate>,
     authenticated: Authenticated,
     root_span: RootSpan,
@@ -174,16 +174,12 @@ async fn ban(
     root_span.record("body", &tracing::field::debug(&user));
     let result = web::block(move || {
         let conn = &mut db.connection()?;
-        authenticated.ensure_has_higher_privilege_than_user(conn, id.clone())?;
+        let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
+        authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
         if user.ban_level == 3 {
             authenticated.ensure_has_permission(conn, Permission::UserRedact)?;
         }
-        User::ban(
-            conn,
-            authenticated,
-            id.into_inner(),
-            user.into_inner().ban_level,
-        )
+        User::ban(conn, authenticated, user_id, user.into_inner().ban_level)
     })
     .await??;
 

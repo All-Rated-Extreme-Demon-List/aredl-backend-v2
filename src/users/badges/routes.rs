@@ -6,7 +6,6 @@ use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
-use uuid::Uuid;
 
 use super::{UserBadge, UserBadgeGrant};
 
@@ -47,7 +46,7 @@ async fn find_all(
     description = "Recalculate newly unlocked badges for a user.",
     tag = "Users - Badges",
     params(
-        ("id" = Uuid, description = "The internal UUID of the user")
+        ("id" = String, description = "The internal UUID, username or discord ID of the user")
     ),
     responses(
         (status = 200, body = [UserBadge])
@@ -60,13 +59,13 @@ async fn find_all(
 #[post("/sync", wrap = "UserAuth::require(Permission::UserModify)")]
 async fn sync(
     db: web::Data<Arc<DbAppState>>,
-    id: web::Path<Uuid>,
+    id: web::Path<String>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let badges = web::block(move || {
         let conn = &mut db.connection()?;
-        authenticated.ensure_has_higher_privilege_than_user(conn, id.clone())?;
-        let user_id = id.into_inner();
+        let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
+        authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
         UserBadge::update_user_badges(conn, user_id)?;
         UserBadge::find_all(conn, user_id)
     })
@@ -81,7 +80,7 @@ async fn sync(
     description = "Grant the given badges to a user.",
     tag = "Users - Badges",
     params(
-        ("id" = Uuid, description = "The internal UUID of the user")
+        ("id" = String, description = "The internal UUID, username or discord ID of the user")
     ),
     request_body = UserBadgeGrant,
     responses(
@@ -95,7 +94,7 @@ async fn sync(
 #[patch("", wrap = "UserAuth::require(Permission::UserModify)")]
 async fn grant(
     db: web::Data<Arc<DbAppState>>,
-    id: web::Path<Uuid>,
+    id: web::Path<String>,
     authenticated: Authenticated,
     badge: web::Json<UserBadgeGrant>,
     root_span: RootSpan,
@@ -103,8 +102,9 @@ async fn grant(
     root_span.record("body", &tracing::field::debug(&badge));
     let badges = web::block(move || {
         let conn = &mut db.connection()?;
-        authenticated.ensure_has_higher_privilege_than_user(conn, id.clone())?;
-        let badges = UserBadge::grant(conn, id.into_inner(), badge.into_inner())?;
+        let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
+        authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
+        let badges = UserBadge::grant(conn, user_id, badge.into_inner())?;
         Ok::<_, ApiError>(badges)
     })
     .await??;
@@ -118,7 +118,7 @@ async fn grant(
     description = "Remove the given badges from a user.",
     tag = "Users - Badges",
     params(
-        ("id" = Uuid, description = "The internal UUID of the user")
+        ("id" = String, description = "The internal UUID, username or discord ID of the user")
     ),
     request_body = [String],
     responses(
@@ -132,7 +132,7 @@ async fn grant(
 #[delete("", wrap = "UserAuth::require(Permission::UserModify)")]
 async fn remove(
     db: web::Data<Arc<DbAppState>>,
-    id: web::Path<Uuid>,
+    id: web::Path<String>,
     authenticated: Authenticated,
     badge_codes: web::Json<Vec<String>>,
     root_span: RootSpan,
@@ -140,8 +140,9 @@ async fn remove(
     root_span.record("body", &tracing::field::debug(&badge_codes));
     let badges = web::block(move || {
         let conn = &mut db.connection()?;
-        authenticated.ensure_has_higher_privilege_than_user(conn, id.clone())?;
-        let badges = UserBadge::remove_all(conn, id.into_inner(), badge_codes.into_inner())?;
+        let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
+        authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
+        let badges = UserBadge::remove_all(conn, user_id, badge_codes.into_inner())?;
         Ok::<_, ApiError>(badges)
     })
     .await??;
