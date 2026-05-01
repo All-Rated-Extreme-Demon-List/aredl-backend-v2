@@ -1,9 +1,13 @@
 use crate::{
     app_data::db::DbConnection,
+    aredl::levels::id_resolver::level_filter,
     auth::{Authenticated, Permission},
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
-    schema::{aredl::level_notes, users},
+    schema::{
+        aredl::{level_notes, levels},
+        users,
+    },
     users::BaseUser,
 };
 use chrono::{DateTime, Utc};
@@ -86,7 +90,7 @@ pub struct LevelNotePost {
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct LevelNotesQueryOptions {
-    pub level_id: Option<Uuid>,
+    pub level_id: Option<String>,
     pub type_filter: Option<LevelNotesType>,
     pub added_by: Option<Uuid>,
 }
@@ -103,7 +107,7 @@ impl LevelNotes {
             None => false,
         };
 
-        let build_filtered = || {
+        let build_filtered = || -> Result<_, ApiError> {
             let mut q = level_notes::table.into_boxed::<Pg>();
             if let Some(user_id) = filters.added_by {
                 q = q.filter(level_notes::added_by.eq(user_id));
@@ -111,19 +115,21 @@ impl LevelNotes {
             if let Some(note_type) = filters.type_filter.as_ref() {
                 q = q.filter(level_notes::note_type.eq(note_type));
             }
-            if let Some(level_id) = filters.level_id {
-                q = q.filter(level_notes::level_id.eq(level_id));
+            if let Some(level_id) = filters.level_id.as_deref() {
+                q = q.filter(
+                    level_notes::level_id.eq_any(level_filter(level_id)?.select(levels::id)),
+                );
             }
             if !is_reviewer {
                 q = q.filter(level_notes::note_type.ne(LevelNotesType::ReviewerNotes));
             }
 
-            q
+            Ok(q)
         };
 
-        let count = build_filtered().count().get_result(conn)?;
+        let count = build_filtered()?.count().get_result(conn)?;
 
-        let query = build_filtered()
+        let query = build_filtered()?
             .limit(page_query.per_page())
             .offset(page_query.offset())
             .order(level_notes::created_at.desc())

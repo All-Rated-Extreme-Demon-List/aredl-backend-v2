@@ -13,26 +13,8 @@ use diesel::{
 };
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    sync::{Mutex, OnceLock},
-};
 use utoipa::ToSchema;
 use uuid::Uuid;
-
-static CLAIM_PREFER_PRIORITY: OnceLock<Mutex<HashMap<Uuid, bool>>> = OnceLock::new();
-
-fn prefer_priority_next(reviewer_id: Uuid) -> bool {
-    let lock = CLAIM_PREFER_PRIORITY.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut state = lock.lock().expect("claim preference lock poisoned");
-    *state.entry(reviewer_id).or_insert(true)
-}
-
-fn set_prefer_priority_next(reviewer_id: Uuid, prefer_priority: bool) {
-    let lock = CLAIM_PREFER_PRIORITY.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut state = lock.lock().expect("claim preference lock poisoned");
-    state.insert(reviewer_id, prefer_priority);
-}
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq, Default)]
 #[ExistingTypePath = "crate::schema::aredl::sql_types::SubmissionStatus"]
@@ -191,34 +173,24 @@ impl Submission {
         authenticated: Authenticated,
     ) -> Result<SubmissionResolved, ApiError> {
         conn.transaction(|conn| -> Result<SubmissionResolved, ApiError> {
-            let prefer_priority = true; // prefer_priority_next(authenticated.user_id);
             let is_full_reviewer =
                 authenticated.has_permission(conn, Permission::SubmissionReviewFull)?;
 
-            let preferred_id = Self::find_next_claimable_id(
-                conn,
-                authenticated.user_id,
-                is_full_reviewer,
-                prefer_priority,
-            )?;
+            let preferred_id =
+                Self::find_next_claimable_id(conn, authenticated.user_id, is_full_reviewer, true)?;
 
-            let (next_id, claimed_priority) = if let Some(id) = preferred_id {
-                (id, prefer_priority)
-            } else if let Some(id) = Self::find_next_claimable_id(
-                conn,
-                authenticated.user_id,
-                is_full_reviewer,
-                !prefer_priority,
-            )? {
-                (id, !prefer_priority)
+            let next_id = if let Some(id) = preferred_id {
+                id
+            } else if let Some(id) =
+                Self::find_next_claimable_id(conn, authenticated.user_id, is_full_reviewer, false)?
+            {
+                id
             } else {
                 return Err(ApiError::new(
                     404,
                     "There are no submissions available to claim",
                 ));
             };
-
-            set_prefer_priority_next(authenticated.user_id, !claimed_priority);
 
             diesel::update(submissions::table.filter(submissions::id.eq(next_id)))
                 .set((

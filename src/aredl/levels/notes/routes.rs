@@ -1,8 +1,11 @@
 use crate::{
     app_data::db::DbAppState,
-    aredl::levels::notes::{
-        LevelNotePost, LevelNoteUpdate, LevelNotes, LevelNotesQueryOptions, LevelNotesResolvedPage,
-        LevelNotesType,
+    aredl::levels::{
+        id_resolver::resolve_level_id,
+        notes::{
+            LevelNotePost, LevelNoteUpdate, LevelNotes, LevelNotesQueryOptions,
+            LevelNotesResolvedPage, LevelNotesType,
+        },
     },
     auth::{Authenticated, Permission, UserAuth},
     error_handler::ApiError,
@@ -30,7 +33,7 @@ use uuid::Uuid;
     params(
         ("page" = Option<i64>, Query, description = "The page of the notes list to fetch."),
         ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page."),
-        ("level_id" = Option<Uuid>, Query, description = "The internal ID of the original level to filter by."),
+        ("level_id" = Option<String>, Query, description = "The ID of the original level to filter by (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)"),
         ("type_filter" = Option<LevelNotesType>, Query, description = "The type of notes to filter by."),
         ("added_by" = Option<Uuid>, Query, description = "Filter by the moderator that added a note."),
     ),
@@ -64,7 +67,7 @@ async fn find_all(
     description = "Add a note to a level",
     tag = "AREDL - Level Notes",
     params(
-        ("level_id" = Uuid, description = "The internal ID of the level")
+        ("level_id" = String, description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
         (status = 200, body = LevelNotes)
@@ -75,16 +78,13 @@ async fn find_all(
 async fn create(
     db: web::Data<Arc<DbAppState>>,
     body: web::Json<LevelNotePost>,
-    level_id: web::Path<Uuid>,
+    level_id: web::Path<String>,
     auth: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let notes = web::block(move || {
-        LevelNotes::create(
-            &mut db.connection()?,
-            body.into_inner(),
-            level_id.into_inner(),
-            auth,
-        )
+        let conn = &mut db.connection()?;
+        let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
+        LevelNotes::create(conn, body.into_inner(), level_id, auth)
     })
     .await??;
     Ok(HttpResponse::Ok().json(notes))

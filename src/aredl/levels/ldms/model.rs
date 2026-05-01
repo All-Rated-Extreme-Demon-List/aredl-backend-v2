@@ -1,9 +1,13 @@
 use crate::{
     app_data::db::DbConnection,
+    aredl::levels::id_resolver::level_filter,
     auth::Authenticated,
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
-    schema::{aredl::level_ldms, users},
+    schema::{
+        aredl::{level_ldms, levels},
+        users,
+    },
     users::BaseUser,
 };
 use chrono::{DateTime, Utc};
@@ -106,39 +110,11 @@ pub struct LevelLDMBody {
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct LevelLDMQueryOptions {
-    pub level_id: Option<Uuid>,
+    pub level_id: Option<String>,
     pub type_filter: Option<LevelLDMType>,
     pub status_filter: Option<LevelLDMStatus>,
     pub description_filter: Option<Option<String>>,
     pub added_by: Option<Uuid>,
-}
-
-macro_rules! aredl_apply_ldm_filters {
-    ($query:expr, $opts:expr) => {{
-        let filters = &$opts;
-        let mut new_query = $query;
-
-        if let Some(id) = filters.level_id {
-            new_query = new_query.filter(level_ldms::level_id.eq(id))
-        }
-        if let Some(user) = filters.added_by {
-            new_query = new_query.filter(level_ldms::added_by.eq(user))
-        }
-        if let Some(ldm_type) = &filters.type_filter {
-            new_query = new_query.filter(level_ldms::id_type.eq(ldm_type))
-        }
-        if let Some(status) = &filters.status_filter {
-            new_query = new_query.filter(level_ldms::status.eq(status))
-        }
-        if let Some(desc) = &filters.description_filter {
-            match desc {
-                Some(desc) => new_query = new_query.filter(level_ldms::description.ilike(desc)),
-                None => new_query = new_query.filter(level_ldms::description.is_null()),
-            }
-        }
-
-        new_query
-    }};
 }
 
 impl LevelLDM {
@@ -147,18 +123,43 @@ impl LevelLDM {
         filters: LevelLDMQueryOptions,
         page_query: PageQuery<D>,
     ) -> Result<Paginated<LevelLDMResolvedPage>, ApiError> {
-        let mut query = level_ldms::table
+        let build_filtered = || -> Result<_, ApiError> {
+            let mut query = level_ldms::table.into_boxed::<Pg>();
+
+            if let Some(level_id) = filters.level_id.as_deref() {
+                query = query.filter(
+                    level_ldms::level_id.eq_any(level_filter(level_id)?.select(levels::id)),
+                );
+            }
+            if let Some(added_by) = filters.added_by {
+                query = query.filter(level_ldms::added_by.eq(added_by));
+            }
+            if let Some(ldm_type) = filters.type_filter.as_ref() {
+                query = query.filter(level_ldms::id_type.eq(ldm_type));
+            }
+            if let Some(status) = filters.status_filter.as_ref() {
+                query = query.filter(level_ldms::status.eq(status));
+            }
+            if let Some(description_filter) = filters.description_filter.as_ref() {
+                match description_filter {
+                    Some(description) => {
+                        query = query.filter(level_ldms::description.ilike(description));
+                    }
+                    None => query = query.filter(level_ldms::description.is_null()),
+                }
+            }
+
+            Ok(query)
+        };
+
+        let count = build_filtered()?.count().get_result::<i64>(conn)?;
+
+        let query = build_filtered()?
             .limit(page_query.per_page())
             .offset(page_query.offset())
             .order(level_ldms::created_at.desc())
             .inner_join(users::table.on(level_ldms::added_by.eq(users::id)))
-            .select((LevelLDM::as_select(), BaseUser::as_select()))
-            .into_boxed::<Pg>();
-
-        query = aredl_apply_ldm_filters!(query, filters);
-
-        let count = aredl_apply_ldm_filters!(level_ldms::table.count().into_boxed::<Pg>(), filters)
-            .get_result::<i64>(conn)?;
+            .select((LevelLDM::as_select(), BaseUser::as_select()));
 
         let ldms: Vec<(LevelLDM, BaseUser)> = query.load(conn)?;
 

@@ -1,7 +1,11 @@
 use crate::{
     app_data::db::DbAppState,
-    arepl::levels::ldms::{
-        LevelLDM, LevelLDMBody, LevelLDMQueryOptions, LevelLDMStatus, LevelLDMType, LevelLDMUpdate,
+    arepl::levels::{
+        id_resolver::resolve_level_id,
+        ldms::{
+            LevelLDM, LevelLDMBody, LevelLDMQueryOptions, LevelLDMStatus, LevelLDMType,
+            LevelLDMUpdate,
+        },
     },
     auth::{Authenticated, Permission, UserAuth},
     error_handler::ApiError,
@@ -24,7 +28,7 @@ use uuid::Uuid;
     params(
         ("page" = Option<i64>, Query, description = "The page of the LDM list to fetch."),
         ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page."),
-        ("level_id" = Option<Uuid>, Query, description = "The internal ID of the original level to filter by."),
+        ("level_id" = Option<String>, Query, description = "The ID of the original level to filter by (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)"),
         ("type_filter" = Option<LevelLDMType>, Query, description = "The type of LDM to filter by."),
         ("status_filter" = Option<LevelLDMStatus>, Query, description = "The status of an LDM to filter by."),
         ("description" = Option<String>, Query, description = "Filter for the description of this LDM. Use SQL LIKE syntax."),
@@ -54,7 +58,7 @@ async fn find_all(
     description = "Add an LDM to a level",
     tag = "AREDL (P) - Level LDMs",
     params(
-        ("level_id" = Uuid, description = "The internal ID of the level")
+        ("level_id" = String, description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
         (status = 200, body = LevelLDM)
@@ -64,16 +68,13 @@ async fn find_all(
 async fn create(
     db: web::Data<Arc<DbAppState>>,
     body: web::Json<LevelLDMBody>,
-    level_id: web::Path<Uuid>,
+    level_id: web::Path<String>,
     auth: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let ldms = web::block(move || {
-        LevelLDM::create(
-            &mut db.connection()?,
-            body.into_inner(),
-            level_id.into_inner(),
-            auth,
-        )
+        let conn = &mut db.connection()?;
+        let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
+        LevelLDM::create(conn, body.into_inner(), level_id, auth)
     })
     .await??;
     Ok(HttpResponse::Ok().json(ldms))

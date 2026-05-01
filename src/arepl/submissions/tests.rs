@@ -1654,7 +1654,7 @@ async fn patch_submission_mod_patch_non_claimed() {
     let (elevated_id, _) = create_test_user(&db, Some(Permission::EditNonClaimedSubmissions)).await;
     let elevated_token =
         create_test_token(elevated_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    
+
     let level_1 = create_test_level(&db).await;
     let level_2 = create_test_level(&db).await;
 
@@ -1662,16 +1662,17 @@ async fn patch_submission_mod_patch_non_claimed() {
     let submission_2 = create_test_submission(level_2, submitter_id, &db).await;
 
     // Remove the raw URL from the test submissions
-    diesel::update(submissions::table.filter(submissions::id.eq_any(vec![submission_1, submission_2])))
-        .set(submissions::raw_url.eq(Option::<String>::None))
-        .execute(&mut db.connection().unwrap())
-        .expect("Failed to remove raw_urls");
+    diesel::update(
+        submissions::table.filter(submissions::id.eq_any(vec![submission_1, submission_2])),
+    )
+    .set(submissions::raw_url.eq(Option::<String>::None))
+    .execute(&mut db.connection().unwrap())
+    .expect("Failed to remove raw_urls");
 
-    
     let patch_data = json!({
         "status": "Accepted"
     });
-    
+
     // Ensure the base reviewer cannot accept this submission while it is not claimed
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{}", submission_1))
@@ -1681,13 +1682,18 @@ async fn patch_submission_mod_patch_non_claimed() {
 
     let resp = test::call_service(&app, req).await;
 
-    assert_error_response(resp, 403, Some("You do not have permission to edit this submission.")).await;
+    assert_error_response(
+        resp,
+        403,
+        Some("You do not have permission to edit this submission."),
+    )
+    .await;
 
     // Claim the submission
     diesel::update(submissions::table.filter(submissions::id.eq(submission_1)))
         .set((
             submissions::status.eq(SubmissionStatus::Claimed),
-            submissions::reviewer_id.eq(mod_id)
+            submissions::reviewer_id.eq(mod_id),
         ))
         .returning(Submission::as_select())
         .get_result::<Submission>(&mut db.connection().unwrap())
@@ -1707,7 +1713,6 @@ async fn patch_submission_mod_patch_non_claimed() {
     let body: serde_json::Value = read_body_json(resp).await;
 
     assert_eq!(body["status"], "Accepted");
-    
 
     // Ensure a user with the EditNonClaimedSubmissions permission can accept a submission that is not claimed
     let req = test::TestRequest::patch()
@@ -1723,5 +1728,4 @@ async fn patch_submission_mod_patch_non_claimed() {
     let body: serde_json::Value = read_body_json(resp).await;
 
     assert_eq!(body["status"], "Accepted");
-
 }
