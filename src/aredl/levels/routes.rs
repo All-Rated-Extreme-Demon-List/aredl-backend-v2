@@ -19,6 +19,8 @@ use utoipa::OpenApi;
     tag = "AREDL - Levels",
     params(
         ("exclude_legacy" = Option<bool>, Query, description = "Whether levels on the legacy list should be excluded"),
+        ("exclude_pending" = Option<bool>, Query, description = "Whether pending levels should be excluded"),
+        ("exclude_removed" = Option<bool>, Query, description = "Whether removed levels should be excluded"),
         ("at" = Option<DateTime<Utc>>, Query, description = "Return the state of the list at the provided timestamp"),
     ),
     responses((status = 200, body = [LevelWithUserCompletionStatus])),
@@ -64,8 +66,8 @@ async fn create(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&level));
-    let level =
-        web::block(move || Level::create(&mut db.connection()?, level.into_inner())).await??;
+    let level = web::block(move || Level::create(&mut db.connection()?, level.into_inner()))
+        .await??;
     Ok(HttpResponse::Ok().json(level))
 }
 

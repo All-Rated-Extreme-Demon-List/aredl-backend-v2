@@ -75,7 +75,7 @@ pub struct CountryCreatedLevelEntry {
     pub country: i32,
     pub level_id: Uuid,
     pub creator_id: Uuid,
-    pub order_pos: i32,
+    pub order_pos: Option<i32>,
 }
 
 impl ResolvedRecord {

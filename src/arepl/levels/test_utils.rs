@@ -2,6 +2,8 @@
 use std::sync::Arc;
 
 #[cfg(test)]
+use crate::arepl::levels::LevelStatus;
+#[cfg(test)]
 use crate::schema::arepl::{levels, levels_created};
 #[cfg(test)]
 use crate::users::test_utils::create_test_user;
@@ -27,7 +29,8 @@ pub async fn create_test_level(db: &Arc<DbAppState>) -> Uuid {
             levels::position.eq(1),
             levels::name.eq(format!("Test Level {}", level_id)),
             levels::publisher_id.eq(publisher),
-            levels::legacy.eq(false),
+            levels::status.eq(LevelStatus::MainList),
+            levels::requires_raw_footage.eq(false),
             levels::level_id.eq(level_id),
             levels::two_player.eq(false),
         ))

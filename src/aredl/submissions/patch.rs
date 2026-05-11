@@ -1,5 +1,6 @@
 use crate::{
     app_data::db::DbConnection,
+    aredl::levels::LevelStatus,
     aredl::submissions::{status::SubmissionsEnabled, *},
     auth::{Authenticated, Permission},
     error_handler::ApiError,
@@ -225,16 +226,25 @@ impl SubmissionPatchUser {
             ));
         }
 
-        let is_legacy = levels::table
+        let level_status = levels::table
             .filter(levels::id.eq(old_submission.level_id))
-            .select(levels::legacy)
-            .first::<bool>(conn)?;
+            .select(levels::status)
+            .first::<LevelStatus>(conn)?;
 
-        if is_legacy {
-            return Err(ApiError::new(
-                400,
-                "This level is on the legacy list and is not accepting records!",
-            ));
+        match level_status {
+            LevelStatus::Legacy => {
+                return Err(ApiError::new(
+                    400,
+                    "This level is on the legacy list and is not accepting records!",
+                ));
+            }
+            LevelStatus::Removed => {
+                return Err(ApiError::new(
+                    400,
+                    "This level has been removed from the list.",
+                ));
+            }
+            _ => {}
         }
 
         let result = diesel::update(submissions::table)

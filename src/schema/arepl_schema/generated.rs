@@ -15,6 +15,10 @@ pub mod arepl {
         pub struct LevelNotesType;
 
         #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+        #[diesel(postgres_type(name = "level_status"))]
+        pub struct LevelStatus;
+
+        #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
         #[diesel(postgres_type(name = "submission_status"))]
         pub struct SubmissionStatus;
     }
@@ -59,13 +63,17 @@ pub mod arepl {
     }
 
     diesel::table! {
+        use diesel::sql_types::*;
+        use super::sql_types::LevelStatus;
+
         arepl.levels (id) {
             id -> Uuid,
-            position -> Int4,
+            position -> Nullable<Int4>,
             name -> Varchar,
             publisher_id -> Uuid,
             points -> Int4,
-            legacy -> Bool,
+            status -> LevelStatus,
+            requires_raw_footage -> Bool,
             level_id -> Int4,
             two_player -> Bool,
             tags -> Array<Nullable<Text>>,
@@ -110,11 +118,15 @@ pub mod arepl {
     }
 
     diesel::table! {
+        use diesel::sql_types::*;
+        use super::sql_types::LevelStatus;
+
         arepl.position_history (i) {
             i -> Int4,
             new_position -> Nullable<Int4>,
             old_position -> Nullable<Int4>,
-            legacy -> Nullable<Bool>,
+            old_status -> Nullable<LevelStatus>,
+            new_status -> LevelStatus,
             affected_level -> Uuid,
             level_above -> Nullable<Uuid>,
             level_below -> Nullable<Uuid>,

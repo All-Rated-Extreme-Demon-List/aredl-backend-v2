@@ -1,5 +1,6 @@
 use crate::{
     app_data::db::DbConnection,
+    arepl::levels::LevelStatus,
     arepl::submissions::{status::SubmissionsEnabled, *},
     auth::{Authenticated, Permission},
     error_handler::ApiError,
@@ -232,24 +233,31 @@ impl Submission {
                 ));
             }
 
-            // check that this level exists, is not legacy, and
-            // raw footage is provided for ranks 400+
+            // check that this level exists, accepts submissions, and
+            // raw footage is provided
             let level_info = levels::table
                 .filter(levels::id.eq(inserted_submission.level_id))
-                .select((levels::legacy, levels::position))
-                .first::<(bool, i32)>(connection)
+                .select(levels::status)
+                .first::<LevelStatus>(connection)
                 .optional()?;
 
             match level_info {
                 None => return Err(ApiError::new(404, "Could not find this level")),
-                Some((legacy, pos)) => {
-                    if legacy == true {
+                Some(status) => {
+                    if status == LevelStatus::Legacy {
                         return Err(ApiError::new(
                             400,
                             "This level is on the legacy list and is not accepting records.",
                         ));
                     }
-                    if pos <= 400 && inserted_submission.raw_url.is_none() {
+                    if status == LevelStatus::Removed {
+                        return Err(ApiError::new(
+                            400,
+                            "This level has been removed from the list.",
+                        ));
+                    }
+
+                    if inserted_submission.raw_url.is_none() {
                         return Err(ApiError::new(
                             400,
                             "Platformer submissions require raw footage",

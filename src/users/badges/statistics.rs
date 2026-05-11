@@ -1,10 +1,14 @@
 use std::collections::{HashMap, HashSet};
 
-use diesel::{ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl};
+use diesel::{
+    BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl,
+};
 use uuid::Uuid;
 
 use crate::{
     app_data::db::DbConnection,
+    aredl::levels::LevelStatus as ClassicLevelStatus,
+    arepl::levels::LevelStatus as PlatformerLevelStatus,
     error_handler::ApiError,
     schema::{
         aredl::{self, completed_packs as classic_completed_packs},
@@ -33,7 +37,7 @@ pub struct BadgeLevelStatistics {
     pub scope: &'static str,
     pub id: Uuid,
     pub name: String,
-    pub position: i32,
+    pub position: Option<i32>,
     pub level_id: i32,
     pub two_player: bool,
     pub publisher_id: Uuid,
@@ -49,7 +53,7 @@ pub struct BadgeCreatedLevelStatistics {
     pub scope: &'static str,
     pub id: Uuid,
     pub name: String,
-    pub position: i32,
+    pub position: Option<i32>,
     pub publisher_id: Uuid,
 }
 
@@ -84,7 +88,11 @@ impl UserListStatistics {
 
         let first_victor_level_ids = aredl::records::table
             .inner_join(aredl::levels::table.on(aredl::levels::id.eq(aredl::records::level_id)))
-            .filter(aredl::levels::legacy.eq(false))
+            .filter(
+                aredl::levels::status
+                    .eq(ClassicLevelStatus::MainList)
+                    .or(aredl::levels::status.eq(ClassicLevelStatus::Pending)),
+            )
             .filter(aredl::records::is_verification.eq(false))
             .distinct_on(aredl::records::level_id)
             .order_by((
@@ -102,7 +110,11 @@ impl UserListStatistics {
         let levels_records = aredl::records::table
             .inner_join(aredl::levels::table.on(aredl::levels::id.eq(aredl::records::level_id)))
             .filter(aredl::records::submitted_by.eq(user_id))
-            .filter(aredl::levels::legacy.eq(false))
+            .filter(
+                aredl::levels::status
+                    .eq(ClassicLevelStatus::MainList)
+                    .or(aredl::levels::status.eq(ClassicLevelStatus::Pending)),
+            )
             .order(aredl::levels::position.asc())
             .select((
                 aredl::levels::id,
@@ -118,7 +130,7 @@ impl UserListStatistics {
             .load::<(
                 Uuid,
                 String,
-                i32,
+                Option<i32>,
                 i32,
                 bool,
                 Uuid,
@@ -183,6 +195,7 @@ impl UserListStatistics {
                     .on(aredl::levels_created::level_id.eq(aredl::levels::id)),
             )
             .filter(aredl::levels_created::user_id.eq(user_id))
+            .filter(aredl::levels::status.ne(ClassicLevelStatus::Removed))
             .order(aredl::levels::position.asc())
             .select((
                 aredl::levels::id,
@@ -191,7 +204,7 @@ impl UserListStatistics {
                 aredl::levels::publisher_id,
             ))
             .distinct()
-            .load::<(Uuid, String, i32, Uuid)>(conn)?
+            .load::<(Uuid, String, Option<i32>, Uuid)>(conn)?
             .into_iter()
             .map(
                 |(id, name, position, publisher_id)| BadgeCreatedLevelStatistics {
@@ -206,6 +219,7 @@ impl UserListStatistics {
 
         let published_levels = aredl::levels::table
             .filter(aredl::levels::publisher_id.eq(user_id))
+            .filter(aredl::levels::status.ne(ClassicLevelStatus::Removed))
             .order(aredl::levels::position.asc())
             .select((
                 aredl::levels::id,
@@ -213,7 +227,7 @@ impl UserListStatistics {
                 aredl::levels::position,
                 aredl::levels::publisher_id,
             ))
-            .load::<(Uuid, String, i32, Uuid)>(conn)?
+            .load::<(Uuid, String, Option<i32>, Uuid)>(conn)?
             .into_iter()
             .map(
                 |(id, name, position, publisher_id)| BadgeCreatedLevelStatistics {
@@ -226,13 +240,21 @@ impl UserListStatistics {
             );
 
         created_levels.extend(published_levels);
-        created_levels.sort_by_key(|level| level.position);
+        created_levels.sort_by(|left, right| {
+            left.position
+                .unwrap_or(i32::MAX)
+                .cmp(&right.position.unwrap_or(i32::MAX))
+        });
         created_levels.dedup_by_key(|level| (level.id, level.publisher_id));
 
         let completed_level_tags = aredl::records::table
             .inner_join(aredl::levels::table.on(aredl::levels::id.eq(aredl::records::level_id)))
             .filter(aredl::records::submitted_by.eq(user_id))
-            .filter(aredl::levels::legacy.eq(false))
+            .filter(
+                aredl::levels::status
+                    .eq(ClassicLevelStatus::MainList)
+                    .or(aredl::levels::status.eq(ClassicLevelStatus::Pending)),
+            )
             .select((aredl::records::level_id, aredl::levels::tags))
             .distinct()
             .load::<(Uuid, Vec<Option<String>>)>(conn)?;
@@ -251,7 +273,11 @@ impl UserListStatistics {
     fn load_platformer(conn: &mut DbConnection, user_id: Uuid) -> Result<Self, ApiError> {
         let fastest_time_level_ids = arepl::records::table
             .inner_join(arepl::levels::table.on(arepl::levels::id.eq(arepl::records::level_id)))
-            .filter(arepl::levels::legacy.eq(false))
+            .filter(
+                arepl::levels::status
+                    .eq(PlatformerLevelStatus::MainList)
+                    .or(arepl::levels::status.eq(PlatformerLevelStatus::Pending)),
+            )
             .filter(arepl::records::is_verification.eq(false))
             .distinct_on(arepl::records::level_id)
             .order_by((
@@ -268,7 +294,11 @@ impl UserListStatistics {
 
         let first_victor_level_ids = arepl::records::table
             .inner_join(arepl::levels::table.on(arepl::levels::id.eq(arepl::records::level_id)))
-            .filter(arepl::levels::legacy.eq(false))
+            .filter(
+                arepl::levels::status
+                    .eq(PlatformerLevelStatus::MainList)
+                    .or(arepl::levels::status.eq(PlatformerLevelStatus::Pending)),
+            )
             .filter(arepl::records::is_verification.eq(false))
             .distinct_on(arepl::records::level_id)
             .order_by((
@@ -286,7 +316,11 @@ impl UserListStatistics {
         let levels_records = arepl::records::table
             .inner_join(arepl::levels::table.on(arepl::levels::id.eq(arepl::records::level_id)))
             .filter(arepl::records::submitted_by.eq(user_id))
-            .filter(arepl::levels::legacy.eq(false))
+            .filter(
+                arepl::levels::status
+                    .eq(PlatformerLevelStatus::MainList)
+                    .or(arepl::levels::status.eq(PlatformerLevelStatus::Pending)),
+            )
             .order(arepl::levels::position.asc())
             .select((
                 arepl::levels::id,
@@ -302,7 +336,7 @@ impl UserListStatistics {
             .load::<(
                 Uuid,
                 String,
-                i32,
+                Option<i32>,
                 i32,
                 bool,
                 Uuid,
@@ -367,6 +401,7 @@ impl UserListStatistics {
                     .on(arepl::levels_created::level_id.eq(arepl::levels::id)),
             )
             .filter(arepl::levels_created::user_id.eq(user_id))
+            .filter(arepl::levels::status.ne(PlatformerLevelStatus::Removed))
             .order(arepl::levels::position.asc())
             .select((
                 arepl::levels::id,
@@ -375,7 +410,7 @@ impl UserListStatistics {
                 arepl::levels::publisher_id,
             ))
             .distinct()
-            .load::<(Uuid, String, i32, Uuid)>(conn)?
+            .load::<(Uuid, String, Option<i32>, Uuid)>(conn)?
             .into_iter()
             .map(
                 |(id, name, position, publisher_id)| BadgeCreatedLevelStatistics {
@@ -390,6 +425,7 @@ impl UserListStatistics {
 
         let published_levels = arepl::levels::table
             .filter(arepl::levels::publisher_id.eq(user_id))
+            .filter(arepl::levels::status.ne(PlatformerLevelStatus::Removed))
             .order(arepl::levels::position.asc())
             .select((
                 arepl::levels::id,
@@ -397,7 +433,7 @@ impl UserListStatistics {
                 arepl::levels::position,
                 arepl::levels::publisher_id,
             ))
-            .load::<(Uuid, String, i32, Uuid)>(conn)?
+            .load::<(Uuid, String, Option<i32>, Uuid)>(conn)?
             .into_iter()
             .map(
                 |(id, name, position, publisher_id)| BadgeCreatedLevelStatistics {
@@ -410,13 +446,21 @@ impl UserListStatistics {
             );
 
         created_levels.extend(published_levels);
-        created_levels.sort_by_key(|level| level.position);
+        created_levels.sort_by(|left, right| {
+            left.position
+                .unwrap_or(i32::MAX)
+                .cmp(&right.position.unwrap_or(i32::MAX))
+        });
         created_levels.dedup_by_key(|level| (level.id, level.publisher_id));
 
         let completed_level_tags = arepl::records::table
             .inner_join(arepl::levels::table.on(arepl::levels::id.eq(arepl::records::level_id)))
             .filter(arepl::records::submitted_by.eq(user_id))
-            .filter(arepl::levels::legacy.eq(false))
+            .filter(
+                arepl::levels::status
+                    .eq(PlatformerLevelStatus::MainList)
+                    .or(arepl::levels::status.eq(PlatformerLevelStatus::Pending)),
+            )
             .select((arepl::records::level_id, arepl::levels::tags))
             .distinct()
             .load::<(Uuid, Vec<Option<String>>)>(conn)?;
@@ -449,7 +493,8 @@ impl UserListStatistics {
         levels_records.extend(platformer.levels_records.clone());
         levels_records.sort_by(|left, right| {
             left.position
-                .cmp(&right.position)
+                .unwrap_or(i32::MAX)
+                .cmp(&right.position.unwrap_or(i32::MAX))
                 .then(right.is_verification.cmp(&left.is_verification))
                 .then(left.scope.cmp(right.scope))
                 .then(left.name.cmp(&right.name))
@@ -460,7 +505,8 @@ impl UserListStatistics {
         created_levels.extend(platformer.created_levels.clone());
         created_levels.sort_by(|left, right| {
             left.position
-                .cmp(&right.position)
+                .unwrap_or(i32::MAX)
+                .cmp(&right.position.unwrap_or(i32::MAX))
                 .then(left.scope.cmp(right.scope))
                 .then(left.name.cmp(&right.name))
         });

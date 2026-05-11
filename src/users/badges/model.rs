@@ -242,7 +242,7 @@ impl UserStatistics {
                     scope_statistics
                         .levels_records
                         .iter()
-                        .map(|level| level.position)
+                        .filter_map(|level| level.position)
                         .min()
                         .is_some_and(|position| position <= threshold)
                 })
@@ -379,7 +379,8 @@ impl UserStatistics {
                 .iter()
                 .min_by(|left, right| {
                     left.position
-                        .cmp(&right.position)
+                        .unwrap_or(i32::MAX)
+                        .cmp(&right.position.unwrap_or(i32::MAX))
                         .then(left.name.cmp(&right.name))
                 })
                 .map(|level| level.name.clone()),
@@ -397,9 +398,9 @@ impl UserStatistics {
                     left.len().cmp(&right.len()).then_with(|| {
                         right
                             .iter()
-                            .map(|level| level.position)
+                            .filter_map(|level| level.position)
                             .min()
-                            .cmp(&left.iter().map(|level| level.position).min())
+                            .cmp(&left.iter().filter_map(|level| level.position).min())
                     })
                 })?;
 
@@ -446,12 +447,17 @@ impl UserStatistics {
     }
 
     // creates a text list of levels names from a list of levels
-    fn levels_to_text(mut levels: Vec<(i32, &str)>) -> Option<String> {
+    fn levels_to_text(mut levels: Vec<(Option<i32>, &str)>) -> Option<String> {
         if levels.is_empty() {
             return None;
         }
 
-        levels.sort_by(|left, right| left.0.cmp(&right.0).then(left.1.cmp(right.1)));
+        levels.sort_by(|left, right| {
+            left.0
+                .unwrap_or(i32::MAX)
+                .cmp(&right.0.unwrap_or(i32::MAX))
+                .then(left.1.cmp(right.1))
+        });
 
         let level_names = levels.into_iter().map(|(_, name)| name).collect::<Vec<_>>();
 

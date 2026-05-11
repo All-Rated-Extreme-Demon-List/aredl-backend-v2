@@ -34,7 +34,7 @@ async fn create_level() {
         "position": 1,
         "level_id": 123456,
         "publisher_id": user_id.to_string(),
-        "legacy": false,
+        "status": "MainList",
         "two_player": false
     });
     let req = test::TestRequest::post()

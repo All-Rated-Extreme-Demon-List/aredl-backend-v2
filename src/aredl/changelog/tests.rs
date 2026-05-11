@@ -2,7 +2,9 @@
 use {
     crate::{
         aredl::changelog::test_utils::insert_history_entry,
-        aredl::levels::test_utils::create_test_level, schema::aredl::levels, test_utils::*,
+        aredl::levels::{test_utils::create_test_level, LevelStatus},
+        schema::aredl::levels,
+        test_utils::*,
     },
     actix_web::test::{self, read_body_json},
     diesel::{query_dsl::methods::FilterDsl, ExpressionMethods, RunQueryDsl},
@@ -43,19 +45,37 @@ async fn changelog_actions_and_pagination() {
             .unwrap();
         // move to legacy and back
         diesel::update(levels::table.filter(levels::id.eq(l1)))
-            .set(levels::legacy.eq(true))
+            .set(levels::status.eq(LevelStatus::Legacy))
             .execute(conn)
             .unwrap();
         diesel::update(levels::table.filter(levels::id.eq(l1)))
-            .set(levels::legacy.eq(false))
+            .set(levels::status.eq(LevelStatus::MainList))
             .execute(conn)
             .unwrap();
     }
 
     // removed
-    insert_history_entry(&db, None, Some(3), None, l1, None, None);
+    insert_history_entry(
+        &db,
+        None,
+        Some(3),
+        Some(LevelStatus::MainList),
+        LevelStatus::Removed,
+        l1,
+        None,
+        None,
+    );
     // unknown
-    insert_history_entry(&db, Some(5), Some(5), None, l1, None, None);
+    insert_history_entry(
+        &db,
+        Some(5),
+        Some(5),
+        Some(LevelStatus::MainList),
+        LevelStatus::MainList,
+        l1,
+        None,
+        None,
+    );
 
     let req = test::TestRequest::get()
         .uri("/aredl/changelog?per_page=20")

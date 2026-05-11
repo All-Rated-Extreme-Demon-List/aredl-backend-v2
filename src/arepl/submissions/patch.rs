@@ -1,5 +1,6 @@
 use crate::{
     app_data::db::DbConnection,
+    arepl::levels::LevelStatus,
     arepl::submissions::{status::SubmissionsEnabled, *},
     auth::{Authenticated, Permission},
     error_handler::ApiError,
@@ -71,7 +72,7 @@ pub struct SubmissionPatchMod {
     pub status: Option<SubmissionStatus>,
     /// The mod menu used in this record
     pub mod_menu: Option<String>,
-    /// Whether the record was submitted as a priority record.
+    /// [MOD ONLY] Whether the record was submitted as a priority record.
     pub priority: Option<bool>,
     /// [MOD ONLY] Notes given by the reviewer when reviewing the record.
     pub reviewer_notes: Option<String>,
@@ -228,16 +229,25 @@ impl SubmissionPatchUser {
             ));
         }
 
-        let is_legacy = levels::table
+        let level_status = levels::table
             .filter(levels::id.eq(old_submission.level_id))
-            .select(levels::legacy)
-            .first::<bool>(conn)?;
+            .select(levels::status)
+            .first::<LevelStatus>(conn)?;
 
-        if is_legacy {
-            return Err(ApiError::new(
-                400,
-                "This level is on the legacy list and is not accepting records!",
-            ));
+        match level_status {
+            LevelStatus::Legacy => {
+                return Err(ApiError::new(
+                    400,
+                    "This level is on the legacy list and is not accepting records!",
+                ));
+            }
+            LevelStatus::Removed => {
+                return Err(ApiError::new(
+                    400,
+                    "This level has been removed from the list.",
+                ));
+            }
+            _ => {}
         }
 
         let result = diesel::update(submissions::table)

@@ -26,12 +26,15 @@ diesel::allow_tables_to_appear_in_same_query!(records, clan_members);
 diesel::allow_tables_to_appear_in_same_query!(submission_history, users);
 
 diesel::table! {
+    use diesel::sql_types::*;
+    use crate::schema::arepl::sql_types::LevelStatus;
+
     arepl.position_history_full_view (affected_level) {
         ord -> Int4,
         affected_level -> Uuid,
         position -> Nullable<Int4>,
         moved -> Bool,
-        legacy -> Bool,
+        status -> LevelStatus,
         action_at -> Timestamptz,
         cause -> Uuid,
         pos_diff -> Nullable<Int4>,
@@ -89,7 +92,7 @@ diesel::table! {
         country -> Int4,
         level_id -> Uuid,
         creator_id -> Uuid,
-        order_pos -> Int4,
+        order_pos -> Nullable<Int4>,
     }
 }
 
@@ -167,7 +170,7 @@ diesel::table! {
         clan_id -> Uuid,
         level_id -> Uuid,
         creator_id -> Uuid,
-        order_pos -> Int4,
+        order_pos -> Nullable<Int4>,
     }
 }
 

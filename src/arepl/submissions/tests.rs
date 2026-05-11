@@ -2,7 +2,7 @@
 use {
     crate::{
         arepl::{
-            levels::test_utils::create_test_level,
+            levels::{test_utils::create_test_level, LevelStatus},
             submissions::{
                 history::SubmissionHistory, status::SubmissionsEnabled,
                 test_utils::create_test_submission, Submission, SubmissionStatus,
@@ -412,7 +412,7 @@ async fn patch_submission_legacy_level_rejected() {
     let level = create_test_level(&db).await;
 
     diesel::update(levels::table.filter(levels::id.eq(level)))
-        .set(levels::legacy.eq(true))
+        .set(levels::status.eq(LevelStatus::Legacy))
         .execute(&mut db.connection().unwrap())
         .unwrap();
 
@@ -951,7 +951,7 @@ async fn post_submission_legacy_level_rejected() {
     let level = create_test_level(&db).await;
 
     diesel::update(levels::table.filter(levels::id.eq(level)))
-        .set(levels::legacy.eq(true))
+        .set(levels::status.eq(LevelStatus::Legacy))
         .execute(&mut db.connection().unwrap())
         .unwrap();
 

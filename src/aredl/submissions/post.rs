@@ -1,6 +1,7 @@
 use crate::notifications::WebsocketNotification;
 use crate::{
     app_data::db::DbConnection,
+    aredl::levels::LevelStatus,
     aredl::submissions::{status::SubmissionsEnabled, *},
     auth::{Authenticated, Permission},
     error_handler::ApiError,
@@ -228,28 +229,42 @@ impl Submission {
                 ));
             }
 
-            // check that this level exists, is not legacy, and
-            // raw footage is provided for ranks 400+
+            // check that this level exists, accepts submissions, and
+            // raw footage is provided when required
             let level_info = levels::table
                 .filter(levels::id.eq(inserted_submission.level_id))
-                .select((levels::legacy, levels::position))
-                .first::<(bool, i32)>(connection)
+                .select((
+                    levels::status,
+                    levels::position,
+                    levels::requires_raw_footage,
+                ))
+                .first::<(LevelStatus, Option<i32>, bool)>(connection)
                 .optional()?;
 
             match level_info {
                 None => return Err(ApiError::new(404, "Could not find this level")),
-                Some((legacy, pos)) => {
-                    if legacy == true {
+                Some((status, position, requires_raw_footage)) => {
+                    if status == LevelStatus::Legacy {
                         return Err(ApiError::new(
                             400,
                             "This level is on the legacy list and is not accepting records.",
                         ));
                     }
-                    if pos <= 400 && inserted_submission.raw_url.is_none() {
+                    if status == LevelStatus::Removed {
                         return Err(ApiError::new(
                             400,
-                            "This level is top 400 and requires raw footage",
+                            "This level has been removed from the list.",
                         ));
+                    }
+
+                    let raw_is_required = match status {
+                        LevelStatus::Pending => requires_raw_footage,
+                        LevelStatus::MainList => position.is_some_and(|position| position <= 400),
+                        _ => false,
+                    };
+
+                    if raw_is_required && inserted_submission.raw_url.is_none() {
+                        return Err(ApiError::new(400, "This level requires raw footage"));
                     }
                 }
             }

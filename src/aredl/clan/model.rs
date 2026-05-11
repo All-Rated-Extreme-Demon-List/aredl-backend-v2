@@ -75,7 +75,7 @@ pub struct ClanCreatedLevelEntry {
     pub clan_id: Uuid,
     pub level_id: Uuid,
     pub creator_id: Uuid,
-    pub order_pos: i32,
+    pub order_pos: Option<i32>,
 }
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct ClanProfileResolved {
