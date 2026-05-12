@@ -927,7 +927,7 @@ level_count AS (
         COUNT(*) AS c
     FROM aredl.records r
     JOIN aredl.levels l ON r.level_id = l.id
-    WHERE l.status = 'MainList'
+    WHERE l.status IN ('MainList', 'Pending')
     GROUP BY submitted_by
 )
 SELECT
@@ -986,7 +986,7 @@ level_count AS (
         COUNT(*) AS c
     FROM arepl.records r
     JOIN arepl.levels l ON r.level_id = l.id
-    WHERE l.status = 'MainList'
+    WHERE l.status IN ('MainList', 'Pending')
     GROUP BY submitted_by
 )
 SELECT
@@ -1013,7 +1013,7 @@ WITH completed_levels AS (
     JOIN users u ON r.submitted_by = u.id
     JOIN aredl.levels l ON r.level_id = l.id
     WHERE u.ban_level = 0
-      AND l.status = 'MainList'
+      AND l.status IN ('MainList', 'Pending')
 ),
 level_points AS (
     SELECT
@@ -1070,7 +1070,7 @@ WITH completed_levels AS (
     JOIN users u ON r.submitted_by = u.id
     JOIN arepl.levels l ON r.level_id = l.id
     WHERE u.ban_level = 0
-      AND l.status = 'MainList'
+      AND l.status IN ('MainList', 'Pending')
 ),
 level_points AS (
     SELECT
@@ -1128,7 +1128,7 @@ WITH completed_levels AS (
     WHERE u.ban_level = 0
       AND u.country IS NOT NULL
       AND u.country <> 0
-      AND l.status = 'MainList'
+      AND l.status IN ('MainList', 'Pending')
 ),
 level_points AS (
     SELECT
@@ -1189,7 +1189,7 @@ WITH completed_levels AS (
     WHERE u.ban_level = 0
       AND u.country IS NOT NULL
       AND u.country <> 0
-      AND l.status = 'MainList'
+      AND l.status IN ('MainList', 'Pending')
 ),
 level_points AS (
     SELECT
