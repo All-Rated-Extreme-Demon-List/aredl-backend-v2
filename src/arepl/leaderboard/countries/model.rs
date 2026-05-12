@@ -90,7 +90,7 @@ impl CountryLeaderboardPage {
             .offset(page_query.offset())
             .select((
                 CountryLeaderboardEntry::as_select(),
-                (levels::id, levels::name).nullable(),
+                Option::<BaseLevel>::as_select(),
             ))
             .load(conn)?;
 

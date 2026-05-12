@@ -106,7 +106,7 @@ impl ClansLeaderboardPage {
             .select((
                 ClansLeaderboardEntry::as_select(),
                 Clan::as_select(),
-                (levels::id, levels::name).nullable(),
+                Option::<BaseLevel>::as_select(),
             ))
             .load(conn)?;
 

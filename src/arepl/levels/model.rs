@@ -32,6 +32,10 @@ pub struct BaseLevel {
     pub id: Uuid,
     /// Name of the level in the game. If multiple levels share the same name, their creator's name is appended at the end. 2P levels both have (2P) or (Solo) appended at the end.
     pub name: String,
+    /// Level ID in the game. May not be unique for 2P levels.
+    pub level_id: i32,
+    /// Whether this is the 2P version of a level or not.
+    pub two_player: bool,
 }
 
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema, Clone)]

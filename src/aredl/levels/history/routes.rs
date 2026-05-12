@@ -1,5 +1,5 @@
 use crate::app_data::db::DbAppState;
-use crate::aredl::levels::history::{HistoryLevelFull, HistoryLevelResponse};
+use crate::aredl::levels::history::{HistoryLevelFullResolved, HistoryLevelResponse};
 use crate::aredl::levels::id_resolver::resolve_level_id;
 use crate::cache_control::CacheController;
 use crate::error_handler::ApiError;
@@ -27,7 +27,7 @@ async fn find(
     let response = web::block(move || -> Result<Vec<HistoryLevelResponse>, ApiError> {
         let conn = &mut db.connection()?;
         let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
-        let entries = HistoryLevelFull::find(conn, level_id);
+        let entries = HistoryLevelFullResolved::find(conn, level_id);
 
         // map history
         let mapped = entries

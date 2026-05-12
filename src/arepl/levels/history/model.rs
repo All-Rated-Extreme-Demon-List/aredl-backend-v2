@@ -24,10 +24,10 @@ pub enum HistoryEvent {
 }
 
 impl HistoryEvent {
-    pub fn from_history(data: &HistoryLevelFull, level_id: Uuid) -> Self {
+    pub fn from_history(data: &HistoryLevelFullResolved, level_id: Uuid) -> Self {
         match (
             data.status.clone(),
-            level_id == data.cause_id,
+            level_id == data.cause.id,
             data.moved,
             data.pos_diff < Some(0),
         ) {
@@ -59,48 +59,58 @@ pub struct HistoryLevelResponse {
 }
 
 impl HistoryLevelResponse {
-    pub fn from_data(data: &HistoryLevelFull, level_id: Uuid) -> Self {
+    pub fn from_data(data: &HistoryLevelFullResolved, level_id: Uuid) -> Self {
         Self {
             position: data.position,
             position_diff: data.pos_diff,
             event: HistoryEvent::from_history(data, level_id),
             status: data.status.clone(),
             action_at: data.action_at,
-            cause: BaseLevel {
-                id: data.cause_id,
-                name: data.cause_name.clone(),
-            },
+            cause: data.cause.clone(),
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Queryable)]
+#[derive(Serialize, Deserialize, Queryable, Selectable, Debug)]
+#[diesel(table_name = position_history_full_view)]
 pub struct HistoryLevelFull {
     pub position: Option<i32>,
     pub pos_diff: Option<i32>,
     pub moved: bool,
     pub status: LevelStatus,
     pub action_at: DateTime<Utc>,
-    pub cause_id: Uuid,
-    pub cause_name: String,
+    pub cause: Uuid,
+}
+#[derive(Serialize, Deserialize, Queryable)]
+pub struct HistoryLevelFullResolved {
+    pub position: Option<i32>,
+    pub pos_diff: Option<i32>,
+    pub moved: bool,
+    pub status: LevelStatus,
+    pub action_at: DateTime<Utc>,
+    pub cause: BaseLevel,
 }
 
-impl HistoryLevelFull {
+impl HistoryLevelFullResolved {
     pub fn find(conn: &mut DbConnection, id: Uuid) -> Result<Vec<Self>, ApiError> {
         let entries = position_history_full_view::table
             .filter(position_history_full_view::affected_level.eq(id))
             .inner_join(levels::table.on(levels::id.eq(position_history_full_view::cause)))
             .order_by(position_history_full_view::ord.desc())
-            .select((
-                position_history_full_view::position,
-                position_history_full_view::pos_diff,
-                position_history_full_view::moved,
-                position_history_full_view::status,
-                position_history_full_view::action_at,
-                position_history_full_view::cause,
-                levels::name,
-            ))
-            .load::<HistoryLevelFull>(conn)?;
+            .select((HistoryLevelFull::as_select(), BaseLevel::as_select()))
+            .load::<(HistoryLevelFull, BaseLevel)>(conn)?;
+
+        let entries = entries
+            .into_iter()
+            .map(|(history, cause)| HistoryLevelFullResolved {
+                position: history.position,
+                pos_diff: history.pos_diff,
+                moved: history.moved,
+                status: history.status,
+                action_at: history.action_at,
+                cause,
+            })
+            .collect::<Vec<_>>();
         Ok(entries)
     }
 }

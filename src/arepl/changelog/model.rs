@@ -6,7 +6,7 @@ use crate::schema::arepl::{levels, position_history};
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::{
-    ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl,
+    ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl, Selectable,
     SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
@@ -146,9 +146,13 @@ impl ChangelogPage {
             )
             .select((
                 ChangelogEntryData::as_select(),
-                level_affected.fields((levels::id, levels::name)),
-                level_above.fields((levels::id, levels::name)).nullable(),
-                level_below.fields((levels::id, levels::name)).nullable(),
+                level_affected.fields(<BaseLevel as Selectable<Pg>>::construct_selection()),
+                level_above
+                    .fields(<BaseLevel as Selectable<Pg>>::construct_selection())
+                    .nullable(),
+                level_below
+                    .fields(<BaseLevel as Selectable<Pg>>::construct_selection())
+                    .nullable(),
             ))
             .load::<(
                 ChangelogEntryData,
