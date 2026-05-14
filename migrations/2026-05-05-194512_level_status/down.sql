@@ -10,12 +10,6 @@ DROP MATERIALIZED VIEW IF EXISTS arepl.user_leaderboard;
 DROP MATERIALIZED VIEW IF EXISTS aredl.user_leaderboard;
 DROP MATERIALIZED VIEW IF EXISTS arepl.position_history_full_view;
 DROP MATERIALIZED VIEW IF EXISTS aredl.position_history_full_view;
-DROP VIEW IF EXISTS arepl.user_pack_points;
-DROP VIEW IF EXISTS aredl.user_pack_points;
-DROP VIEW IF EXISTS arepl.packs_points;
-DROP VIEW IF EXISTS aredl.packs_points;
-DROP VIEW IF EXISTS arepl.completed_packs;
-DROP VIEW IF EXISTS aredl.completed_packs;
 
 DROP TRIGGER IF EXISTS levels_points_after_insert ON arepl.levels;
 DROP TRIGGER IF EXISTS level_place_history ON arepl.levels;
@@ -77,7 +71,7 @@ ALTER TABLE arepl.position_history
 UPDATE arepl.position_history
 SET legacy = CASE
     WHEN new_status = 'Legacy' THEN TRUE
-    WHEN new_status::TEXT IN ('MainList', 'Published') THEN FALSE
+    WHEN new_status = 'MainList' THEN FALSE
     ELSE NULL
 END;
 
@@ -87,7 +81,7 @@ ALTER TABLE aredl.position_history
 UPDATE aredl.position_history
 SET legacy = CASE
     WHEN new_status = 'Legacy' THEN TRUE
-    WHEN new_status::TEXT IN ('MainList', 'Published') THEN FALSE
+    WHEN new_status = 'MainList' THEN FALSE
     ELSE NULL
 END;
 
@@ -578,5 +572,547 @@ CREATE TRIGGER levels_points_after_insert
 AFTER INSERT ON arepl.levels
 FOR EACH STATEMENT
 EXECUTE PROCEDURE arepl.levels_points_after_insert();
+
+CREATE MATERIALIZED VIEW aredl.position_history_full_view AS
+WITH RECURSIVE ranked_history AS (
+    SELECT ROW_NUMBER() OVER (ORDER BY i) AS i, new_position, old_position, legacy, created_at, affected_level
+    FROM aredl.position_history
+),
+full_history AS (
+	SELECT i, affected_level AS id, new_position AS position, CAST(NULL AS INT) as prev_pos, legacy, legacy AS prev_legacy, created_at AS action_at, affected_level AS cause, false AS moved
+	FROM ranked_history
+	WHERE old_position IS NULL
+	UNION
+	SELECT
+		r.i,
+		h.id,
+		(CASE
+			WHEN r.affected_level = h.id THEN r.new_position
+			WHEN r.old_position IS NULL THEN
+				CASE WHEN h.position >= r.new_position THEN h.position + 1 ELSE h.position END
+			WHEN r.new_position IS NULL THEN
+				CASE WHEN h.position >= r.old_position THEN h.position - 1 ELSE h.position END
+			WHEN r.old_position < r.new_position THEN
+				CASE WHEN h.position BETWEEN r.old_position AND r.new_position THEN h.position - 1 ELSE h.position END
+			ELSE
+				CASE WHEN h.position BETWEEN r.new_position AND r.old_position THEN h.position + 1 ELSE h.position END
+		END) as position,
+		h.position AS prev_pos,
+		(CASE WHEN r.affected_level = h.id AND r.legacy IS NOT NULL THEN r.legacy ELSE h.legacy END) AS legacy,
+		h.legacy AS prev_legacy,
+		r.created_at AS action_at,
+		r.affected_level as cause,
+		(r.old_position IS NOT NULL AND r.new_position IS NOT NULL) as moved
+	FROM ranked_history r
+	INNER JOIN full_history h ON r.i = h.i + 1
+),
+filtered AS (
+    SELECT i::INTEGER as ord, id as affected_level, position, moved, legacy, action_at, cause
+    FROM full_history
+    WHERE prev_pos <> position OR prev_legacy <> legacy OR prev_pos IS NULL
+)
+SELECT *, position - LAG(position, 1) OVER (PARTITION BY affected_level ORDER BY ord ASC) as pos_diff FROM filtered;
+
+CREATE MATERIALIZED VIEW aredl.user_leaderboard AS
+WITH user_points AS (
+	SELECT u.id AS user_id, u.country, (COALESCE(SUM(l.points), 0) + COALESCE(pp.points, 0))::INTEGER AS total_points, (COALESCE(pp.points, 0))::INTEGER AS pack_points
+	FROM users u
+	LEFT JOIN aredl.records r ON u.id = r.submitted_by
+	LEFT JOIN aredl.levels l ON r.level_id = l.id
+	LEFT JOIN aredl.user_pack_points pp ON pp.user_id = r.submitted_by
+	WHERE u.ban_level = 0
+	GROUP BY u.id, u.country, pp.points
+),
+hardest_position AS (
+	SELECT
+		r.submitted_by AS user_id,
+		MIN(l.position) AS position
+	FROM aredl.records r
+	JOIN aredl.levels l ON r.level_id = l.id
+	GROUP BY r.submitted_by
+),
+hardest AS (
+	SELECT
+		hp.user_id,
+		l.id AS level_id
+	FROM hardest_position hp
+	JOIN aredl.levels l ON hp.position = l.position
+),
+level_count AS (
+    SELECT
+        r.submitted_by AS id,
+        count(*) AS c
+    FROM aredl.records r
+    JOIN aredl.levels l ON r.level_id = l.id
+    WHERE l.legacy = false
+    GROUP BY submitted_by
+)
+SELECT
+	RANK() OVER (ORDER BY up.total_points DESC)::INTEGER AS rank,
+	RANK() OVER (ORDER BY up.total_points - up.pack_points DESC)::INTEGER AS raw_rank,
+	RANK() OVER (ORDER BY COALESCE(lc.c, 0) DESC)::INTEGER AS extremes_rank,
+	RANK() OVER (PARTITION BY up.country ORDER BY up.total_points DESC)::INTEGER AS country_rank,
+	RANK() OVER (PARTITION BY up.country ORDER BY up.total_points - up.pack_points DESC)::INTEGER AS country_raw_rank,
+	RANK() OVER (PARTITION BY up.country ORDER BY COALESCE(lc.c, 0) DESC)::INTEGER AS country_extremes_rank,
+	up.*,
+	h.level_id AS hardest,
+	COALESCE(lc.c, 0)::INTEGER AS extremes,
+	cm.clan_id
+FROM user_points up
+LEFT JOIN hardest h ON h.user_id = up.user_id
+LEFT JOIN level_count lc ON lc.id = up.user_id
+LEFT JOIN clan_members cm ON cm.user_id = up.user_id;
+
+CREATE MATERIALIZED VIEW aredl.clans_leaderboard AS
+WITH completed_levels AS (
+    SELECT DISTINCT cm.clan_id, r.level_id
+    FROM aredl.records r
+    JOIN clan_members cm ON r.submitted_by = cm.user_id
+	JOIN users u ON r.submitted_by = u.id
+    WHERE u.ban_level = 0
+),
+level_points AS (
+    SELECT
+		c.clan_id,
+		COALESCE(SUM(l.points), 0)::INTEGER AS level_points
+    FROM completed_levels c
+    JOIN aredl.levels l ON c.level_id = l.id
+    GROUP BY c.clan_id
+),
+hardest_position AS (
+    SELECT
+		c.clan_id,
+		MIN(l.position) AS position
+    FROM completed_levels c
+    JOIN aredl.levels l ON c.level_id = l.id
+    GROUP BY c.clan_id
+),
+hardest AS (
+    SELECT
+		hp.clan_id,
+		l.id AS level_id
+    FROM hardest_position hp
+    JOIN aredl.levels l ON hp.position = l.position
+),
+level_count AS (
+    SELECT
+        clan_id,
+        count(*) AS c
+    FROM completed_levels
+    GROUP BY clan_id
+),
+user_count AS (
+	SELECT
+		clan_id,
+		count(*) AS c
+	FROM clan_members
+	GROUP BY clan_id
+)
+SELECT
+    RANK() OVER (ORDER BY lp.level_points DESC)::INTEGER AS rank,
+	RANK() OVER (ORDER BY COALESCE(lc.c, 0) DESC)::INTEGER AS extremes_rank,
+	lp.*,
+	COALESCE(uc.c, 0)::INTEGER AS members_count,
+    h.level_id AS hardest,
+    COALESCE(lc.c, 0)::INTEGER AS extremes
+FROM level_points lp
+LEFT JOIN hardest h ON h.clan_id = lp.clan_id
+LEFT JOIN level_count lc ON lc.clan_id = lp.clan_id
+LEFT JOIN user_count uc ON uc.clan_id = lp.clan_id;
+
+CREATE MATERIALIZED VIEW aredl.country_leaderboard AS
+WITH completed_levels AS (
+    SELECT DISTINCT u.country, r.level_id
+    FROM aredl.records r
+    JOIN users u ON r.submitted_by = u.id
+    JOIN aredl.levels l ON r.level_id = l.id
+    WHERE u.ban_level = 0
+      AND u.country IS NOT NULL AND u.country <> 0
+),
+level_points AS (
+    SELECT
+		c.country,
+		COALESCE(SUM(l.points), 0)::INTEGER AS level_points
+    FROM completed_levels c
+    JOIN aredl.levels l ON c.level_id = l.id
+    GROUP BY c.country
+),
+hardest_position AS (
+    SELECT
+		c.country,
+		MIN(l.position) AS position
+    FROM completed_levels c
+    JOIN aredl.levels l ON c.level_id = l.id
+    GROUP BY c.country
+),
+hardest AS (
+    SELECT
+		hp.country,
+		l.id AS level_id
+    FROM hardest_position hp
+    JOIN aredl.levels l ON hp.position = l.position
+),
+level_count AS (
+    SELECT
+        country,
+        count(*) AS c
+    FROM completed_levels
+    GROUP BY country
+),
+user_count AS (
+	SELECT
+		country,
+		count(*) AS c
+	FROM users
+	WHERE ban_level = 0
+	AND country IS NOT NULL AND country <> 0
+	GROUP BY country
+)
+SELECT
+    RANK() OVER (ORDER BY lp.level_points DESC)::INTEGER AS rank,
+	RANK() OVER (ORDER BY COALESCE(lc.c, 0) DESC)::INTEGER AS extremes_rank,
+	lp.*,
+	COALESCE(uc.c, 0)::INTEGER AS members_count,
+    h.level_id AS hardest,
+    COALESCE(lc.c, 0)::INTEGER AS extremes
+FROM level_points lp
+LEFT JOIN hardest h ON h.country = lp.country
+LEFT JOIN level_count lc ON lc.country = lp.country
+LEFT JOIN user_count uc ON uc.country = lp.country;
+
+CREATE MATERIALIZED VIEW aredl.country_created_levels AS
+WITH explicit_creators AS (
+    SELECT
+        u.country,
+        l.id AS level_id,
+        lc.user_id AS creator_id,
+        l.position AS order_pos
+    FROM aredl.levels_created lc
+    JOIN aredl.levels l ON l.id = lc.level_id
+    JOIN users u ON u.id = lc.user_id
+    WHERE u.country IS NOT NULL
+),
+published_without_creators AS (
+    SELECT
+        u.country,
+        l.id AS level_id,
+        l.publisher_id AS creator_id,
+        l.position AS order_pos
+    FROM aredl.levels l
+    JOIN users u ON u.id = l.publisher_id
+    LEFT JOIN aredl.levels_created lc ON lc.level_id = l.id
+    WHERE u.country IS NOT NULL
+      AND lc.level_id IS NULL
+)
+SELECT country, level_id, creator_id, order_pos
+FROM explicit_creators
+UNION
+SELECT country, level_id, creator_id, order_pos
+FROM published_without_creators;
+
+CREATE INDEX aredl_country_created_levels_country_idx
+    ON aredl.country_created_levels (country, order_pos, level_id, creator_id);
+
+CREATE MATERIALIZED VIEW aredl.clans_created_levels AS
+WITH explicit_creators AS (
+    SELECT
+        cm.clan_id,
+        l.id AS level_id,
+        lc.user_id AS creator_id,
+        l.position AS order_pos
+    FROM aredl.levels_created lc
+    JOIN aredl.levels l ON l.id = lc.level_id
+    JOIN clan_members cm ON cm.user_id = lc.user_id
+),
+published_without_creators AS (
+    SELECT
+        cm.clan_id,
+        l.id AS level_id,
+        l.publisher_id AS creator_id,
+        l.position AS order_pos
+    FROM aredl.levels l
+    JOIN clan_members cm ON cm.user_id = l.publisher_id
+    LEFT JOIN aredl.levels_created lc ON lc.level_id = l.id
+    WHERE lc.level_id IS NULL
+)
+SELECT clan_id, level_id, creator_id, order_pos
+FROM explicit_creators
+UNION
+SELECT clan_id, level_id, creator_id, order_pos
+FROM published_without_creators;
+
+CREATE INDEX aredl_clans_created_levels_clan_idx
+    ON aredl.clans_created_levels (clan_id, order_pos, level_id, creator_id);
+
+CREATE MATERIALIZED VIEW arepl.position_history_full_view AS
+WITH RECURSIVE ranked_history AS (
+    SELECT ROW_NUMBER() OVER (ORDER BY i) AS i, new_position, old_position, legacy, created_at, affected_level
+    FROM arepl.position_history
+),
+full_history AS (
+	SELECT i, affected_level AS id, new_position AS position, CAST(NULL AS INT) as prev_pos, legacy, legacy AS prev_legacy, created_at AS action_at, affected_level AS cause, false AS moved
+	FROM ranked_history
+	WHERE old_position IS NULL
+	UNION
+	SELECT
+		r.i,
+		h.id,
+		(CASE
+			WHEN r.affected_level = h.id THEN r.new_position
+			WHEN r.old_position IS NULL THEN
+				CASE WHEN h.position >= r.new_position THEN h.position + 1 ELSE h.position END
+			WHEN r.new_position IS NULL THEN
+				CASE WHEN h.position >= r.old_position THEN h.position - 1 ELSE h.position END
+			WHEN r.old_position < r.new_position THEN
+				CASE WHEN h.position BETWEEN r.old_position AND r.new_position THEN h.position - 1 ELSE h.position END
+			ELSE
+				CASE WHEN h.position BETWEEN r.new_position AND r.old_position THEN h.position + 1 ELSE h.position END
+		END) as position,
+		h.position AS prev_pos,
+		(CASE WHEN r.affected_level = h.id AND r.legacy IS NOT NULL THEN r.legacy ELSE h.legacy END) AS legacy,
+		h.legacy AS prev_legacy,
+		r.created_at AS action_at,
+		r.affected_level as cause,
+		(r.old_position IS NOT NULL AND r.new_position IS NOT NULL) as moved
+	FROM ranked_history r
+	INNER JOIN full_history h ON r.i = h.i + 1
+),
+filtered AS (
+    SELECT i::INTEGER as ord, id as affected_level, position, moved, legacy, action_at, cause
+    FROM full_history
+    WHERE prev_pos <> position OR prev_legacy <> legacy OR prev_pos IS NULL
+)
+SELECT *, position - LAG(position, 1) OVER (PARTITION BY affected_level ORDER BY ord ASC) as pos_diff FROM filtered;
+
+CREATE MATERIALIZED VIEW arepl.user_leaderboard AS
+WITH user_points AS (
+	SELECT u.id AS user_id, u.country, (COALESCE(SUM(l.points), 0) + COALESCE(pp.points, 0))::INTEGER AS total_points, (COALESCE(pp.points, 0))::INTEGER AS pack_points
+	FROM users u
+	LEFT JOIN arepl.records r ON u.id = r.submitted_by
+	LEFT JOIN arepl.levels l ON r.level_id = l.id
+	LEFT JOIN arepl.user_pack_points pp ON pp.user_id = r.submitted_by
+	WHERE u.ban_level = 0
+	GROUP BY u.id, u.country, pp.points
+),
+hardest_position AS (
+	SELECT
+		r.submitted_by AS user_id,
+		MIN(l.position) AS position
+	FROM arepl.records r
+	JOIN arepl.levels l ON r.level_id = l.id
+	GROUP BY r.submitted_by
+),
+hardest AS (
+	SELECT
+		hp.user_id,
+		l.id AS level_id
+	FROM hardest_position hp
+	JOIN arepl.levels l ON hp.position = l.position
+),
+level_count AS (
+    SELECT
+        r.submitted_by AS id,
+        count(*) AS c
+    FROM arepl.records r
+    JOIN arepl.levels l ON r.level_id = l.id
+    WHERE l.legacy = false
+    GROUP BY submitted_by
+)
+SELECT
+	RANK() OVER (ORDER BY up.total_points DESC)::INTEGER AS rank,
+	RANK() OVER (ORDER BY up.total_points - up.pack_points DESC)::INTEGER AS raw_rank,
+	RANK() OVER (ORDER BY COALESCE(lc.c, 0) DESC)::INTEGER AS extremes_rank,
+	RANK() OVER (PARTITION BY up.country ORDER BY up.total_points DESC)::INTEGER AS country_rank,
+	RANK() OVER (PARTITION BY up.country ORDER BY up.total_points - up.pack_points DESC)::INTEGER AS country_raw_rank,
+	RANK() OVER (PARTITION BY up.country ORDER BY COALESCE(lc.c, 0) DESC)::INTEGER AS country_extremes_rank,
+	up.*,
+	h.level_id AS hardest,
+	COALESCE(lc.c, 0)::INTEGER AS extremes,
+	cm.clan_id
+FROM user_points up
+LEFT JOIN hardest h ON h.user_id = up.user_id
+LEFT JOIN level_count lc ON lc.id = up.user_id
+LEFT JOIN clan_members cm ON cm.user_id = up.user_id;
+
+CREATE MATERIALIZED VIEW arepl.clans_leaderboard AS
+WITH completed_levels AS (
+    SELECT DISTINCT cm.clan_id, r.level_id
+    FROM arepl.records r
+    JOIN clan_members cm ON r.submitted_by = cm.user_id
+	JOIN users u ON r.submitted_by = u.id
+    WHERE u.ban_level = 0
+),
+level_points AS (
+    SELECT
+		c.clan_id,
+		COALESCE(SUM(l.points), 0)::INTEGER AS level_points
+    FROM completed_levels c
+    JOIN arepl.levels l ON c.level_id = l.id
+    GROUP BY c.clan_id
+),
+hardest_position AS (
+    SELECT
+		c.clan_id,
+		MIN(l.position) AS position
+    FROM completed_levels c
+    JOIN arepl.levels l ON c.level_id = l.id
+    GROUP BY c.clan_id
+),
+hardest AS (
+    SELECT
+		hp.clan_id,
+		l.id AS level_id
+    FROM hardest_position hp
+    JOIN arepl.levels l ON hp.position = l.position
+),
+level_count AS (
+    SELECT
+        clan_id,
+        count(*) AS c
+    FROM completed_levels
+    GROUP BY clan_id
+),
+user_count AS (
+	SELECT
+		clan_id,
+		count(*) AS c
+	FROM clan_members
+	GROUP BY clan_id
+)
+SELECT
+    RANK() OVER (ORDER BY lp.level_points DESC)::INTEGER AS rank,
+	RANK() OVER (ORDER BY COALESCE(lc.c, 0) DESC)::INTEGER AS extremes_rank,
+	lp.*,
+	COALESCE(uc.c, 0)::INTEGER AS members_count,
+    h.level_id AS hardest,
+    COALESCE(lc.c, 0)::INTEGER AS extremes
+FROM level_points lp
+LEFT JOIN hardest h ON h.clan_id = lp.clan_id
+LEFT JOIN level_count lc ON lc.clan_id = lp.clan_id
+LEFT JOIN user_count uc ON uc.clan_id = lp.clan_id;
+
+CREATE MATERIALIZED VIEW arepl.country_leaderboard AS
+WITH completed_levels AS (
+    SELECT DISTINCT u.country, r.level_id
+    FROM arepl.records r
+    JOIN users u ON r.submitted_by = u.id
+    JOIN arepl.levels l ON r.level_id = l.id
+    WHERE u.ban_level = 0
+      AND u.country IS NOT NULL AND u.country <> 0
+),
+level_points AS (
+    SELECT
+		c.country,
+		COALESCE(SUM(l.points), 0)::INTEGER AS level_points
+    FROM completed_levels c
+    JOIN arepl.levels l ON c.level_id = l.id
+    GROUP BY c.country
+),
+hardest_position AS (
+    SELECT
+		c.country,
+		MIN(l.position) AS position
+    FROM completed_levels c
+    JOIN arepl.levels l ON c.level_id = l.id
+    GROUP BY c.country
+),
+hardest AS (
+    SELECT
+		hp.country,
+		l.id AS level_id
+    FROM hardest_position hp
+    JOIN arepl.levels l ON hp.position = l.position
+),
+level_count AS (
+    SELECT
+        country,
+        count(*) AS c
+    FROM completed_levels
+    GROUP BY country
+),
+user_count AS (
+	SELECT
+		country,
+		count(*) AS c
+	FROM users
+	WHERE ban_level = 0
+	AND country IS NOT NULL AND country <> 0
+	GROUP BY country
+)
+SELECT
+    RANK() OVER (ORDER BY lp.level_points DESC)::INTEGER AS rank,
+	RANK() OVER (ORDER BY COALESCE(lc.c, 0) DESC)::INTEGER AS extremes_rank,
+	lp.*,
+	COALESCE(uc.c, 0)::INTEGER AS members_count,
+    h.level_id AS hardest,
+    COALESCE(lc.c, 0)::INTEGER AS extremes
+FROM level_points lp
+LEFT JOIN hardest h ON h.country = lp.country
+LEFT JOIN level_count lc ON lc.country = lp.country
+LEFT JOIN user_count uc ON uc.country = lp.country;
+
+CREATE MATERIALIZED VIEW arepl.country_created_levels AS
+WITH explicit_creators AS (
+    SELECT
+        u.country,
+        l.id AS level_id,
+        lc.user_id AS creator_id,
+        l.position AS order_pos
+    FROM arepl.levels_created lc
+    JOIN arepl.levels l ON l.id = lc.level_id
+    JOIN users u ON u.id = lc.user_id
+    WHERE u.country IS NOT NULL
+),
+published_without_creators AS (
+    SELECT
+        u.country,
+        l.id AS level_id,
+        l.publisher_id AS creator_id,
+        l.position AS order_pos
+    FROM arepl.levels l
+    JOIN users u ON u.id = l.publisher_id
+    LEFT JOIN arepl.levels_created lc ON lc.level_id = l.id
+    WHERE u.country IS NOT NULL
+      AND lc.level_id IS NULL
+)
+SELECT country, level_id, creator_id, order_pos
+FROM explicit_creators
+UNION
+SELECT country, level_id, creator_id, order_pos
+FROM published_without_creators;
+
+CREATE INDEX arepl_country_created_levels_country_idx
+    ON arepl.country_created_levels (country, order_pos, level_id, creator_id);
+
+CREATE MATERIALIZED VIEW arepl.clans_created_levels AS
+WITH explicit_creators AS (
+    SELECT
+        cm.clan_id,
+        l.id AS level_id,
+        lc.user_id AS creator_id,
+        l.position AS order_pos
+    FROM arepl.levels_created lc
+    JOIN arepl.levels l ON l.id = lc.level_id
+    JOIN clan_members cm ON cm.user_id = lc.user_id
+),
+published_without_creators AS (
+    SELECT
+        cm.clan_id,
+        l.id AS level_id,
+        l.publisher_id AS creator_id,
+        l.position AS order_pos
+    FROM arepl.levels l
+    JOIN clan_members cm ON cm.user_id = l.publisher_id
+    LEFT JOIN arepl.levels_created lc ON lc.level_id = l.id
+    WHERE lc.level_id IS NULL
+)
+SELECT clan_id, level_id, creator_id, order_pos
+FROM explicit_creators
+UNION
+SELECT clan_id, level_id, creator_id, order_pos
+FROM published_without_creators;
+
+CREATE INDEX arepl_clans_created_levels_clan_idx
+    ON arepl.clans_created_levels (clan_id, order_pos, level_id, creator_id);
 
 DROP TYPE IF EXISTS level_status;
