@@ -5,12 +5,14 @@ use crate::{
         submissions::{
             patch::{SubmissionPatchMod, SubmissionPatchUser},
             post::{SubmissionInsert, SubmissionPostMod},
+            resolved::{ResolvedSubmissionPage, SubmissionQueryOptions},
             status, Submission, SubmissionPage, SubmissionResolved, SubmissionStatus,
         },
     },
     auth::{Authenticated, Permission, UserAuth},
     error_handler::ApiError,
     notifications::WebsocketNotification,
+    page_helper::{PageQuery, Paginated},
     providers::VideoProvidersAppState,
 };
 use actix_web::{delete, get, patch, post, web, HttpResponse};
@@ -20,7 +22,116 @@ use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
 use uuid::Uuid;
 
-use super::{history, queue, resolved};
+use super::{history, queue};
+
+#[utoipa::path(
+    get,
+    summary = "[Staff]List submissions",
+    description = "Get a possibly filtered list of resolved submissions.",
+    tag = "AREDL - Submissions",
+    responses(
+        (status = 200, body = Paginated<ResolvedSubmissionPage>)
+    ),
+    security(
+        ("access_token" = []),
+        ("api_key" = []),
+    ),
+    params(
+        ("page" = Option<i64>, Query, description = "The page of the list to fetch"),
+        ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page"),
+        ("level_filter" = Option<Uuid>, Query, description = "Filter submissions to a specific level UUID"),
+        ("status_filter" = Option<SubmissionStatus>, Query, description = "Filter submissions to specific statuses"),
+        ("mobile_filter" = Option<bool>, Query, description = "Filter submissions to mobile/desktop submissions only"),
+        ("submitter_filter" = Option<String>, Query, description = "Filter submissions to a specific submitter (UUID, discord ID, or username)"),
+        ("priority_filter" = Option<bool>, Query, description = "Filter submissions to priority/non-priority submissions"),
+        ("reviewer_filter" = Option<String>, Query, description = "Filter submissions to a specific reviewer (UUID, discord ID, or username)"),
+        ("note_filter" = Option<String>, Query, description = "Filter submissions that contain a specific note substring"),
+))]
+#[get("", wrap = "UserAuth::require(Permission::SubmissionReviewFull)")]
+async fn find_all(
+    db: web::Data<Arc<DbAppState>>,
+    page_query: web::Query<PageQuery<50>>,
+    options: web::Query<SubmissionQueryOptions>,
+    authenticated: Authenticated,
+) -> Result<HttpResponse, ApiError> {
+    let submissions = web::block(move || {
+        ResolvedSubmissionPage::find_all(
+            &mut db.connection()?,
+            page_query.into_inner(),
+            options.into_inner(),
+            authenticated,
+        )
+    })
+    .await??;
+    Ok(HttpResponse::Ok().json(submissions))
+}
+
+#[utoipa::path(
+    get,
+    summary = "[Auth]Get a resolved submission",
+    description = "Get a specific submission by its ID. If you aren't staff, the submission must be yours.",
+    tag = "AREDL - Submissions",
+    responses(
+        (status = 200, body = SubmissionResolved)
+    ),
+    security(
+        ("access_token" = []),
+        ("api_key" = []),
+    ),
+    params(
+        ("id" = Uuid, description = "The ID of the submission")
+    ),
+)]
+#[get("{id}", wrap = "UserAuth::load()")]
+async fn find_one(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<Uuid>,
+    authenticated: Authenticated,
+) -> Result<HttpResponse, ApiError> {
+    let submission = web::block(move || {
+        SubmissionResolved::find_one(&mut db.connection()?, id.into_inner(), authenticated)
+    })
+    .await??;
+    Ok(HttpResponse::Ok().json(submission))
+}
+
+#[utoipa::path(
+    get,
+    summary = "[Auth]Get own submissions",
+    description = "List all submissions submitted by the logged in user.",
+    tag = "AREDL - Submissions",
+    responses(
+        (status = 200, body = Paginated<SubmissionPage>)
+    ),
+    security(
+        ("access_token" = []),
+        ("api_key" = []),
+    ),
+    params(
+        ("page" = Option<i64>, Query, description = "The page of the list to fetch"),
+        ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page"),
+        ("level_filter" = Option<Uuid>, Query, description = "Filter submissions to a specific level UUID"),
+        ("status_filter" = Option<SubmissionStatus>, Query, description = "Filter submissions to specific statuses"),
+        ("mobile_filter" = Option<bool>, Query, description = "Filter submissions to mobile/desktop submissions only")
+))]
+#[get("@me", wrap = "UserAuth::load()")]
+async fn find_me(
+    db: web::Data<Arc<DbAppState>>,
+    page_query: web::Query<PageQuery<50>>,
+    options: web::Query<SubmissionQueryOptions>,
+    authenticated: Authenticated,
+) -> Result<HttpResponse, ApiError> {
+    let submissions = web::block(move || {
+        ResolvedSubmissionPage::find_own(
+            &mut db.connection()?,
+            page_query.into_inner(),
+            options.into_inner(),
+            authenticated,
+        )
+    })
+    .await??;
+    Ok(HttpResponse::Ok().json(submissions))
+}
 
 #[utoipa::path(
     post,
@@ -190,7 +301,6 @@ async fn delete(
     nest(
         (path = "/", api=history::ApiDoc),
         (path = "/", api=queue::ApiDoc),
-        (path = "/", api=resolved::ApiDoc),
         (path = "/status", api=status::ApiDoc),
     ),
     components(
@@ -203,9 +313,16 @@ async fn delete(
             SubmissionPatchMod,
             SubmissionPatchUser,
             SubmissionInsert,
+            SubmissionPage,
+            SubmissionQueryOptions,
+            SubmissionResolved,
+            ResolvedSubmissionPage,
         )
     ),
     paths(
+        find_all,
+        find_one,
+        find_me,
         claim,
         create,
         patch,
@@ -217,12 +334,14 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/submissions")
             .service(claim)
+            .service(find_me)
             .configure(status::init_routes)
             .configure(history::init_routes)
             .configure(queue::init_routes)
-            .configure(resolved::init_routes)
-            .service(create)
+            .service(find_one)
             .service(patch)
-            .service(delete),
+            .service(delete)
+            .service(create)
+            .service(find_all),
     );
 }

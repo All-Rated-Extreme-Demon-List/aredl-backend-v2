@@ -4,7 +4,7 @@ pub mod patch;
 mod pemonlist;
 pub mod post;
 mod queue;
-mod resolved;
+pub mod resolved;
 mod routes;
 mod status;
 
