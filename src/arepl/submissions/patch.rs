@@ -302,15 +302,12 @@ impl SubmissionPatchMod {
             );
         }
 
-        let is_full_staff = authenticated.has_permission(conn, Permission::SubmissionReviewFull)?;
+        let is_full_staff = authenticated.has_permission(conn, Permission::EditNonClaimedSubmissions)?;
 
-        let can_edit_non_claimed =
-            is_full_staff || authenticated.has_permission(conn, Permission::EditNonClaimedSubmissions)?;
-
-        if (!can_edit_non_claimed
-            && (old_submission.status != SubmissionStatus::Claimed
-                || old_submission.reviewer_id != Some(authenticated.user_id)))
-            || (!is_full_staff && old_submission.raw_url.is_some())
+        if !is_full_staff
+            && (old_submission.raw_url.is_some()
+                || old_submission.status != SubmissionStatus::Claimed
+                || old_submission.reviewer_id != Some(authenticated.user_id))
         {
             return Err(ApiError::new(
                 403,
