@@ -28,6 +28,7 @@ pub enum Permission {
     SubmissionStatusManage,
     ReviewersAudit,
     NotificationsSubscribe,
+    BountyManage,
 }
 
 pub fn get_privilege_level(conn: &mut DbConnection, user_id: Uuid) -> Result<i32, ApiError> {

@@ -221,15 +221,9 @@ async fn patch(
     })
     .await??;
 
-    // if the status submission is changed to accepted, we may need to fetch the record's achieved_at timestamp
+    // if the status submission is changed to accepted, trigger other actions (timestamp update, badges, bounties, etc)
     if patched.status == SubmissionStatus::Accepted {
-        let _ = Record::fire_and_forget_fetch_completion_timestamp(
-            db_clone,
-            None,
-            Some(patched.id),
-            providers_clone,
-        )
-        .await;
+        let _ = Record::post_accept_actions(db_clone, patched.clone(), providers_clone).await;
     }
     Ok(HttpResponse::Ok().json(patched))
 }

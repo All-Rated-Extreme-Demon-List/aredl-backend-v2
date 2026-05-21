@@ -392,25 +392,18 @@ impl Record {
 
     pub async fn update_timestamp(
         db: web::Data<Arc<DbAppState>>,
-        record_id: Option<Uuid>,
-        submission_id: Option<Uuid>,
+        record_id: Uuid,
         providers: &VideoProvidersAppState,
     ) -> Result<Self, ApiError> {
         let db_clone = db.clone();
-        let record = web::block(move || {
+        let record: Record = web::block(move || {
             let conn = &mut db.connection()?;
-            let record = match (record_id, submission_id) {
-                (Some(record_id), _) => records::table
-                    .filter(records::id.eq(record_id))
-                    .select(Record::as_select())
-                    .first::<Record>(conn)?,
-                (None, Some(submission_id)) => records::table
-                    .filter(records::submission_id.eq(submission_id))
-                    .select(Record::as_select())
-                    .first::<Record>(conn)?,
-                _ => return Err(ApiError::new(400, "No record or submission ID provided")),
-            };
-            Ok(record)
+            let record = records::table
+                .filter(records::id.eq(record_id))
+                .select(Record::as_select())
+                .first::<Record>(conn)?;
+
+            Ok::<Record, ApiError>(record)
         })
         .await??;
 
@@ -433,24 +426,77 @@ impl Record {
         Ok(result)
     }
 
-    pub async fn fire_and_forget_fetch_completion_timestamp(
+    pub async fn post_accept_actions(
         db: web::Data<Arc<DbAppState>>,
-        record_id: Option<Uuid>,
-        submission_id: Option<Uuid>,
+        submission: Submission,
         providers: web::Data<Arc<VideoProvidersAppState>>,
     ) {
         tokio::spawn(async move {
-            if let Err(error) =
-                Record::update_timestamp(db, record_id, submission_id, providers.get_ref()).await
+            let record = match Record::find_from_submission(
+                &mut db.connection().unwrap(),
+                submission.id,
+            ) {
+                Ok(record) => record,
+                Err(e) => {
+                    tracing::warn!(
+                        error = %e.error_message,
+                        ?submission.id,
+                        "Failed to process post submission accept actions: no record found for this submission"
+                    );
+                    return;
+                }
+            };
+
+            let record = match Record::update_timestamp(db.clone(), record.id, providers.get_ref())
+                .await
             {
+                Ok(updated_record) => updated_record,
+                Err(error) => {
+                    tracing::warn!(
+                        error = %error.error_message,
+                        ?record.id,
+                        ?submission.id,
+                        "Failed to process post submission accept actions: failed to update record's achieved_at timestamp"
+                    );
+                    record
+                }
+            };
+
+            if let Err(error) = record.complete_bounty_if_exists(&mut db.connection().unwrap()) {
                 tracing::warn!(
                     error = %error.error_message,
-                    ?record_id,
-                    ?submission_id,
-                    "Failed to fetch completion timestamp in background task"
+                    ?record.id,
+                    level_id = ?record.level_id,
+                    "Failed to process post submission accept actions: failed to complete bounty"
+                );
+            }
+
+            if let Err(error) = UserBadge::update_user_badges(
+                &mut db.connection().unwrap(),
+                submission.submitted_by,
+            ) {
+                tracing::warn!(
+                    error = %error.error_message,
+                    user_id = ?submission.submitted_by,
+                    level_id = ?record.level_id,
+                    "Failed to process post submission accept actions: failed to update user badges"
                 );
             }
         });
+    }
+}
+
+impl Record {
+    pub fn find_from_submission(
+        conn: &mut DbConnection,
+        submission_id: Uuid,
+    ) -> Result<Self, ApiError> {
+        let record = records::table
+            .filter(records::submission_id.eq(submission_id))
+            .select(Record::as_select())
+            .first::<Record>(conn)?;
+
+        Ok(record)
     }
 }
 

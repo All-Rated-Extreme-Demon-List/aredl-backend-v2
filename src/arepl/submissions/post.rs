@@ -1,5 +1,6 @@
 use crate::{
     app_data::db::DbConnection,
+    arepl::bounty::Bounty,
     arepl::levels::LevelStatus,
     arepl::submissions::{status::SubmissionsEnabled, *},
     auth::{Authenticated, Permission},
@@ -138,6 +139,7 @@ impl SubmissionInsert {
         body: SubmissionPostUser,
         authenticated: &Authenticated,
     ) -> Result<Self, ApiError> {
+        let active_bounties = Bounty::find_active_by_level(conn, body.level_id)?;
         Ok(SubmissionInsert {
             submitted_by: authenticated.user_id,
             level_id: body.level_id,
@@ -148,7 +150,7 @@ impl SubmissionInsert {
             mod_menu: body.mod_menu,
             user_notes: body.user_notes,
             completion_time: body.completion_time,
-            priority: authenticated.is_aredl_plus(conn)?,
+            priority: authenticated.is_aredl_plus(conn)? || !active_bounties.is_empty(),
             status: SubmissionStatus::Pending,
             ..Default::default()
         })
@@ -177,7 +179,7 @@ impl SubmissionInsert {
             mod_menu: body.mod_menu,
             user_notes: body.user_notes,
             completion_time: body.completion_time,
-            priority: authenticated.is_aredl_plus(conn)?,
+            priority: body.priority.unwrap_or(false),
             status: body.status.unwrap_or(SubmissionStatus::Pending),
             reviewer_notes: body.reviewer_notes,
             reviewer_id: Some(authenticated.user_id),

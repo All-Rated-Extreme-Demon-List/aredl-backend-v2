@@ -85,6 +85,7 @@ fn init_test_db_schema_and_seed() {
             ("user_redact", 75),
             ("direct_merge", 80),
             ("submission_status_manage", 80),
+            ("bounty_manage", 80),
             ("reviewers_audit", 85),
             ("role_manage", 85),
             ("shift_manage", 90),
