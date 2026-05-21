@@ -3,6 +3,14 @@
 pub mod aredl {
     pub mod sql_types {
         #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+        #[diesel(postgres_type(name = "bounty_difficulty"))]
+        pub struct BountyDifficulty;
+
+        #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+        #[diesel(postgres_type(name = "bounty_type"))]
+        pub struct BountyType;
+
+        #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
         #[diesel(postgres_type(name = "custom_id_status", schema = "aredl"))]
         pub struct CustomIdStatus;
 
@@ -21,6 +29,31 @@ pub mod aredl {
         #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
         #[diesel(postgres_type(name = "submission_status"))]
         pub struct SubmissionStatus;
+    }
+
+    diesel::table! {
+        use diesel::sql_types::*;
+        use super::sql_types::BountyType;
+        use super::sql_types::BountyDifficulty;
+
+        aredl.bounties (id) {
+            id -> Uuid,
+            level_id -> Uuid,
+            bounty_type -> BountyType,
+            bounty_difficulty -> BountyDifficulty,
+            start_date -> Timestamptz,
+            end_date -> Nullable<Timestamptz>,
+            target_submissions -> Nullable<Int4>,
+            is_target_public -> Bool,
+        }
+    }
+
+    diesel::table! {
+        aredl.bounty_completed (user_id, bounty_id) {
+            user_id -> Uuid,
+            bounty_id -> Uuid,
+            completed_at -> Timestamptz,
+        }
     }
 
     diesel::table! {
@@ -81,8 +114,6 @@ pub mod aredl {
             name -> Varchar,
             publisher_id -> Uuid,
             points -> Int4,
-            status -> LevelStatus,
-            requires_raw_footage -> Bool,
             level_id -> Int4,
             two_player -> Bool,
             tags -> Array<Nullable<Text>>,
@@ -92,6 +123,8 @@ pub mod aredl {
             is_edel_pending -> Bool,
             gddl_tier -> Nullable<Float8>,
             nlw_tier -> Nullable<Varchar>,
+            status -> LevelStatus,
+            requires_raw_footage -> Bool,
         }
     }
 
@@ -134,12 +167,12 @@ pub mod aredl {
             i -> Int4,
             new_position -> Nullable<Int4>,
             old_position -> Nullable<Int4>,
-            old_status -> Nullable<LevelStatus>,
-            new_status -> LevelStatus,
             affected_level -> Uuid,
             level_above -> Nullable<Uuid>,
             level_below -> Nullable<Uuid>,
             created_at -> Timestamptz,
+            old_status -> Nullable<LevelStatus>,
+            new_status -> LevelStatus,
         }
     }
 
@@ -216,12 +249,16 @@ pub mod aredl {
         }
     }
 
+    diesel::joinable!(bounties -> levels (level_id));
+    diesel::joinable!(bounty_completed -> bounties (bounty_id));
     diesel::joinable!(level_ldms -> levels (level_id));
     diesel::joinable!(level_notes -> levels (level_id));
     diesel::joinable!(records -> submissions (submission_id));
     diesel::joinable!(submission_history -> submissions (submission_id));
 
     diesel::allow_tables_to_appear_in_same_query!(
+        bounties,
+        bounty_completed,
         guideline_updates,
         last_gddl_update,
         level_ldms,

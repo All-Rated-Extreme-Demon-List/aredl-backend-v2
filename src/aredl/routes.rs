@@ -1,6 +1,6 @@
 use crate::aredl::{
-    changelog, clan, country, leaderboard, levels, packs, packtiers, profile, records, statistics,
-    submissions,
+    bounty, changelog, clan, country, leaderboard, levels, packs, packtiers, profile, records,
+    statistics, submissions,
 };
 use actix_web::web;
 use utoipa::OpenApi;
@@ -21,7 +21,8 @@ use utoipa::OpenApi;
         (path = "/clan", api=clan::ApiDoc),
         (path = "/submissions", api=submissions::ApiDoc),
         (path = "/records", api=records::ApiDoc),
-        (path = "/statistics", api=statistics::ApiDoc)
+        (path = "/statistics", api=statistics::ApiDoc),
+        (path = "/bounty-board", api=bounty::ApiDoc),
     ),
 )]
 
@@ -39,6 +40,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .configure(country::init_routes)
             .configure(clan::init_routes)
             .configure(records::init_routes)
-            .configure(statistics::init_routes),
+            .configure(statistics::init_routes)
+            .configure(bounty::init_routes),
     );
 }

@@ -213,6 +213,14 @@ impl UserStatistics {
                         >= threshold
                 })
             }
+            ("global", ["bounty_board", bounty_type, threshold]) => {
+                threshold.parse::<i64>().ok().is_some_and(|threshold| {
+                    scope_statistics
+                        .bounty_counts
+                        .get(*bounty_type)
+                        .is_some_and(|count| *count >= threshold)
+                })
+            }
             (_, ["level_tags", alias, threshold]) => threshold
                 .parse::<i64>()
                 .ok()

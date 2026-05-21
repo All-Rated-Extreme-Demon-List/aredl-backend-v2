@@ -18,6 +18,10 @@ pub const TIERED_BADGES: &[(&str, &[&str])] = &[
         &["2000", "1000", "500", "250", "100", "50", "20"],
     ),
     ("global.pack_completion", &["3", "5", "10", "15"]),
+    ("global.bounty_board.bounty", &["5", "10", "15", "20", "25"]),
+    ("global.bounty_board.weekly", &["3", "7", "12", "18", "25"]),
+    ("global.bounty_board.monthly", &["1", "2", "4", "6", "8"]),
+    ("global.bounty_board.event", &["1", "3", "5"]),
     (
         "global.hardest_pack_tier",
         &["iron", "gold", "ruby", "sapphire", "pearl", "diamond"],

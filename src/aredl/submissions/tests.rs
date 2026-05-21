@@ -2,6 +2,7 @@
 use {
     crate::{
         aredl::{
+            bounty::test_utils::create_test_bounty,
             levels::{test_utils::create_test_level, LevelStatus},
             submissions::{
                 history::SubmissionHistory,
@@ -33,7 +34,7 @@ use {
         users::test_utils::create_test_user,
     },
     actix_web::test::{self, read_body_json},
-    chrono::{DateTime, Utc},
+    chrono::{DateTime, Duration as ChronoDuration, Utc},
     diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper},
     httpmock::prelude::*,
     serde_json::json,
@@ -667,6 +668,47 @@ async fn submission_aredlplus_boost() {
     );
     let body: serde_json::Value = read_body_json(claim_resp).await;
     assert_eq!(body["id"], submission1["id"])
+}
+
+#[actix_web::test]
+async fn submission_for_active_bounty_is_priority_for_non_plus_user() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
+    let level_id = create_test_level(&db).await;
+    create_test_bounty(
+        &db,
+        level_id,
+        Utc::now() - ChronoDuration::days(1),
+        Some(Utc::now() + ChronoDuration::days(1)),
+        None,
+        true,
+    )
+    .await;
+
+    let submission_data = json!({
+        "level_id": level_id,
+        "video_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
+        "raw_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
+        "mobile": false
+    });
+
+    let resp = test::call_service(
+        &app,
+        test::TestRequest::post()
+            .uri("/aredl/submissions")
+            .insert_header(("Authorization", format!("Bearer {}", token)))
+            .set_json(&submission_data)
+            .to_request(),
+    )
+    .await;
+    assert!(
+        resp.status().is_success(),
+        "submission status is {}",
+        resp.status()
+    );
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["priority"], true);
 }
 
 #[actix_web::test]

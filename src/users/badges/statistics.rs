@@ -7,7 +7,9 @@ use uuid::Uuid;
 
 use crate::{
     app_data::db::DbConnection,
+    aredl::bounty::BountyType as ClassicBountyType,
     aredl::levels::LevelStatus as ClassicLevelStatus,
+    arepl::bounty::BountyType as PlatformerBountyType,
     arepl::levels::LevelStatus as PlatformerLevelStatus,
     error_handler::ApiError,
     schema::{
@@ -29,6 +31,7 @@ pub struct UserListStatistics {
     pub created_levels: Vec<BadgeCreatedLevelStatistics>,
     pub packs: Vec<BadgePackStatistics>,
     pub level_tag_counts: HashMap<String, i64>,
+    pub bounty_counts: HashMap<String, i64>,
     pub leaderboard_rank: Option<i32>,
 }
 
@@ -260,12 +263,14 @@ impl UserListStatistics {
             .load::<(Uuid, Vec<Option<String>>)>(conn)?;
 
         let level_tag_counts = Self::count_level_tags(completed_level_tags);
+        let bounty_counts = Self::count_classic_bounties(conn, user_id)?;
 
         Ok(Self {
             levels_records,
             created_levels,
             packs,
             level_tag_counts,
+            bounty_counts,
             leaderboard_rank,
         })
     }
@@ -466,14 +471,66 @@ impl UserListStatistics {
             .load::<(Uuid, Vec<Option<String>>)>(conn)?;
 
         let level_tag_counts = Self::count_level_tags(completed_level_tags);
+        let bounty_counts = Self::count_platformer_bounties(conn, user_id)?;
 
         Ok(Self {
             levels_records,
             created_levels,
             packs,
             level_tag_counts,
+            bounty_counts,
             leaderboard_rank: None,
         })
+    }
+
+    fn count_classic_bounties(
+        conn: &mut DbConnection,
+        user_id: Uuid,
+    ) -> Result<HashMap<String, i64>, ApiError> {
+        let mut counts = HashMap::new();
+        for (bounty_type, key) in [
+            (ClassicBountyType::Bounty, "bounty"),
+            (ClassicBountyType::Weekly, "weekly"),
+            (ClassicBountyType::Monthly, "monthly"),
+            (ClassicBountyType::Event, "event"),
+        ] {
+            let count = aredl::bounty_completed::table
+                .inner_join(
+                    aredl::bounties::table
+                        .on(aredl::bounties::id.eq(aredl::bounty_completed::bounty_id)),
+                )
+                .filter(aredl::bounty_completed::user_id.eq(user_id))
+                .filter(aredl::bounties::bounty_type.eq(bounty_type))
+                .count()
+                .get_result::<i64>(conn)?;
+            counts.insert(key.to_string(), count);
+        }
+        Ok(counts)
+    }
+
+    fn count_platformer_bounties(
+        conn: &mut DbConnection,
+        user_id: Uuid,
+    ) -> Result<HashMap<String, i64>, ApiError> {
+        let mut counts = HashMap::new();
+        for (bounty_type, key) in [
+            (PlatformerBountyType::Bounty, "bounty"),
+            (PlatformerBountyType::Weekly, "weekly"),
+            (PlatformerBountyType::Monthly, "monthly"),
+            (PlatformerBountyType::Event, "event"),
+        ] {
+            let count = arepl::bounty_completed::table
+                .inner_join(
+                    arepl::bounties::table
+                        .on(arepl::bounties::id.eq(arepl::bounty_completed::bounty_id)),
+                )
+                .filter(arepl::bounty_completed::user_id.eq(user_id))
+                .filter(arepl::bounties::bounty_type.eq(bounty_type))
+                .count()
+                .get_result::<i64>(conn)?;
+            counts.insert(key.to_string(), count);
+        }
+        Ok(counts)
     }
 
     fn count_level_tags(
@@ -520,11 +577,17 @@ impl UserListStatistics {
             *level_tag_counts.entry(tag.clone()).or_insert(0) += count;
         }
 
+        let mut bounty_counts = classic.bounty_counts.clone();
+        for (bounty_type, count) in &platformer.bounty_counts {
+            *bounty_counts.entry(bounty_type.clone()).or_insert(0) += count;
+        }
+
         Self {
             levels_records,
             created_levels,
             packs,
             level_tag_counts,
+            bounty_counts,
             leaderboard_rank: None,
         }
     }

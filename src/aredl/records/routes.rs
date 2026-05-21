@@ -126,8 +126,7 @@ async fn update_timestamp(
     id: web::Path<Uuid>,
     providers: web::Data<Arc<VideoProvidersAppState>>,
 ) -> Result<HttpResponse, ApiError> {
-    let record =
-        Record::update_timestamp(db, Some(id.into_inner()), None, providers.get_ref()).await?;
+    let record = Record::update_timestamp(db, id.into_inner(), providers.get_ref()).await?;
     Ok(HttpResponse::Ok().json(record))
 }
 

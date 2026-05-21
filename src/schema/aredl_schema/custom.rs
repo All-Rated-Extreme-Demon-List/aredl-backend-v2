@@ -2,8 +2,8 @@
 // diesel won't autogenerate in schema.rs
 
 use crate::schema::aredl::{
-    level_ldms, level_notes, levels, levels_created, pack_levels, pack_tiers, packs, records,
-    submission_history, submissions, submissions_enabled,
+    bounty_completed, level_ldms, level_notes, levels, levels_created, pack_levels, pack_tiers,
+    packs, records, submission_history, submissions, submissions_enabled,
 };
 use crate::schema::{clan_members, clans, users};
 
@@ -13,6 +13,7 @@ diesel::joinable!(levels -> users (publisher_id));
 diesel::joinable!(levels_created -> users (user_id));
 diesel::joinable!(records -> users (submitted_by));
 diesel::joinable!(submission_history -> users (reviewer_id));
+diesel::joinable!(bounty_completed -> users (user_id));
 
 diesel::allow_tables_to_appear_in_same_query!(levels, users);
 diesel::allow_tables_to_appear_in_same_query!(levels, clans);
@@ -24,6 +25,7 @@ diesel::allow_tables_to_appear_in_same_query!(records, users);
 diesel::allow_tables_to_appear_in_same_query!(records, clans);
 diesel::allow_tables_to_appear_in_same_query!(records, clan_members);
 diesel::allow_tables_to_appear_in_same_query!(submission_history, users);
+diesel::allow_tables_to_appear_in_same_query!(bounty_completed, users);
 
 diesel::table! {
     use diesel::sql_types::*;

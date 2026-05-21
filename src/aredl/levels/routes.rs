@@ -66,8 +66,8 @@ async fn create(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&level));
-    let level = web::block(move || Level::create(&mut db.connection()?, level.into_inner()))
-        .await??;
+    let level =
+        web::block(move || Level::create(&mut db.connection()?, level.into_inner())).await??;
     Ok(HttpResponse::Ok().json(level))
 }
 

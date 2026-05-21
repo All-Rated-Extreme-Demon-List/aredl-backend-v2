@@ -142,9 +142,11 @@ impl PackTierResolved {
                     // It will be Some(true) if user has completed the level and Some(false) otherwise.
                     // That's because None is used for non-authenticated queries.
                     .into_iter()
-                    .map(|(uuid, pack_level, completed): (Uuid, ExtendedBaseLevel, Option<Uuid>)| {
-                        (uuid, pack_level, Some(completed.is_some()))
-                    })
+                    .map(
+                        |(uuid, pack_level, completed): (Uuid, ExtendedBaseLevel, Option<Uuid>)| {
+                            (uuid, pack_level, Some(completed.is_some()))
+                        },
+                    )
                     .collect::<Vec<_>>()
             }
             None => levels_base_query
