@@ -1,0 +1,88 @@
+name: Apply backfills
+
+on:
+  workflow_call:
+    inputs:
+      stack_name:
+        required: true
+        type: string
+      environment_name:
+        required: true
+        type: string
+      backfill_repo:
+        required: true
+        type: string
+      backfill_ref:
+        required: false
+        default: "main"
+        type: string
+    secrets:
+      DEPLOY_HOST:
+        required: true
+      DEPLOY_USER:
+        required: true
+      DEPLOY_KEY:
+        required: true
+      API_DB_PORT:
+        required: true
+      BACKFILL_REPO_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.backfill_repo }}
+          ref: ${{ inputs.backfill_ref }}
+          path: backfill-repo
+          token: ${{ secrets.BACKFILL_REPO_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backfill dependencies
+        run: pip install psycopg[binary]
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Apply backfills
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          DB=$(ssh -i ~/.ssh/id_rsa ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} '
+            docker ps --filter label=com.docker.swarm.service.name=${{ inputs.stack_name }}_db --format "{{.Names}}" | head -n1
+          ')
+          PGUSER=$(ssh -i ~/.ssh/id_rsa ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "
+            docker exec \"$DB\" cat /run/secrets/postgres_user
+          ")
+          PGPASSWORD=$(ssh -i ~/.ssh/id_rsa ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "
+            docker exec \"$DB\" cat /run/secrets/postgres_password
+          ")
+          echo "::add-mask::$PGUSER"
+          echo "::add-mask::$PGPASSWORD"
+
+          ssh -i ~/.ssh/id_rsa -N -L 55432:127.0.0.1:${{ secrets.API_DB_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} &
+          TUNNEL_PID=$!
+          trap 'kill $TUNNEL_PID' EXIT
+          sleep 3
+
+          python backfill-repo/run_backfill.py \
+            --db-url "postgresql://${PGUSER}:${PGPASSWORD}@127.0.0.1:55432/aredl" \
+            --environment "${{ inputs.environment_name }}"
+
+      - name: Cleanup SSH
+        if: always()
+        run: rm -rf ~/.ssh
