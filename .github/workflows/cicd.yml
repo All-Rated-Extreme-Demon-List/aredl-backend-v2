@@ -179,6 +179,24 @@ jobs:
       GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
       GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
 
+  apply-backfills-prod:
+    if: github.ref == 'refs/heads/main'
+    needs: deploy
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/apply-backfills.yml
+    with:
+      stack_name: aredl_backend_stack
+      environment_name: prod
+      backfill_repo: ${{ vars.BACKFILL_REPO }}
+    secrets:
+      API_DB_PORT: ${{ secrets.API_DB_PORT }}
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+      BACKFILL_REPO_TOKEN: ${{ secrets.BACKFILL_REPO_TOKEN }}
+
   build-api-dev:
     if: github.ref == 'refs/heads/dev'
     needs: test
@@ -250,4 +268,22 @@ jobs:
     secrets:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+
+  apply-backfills-dev:
+    if: github.ref == 'refs/heads/dev'
+    needs: migrate-dev-db
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/apply-backfills.yml
+    with:
+      stack_name: aredl_backend_dev_stack
+      environment_name: dev
+      backfill_repo: ${{ vars.BACKFILL_REPO }}
+    secrets:
+      API_DB_PORT: ${{ secrets.DEV_API_DB_PORT }}
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
       DEPLOY_KEY:  ${{ secrets.DEPLOY_KEY }}
+      BACKFILL_REPO_TOKEN: ${{ secrets.BACKFILL_REPO_TOKEN }}
