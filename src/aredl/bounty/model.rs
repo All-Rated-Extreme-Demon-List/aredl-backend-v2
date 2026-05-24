@@ -1,5 +1,5 @@
 use crate::app_data::db::DbConnection;
-use crate::aredl::levels::BaseLevel;
+use crate::aredl::levels::ExtendedBaseLevel;
 use crate::aredl::records::Record;
 use crate::auth::{Authenticated, Permission};
 use crate::error_handler::ApiError;
@@ -60,7 +60,7 @@ pub struct BountyResolved {
     /// Internal UUID for the bounty.
     pub id: Uuid,
     /// The level associated with this bounty.
-    pub level: BaseLevel,
+    pub level: ExtendedBaseLevel,
     /// The subtype of this bounty.
     pub bounty_type: BountyType,
     /// The difficulty range of the level for this bounty.
@@ -97,18 +97,18 @@ impl BountyResolved {
                 )
                 .select((
                     Bounty::as_select(),
-                    BaseLevel::as_select(),
+                    ExtendedBaseLevel::as_select(),
                     bounty_completed::user_id.nullable(),
                 ))
-                .load::<(Bounty, BaseLevel, Option<Uuid>)>(conn)?
+                .load::<(Bounty, ExtendedBaseLevel, Option<Uuid>)>(conn)?
                 .into_iter()
                 .map(|(bounty, level, user_completed)| {
                     (bounty, level, Some(user_completed.is_some()))
                 })
                 .collect::<Vec<_>>(),
             None => base_bounties_query
-                .select((Bounty::as_select(), BaseLevel::as_select()))
-                .load::<(Bounty, BaseLevel)>(conn)?
+                .select((Bounty::as_select(), ExtendedBaseLevel::as_select()))
+                .load::<(Bounty, ExtendedBaseLevel)>(conn)?
                 .into_iter()
                 .map(|(bounty, level)| (bounty, level, None))
                 .collect::<Vec<_>>(),
@@ -130,7 +130,7 @@ impl BountyResolved {
 
     pub fn from_data(
         bounty: Bounty,
-        level: BaseLevel,
+        level: ExtendedBaseLevel,
         user_completed: Option<bool>,
         hide_target: bool,
     ) -> Self {
