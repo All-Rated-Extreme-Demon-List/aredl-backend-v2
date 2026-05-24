@@ -214,6 +214,8 @@ async fn bounty_board_visibility_and_completed_by_user() {
     let anon_public = find_test_bounty(&anon_body, public_bounty.id);
     assert!(anon_hidden.get("completed_by_user").is_none());
     assert!(anon_hidden["target_submissions"].is_null());
+    assert_eq!(anon_hidden["current_completions"], 1);
+    assert_eq!(anon_public["current_completions"], 0);
     assert_eq!(anon_public["target_submissions"], 5);
 
     let user_resp = test::call_service(
@@ -230,7 +232,9 @@ async fn bounty_board_visibility_and_completed_by_user() {
     let user_public = find_test_bounty(&user_body, public_bounty.id);
     assert_eq!(user_hidden["completed_by_user"], true);
     assert!(user_hidden["target_submissions"].is_null());
+    assert_eq!(user_hidden["current_completions"], 1);
     assert_eq!(user_public["completed_by_user"], false);
+    assert_eq!(user_public["current_completions"], 0);
     assert_eq!(user_public["target_submissions"], 5);
 
     let manager_resp = test::call_service(
