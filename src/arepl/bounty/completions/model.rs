@@ -9,13 +9,13 @@ use crate::{
     arepl::bounty::Bounty,
     error_handler::ApiError,
     schema::{arepl::bounty_completed, users},
-    users::BaseUser,
+    users::ExtendedBaseUser,
 };
 
 #[derive(Serialize, Debug, ToSchema)]
 pub struct ResolvedCompletedBounty {
     /// The user who completed the bounty.
-    pub user: BaseUser,
+    pub user: ExtendedBaseUser,
     /// The date this bounty was completed.
     pub completed_at: DateTime<Utc>,
 }
@@ -36,8 +36,11 @@ impl Bounty {
         let completions = bounty_completed::table
             .inner_join(users::table.on(users::id.eq(bounty_completed::user_id)))
             .filter(bounty_completed::bounty_id.eq(bounty_id))
-            .select((BaseUser::as_select(), bounty_completed::completed_at))
-            .load::<(BaseUser, DateTime<Utc>)>(conn)?
+            .select((
+                ExtendedBaseUser::as_select(),
+                bounty_completed::completed_at,
+            ))
+            .load::<(ExtendedBaseUser, DateTime<Utc>)>(conn)?
             .into_iter()
             .map(|(user, completed_at)| ResolvedCompletedBounty { user, completed_at })
             .collect::<Vec<ResolvedCompletedBounty>>();
