@@ -58,7 +58,7 @@ use tracing_actix_web::{root_span, DefaultRootSpanBuilder, RootSpanBuilder, Trac
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::EnvFilter;
 use utoipa::OpenApi;
-use utoipa_rapidoc::RapiDoc;
+use utoipa_scalar::{Scalar, Servable};
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
@@ -118,31 +118,36 @@ async fn main() -> std::io::Result<()> {
     let mut server = HttpServer::new(move || {
         let cors = Cors::permissive();
 
-        let docs_html = "\
-            <!doctype html><html><head><meta charset=\"utf-8\"><script type=\"module\" src=\"https://unpkg.com/rapidoc/dist/rapidoc-min.js\"></script></head><body><rapi-doc \
-                spec-url = \"openapi.json\" \
-                show-method-in-nav-bar = as-colored-block \
-                render-style = focused \
-                allow-spec-url-load = false \
-                allow-spec-file-load = false \
-                allow-spec-file-download = false \
-                allow-server-selection = false \
-                show-components = true \
-                schema-description-expanded = true \
-                persist-auth = true \
-                default-schema-tab = schema \
-                schema-expand-level = 1 \
-                font-size = largest \
-                bg-color = #1c1c1c \
-                header-color = #ff6f00 \
-                text-color =  #ffffff \
-                primary-color = #ff6f00 \
-                nav-bg-color = #424242 \
-                nav-accent-color = #ff6f00 \
-             >\
-                <header style=\"color:white; font-weight: lighter; font-size: 1.5rem;\" slot=\"header\">All Rated Extreme Demons List | API v2 Documentation</header>\
-                <img style=\"padding: 0.5rem; height: 3rem;\" slot=\"logo\"  src=\"https://aredl.net/assets/logo.webp\"/>
-            </rapi-doc></body></html>";
+        let docs_html = r#"
+            <!doctype html>
+            <html>
+                <head>
+                    <title>AREDL API Docs</title>
+                    <meta charset="utf-8"/>
+                    <meta
+                        name="viewport"
+                        content="width=device-width, initial-scale=1"/>
+                    <!-- Link to the font on Google -->
+                    <link
+                        href="https://fonts.googleapis.com/css2?family=Poppins"
+                        rel="stylesheet" />
+                    <!-- Overwrite the scalar font variable -->
+                    <style>
+                        :root {
+                            --scalar-font: 'Poppins', sans-serif;   
+                        }
+                    </style>
+                </head>
+                <body>
+                    <script
+                        id="api-reference"
+                        type="application/json">
+                            $spec
+                    </script>
+                    <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+                </body>
+            </html>
+        "#;
 
         let _governor_conf = GovernorConfigBuilder::default()
             .requests_per_minute(100)
@@ -175,9 +180,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(utils::init_routes),
             )
             .service(
-                RapiDoc::with_openapi("/openapi.json", ApiDoc::openapi())
-                    .path("/docs")
-                    .custom_html(docs_html),
+                Scalar::with_url("/docs", ApiDoc::openapi()).custom_html(docs_html)
             )
     });
 
