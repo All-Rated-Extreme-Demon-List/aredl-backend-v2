@@ -1,7 +1,7 @@
 use actix_http::header;
 use actix_web::body::BoxBody;
 use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
-use actix_web::{web, Error, HttpMessage, HttpRequest, HttpResponse, ResponseError};
+use actix_web::{web, Error, HttpMessage, HttpRequest, ResponseError};
 use futures_util::future::{ready, LocalBoxFuture, Ready};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -96,10 +96,10 @@ where
 
         if token.is_none() {
             return if require_auth {
-                Box::pin(ready(Ok(ServiceResponse::new(
+                Self::error_future(
                     http_req,
-                    HttpResponse::Forbidden().reason("Unauthorized").finish(),
-                ))))
+                    ApiError::new(403, "You must be authenticated to access this endpoint"),
+                )
             } else {
                 // auth is not required
                 let fut = self
