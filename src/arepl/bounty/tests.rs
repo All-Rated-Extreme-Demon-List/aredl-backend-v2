@@ -305,6 +305,67 @@ async fn bounty_completions_endpoint_and_delete_cascade() {
 }
 
 #[actix_web::test]
+async fn bounty_sync_completions_endpoint_adds_matching_records() {
+    let (app, db, auth, _) = init_test_app().await;
+    let level_id = create_test_level(&db).await;
+    let other_level_id = create_test_level(&db).await;
+    let (manager_id, _) = create_test_user(&db, Some(Permission::BountyManage)).await;
+    let (user_1, _) = create_test_user(&db, None).await;
+    let (user_2, _) = create_test_user(&db, None).await;
+    let (user_3, _) = create_test_user(&db, None).await;
+    let (before_user, _) = create_test_user(&db, None).await;
+    let (after_user, _) = create_test_user(&db, None).await;
+    let (other_level_user, _) = create_test_user(&db, None).await;
+    let manager_token = create_test_token(manager_id, &auth.jwt_encoding_key).unwrap();
+    let start = "2026-01-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
+    let end = "2026-02-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
+    let inside = "2026-01-10T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
+
+    let bounty = create_test_bounty(&db, level_id, start, Some(end), None, true).await;
+
+    for user_id in [user_1, user_2, user_3] {
+        let record_id = create_test_record(&db, user_id, level_id).await;
+        set_test_record_achieved_at(&db, record_id, inside);
+    }
+
+    let before_record = create_test_record(&db, before_user, level_id).await;
+    set_test_record_achieved_at(
+        &db,
+        before_record,
+        "2025-12-31T23:59:59Z".parse::<DateTime<Utc>>().unwrap(),
+    );
+    let after_record = create_test_record(&db, after_user, level_id).await;
+    set_test_record_achieved_at(
+        &db,
+        after_record,
+        "2026-02-01T00:00:01Z".parse::<DateTime<Utc>>().unwrap(),
+    );
+    let other_level_record = create_test_record(&db, other_level_user, other_level_id).await;
+    set_test_record_achieved_at(&db, other_level_record, inside);
+
+    assert_eq!(count_test_bounty_completions(&db, bounty.id), 0);
+
+    let sync_resp = test::call_service(
+        &app,
+        test::TestRequest::post()
+            .uri(&format!(
+                "/arepl/bounty-board/{}/completions/sync",
+                bounty.id
+            ))
+            .insert_header(("Authorization", format!("Bearer {}", manager_token)))
+            .to_request(),
+    )
+    .await;
+    assert!(
+        sync_resp.status().is_success(),
+        "sync completions status is {}",
+        sync_resp.status()
+    );
+
+    assert_eq!(count_test_bounty_completions(&db, bounty.id), 3);
+}
+
+#[actix_web::test]
 async fn bounty_completion_windows_and_overlaps() {
     let (_app, db, _auth, _) = init_test_app().await;
     let level_id = create_test_level(&db).await;

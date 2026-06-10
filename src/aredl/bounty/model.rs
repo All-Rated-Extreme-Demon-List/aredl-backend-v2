@@ -221,6 +221,13 @@ pub struct BountyPatch {
 }
 
 impl Bounty {
+    pub fn find_by_id(conn: &mut DbConnection, id: Uuid) -> Result<Self, ApiError> {
+        let bounty = bounties::table
+            .filter(bounties::id.eq(id))
+            .first::<Bounty>(conn)?;
+        Ok(bounty)
+    }
+
     pub fn create(conn: &mut DbConnection, new_bounty: BountyPost) -> Result<Self, ApiError> {
         if let Some(end_date) = new_bounty.end_date {
             if end_date <= new_bounty.start_date {
@@ -243,18 +250,14 @@ impl Bounty {
         Ok(bounty)
     }
 
-    pub fn update(conn: &mut DbConnection, id: Uuid, patch: BountyPatch) -> Result<Self, ApiError> {
-        let existing_bounty = bounties::table
-            .filter(bounties::id.eq(id))
-            .first::<Bounty>(conn)?;
-
+    pub fn update(self, conn: &mut DbConnection, patch: BountyPatch) -> Result<Self, ApiError> {
         let start_date = match patch.start_date {
             Some(date) => date,
-            None => existing_bounty.start_date,
+            None => self.start_date,
         };
         let end_date = match patch.end_date {
             Some(date) => Some(date),
-            None => existing_bounty.end_date,
+            None => self.end_date,
         };
 
         if let Some(end_date) = end_date {
@@ -274,14 +277,14 @@ impl Bounty {
 
         let bounty = diesel::update(bounties::table)
             .set(patch)
-            .filter(bounties::id.eq(id))
+            .filter(bounties::id.eq(self.id))
             .get_result(conn)?;
         Ok(bounty)
     }
 
-    pub fn delete(conn: &mut DbConnection, id: Uuid) -> Result<Self, ApiError> {
+    pub fn delete(self, conn: &mut DbConnection) -> Result<Self, ApiError> {
         let bounty =
-            diesel::delete(bounties::table.filter(bounties::id.eq(id))).get_result(conn)?;
+            diesel::delete(bounties::table.filter(bounties::id.eq(self.id))).get_result(conn)?;
         Ok(bounty)
     }
 

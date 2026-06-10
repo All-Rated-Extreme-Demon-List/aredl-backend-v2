@@ -73,7 +73,8 @@ async fn update(
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", &tracing::field::debug(&patch));
     let result = web::block(move || {
-        Bounty::update(&mut db.connection()?, id.into_inner(), patch.into_inner())
+        let conn = &mut db.connection()?;
+        Bounty::find_by_id(conn, id.into_inner())?.update(conn, patch.into_inner())
     })
     .await??;
     Ok(HttpResponse::Ok().json(result))
@@ -93,7 +94,11 @@ async fn delete(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
 ) -> Result<HttpResponse, ApiError> {
-    web::block(move || Bounty::delete(&mut db.connection()?, id.into_inner())).await??;
+    web::block(move || {
+        let conn = &mut db.connection()?;
+        Bounty::find_by_id(conn, id.into_inner())?.delete(conn)
+    })
+    .await??;
     Ok(HttpResponse::Ok().finish())
 }
 

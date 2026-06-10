@@ -8,7 +8,10 @@ use crate::{
     app_data::db::DbConnection,
     aredl::bounty::Bounty,
     error_handler::ApiError,
-    schema::{aredl::bounty_completed, users},
+    schema::{
+        aredl::{bounty_completed, records},
+        users,
+    },
     users::ExtendedBaseUser,
 };
 
@@ -46,5 +49,46 @@ impl Bounty {
             .collect::<Vec<ResolvedCompletedBounty>>();
 
         Ok(completions)
+    }
+
+    pub fn sync_completions(self, conn: &mut DbConnection) -> Result<(), ApiError> {
+        let existing_completions = bounty_completed::table
+            .filter(bounty_completed::bounty_id.eq(self.id))
+            .select(bounty_completed::user_id)
+            .load::<Uuid>(conn)?;
+
+        // make sure to stay below the target number if there is one
+        let max_missing_completions = self
+            .target_submissions
+            .map(|target| target as i64 - existing_completions.len() as i64)
+            .unwrap_or(i64::MAX);
+
+        let records = records::table
+            .filter(records::level_id.eq(self.level_id))
+            .filter(records::achieved_at.ge(self.start_date))
+            .filter(records::achieved_at.le(self.end_date.unwrap_or(Utc::now())))
+            .filter(records::submitted_by.ne_all(existing_completions))
+            .limit(max_missing_completions)
+            .select((records::submitted_by, records::achieved_at))
+            .load::<(Uuid, DateTime<Utc>)>(conn)?;
+
+        diesel::insert_into(bounty_completed::table)
+            .values(
+                records
+                    .into_iter()
+                    .map(|(user_id, achieved_at)| {
+                        (
+                            bounty_completed::bounty_id.eq(self.id),
+                            bounty_completed::user_id.eq(user_id),
+                            bounty_completed::completed_at.eq(achieved_at),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .on_conflict((bounty_completed::bounty_id, bounty_completed::user_id))
+            .do_nothing()
+            .execute(conn)?;
+
+        Ok(())
     }
 }
