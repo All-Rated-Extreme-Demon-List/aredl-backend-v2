@@ -3,9 +3,11 @@ use {
     crate::{
         aredl::{
             levels::test_utils::create_test_level,
-            statistics::submissions::daily::ResolvedLeaderboardRow,
+            statistics::submissions::daily::{
+                test_utils::refresh_test_submission_stats, ResolvedLeaderboardRow,
+            },
             submissions::{
-                test_utils::{create_test_submission, insert_history_entry},
+                test_utils::{create_test_submission, insert_history_entry, set_history_timestamp},
                 SubmissionStatus,
             },
         },
@@ -19,7 +21,6 @@ use {
         http::header,
         test::{self, read_body_json},
     },
-    diesel::{sql_query, RunQueryDsl},
     serde_json::Value,
     uuid::Uuid,
 };
@@ -36,9 +37,7 @@ async fn submission_stats_filter_moderator() {
     let sub = create_test_submission(level_id, Uuid::new_v4(), &db).await;
     insert_history_entry(sub, Some(mod_id), SubmissionStatus::Accepted, &db).await;
     insert_history_entry(sub, Some(mod_id), SubmissionStatus::Denied, &db).await;
-    sql_query("REFRESH MATERIALIZED VIEW aredl.submission_stats")
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    refresh_test_submission_stats(&db).await;
 
     let uri = format!(
         "/aredl/statistics/submissions/daily?reviewer_id={}&page=1&per_page=10",
@@ -84,9 +83,7 @@ async fn submission_stats_hides_base_reviewer_filter_for_non_auditor() {
     let sub = create_test_submission(level_id, Uuid::new_v4(), &db).await;
     insert_history_entry(sub, Some(base_reviewer), SubmissionStatus::Accepted, &db).await;
 
-    sql_query("REFRESH MATERIALIZED VIEW aredl.submission_stats")
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    refresh_test_submission_stats(&db).await;
 
     let uri = format!(
         "/aredl/statistics/submissions/daily?reviewer_id={}&page=1&per_page=10",
@@ -156,9 +153,7 @@ async fn submission_leaderboard_include_base_reviewers_requires_audit() {
     let full_sub = create_test_submission(lvl, Uuid::new_v4(), &db).await;
     insert_history_entry(full_sub, Some(full_reviewer), SubmissionStatus::Denied, &db).await;
 
-    diesel::sql_query("REFRESH MATERIALIZED VIEW aredl.submission_stats")
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    refresh_test_submission_stats(&db).await;
 
     let uri = "/aredl/statistics/submissions/daily/leaderboard?include_base_reviewers=true";
 
@@ -266,9 +261,7 @@ async fn submission_leaderboard_counts_and_ordering() {
     )
     .await;
 
-    diesel::sql_query("REFRESH MATERIALIZED VIEW aredl.submission_stats")
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    refresh_test_submission_stats(&db).await;
 
     let req = test::TestRequest::get()
         .uri("/aredl/statistics/submissions/daily/leaderboard")
@@ -300,9 +293,7 @@ async fn submission_leaderboard_only_active_filters_out() {
     let s2 = create_test_submission(lvl, Uuid::new_v4(), &db).await;
     insert_history_entry(s2, Some(mod_inactive), SubmissionStatus::Denied, &db).await;
 
-    diesel::sql_query("REFRESH MATERIALIZED VIEW aredl.submission_stats")
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    refresh_test_submission_stats(&db).await;
 
     let uri = "/aredl/statistics/submissions/daily/leaderboard?only_active=true";
     let req = test::TestRequest::get()
@@ -329,9 +320,7 @@ async fn submission_leaderboard_since_filters_out_future_date() {
     let sub = create_test_submission(lvl, Uuid::new_v4(), &db).await;
     insert_history_entry(sub, Some(mod1), SubmissionStatus::Accepted, &db).await;
 
-    diesel::sql_query("REFRESH MATERIALIZED VIEW aredl.submission_stats")
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    refresh_test_submission_stats(&db).await;
 
     let tomorrow = chrono::Utc::now().date_naive() + chrono::Duration::days(1);
     let uri = format!(
@@ -352,4 +341,80 @@ async fn submission_leaderboard_since_filters_out_future_date() {
         0,
         "No mods should show up for a future 'since' date"
     );
+}
+
+#[actix_web::test]
+async fn submission_leaderboard_until_filters_out_later_dates() {
+    let (app, db, auth, _db) = init_test_app().await;
+    let (mod1, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (mod2, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let token = create_test_token(mod1, &auth.jwt_encoding_key).unwrap();
+
+    let lvl = create_test_level(&db).await;
+
+    let mod1_before_cutoff = create_test_submission(lvl, Uuid::new_v4(), &db).await;
+    insert_history_entry(
+        mod1_before_cutoff,
+        Some(mod1),
+        SubmissionStatus::Accepted,
+        &db,
+    )
+    .await;
+    set_history_timestamp(
+        &db,
+        mod1_before_cutoff,
+        "2024-01-09T12:00:00Z".parse().unwrap(),
+    );
+
+    let mod1_on_cutoff = create_test_submission(lvl, Uuid::new_v4(), &db).await;
+    insert_history_entry(
+        mod1_on_cutoff,
+        Some(mod1),
+        SubmissionStatus::UnderConsideration,
+        &db,
+    )
+    .await;
+    set_history_timestamp(&db, mod1_on_cutoff, "2024-01-10T12:00:00Z".parse().unwrap());
+
+    let mod1_after_cutoff = create_test_submission(lvl, Uuid::new_v4(), &db).await;
+    insert_history_entry(mod1_after_cutoff, Some(mod1), SubmissionStatus::Denied, &db).await;
+    set_history_timestamp(
+        &db,
+        mod1_after_cutoff,
+        "2024-01-11T12:00:00Z".parse().unwrap(),
+    );
+
+    let mod2_before_cutoff = create_test_submission(lvl, Uuid::new_v4(), &db).await;
+    insert_history_entry(
+        mod2_before_cutoff,
+        Some(mod2),
+        SubmissionStatus::Accepted,
+        &db,
+    )
+    .await;
+    set_history_timestamp(
+        &db,
+        mod2_before_cutoff,
+        "2024-01-09T12:00:00Z".parse().unwrap(),
+    );
+
+    refresh_test_submission_stats(&db).await;
+
+    let req = test::TestRequest::get()
+        .uri("/aredl/statistics/submissions/daily/leaderboard?until=2024-01-10")
+        .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+
+    let arr: Vec<ResolvedLeaderboardRow> = read_body_json(resp).await;
+
+    assert_eq!(arr.len(), 2);
+    assert_eq!(arr[0].moderator.id, mod1);
+    assert_eq!(arr[0].accepted, 1);
+    assert_eq!(arr[0].denied, 0);
+    assert_eq!(arr[0].under_consideration, 1);
+    assert_eq!(arr[0].total, 2);
+    assert_eq!(arr[1].moderator.id, mod2);
+    assert_eq!(arr[1].total, 1);
 }

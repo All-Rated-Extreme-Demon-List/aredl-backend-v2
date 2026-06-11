@@ -64,6 +64,16 @@ pub async fn insert_history_entry(
 }
 
 #[cfg(test)]
+pub fn set_history_timestamp(db: &Arc<DbAppState>, submission_id: Uuid, timestamp: DateTime<Utc>) {
+    diesel::update(
+        submission_history::table.filter(submission_history::submission_id.eq(submission_id)),
+    )
+    .set(submission_history::timestamp.eq(timestamp))
+    .execute(&mut db.connection().unwrap())
+    .unwrap();
+}
+
+#[cfg(test)]
 pub async fn create_two_test_submissions_with_different_timestamps(
     db: &Arc<DbAppState>,
     submitter_id: uuid::Uuid,

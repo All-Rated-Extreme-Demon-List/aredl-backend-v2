@@ -55,6 +55,7 @@ pub async fn stats(
 #[derive(Deserialize, ToSchema)]
 pub struct LeaderboardQuery {
     pub since: Option<NaiveDate>,
+    pub until: Option<NaiveDate>,
     pub only_active: Option<bool>,
     pub include_base_reviewers: Option<bool>,
 }
@@ -66,6 +67,7 @@ pub struct LeaderboardQuery {
     tag = "AREDL - Statistics",
     params(
         ("since" = Option<NaiveDate>, Query, description = "Only include data since this date"),
+        ("until" = Option<NaiveDate>, Query, description = "Only include data until this date"),
         ("only_active" = Option<bool>, Query, description = "Whether or not to exclude moderators that aren't staff anymore"),
         ("include_base_reviewers" = Option<bool>, Query, description = "Whether to include base reviewers in the results. Requires `ReviewersAudit`; otherwise forced to false."),
     ),
@@ -81,18 +83,8 @@ pub async fn leaderboard_route(
     query: web::Query<LeaderboardQuery>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let query = query.into_inner();
-
     let data = web::block(move || {
-        let conn = &mut db.connection()?;
-        let include_base_reviewers = query.include_base_reviewers.unwrap_or(false)
-            && authenticated.has_permission(conn, Permission::ReviewersAudit)?;
-        stats_mod_leaderboard(
-            conn,
-            query.since,
-            query.only_active.unwrap_or(false),
-            include_base_reviewers,
-        )
+        stats_mod_leaderboard(&mut db.connection()?, query.into_inner(), authenticated)
     })
     .await??;
     Ok(HttpResponse::Ok().json(data))

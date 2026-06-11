@@ -1,4 +1,5 @@
 use crate::app_data::db::DbConnection;
+use crate::arepl::statistics::submissions::daily::routes::LeaderboardQuery;
 use crate::auth::{Authenticated, Permission};
 use crate::page_helper::{PageQuery, Paginated};
 use crate::{
@@ -122,28 +123,33 @@ impl DailyStatsPage {
 
 pub fn stats_mod_leaderboard(
     conn: &mut DbConnection,
-    since: Option<NaiveDate>,
-    only_active: bool,
-    include_base_reviewers: bool,
+    options: LeaderboardQuery,
+    authenticated: Authenticated,
 ) -> Result<Vec<ResolvedLeaderboardRow>, ApiError> {
     let mut query = submission_stats::table
         .inner_join(users::table.on(users::id.nullable().eq(submission_stats::reviewer_id)))
         .select((DailyStats::as_select(), ExtendedBaseUser::as_select()))
         .into_boxed::<Pg>();
 
-    if let Some(date) = since {
+    if let Some(date) = options.since {
         query = query.filter(submission_stats::day.ge(date));
+    }
+
+    if let Some(date) = options.until {
+        query = query.filter(submission_stats::day.le(date));
     }
 
     let all_rows: Vec<(DailyStats, ExtendedBaseUser)> = query.load(conn)?;
     let reviewer_sets = RoleResolved::find_all_base_reviewers(conn)?;
+    let include_base_reviewers = options.include_base_reviewers.unwrap_or(false)
+        && authenticated.has_permission(conn, Permission::ReviewersAudit)?;
 
     let rows = all_rows.into_iter().filter_map(|(stats, user)| {
         if reviewer_sets.full_reviewers.contains(&user.id) {
             Some((stats, user))
         } else if reviewer_sets.base_reviewers.contains(&user.id) {
             include_base_reviewers.then_some((stats, user))
-        } else if only_active {
+        } else if options.only_active.unwrap_or(false) {
             None
         } else {
             Some((stats, user))

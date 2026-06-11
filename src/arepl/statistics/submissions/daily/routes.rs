@@ -55,6 +55,7 @@ pub async fn stats(
 #[derive(Deserialize, ToSchema)]
 pub struct LeaderboardQuery {
     pub since: Option<NaiveDate>,
+    pub until: Option<NaiveDate>,
     pub only_active: Option<bool>,
     pub include_base_reviewers: Option<bool>,
 }
@@ -81,18 +82,8 @@ pub async fn leaderboard_route(
     query: web::Query<LeaderboardQuery>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let query = query.into_inner();
-
     let data = web::block(move || {
-        let conn = &mut db.connection()?;
-        let include_base_reviewers = query.include_base_reviewers.unwrap_or(false)
-            && authenticated.has_permission(conn, Permission::ReviewersAudit)?;
-        stats_mod_leaderboard(
-            conn,
-            query.since,
-            query.only_active.unwrap_or(false),
-            include_base_reviewers,
-        )
+        stats_mod_leaderboard(&mut db.connection()?, query.into_inner(), authenticated)
     })
     .await??;
     Ok(HttpResponse::Ok().json(data))
