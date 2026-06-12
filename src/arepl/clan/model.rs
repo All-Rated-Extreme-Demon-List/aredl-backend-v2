@@ -1,10 +1,15 @@
 use crate::app_data::db::DbConnection;
+use crate::arepl::levels::records::LevelResolvedRecordExtended;
 use crate::arepl::levels::ExtendedBaseLevel;
-use crate::arepl::records::ResolvedRecord;
+use crate::arepl::levels::LevelStatus;
+use crate::arepl::records::{Record, ResolvedRecord};
 use crate::clans::Clan;
 use crate::error_handler::ApiError;
 use crate::schema::{
-    arepl::{clans_created_levels, clans_leaderboard, levels, min_placement_clans_records},
+    arepl::{
+        clan_member_points, clans_created_levels, clans_leaderboard, levels,
+        min_placement_clans_records, records,
+    },
     clan_members, clans, users,
 };
 use crate::users::{BaseUser, ExtendedBaseUser};
@@ -54,6 +59,15 @@ pub struct ClanProfileRecord {
     pub created_at: DateTime<Utc>,
     /// Timestamp of when the record was last updated.
     pub updated_at: DateTime<Utc>,
+    /// How many member completed the same level.
+    pub completion_count: i64,
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct ResolvedClanProfileRecord {
+    #[serde(flatten)]
+    pub record: ResolvedRecord,
+    pub completion_count: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
@@ -79,14 +93,33 @@ pub struct ClanCreatedLevelEntry {
     pub creator_id: Uuid,
     pub order_pos: Option<i32>,
 }
+
+#[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
+#[diesel(table_name=clan_member_points, check_for_backend(Pg))]
+pub struct ClanMemberPointsEntry {
+    pub clan_id: Uuid,
+    pub submitted_by: Uuid,
+    pub completed_levels: i64,
+    pub contributed_points: f64,
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct ResolvedClanMemberPoints {
+    pub member: ExtendedBaseUser,
+    pub completed_levels: i64,
+    pub contributed_points: f64,
+}
+
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct ClanProfileResolved {
     /// This profile's clan.
     pub clan: Clan,
     /// Rank of the clan in the clans leaderboard.
     pub rank: Option<Rank>,
-    /// Records of users from this clan.
-    pub records: Vec<ResolvedRecord>,
+    /// Records of users from this clan. (Only the clan's first victor/verifier)
+    pub records: Vec<ResolvedClanProfileRecord>,
+    /// Points contributed by each member of the clan. (For each record, the member's contribution is the level's given points divided by how many clan members completed it)
+    pub members_points: Vec<ResolvedClanMemberPoints>,
     /// Levels created by users from this clan.
     pub created: Vec<ResolvedClanProfileCreatedLevel>,
     /// Levels published by users from this clan.
@@ -116,6 +149,30 @@ impl ResolvedRecord {
     }
 }
 
+impl ResolvedClanProfileRecord {
+    pub fn from_clan_data(
+        record: ClanProfileRecord,
+        level: ExtendedBaseLevel,
+        user: ExtendedBaseUser,
+    ) -> Self {
+        let completion_count = record.completion_count;
+        Self {
+            record: ResolvedRecord::from_clan_data(record, level, user),
+            completion_count,
+        }
+    }
+}
+
+impl ResolvedClanMemberPoints {
+    pub fn from_data(entry: ClanMemberPointsEntry, member: ExtendedBaseUser) -> Self {
+        Self {
+            member,
+            completed_levels: entry.completed_levels,
+            contributed_points: entry.contributed_points,
+        }
+    }
+}
+
 impl ClanProfileResolved {
     pub fn find(conn: &mut DbConnection, clan_id: Uuid) -> Result<Self, ApiError> {
         let clan = clans::table
@@ -141,7 +198,27 @@ impl ClanProfileResolved {
             .order_by(levels::position.asc())
             .load::<(ClanProfileRecord, ExtendedBaseUser, ExtendedBaseLevel)>(conn)?
             .into_iter()
-            .map(|(record, user, level)| ResolvedRecord::from_clan_data(record, level, user))
+            .map(|(record, user, level)| {
+                ResolvedClanProfileRecord::from_clan_data(record, level, user)
+            })
+            .collect();
+
+        let members_points = clan_member_points::table
+            .filter(clan_member_points::clan_id.eq(clan_id))
+            .inner_join(users::table.on(users::id.eq(clan_member_points::submitted_by)))
+            .order_by((
+                clan_member_points::contributed_points.desc(),
+                clan_member_points::completed_levels.desc(),
+                users::global_name.asc(),
+                users::id.asc(),
+            ))
+            .select((
+                ClanMemberPointsEntry::as_select(),
+                ExtendedBaseUser::as_select(),
+            ))
+            .load::<(ClanMemberPointsEntry, ExtendedBaseUser)>(conn)?
+            .into_iter()
+            .map(|(entry, member)| ResolvedClanMemberPoints::from_data(entry, member))
             .collect();
 
         let created_rows: Vec<(ClanCreatedLevelEntry, ExtendedBaseLevel, BaseUser)> =
@@ -192,8 +269,33 @@ impl ClanProfileResolved {
             clan,
             rank,
             records,
+            members_points,
             created,
             published,
         })
+    }
+
+    pub fn find_records_for_level(
+        conn: &mut DbConnection,
+        clan_id: Uuid,
+        level_id: Uuid,
+    ) -> Result<Vec<LevelResolvedRecordExtended>, ApiError> {
+        records::table
+            .filter(records::level_id.eq(level_id))
+            .inner_join(users::table.on(records::submitted_by.eq(users::id)))
+            .inner_join(levels::table.on(records::level_id.eq(levels::id)))
+            .inner_join(clan_members::table.on(clan_members::user_id.eq(records::submitted_by)))
+            .filter(clan_members::clan_id.eq(clan_id))
+            .filter(users::ban_level.eq(0))
+            .filter(levels::status.ne(LevelStatus::Removed))
+            .order(records::achieved_at.asc())
+            .select((Record::as_select(), ExtendedBaseUser::as_select()))
+            .load::<(Record, ExtendedBaseUser)>(conn)
+            .map(|rows| {
+                rows.into_iter()
+                    .map(|(record, user)| LevelResolvedRecordExtended::from_data(record, user))
+                    .collect()
+            })
+            .map_err(ApiError::from)
     }
 }

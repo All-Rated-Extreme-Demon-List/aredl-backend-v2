@@ -1,9 +1,14 @@
 use crate::app_data::db::DbConnection;
+use crate::aredl::levels::records::LevelResolvedRecordExtended;
 use crate::aredl::levels::ExtendedBaseLevel;
-use crate::aredl::records::ResolvedRecord;
+use crate::aredl::levels::LevelStatus;
+use crate::aredl::records::{Record, ResolvedRecord};
 use crate::error_handler::ApiError;
 use crate::schema::{
-    aredl::{country_created_levels, country_leaderboard, levels, min_placement_country_records},
+    aredl::{
+        country_created_levels, country_leaderboard, country_member_points, levels,
+        min_placement_country_records, records,
+    },
     users,
 };
 use crate::users::{BaseUser, ExtendedBaseUser};
@@ -51,6 +56,15 @@ pub struct CountryProfileRecord {
     pub created_at: DateTime<Utc>,
     /// Timestamp of when the record was last updated.
     pub updated_at: DateTime<Utc>,
+    /// How many member completed the same level.
+    pub completion_count: i64,
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct ResolvedCountryProfileRecord {
+    #[serde(flatten)]
+    pub record: ResolvedRecord,
+    pub completion_count: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
@@ -78,6 +92,22 @@ pub struct CountryCreatedLevelEntry {
     pub order_pos: Option<i32>,
 }
 
+#[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
+#[diesel(table_name=country_member_points, check_for_backend(Pg))]
+pub struct CountryMemberPointsEntry {
+    pub country: i32,
+    pub submitted_by: Uuid,
+    pub completed_levels: i64,
+    pub contributed_points: f64,
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct ResolvedCountryMemberPoints {
+    pub member: ExtendedBaseUser,
+    pub completed_levels: i64,
+    pub contributed_points: f64,
+}
+
 impl ResolvedRecord {
     pub fn from_country_data(
         record: CountryProfileRecord,
@@ -100,14 +130,40 @@ impl ResolvedRecord {
     }
 }
 
+impl ResolvedCountryProfileRecord {
+    pub fn from_country_data(
+        record: CountryProfileRecord,
+        level: ExtendedBaseLevel,
+        user: ExtendedBaseUser,
+    ) -> Self {
+        let completion_count = record.completion_count;
+        Self {
+            record: ResolvedRecord::from_country_data(record, level, user),
+            completion_count,
+        }
+    }
+}
+
+impl ResolvedCountryMemberPoints {
+    pub fn from_data(entry: CountryMemberPointsEntry, member: ExtendedBaseUser) -> Self {
+        Self {
+            member,
+            completed_levels: entry.completed_levels,
+            contributed_points: entry.contributed_points,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct CountryProfileResolved {
     /// Country of the profile. Uses the ISO 3166-1 numeric country code.
     pub country: i32,
     /// Rank of the country in the countries leaderboard.
     pub rank: Option<Rank>,
-    /// Records of users from the country.
-    pub records: Vec<ResolvedRecord>,
+    /// Records of users from this country. (Only the country's first victor/verifier)
+    pub records: Vec<ResolvedCountryProfileRecord>,
+    /// Points contributed by each member of the country. (For each record, the member's contribution is the level's given points divided by how many country members completed it)
+    pub members_points: Vec<ResolvedCountryMemberPoints>,
     /// Levels created by users from the country.
     pub created: Vec<ResolvedCountryProfileCreatedLevel>,
     /// Levels published by users from the country.
@@ -134,7 +190,27 @@ impl CountryProfileResolved {
             .order_by(levels::position.asc())
             .load::<(CountryProfileRecord, ExtendedBaseUser, ExtendedBaseLevel)>(conn)?
             .into_iter()
-            .map(|(record, user, level)| ResolvedRecord::from_country_data(record, level, user))
+            .map(|(record, user, level)| {
+                ResolvedCountryProfileRecord::from_country_data(record, level, user)
+            })
+            .collect();
+
+        let members_points = country_member_points::table
+            .filter(country_member_points::country.eq(country))
+            .inner_join(users::table.on(users::id.eq(country_member_points::submitted_by)))
+            .order_by((
+                country_member_points::contributed_points.desc(),
+                country_member_points::completed_levels.desc(),
+                users::global_name.asc(),
+                users::id.asc(),
+            ))
+            .select((
+                CountryMemberPointsEntry::as_select(),
+                ExtendedBaseUser::as_select(),
+            ))
+            .load::<(CountryMemberPointsEntry, ExtendedBaseUser)>(conn)?
+            .into_iter()
+            .map(|(entry, member)| ResolvedCountryMemberPoints::from_data(entry, member))
             .collect();
 
         let created_rows: Vec<(CountryCreatedLevelEntry, ExtendedBaseLevel, BaseUser)> =
@@ -184,8 +260,32 @@ impl CountryProfileResolved {
             country,
             rank,
             records,
+            members_points,
             created,
             published,
         })
+    }
+
+    pub fn find_records_for_level(
+        conn: &mut DbConnection,
+        country: i32,
+        level_id: Uuid,
+    ) -> Result<Vec<LevelResolvedRecordExtended>, ApiError> {
+        records::table
+            .filter(records::level_id.eq(level_id))
+            .inner_join(users::table.on(records::submitted_by.eq(users::id)))
+            .inner_join(levels::table.on(records::level_id.eq(levels::id)))
+            .filter(users::country.eq(country))
+            .filter(users::ban_level.eq(0))
+            .filter(levels::status.ne(LevelStatus::Removed))
+            .order(records::achieved_at.asc())
+            .select((Record::as_select(), ExtendedBaseUser::as_select()))
+            .load::<(Record, ExtendedBaseUser)>(conn)
+            .map(|rows| {
+                rows.into_iter()
+                    .map(|(record, user)| LevelResolvedRecordExtended::from_data(record, user))
+                    .collect()
+            })
+            .map_err(ApiError::from)
     }
 }

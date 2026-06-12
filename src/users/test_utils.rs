@@ -106,3 +106,12 @@ pub async fn set_test_user_country(db: &Arc<DbAppState>, user_id: Uuid, country:
         .execute(&mut db.connection().unwrap())
         .expect("Failed to assign country to user");
 }
+
+#[cfg(test)]
+pub async fn set_test_user_ban_level(db: &Arc<DbAppState>, user_id: Uuid, ban_level: i32) {
+    diesel::update(users::table)
+        .filter(users::id.eq(user_id))
+        .set(users::ban_level.eq(ban_level))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to set user ban level");
+}

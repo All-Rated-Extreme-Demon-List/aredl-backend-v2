@@ -144,6 +144,7 @@ diesel::table! {
         updated_at -> Timestamptz,
         country -> Int4,
         order_pos -> Int4,
+        completion_count -> Int8,
     }
 }
 
@@ -153,6 +154,19 @@ diesel::joinable!(min_placement_country_records -> levels (level_id));
 diesel::allow_tables_to_appear_in_same_query!(min_placement_country_records, users,);
 
 diesel::allow_tables_to_appear_in_same_query!(min_placement_country_records, levels,);
+
+diesel::table! {
+    aredl.country_member_points (country, submitted_by) {
+        country -> Int4,
+        submitted_by -> Uuid,
+        completed_levels -> Int8,
+        contributed_points -> Float8,
+    }
+}
+
+diesel::joinable!(country_member_points -> users (submitted_by));
+
+diesel::allow_tables_to_appear_in_same_query!(country_member_points, users,);
 
 diesel::table! {
     aredl.clans_leaderboard (clan_id) {
@@ -202,6 +216,7 @@ diesel::table! {
         updated_at -> Timestamptz,
         clan_id -> Uuid,
         order_pos -> Int4,
+        completion_count -> Int8,
     }
 }
 
@@ -214,6 +229,21 @@ diesel::allow_tables_to_appear_in_same_query!(min_placement_clans_records, users
 diesel::allow_tables_to_appear_in_same_query!(min_placement_clans_records, levels,);
 
 diesel::allow_tables_to_appear_in_same_query!(min_placement_clans_records, clans,);
+
+diesel::table! {
+    aredl.clan_member_points (clan_id, submitted_by) {
+        clan_id -> Uuid,
+        submitted_by -> Uuid,
+        completed_levels -> Int8,
+        contributed_points -> Float8,
+    }
+}
+
+diesel::joinable!(clan_member_points -> clans (clan_id));
+diesel::joinable!(clan_member_points -> users (submitted_by));
+
+diesel::allow_tables_to_appear_in_same_query!(clan_member_points, clans,);
+diesel::allow_tables_to_appear_in_same_query!(clan_member_points, users,);
 
 diesel::joinable!(users -> level_ldms (id));
 diesel::joinable!(users -> level_notes (id));

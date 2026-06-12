@@ -8,7 +8,7 @@ use crate::aredl::levels::LevelStatus;
 #[cfg(test)]
 use crate::schema::aredl::{levels, levels_created};
 #[cfg(test)]
-use diesel::{ExpressionMethods, RunQueryDsl};
+use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 #[cfg(test)]
 use rand::Rng;
 #[cfg(test)]
@@ -72,6 +72,19 @@ pub async fn add_test_level_creators(db: &Arc<DbAppState>, level_id: Uuid, creat
         )
         .execute(&mut db.connection().unwrap())
         .expect("Failed to create aredl level creators");
+}
+
+#[cfg(test)]
+pub async fn set_test_level_status(
+    db: &Arc<DbAppState>,
+    level_id: Uuid,
+    status: LevelStatus,
+    position: Option<i32>,
+) {
+    diesel::update(levels::table.filter(levels::id.eq(level_id)))
+        .set((levels::status.eq(status), levels::position.eq(position)))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to update test aredl level status");
 }
 
 #[cfg(test)]

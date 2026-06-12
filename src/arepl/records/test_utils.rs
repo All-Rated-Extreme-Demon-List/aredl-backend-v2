@@ -67,3 +67,27 @@ pub async fn create_two_test_records_with_different_timestamps(
 
     (record_a, record_b)
 }
+
+#[cfg(test)]
+pub async fn set_test_record_verification(
+    db: &Arc<DbAppState>,
+    record_id: Uuid,
+    is_verification: bool,
+) {
+    diesel::update(records::table.filter(records::id.eq(record_id)))
+        .set(records::is_verification.eq(is_verification))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to update test arepl record verification status");
+}
+
+#[cfg(test)]
+pub async fn set_test_record_achieved_at(
+    db: &Arc<DbAppState>,
+    record_id: Uuid,
+    achieved_at: DateTime<Utc>,
+) {
+    diesel::update(records::table.filter(records::id.eq(record_id)))
+        .set(records::achieved_at.eq(achieved_at))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to update test arepl record achieved_at");
+}
