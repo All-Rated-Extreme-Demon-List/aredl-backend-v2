@@ -117,8 +117,7 @@ pub struct LevelPlace {
     /// The current status of the level.
     pub status: LevelStatus,
     /// Whether this level requires raw footage while pending.
-    #[serde(default)]
-    pub requires_raw_footage: bool,
+    pub requires_raw_footage: Option<bool>, // Default: false 
     /// Level ID in the game. May not be unique for 2P levels.
     pub level_id: i32,
     /// Whether this is the 2P version of a level or not.
