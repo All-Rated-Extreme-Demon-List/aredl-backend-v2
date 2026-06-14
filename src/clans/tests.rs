@@ -359,7 +359,7 @@ async fn find_clan_with_filter() {
     let (staff_id, _) = create_test_user(&db, Some(Permission::ClanModify)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
 
-    let payload = json!({"global_name": "Alpha Clan", "tag": "ALP"});
+    let payload = json!({"global_name": "Alpha Clan", "tag": "ALC"});
     let req = test::TestRequest::post()
         .uri("/clans/placeholder")
         .insert_header(("Authorization", format!("Bearer {}", token)))
@@ -378,6 +378,16 @@ async fn find_clan_with_filter() {
     let req = test::TestRequest::get()
         .uri("/clans?name_filter=%25Alpha%25&per_page=1&page=1")
         .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["data"].as_array().unwrap().len(), 1);
+    assert_eq!(body["data"][0]["global_name"], "Alpha Clan");
+
+    let req = test::TestRequest::get()
+        .uri("/clans?name_filter=%25ALC%25&per_page=1&page=1")
+        .to_request();
+
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
     let body: serde_json::Value = read_body_json(resp).await;

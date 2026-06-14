@@ -76,7 +76,9 @@ impl ClansLeaderboardPage {
                 .into_boxed::<Pg>();
 
             if let Some(ref filter) = options.name_filter {
-                q = q.filter(clans::global_name.ilike(filter));
+                q = q
+                    .filter(clans::global_name.ilike(filter))
+                    .or_filter(clans::tag.ilike(filter));
             }
 
             q

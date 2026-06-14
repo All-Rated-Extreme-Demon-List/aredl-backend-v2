@@ -193,7 +193,9 @@ impl Clan {
         let build_query = || {
             let mut q = clans::table.into_boxed::<Pg>();
             if let Some(ref name_like) = options.name_filter {
-                q = q.filter(clans::global_name.ilike(name_like));
+                q = q
+                    .filter(clans::global_name.ilike(name_like))
+                    .or_filter(clans::tag.ilike(name_like));
             }
             q
         };

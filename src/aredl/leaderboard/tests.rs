@@ -1,8 +1,9 @@
+use {crate::aredl::records::test_utils::create_test_record};
 #[cfg(test)]
 use {
     crate::{
         aredl::leaderboard::test_utils::refresh_test_leaderboards,
-        aredl::levels::test_utils::create_test_level_with_record,
+        aredl::levels::test_utils::{create_test_level_with_record, create_test_level},
         clans::test_utils::{create_test_clan, create_test_clan_member},
         schema::{aredl::levels, users},
         test_utils::*,
@@ -10,6 +11,8 @@ use {
     },
     actix_web::test::{self, read_body_json},
     diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
+    crate::{clans::Clan, schema::clans},
+    diesel::SelectableHelper,
 };
 
 #[actix_web::test]
@@ -39,7 +42,7 @@ async fn get_leaderboard() {
 
     let data = body["data"].as_array().unwrap();
 
-    assert!(data.len() > 0, "No data was returned!");
+    assert!(!data.is_empty(), "No data was returned!");
     assert_eq!(
         data[0]["rank"].as_i64().unwrap(),
         1,
@@ -48,7 +51,7 @@ async fn get_leaderboard() {
 
     let user_entry = data
         .iter()
-        .find(|entry| entry["user"]["id"].as_str().unwrap().to_string() == user.to_string())
+        .find(|entry| entry["user"]["id"].as_str().unwrap() == user.to_string())
         .expect("User not found in leaderboard!");
 
     assert_eq!(
@@ -86,7 +89,7 @@ async fn get_country_leaderboard() {
     refresh_test_leaderboards(&db).await;
 
     let req = test::TestRequest::get()
-        .uri(format!("/aredl/leaderboard/countries").as_str())
+        .uri("/aredl/leaderboard/countries")
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -116,7 +119,7 @@ async fn get_clans_leaderboard() {
     refresh_test_leaderboards(&db).await;
 
     let req = test::TestRequest::get()
-        .uri(format!("/aredl/leaderboard/clans").as_str())
+        .uri("/aredl/leaderboard/clans")
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -225,9 +228,68 @@ async fn country_clan_leaderboard_orders() {
     assert_eq!(body["data"][0]["country"], 124);
 
     let req = test::TestRequest::get()
-        .uri(&format!("/aredl/leaderboard/clans?order=ExtremeCount"))
+        .uri("/aredl/leaderboard/clans?order=ExtremeCount")
         .to_request();
     let resp = test::call_service(&app, req).await;
     let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(body["data"][0]["clan"]["id"], clan_id.to_string());
+}
+
+#[actix_web::test]
+async fn get_clans_leaderboard_with_filters() {
+    let (app, db, _, _) = init_test_app().await;
+
+    let level_id = create_test_level(&db).await;
+
+    let mkl = diesel::insert_into(clans::table)
+        .values((
+            clans::global_name.eq("Mika Lore"),
+            clans::tag.eq("MKL"),
+            clans::description.eq("This should be searchable via \"MKL\""),
+        ))
+        .returning(Clan::as_returning())
+        .get_result(&mut db.connection().unwrap())
+        .unwrap();
+
+    let user1 = create_test_user(&db, None).await.0;
+    create_test_clan_member(&db, mkl.id, user1, 0).await;
+    create_test_record(&db, user1, level_id).await;
+
+    let clan2 = diesel::insert_into(clans::table)
+        .values((
+            clans::global_name.eq("Test clan"),
+            clans::tag.eq("TTC")
+        ))
+        .returning(Clan::as_returning())
+        .get_result(&mut db.connection().unwrap())
+        .unwrap();
+
+    let user2 = create_test_user(&db, None).await.0;
+    create_test_clan_member(&db, clan2.id, user2, 0).await;
+    create_test_record(&db, user2, level_id).await;
+
+    refresh_test_leaderboards(&db).await;
+
+    let req = test::TestRequest::get()
+        .uri("/aredl/leaderboard/clans?name_filter=%Test%")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let body: serde_json::Value = read_body_json(resp).await;
+
+    assert_eq!(body["data"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        uuid::Uuid::parse_str(body["data"][0]["clan"]["id"].as_str().unwrap()).unwrap(),
+        clan2.id
+    );
+
+    let req = test::TestRequest::get()
+        .uri("/aredl/leaderboard/clans?name_filter=%MKL%")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["data"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        uuid::Uuid::parse_str(body["data"][0]["clan"]["id"].as_str().unwrap()).unwrap(),
+        mkl.id
+    );
 }
