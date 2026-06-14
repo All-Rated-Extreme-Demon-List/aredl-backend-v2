@@ -157,19 +157,6 @@ diesel::allow_tables_to_appear_in_same_query!(min_placement_country_records, use
 diesel::allow_tables_to_appear_in_same_query!(min_placement_country_records, levels,);
 
 diesel::table! {
-    arepl.country_member_points (country, submitted_by) {
-        country -> Int4,
-        submitted_by -> Uuid,
-        completed_levels -> Int8,
-        contributed_points -> Float8,
-    }
-}
-
-diesel::joinable!(country_member_points -> users (submitted_by));
-
-diesel::allow_tables_to_appear_in_same_query!(country_member_points, users,);
-
-diesel::table! {
     arepl.clans_leaderboard (clan_id) {
         rank -> Int4,
         extremes_rank -> Int4,

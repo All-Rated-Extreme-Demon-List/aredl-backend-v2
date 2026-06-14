@@ -119,7 +119,7 @@ async fn get_country_includes_created_levels_and_matching_creators() {
 }
 
 #[actix_web::test]
-async fn get_country_includes_completion_counts_and_member_points() {
+async fn get_country_includes_completion_counts_and_level_records() {
     let (app, db, _, _) = init_test_app().await;
     let country_id = 840;
     let other_country = 124;
@@ -140,9 +140,6 @@ async fn get_country_includes_completion_counts_and_member_points() {
     let _banned_shared = create_test_record(&db, banned_member, shared_level).await;
     let _outsider_shared = create_test_record(&db, outsider, shared_level).await;
 
-    let solo_level = create_test_level(&db).await;
-    create_test_record(&db, member_a, solo_level).await;
-
     let legacy_level = create_test_level(&db).await;
     create_test_record(&db, member_b, legacy_level).await;
 
@@ -151,7 +148,7 @@ async fn get_country_includes_completion_counts_and_member_points() {
 
     set_test_record_verification(&db, member_b_shared, true).await;
     set_test_user_ban_level(&db, banned_member, 1).await;
-    set_test_level_status(&db, legacy_level, LevelStatus::Legacy, Some(4)).await;
+    set_test_level_status(&db, legacy_level, LevelStatus::Legacy, Some(3)).await;
     set_test_level_status(&db, removed_level, LevelStatus::Removed, None).await;
 
     let req = test::TestRequest::get()
@@ -174,30 +171,7 @@ async fn get_country_includes_completion_counts_and_member_points() {
         .iter()
         .any(|record| record["level"]["id"].as_str() == Some(&removed_level.to_string())));
 
-    let shared_points = shared_record["level"]["points"].as_f64().unwrap();
-    let solo_points = find_profile_record_for_level(&body, solo_level)["level"]["points"]
-        .as_f64()
-        .unwrap();
-
-    let member_a_points = find_member_points(&body, member_a);
-    assert_eq!(member_a_points["completed_levels"].as_i64(), Some(2));
-    assert_float_eq(
-        member_a_points["contributed_points"].as_f64().unwrap(),
-        shared_points / 2.0 + solo_points,
-    );
-
-    let member_b_points = find_member_points(&body, member_b);
-    assert_eq!(member_b_points["completed_levels"].as_i64(), Some(2));
-    assert_float_eq(
-        member_b_points["contributed_points"].as_f64().unwrap(),
-        shared_points / 2.0,
-    );
-
-    assert!(!body["members_points"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|entry| entry["member"]["id"].as_str() == Some(&banned_member.to_string())));
+    assert!(body.get("members_points").is_none());
 
     let old_time: DateTime<Utc> = "2020-01-01T00:00:00Z".parse().unwrap();
     let new_time: DateTime<Utc> = "2021-01-01T00:00:00Z".parse().unwrap();
@@ -230,20 +204,4 @@ fn find_profile_record_for_level(body: &serde_json::Value, level_id: Uuid) -> &s
         .iter()
         .find(|record| record["level"]["id"].as_str() == Some(&level_id.to_string()))
         .expect("profile record not found")
-}
-
-fn find_member_points(body: &serde_json::Value, user_id: Uuid) -> &serde_json::Value {
-    body["members_points"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|entry| entry["member"]["id"].as_str() == Some(&user_id.to_string()))
-        .expect("member points entry not found")
-}
-
-fn assert_float_eq(actual: f64, expected: f64) {
-    assert!(
-        (actual - expected).abs() < 0.000001,
-        "expected {expected}, got {actual}"
-    );
 }

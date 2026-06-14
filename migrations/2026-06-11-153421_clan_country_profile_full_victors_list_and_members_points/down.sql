@@ -1,5 +1,3 @@
-DROP VIEW IF EXISTS arepl.country_member_points;
-DROP VIEW IF EXISTS aredl.country_member_points;
 DROP VIEW IF EXISTS arepl.clan_member_points;
 DROP VIEW IF EXISTS aredl.clan_member_points;
 DROP VIEW IF EXISTS arepl.min_placement_country_records;
