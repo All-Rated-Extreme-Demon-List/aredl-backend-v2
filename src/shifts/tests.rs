@@ -55,7 +55,6 @@ async fn get_my_shifts() {
         .all(|x| x["user"].as_object().unwrap()["id"]
             .as_str()
             .unwrap()
-            .to_string()
             == user_id.to_string()))
 }
 
@@ -389,4 +388,71 @@ async fn create_shifts_wrong_weekday() {
         0,
         "Should create no shifts for wrong weekday"
     );
+}
+
+#[actix_web::test]
+async fn create_shift_instantly() {
+    let (app, db, auth, _) = init_test_app().await;
+
+    let admin = create_test_user(&db, Some(Permission::ShiftManage)).await.0;
+    let staff = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await.0;
+    let staff2 = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await.0;
+    let admin_token = create_test_token(admin, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let staff_token = create_test_token(staff, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    // Self create staff shift
+    let insert_data = json!({
+        "target_count": 5,
+        "length": 3
+    });
+
+    let req = test::TestRequest::post()
+        .uri("/shifts")
+        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .set_json(&insert_data)
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "Failed to create shift, status is {}", resp.status());
+    let body: serde_json::Value = read_body_json(resp).await;
+
+    assert_eq!(body["user_id"].as_str().unwrap(), staff.to_string(), "Shift should be assigned to staff");
+    assert_eq!(body["target_count"].as_i64().unwrap(), 5, "Target count should match");
+
+
+    // Create shift for staff by admin
+    let insert_data = json!({
+        "user_id": staff.to_string(),
+        "target_count": 5,
+        "length": 3
+    });
+
+    let req = test::TestRequest::post()
+        .uri("/shifts")
+        .insert_header(("Authorization", format!("Bearer {}", admin_token)))
+        .set_json(&insert_data)
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "Failed to create shift, status is {}", resp.status());
+    let body: serde_json::Value = read_body_json(resp).await;
+
+    assert_eq!(body["user_id"].as_str().unwrap(), staff.to_string(), "Shift should be assigned to staff");
+    assert_eq!(body["target_count"].as_i64().unwrap(), 5, "Target count should match");
+
+    // Staff attempt to create shift for another user (should fail)
+    let insert_data = json!({
+        "user_id": staff2.to_string(),
+        "target_count": 5,
+        "length": 3
+    });
+
+    let req = test::TestRequest::post()
+        .uri("/shifts")
+        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .set_json(&insert_data)
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_client_error(), "Staff should not be able to create shift for another user, status is {}", resp.status());
 }

@@ -1,11 +1,7 @@
 use crate::{
-    app_data::db::DbConnection,
-    error_handler::ApiError,
-    page_helper::{PageQuery, Paginated},
-    schema::{shifts, users},
-    users::ExtendedBaseUser,
+    app_data::db::DbConnection, auth::Authenticated, error_handler::ApiError, page_helper::{PageQuery, Paginated}, schema::{shifts, users}, users::ExtendedBaseUser
 };
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Timelike, Utc};
 use diesel::{
     pg::Pg, AsChangeset, ExpressionMethods, Identifiable, JoinOnDsl, QueryDsl, Queryable,
     RunQueryDsl, SelectableHelper,
@@ -113,7 +109,31 @@ pub struct ShiftInsert {
     pub end_at: DateTime<Utc>,
 }
 
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct ShiftCreate {
+    pub user_id: Option<Uuid>,
+    pub target_count: i32,
+    pub length: i32,
+}
+
 impl Shift {
+    pub fn create(conn: &mut DbConnection, new_shift: ShiftCreate, authenticated: Authenticated) -> Result<Self, ApiError> {
+        let mut end_at = Utc::now().with_second(0).unwrap() + chrono::Duration::hours(new_shift.length.into());
+        if end_at.minute() != 0 {
+            end_at = end_at.with_minute(0).unwrap() + chrono::Duration::hours(1);
+        }
+        
+        let created = diesel::insert_into(shifts::table)
+            .values((
+                shifts::user_id.eq(new_shift.user_id.unwrap_or(authenticated.user_id)),
+                shifts::target_count.eq(new_shift.target_count),
+                shifts::start_at.eq(Utc::now()),
+                shifts::end_at.eq(end_at),
+            ))
+            .get_result::<Shift>(conn)?;
+        Ok(created)
+    }
+
     pub fn patch(conn: &mut DbConnection, id: Uuid, patch: ShiftPatch) -> Result<Self, ApiError> {
         let updated = diesel::update(shifts::table.filter(shifts::id.eq(id)))
             .set(&patch)
