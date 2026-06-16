@@ -63,7 +63,7 @@ async fn create(
     tier: web::Json<PackTierCreate>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&tier));
+    root_span.record("body", tracing::field::debug(&tier));
     let tier =
         web::block(move || PackTier::create(&mut db.connection()?, tier.into_inner())).await??;
     Ok(HttpResponse::Ok().json(tier))
@@ -92,7 +92,7 @@ async fn update(
     tier: web::Json<PackTierUpdate>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&tier));
+    root_span.record("body", tracing::field::debug(&tier));
     let tier = web::block(move || {
         PackTier::update(&mut db.connection()?, id.into_inner(), tier.into_inner())
     })

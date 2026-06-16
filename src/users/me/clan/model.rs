@@ -15,7 +15,7 @@ impl Clan {
             .first::<ClanMember>(conn)
             .optional()?;
 
-        if !member.is_some() {
+        if member.is_none() {
             return Err(ApiError::new(404, "You are not part of a clan"));
         }
 

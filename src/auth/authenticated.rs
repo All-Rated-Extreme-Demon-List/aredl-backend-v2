@@ -37,10 +37,7 @@ impl FromRequest for Authenticated {
 impl Authenticated {
     pub fn ensure_not_banned(&self, conn: &mut DbConnection) -> Result<(), ApiError> {
         if User::is_banned(self.user_id, conn)? {
-            return Err(ApiError::new(
-                403,
-                "You have been banned from the list.".into(),
-            ));
+            return Err(ApiError::new(403, "You have been banned from the list."));
         }
         Ok(())
     }
@@ -114,7 +111,7 @@ impl Authenticated {
         if (member.is_none() || member.unwrap().role < clan_role_level) && !has_permission {
             return Err(ApiError::new(
                 403,
-                "You do not have the required permission to perform this action".into(),
+                "You do not have the required permission to perform this action",
             ));
         }
 
@@ -134,8 +131,8 @@ impl Authenticated {
             .first::<ClanMember>(conn)
             .optional()?;
 
-        if member.is_some() {
-            self.ensure_has_clan_permission(conn, clan_id, member.unwrap().role)?;
+        if let Some(member) = member {
+            self.ensure_has_clan_permission(conn, clan_id, member.role)?;
         }
 
         Ok(())

@@ -48,7 +48,7 @@ async fn create(
     new_bounty: web::Json<BountyPost>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&new_bounty));
+    root_span.record("body", tracing::field::debug(&new_bounty));
     let result = web::block(move || Bounty::create(&mut db.connection()?, new_bounty.into_inner()))
         .await??;
     Ok(HttpResponse::Ok().json(result))
@@ -71,7 +71,7 @@ async fn update(
     patch: web::Json<BountyPatch>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&patch));
+    root_span.record("body", tracing::field::debug(&patch));
     let result = web::block(move || {
         let conn = &mut db.connection()?;
         Bounty::find_by_id(conn, id.into_inner())?.update(conn, patch.into_inner())

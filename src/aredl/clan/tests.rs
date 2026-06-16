@@ -43,9 +43,7 @@ async fn get_clan() {
         .as_array()
         .unwrap()
         .iter()
-        .any(|record_iter| {
-            record_iter["id"].as_str().unwrap().to_string() == record_id.to_string()
-        });
+        .any(|record_iter| record_iter["id"].as_str().unwrap() == record_id.to_string());
 
     assert!(has_record);
 }

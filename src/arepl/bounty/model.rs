@@ -136,7 +136,7 @@ impl BountyResolved {
                 .collect::<Vec<_>>(),
         };
 
-        let has_bounty_manage = authenticated.as_ref().map_or(false, |auth| {
+        let has_bounty_manage = authenticated.is_some_and(|auth| {
             auth.has_permission(conn, Permission::BountyManage)
                 .unwrap_or(false)
         });

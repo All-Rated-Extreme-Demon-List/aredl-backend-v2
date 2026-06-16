@@ -23,7 +23,7 @@ async fn add_role_users() {
     let req = test::TestRequest::patch()
         .uri(&format!("/roles/{}/users", role_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&vec![u1, u2])
+        .set_json(vec![u1, u2])
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -45,7 +45,7 @@ async fn set_role_users() {
     let req = test::TestRequest::post()
         .uri(&format!("/roles/{}/users", role_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&vec![u2])
+        .set_json(vec![u2])
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -68,7 +68,7 @@ async fn delete_role_users() {
     let req = test::TestRequest::delete()
         .uri(&format!("/roles/{}/users", role_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&vec![u1])
+        .set_json(vec![u1])
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -92,7 +92,7 @@ async fn add_role_users_fails_when_target_role_has_same_privilege_as_user() {
     let req = test::TestRequest::patch()
         .uri(&format!("/roles/{}/users", role_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&vec![u1])
+        .set_json(vec![u1])
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -119,7 +119,7 @@ async fn set_role_users_fails_when_target_role_has_same_privilege_as_user() {
     let req = test::TestRequest::post()
         .uri(&format!("/roles/{}/users", role_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&vec![u1])
+        .set_json(vec![u1])
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -146,7 +146,7 @@ async fn delete_role_users_fails_when_target_role_has_same_privilege_as_user() {
     let req = test::TestRequest::delete()
         .uri(&format!("/roles/{}/users", role_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&vec![u1])
+        .set_json(vec![u1])
         .to_request();
 
     let resp = test::call_service(&app, req).await;

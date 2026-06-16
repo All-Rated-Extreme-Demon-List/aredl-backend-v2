@@ -28,7 +28,7 @@ async fn create(
     pack: web::Json<PackCreate>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&pack));
+    root_span.record("body", tracing::field::debug(&pack));
     let pack = web::block(move || Pack::create(&mut db.connection()?, pack.into_inner())).await??;
     Ok(HttpResponse::Ok().json(pack))
 }
@@ -57,7 +57,7 @@ async fn update(
     pack: web::Json<PackUpdate>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&pack));
+    root_span.record("body", tracing::field::debug(&pack));
     let pack =
         web::block(move || Pack::update(&mut db.connection()?, id.into_inner(), pack.into_inner()))
             .await??;

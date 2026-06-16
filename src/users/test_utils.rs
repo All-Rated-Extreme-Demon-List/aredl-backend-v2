@@ -35,9 +35,9 @@ pub async fn create_test_user(
         .execute(conn)
         .expect("Failed to create fake user");
 
-    if required_permission.is_some() {
+    if let Some(required_permission) = required_permission {
         let privilege_level = permissions::table
-            .filter(permissions::permission.eq(required_permission.unwrap().to_string()))
+            .filter(permissions::permission.eq(required_permission.to_string()))
             .select(permissions::privilege_level)
             .first::<i32>(conn)
             .expect("Failed to get privilege level");

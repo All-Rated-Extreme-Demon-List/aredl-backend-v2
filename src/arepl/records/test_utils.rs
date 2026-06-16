@@ -26,11 +26,11 @@ pub async fn create_test_record(db: &Arc<DbAppState>, user_id: Uuid, level_id: U
         .get_result::<Uuid>(conn)
         .expect("Failed to create test aredl record");
 
-    return records::table
+    records::table
         .filter(records::submission_id.eq(submission_id))
         .select(records::id)
         .first::<Uuid>(conn)
-        .expect("Failed to retrieve test aredl record ID");
+        .expect("Failed to retrieve test aredl record ID")
 }
 
 #[cfg(test)]

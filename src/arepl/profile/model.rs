@@ -140,7 +140,7 @@ impl ProfileResolved {
             .map(|auth| auth.has_permission(conn, Permission::RoleManage))
             .unwrap_or(Ok(false))?
         {
-            roles = roles.into_iter().filter(|role| !role.hide).collect();
+            roles.retain(|role| !role.hide);
         }
 
         let rank = user_leaderboard::table

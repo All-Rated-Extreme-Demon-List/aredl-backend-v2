@@ -117,7 +117,7 @@ pub struct LevelPlace {
     /// The current status of the level.
     pub status: LevelStatus,
     /// Whether this level requires raw footage while pending.
-    pub requires_raw_footage: Option<bool>, // Default: false 
+    pub requires_raw_footage: Option<bool>, // Default: false
     /// Level ID in the game. May not be unique for 2P levels.
     pub level_id: i32,
     /// Whether this is the 2P version of a level or not.
@@ -220,11 +220,10 @@ impl Level {
         };
 
         levels.retain(|level| {
-            !(query.exclude_legacy == Some(true) && level.status == LevelStatus::Legacy)
-                && !(query.exclude_pending == Some(true) && level.status == LevelStatus::Pending)
-                && !(query.exclude_removed == Some(true) && level.status == LevelStatus::Removed)
+            !((query.exclude_legacy == Some(true) && level.status == LevelStatus::Legacy)
+                || (query.exclude_pending == Some(true) && level.status == LevelStatus::Pending)
+                || (query.exclude_removed == Some(true) && level.status == LevelStatus::Removed))
         });
-
         Ok(levels)
     }
 

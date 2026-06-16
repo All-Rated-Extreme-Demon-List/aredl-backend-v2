@@ -9,6 +9,7 @@ use chrono::Utc;
 use diesel::{ExpressionMethods, RunQueryDsl};
 use uuid::Uuid;
 
+#[allow(clippy::too_many_arguments)]
 #[cfg(test)]
 pub fn insert_history_entry(
     db: &Arc<DbAppState>,

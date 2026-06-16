@@ -81,7 +81,7 @@ impl Role {
             .ok_or_else(|| {
                 ApiError::new(
                     403,
-                    "You do not have sufficient permissions to edit this role.".into(),
+                    "You do not have sufficient permissions to edit this role.",
                 )
             })?;
 
@@ -99,7 +99,7 @@ impl Role {
             .ok_or_else(|| {
                 ApiError::new(
                     403,
-                    "You can not create a role with higher permissions than yourself.".into(),
+                    "You can not create a role with higher permissions than yourself.",
                 )
             })?;
         let role = diesel::insert_into(roles::table)

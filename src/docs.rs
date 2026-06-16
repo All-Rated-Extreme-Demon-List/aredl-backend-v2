@@ -181,7 +181,6 @@ Each permission then requires the user's privilege level to be higher or equal t
         (path = "/utils", api=utils::ApiDoc),
 	)
 )]
-
 struct MainApiDoc;
 #[derive(OpenApi)]
 #[openapi(
@@ -293,7 +292,7 @@ impl StaffBadgeAddon {
     }
 
     fn add_badge_to_operation(op: &mut Operation, badge: serde_json::Value) {
-        let extensions = op.extensions.get_or_insert_with(|| Extensions::default());
+        let extensions = op.extensions.get_or_insert_with(Extensions::default);
         extensions
             .entry("x-badges".to_string())
             .and_modify(|existing| {

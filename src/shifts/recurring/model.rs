@@ -178,7 +178,7 @@ impl RecurringShift {
         for template in templates {
             let naive_dt = date
                 .and_hms_opt(template.start_hour as u32, 0, 0)
-                .ok_or_else(|| ApiError::new(400, "invalid start_hour".into()))?;
+                .ok_or_else(|| ApiError::new(400, "Invalid start_hour"))?;
             let start_at: DateTime<Utc> = Utc.from_utc_datetime(&naive_dt);
 
             let end_at = start_at + chrono::Duration::hours(template.duration as i64);

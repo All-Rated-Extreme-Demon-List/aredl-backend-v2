@@ -41,7 +41,7 @@ impl VideoProvidersAppState {
 
     // completion video enforces a valid url and an allowed provider
     pub fn validate_completion_video_url(&self, url: &str) -> Result<String, ApiError> {
-        let matched = self.parse_url(&url)?;
+        let matched = self.parse_url(url)?;
         let provider = self
             .registry
             .get(matched.provider)

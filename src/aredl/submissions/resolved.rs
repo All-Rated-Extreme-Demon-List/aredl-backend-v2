@@ -30,6 +30,7 @@ pub type ResolvedSubmissionRow = (
     Option<ExtendedBaseUser>,
 );
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Serialize, Deserialize, ToSchema)]
 pub enum SubmissionsSortField {
     OldestCreatedAt,
@@ -57,20 +58,19 @@ pub struct ResolvedSubmissionPage {
 
 diesel::alias!(users as reviewers: Reviewers);
 
+type ResolvedSubmissionQuerySelection = (
+    AsSelect<Submission, Pg>,
+    AsSelect<ExtendedBaseLevel, Pg>,
+    AsSelect<ExtendedBaseUser, Pg>,
+    Nullable<
+        AliasedFields<Reviewers, <ExtendedBaseUser as diesel::Selectable<Pg>>::SelectExpression>,
+    >,
+);
+
 #[auto_type]
 fn resolve_query<'a>(q: submissions::BoxedQuery<'a, Pg>) -> _ {
     // annoying type shenanigans to get around Diesel not being able to infer types properly
-    let selection: (
-        AsSelect<Submission, Pg>,
-        AsSelect<ExtendedBaseLevel, Pg>,
-        AsSelect<ExtendedBaseUser, Pg>,
-        Nullable<
-            AliasedFields<
-                Reviewers,
-                <ExtendedBaseUser as diesel::Selectable<Pg>>::SelectExpression,
-            >,
-        >,
-    ) = (
+    let selection: ResolvedSubmissionQuerySelection = (
         Submission::as_select(),
         ExtendedBaseLevel::as_select(),
         ExtendedBaseUser::as_select(),
@@ -174,26 +174,26 @@ impl ResolvedSubmissionPage {
                 query = query.filter(submissions::status.eq(status));
             }
 
-            if let Some(mobile) = options.mobile_filter.clone() {
+            if let Some(mobile) = options.mobile_filter.as_ref().copied() {
                 query = query.filter(submissions::mobile.eq(mobile));
             }
 
-            if let Some(level) = options.level_filter.clone() {
+            if let Some(level) = options.level_filter.as_ref().copied() {
                 query = query.filter(submissions::level_id.eq(level));
             }
 
             if let Some(ref submitter) = options.submitter_filter {
                 query = query.filter(
-                    submissions::submitted_by.eq_any(user_filter(&submitter).select(users::id)),
+                    submissions::submitted_by.eq_any(user_filter(submitter).select(users::id)),
                 );
             }
 
-            if let Some(priority) = options.priority_filter.clone() {
+            if let Some(priority) = options.priority_filter {
                 query = query.filter(submissions::priority.eq(priority));
             }
 
             if let Some(ref reviewer) = options.reviewer_filter {
-                let mut reviewer_query = user_filter(&reviewer);
+                let mut reviewer_query = user_filter(reviewer);
                 if !can_audit_reviewers {
                     reviewer_query =
                         reviewer_query.filter(users::id.ne_all(base_reviewers.iter().copied()));
@@ -253,7 +253,7 @@ impl ResolvedSubmissionPage {
 
         let mut submissions = submissions
             .into_iter()
-            .map(|resolved_row| SubmissionResolved::from_data(resolved_row))
+            .map(SubmissionResolved::from_data)
             .collect::<Vec<_>>();
 
         let total_count: i64 = build_filtered().count().get_result(conn)?;
@@ -293,6 +293,6 @@ impl ResolvedSubmissionPage {
         options.submitter_filter = Some(authenticated.user_id.to_string());
         options.reviewer_filter = None;
 
-        Ok(Self::find_all(conn, page_query, options, authenticated)?)
+        Self::find_all(conn, page_query, options, authenticated)
     }
 }

@@ -6,8 +6,8 @@ use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 use uuid::Uuid;
 
 fn parse_gd_id(s: &str) -> Result<(i32, bool), ApiError> {
-    let (parsed_id, two_player) = if s.ends_with("_2p") {
-        (s[..s.len() - 3].parse::<i32>(), true)
+    let (parsed_id, two_player) = if let Some(stripped) = s.strip_suffix("_2p") {
+        (stripped.parse::<i32>(), true)
     } else {
         (s.parse::<i32>(), false)
     };

@@ -59,7 +59,7 @@ async fn set(
     creators: web::Json<Vec<Uuid>>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&creators));
+    root_span.record("body", tracing::field::debug(&creators));
     let creators = web::block(move || {
         let conn = &mut db.connection()?;
         let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
@@ -92,7 +92,7 @@ async fn add(
     creators: web::Json<Vec<Uuid>>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&creators));
+    root_span.record("body", tracing::field::debug(&creators));
     let creators = web::block(move || {
         let conn = &mut db.connection()?;
         let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
@@ -125,7 +125,7 @@ async fn delete(
     creators: web::Json<Vec<Uuid>>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&creators));
+    root_span.record("body", tracing::field::debug(&creators));
     let creators = web::block(move || {
         let conn = &mut db.connection()?;
         let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;

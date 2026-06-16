@@ -55,11 +55,9 @@ async fn accept(
     invite_id: web::Path<Uuid>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let result = web::block(move || {
-        ClanInvite::accept_invite(&mut db.connection()?, *invite_id, authenticated)
-    })
-    .await??;
-    Ok(HttpResponse::Ok().json(result))
+    web::block(move || ClanInvite::accept_invite(&mut db.connection()?, *invite_id, authenticated))
+        .await??;
+    Ok(HttpResponse::Ok().json(()))
 }
 
 #[utoipa::path(
@@ -84,11 +82,9 @@ async fn reject(
     invite_id: web::Path<Uuid>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let result = web::block(move || {
-        ClanInvite::reject_invite(&mut db.connection()?, *invite_id, authenticated)
-    })
-    .await??;
-    Ok(HttpResponse::Ok().json(result))
+    web::block(move || ClanInvite::reject_invite(&mut db.connection()?, *invite_id, authenticated))
+        .await??;
+    Ok(HttpResponse::Ok().json(()))
 }
 
 #[derive(OpenApi)]

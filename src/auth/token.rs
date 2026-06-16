@@ -42,7 +42,7 @@ pub fn create_token(
         token_type: token_type.to_string(),
     };
 
-    let token = encode(&Header::default(), &claims, &encoding_key)
+    let token = encode(&Header::default(), &claims, encoding_key)
         .map_err(|_| ApiError::new(400, "Failed to create token!"))?;
 
     Ok((token, expire_datetime))
@@ -55,12 +55,9 @@ pub fn decode_token<T: Into<String>>(
 ) -> Result<TokenClaims, ApiError> {
     let token_str = token.into();
 
-    let decoded = decode::<TokenClaims>(
-        &token_str,
-        &decoding_key,
-        &Validation::new(Algorithm::HS256),
-    )
-    .map_err(|e| ApiError::new(401, format!("Invalid token! {}", e.to_string()).as_str()))?;
+    let decoded =
+        decode::<TokenClaims>(&token_str, decoding_key, &Validation::new(Algorithm::HS256))
+            .map_err(|e| ApiError::new(401, format!("Invalid token! {}", e).as_str()))?;
 
     if !expected_types.is_empty() && !expected_types.contains(&decoded.claims.token_type.as_str()) {
         return Err(ApiError::new(401, "Invalid token type"));
@@ -70,12 +67,8 @@ pub fn decode_token<T: Into<String>>(
 }
 
 pub fn decode_user_claims(token_claims: &TokenClaims) -> Result<UserClaims, ApiError> {
-    serde_json::from_str(&token_claims.sub).map_err(|e| {
-        ApiError::new(
-            401,
-            format!("Failed to decode user claims! {}", e.to_string()).as_str(),
-        )
-    })
+    serde_json::from_str(&token_claims.sub)
+        .map_err(|e| ApiError::new(401, format!("Failed to decode user claims! {}", e).as_str()))
 }
 
 pub fn check_token_valid(

@@ -161,7 +161,7 @@ impl PackTierResolved {
         for (uuid, pack_level, completed_by_user) in pack_levels {
             pack_levels_map
                 .entry(uuid)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(PackLevelResolved {
                     pack_level,
                     completed_by_user,
@@ -182,7 +182,7 @@ impl PackTierResolved {
                         id: pack.id,
                         name: pack.name,
                         points: pack.points,
-                        levels: pack_levels_map.remove(&pack.id).unwrap_or_else(Vec::new),
+                        levels: pack_levels_map.remove(&pack.id).unwrap_or_default(),
                     })
                     .collect::<Vec<_>>(),
             })

@@ -21,7 +21,7 @@ impl BaseUser {
             .load::<BaseUserWithBanLevel>(conn)?;
         let creators = creators
             .into_iter()
-            .map(|creator| BaseUser::from_base_user_with_ban_level(creator))
+            .map(BaseUser::from_base_user_with_ban_level)
             .collect();
         Ok(creators)
     }
@@ -87,13 +87,13 @@ impl BaseUser {
 
     fn arepl_add_creators(
         level_id: Uuid,
-        creators: &Vec<Uuid>,
+        creators: &[Uuid],
         conn: &mut DbConnection,
     ) -> Result<(), ApiError> {
         insert_into(levels_created::table)
             .values(
                 creators
-                    .into_iter()
+                    .iter()
                     .map(|creator| {
                         (
                             levels_created::level_id.eq(level_id),

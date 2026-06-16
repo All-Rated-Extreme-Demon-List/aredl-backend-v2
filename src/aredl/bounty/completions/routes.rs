@@ -3,7 +3,7 @@ use crate::auth::{Permission, UserAuth};
 use crate::cache_control::CacheController;
 use crate::error_handler::ApiError;
 use crate::{app_data::db::DbAppState, aredl::bounty::Bounty};
-use actix_web::{get, post, web, HttpResponse};
+use actix_web::{HttpResponse, get, post, web};
 use std::sync::Arc;
 use utoipa::OpenApi;
 use uuid::Uuid;
@@ -43,12 +43,12 @@ async fn sync_completions(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
 ) -> Result<HttpResponse, ApiError> {
-    let result = web::block(move || {
+    web::block(move || {
         let conn = &mut db.connection()?;
         Bounty::find_by_id(conn, id.into_inner())?.sync_completions(conn)
     })
     .await??;
-    Ok(HttpResponse::Ok().json(result))
+    Ok(HttpResponse::Ok().json(()))
 }
 
 #[derive(OpenApi)]

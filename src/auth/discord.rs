@@ -441,13 +441,13 @@ pub(crate) async fn create_discord_client() -> Result<DiscordClient, Box<dyn std
     let auth_url = AuthUrl::new(format!("{}/oauth2/authorize", base_discord_url).to_string())?;
     let token_url = TokenUrl::new(format!("{}/api/oauth2/token", base_discord_url).to_string())?;
 
-    return Ok(
+    Ok(
         CoreClient::new(discord_client_id, issuer, CoreJsonWebKeySet::default())
             .set_client_secret(discord_client_secret)
             .set_auth_uri(auth_url)
             .set_token_uri(token_url)
             .set_redirect_uri(discord_redirect_uri),
-    );
+    )
 }
 
 #[derive(OpenApi)]

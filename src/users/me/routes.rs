@@ -59,7 +59,7 @@ async fn update(
     user: web::Json<UserMeUpdate>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&user));
+    root_span.record("body", tracing::field::debug(&user));
     let user = web::block(move || {
         User::update_me(
             &mut db.connection()?,

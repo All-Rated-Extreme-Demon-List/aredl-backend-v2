@@ -64,7 +64,7 @@ async fn create_and_join(
     authenticated: Authenticated,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&clan));
+    root_span.record("body", tracing::field::debug(&clan));
     let result = web::block(move || {
         Clan::create_and_join(&mut db.connection()?, clan.into_inner(), authenticated)
     })
@@ -92,7 +92,7 @@ async fn create_empty(
     clan: web::Json<ClanCreate>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&clan));
+    root_span.record("body", tracing::field::debug(&clan));
     let result =
         web::block(move || Clan::create_empty(&mut db.connection()?, clan.into_inner())).await??;
     Ok(HttpResponse::Ok().json(result))
@@ -125,7 +125,7 @@ async fn update(
     authenticated: Authenticated,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&clan));
+    root_span.record("body", tracing::field::debug(&clan));
     let clan_id = id.into_inner();
     let result = web::block(move || {
         let conn = &mut db.connection()?;
@@ -175,7 +175,7 @@ async fn delete(
         if members_count > 1 && !has_staff_permission {
             return Err(ApiError::new(
                 403,
-                "You cannot delete a clan unless you're the only member left in it.".into(),
+                "You cannot delete a clan unless you're the only member left in it.",
             ));
         }
 

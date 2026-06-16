@@ -143,7 +143,7 @@ async fn get_profile_includes_badges_and_featured_badge() {
     let feature_req = test::TestRequest::patch()
         .uri("/users/@me")
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&serde_json::json!({ "featured_badge_code": badge_code }))
+        .set_json(serde_json::json!({ "featured_badge_code": badge_code }))
         .to_request();
     let feature_resp = test::call_service(&app, feature_req).await;
     assert!(feature_resp.status().is_success());

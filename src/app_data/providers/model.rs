@@ -119,7 +119,7 @@ pub trait Provider: Send + Sync {
             None => return Ok(None),
         };
 
-        if !self.hosts().is_empty() && !self.hosts().iter().any(|&h| h == host) {
+        if !self.hosts().is_empty() && !self.hosts().contains(&host) {
             return Ok(None);
         }
 

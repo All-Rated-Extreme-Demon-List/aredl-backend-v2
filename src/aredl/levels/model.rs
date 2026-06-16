@@ -6,8 +6,8 @@ use crate::schema::aredl::{levels, position_history, position_history_full_view,
 use crate::schema::users;
 use crate::users::{BaseUser, BaseUserWithBanLevel};
 use chrono::{DateTime, Utc};
-use diesel::prelude::*;
 use diesel::PgSortExpressionMethods;
+use diesel::prelude::*;
 use diesel::{ExpressionMethods, RunQueryDsl};
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
@@ -221,11 +221,10 @@ impl Level {
         };
 
         levels.retain(|level| {
-            !(query.exclude_legacy == Some(true) && level.status == LevelStatus::Legacy)
-                && !(query.exclude_pending == Some(true) && level.status == LevelStatus::Pending)
-                && !(query.exclude_removed == Some(true) && level.status == LevelStatus::Removed)
+            !((query.exclude_legacy == Some(true) && level.status == LevelStatus::Legacy)
+                || (query.exclude_pending == Some(true) && level.status == LevelStatus::Pending)
+                || (query.exclude_removed == Some(true) && level.status == LevelStatus::Removed))
         });
-
         Ok(levels)
     }
 

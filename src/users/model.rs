@@ -176,7 +176,7 @@ pub struct UserPage {
 pub fn user_filter<'a>(input: &'a String) -> users::BoxedQuery<'a, Pg> {
     let mut q = users::table.into_boxed::<Pg>();
 
-    if let Ok(uuid) = Uuid::parse_str(&input) {
+    if let Ok(uuid) = Uuid::parse_str(input) {
         q = q.filter(users::id.eq(uuid));
     } else {
         q = q.filter(
@@ -200,17 +200,17 @@ impl BaseUser {
 
     pub fn from_base_user_with_ban_level(user: BaseUserWithBanLevel) -> Self {
         if user.ban_level == 3 {
-            return BaseUser {
+            BaseUser {
                 id: user.id,
                 username: "-".to_string(),
                 global_name: "-".to_string(),
-            };
+            }
         } else {
-            return BaseUser {
+            BaseUser {
                 id: user.id,
                 username: user.username,
                 global_name: user.global_name,
-            };
+            }
         }
     }
 }
@@ -284,14 +284,14 @@ impl User {
                     })
                     .returning(Self::as_select())
                     .get_result::<Self>(conn)?;
-                return Ok(updated_user);
+                Ok(updated_user)
             }
             None => {
                 let user = diesel::insert_into(users::table)
                     .values(&user_upsert)
                     .returning(Self::as_select())
                     .get_result::<Self>(conn)?;
-                return Ok(user);
+                Ok(user)
             }
         }
     }
@@ -464,7 +464,7 @@ impl UserResolved {
         };
 
         if !can_view_hidden_roles {
-            roles = roles.into_iter().filter(|role| !role.hide).collect();
+            roles.retain(|role| !role.hide)
         }
 
         let user_privilege_level: i32 = roles

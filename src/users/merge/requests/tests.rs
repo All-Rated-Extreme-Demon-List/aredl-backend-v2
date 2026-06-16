@@ -49,14 +49,12 @@ async fn create_merge_request() {
         user_1_id.to_string(),
         "Primary users do not match!"
     );
-    assert_eq!(
-        body["is_rejected"].as_bool().unwrap(),
-        false,
+    assert!(
+        !body["is_rejected"].as_bool().unwrap(),
         "Request is rejected!"
     );
-    assert_eq!(
-        body["is_claimed"].as_bool().unwrap(),
-        false,
+    assert!(
+        !body["is_claimed"].as_bool().unwrap(),
         "Request is claimed!"
     );
 }
@@ -106,7 +104,7 @@ async fn accept_merge_request() {
     .get_result::<bool>(&mut db.connection().unwrap())
     .expect("Failed to check for merge!");
 
-    assert_ne!(merge_exists, true, "Merge request exists!")
+    assert!(!merge_exists, "Merge request exists!")
 }
 
 #[actix_web::test]
@@ -141,9 +139,8 @@ async fn reject_merge_request() {
 
     assert_eq!(records, 1, "User does not have exactly 2 records!");
 
-    assert_eq!(
+    assert!(
         body["is_rejected"].as_bool().unwrap(),
-        true,
         "Request is not marked as rejected!"
     )
 }

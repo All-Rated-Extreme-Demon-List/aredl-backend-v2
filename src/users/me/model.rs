@@ -42,10 +42,8 @@ impl User {
             .select((users::ban_level, users::last_country_update))
             .first(conn)?;
 
-        if user.ban_level.is_some() {
-            if current_ban_level > 1 {
-                return Err(ApiError::new(403, "You have been banned from the list."));
-            }
+        if user.ban_level.is_some() && current_ban_level > 1 {
+            return Err(ApiError::new(403, "You have been banned from the list."));
         }
 
         if user.country.is_some() {
@@ -59,32 +57,28 @@ impl User {
             }
         }
 
-        if user.global_name.is_some() {
-            if user.global_name.as_ref().unwrap().len() > 35 {
-                return Err(ApiError::new(
-                    400,
-                    "The display name can at most be 35 characters long.",
-                ));
-            }
+        if user.global_name.is_some() && user.global_name.as_ref().unwrap().len() > 35 {
+            return Err(ApiError::new(
+                400,
+                "The display name can at most be 35 characters long.",
+            ));
         }
 
-        if user.description.is_some() {
-            if user.description.as_ref().unwrap().len() > 300 {
-                return Err(ApiError::new(
-                    400,
-                    "The description can at most be 300 characters long.",
-                ));
-            }
+        if user.description.is_some() && user.description.as_ref().unwrap().len() > 300 {
+            return Err(ApiError::new(
+                400,
+                "The description can at most be 300 characters long.",
+            ));
         }
 
-        if user.background_level.is_some() {
-            if user.background_level.unwrap() != 0 {
+        if let Some(background_level) = user.background_level {
+            if background_level != 0 {
                 let beaten_aredl_level: Option<AredlLevel> = aredl::records::table
                     .filter(aredl::records::submitted_by.eq(id))
                     .inner_join(
                         aredl::levels::table.on(aredl::levels::id.eq(aredl::records::level_id)),
                     )
-                    .filter(aredl::levels::level_id.eq(user.background_level.unwrap()))
+                    .filter(aredl::levels::level_id.eq(background_level))
                     .select(AredlLevel::as_select())
                     .get_result(conn)
                     .optional()?;
@@ -94,7 +88,7 @@ impl User {
                     .inner_join(
                         arepl::levels::table.on(arepl::levels::id.eq(arepl::records::level_id)),
                     )
-                    .filter(arepl::levels::level_id.eq(user.background_level.unwrap()))
+                    .filter(arepl::levels::level_id.eq(background_level))
                     .select(AreplLevel::as_select())
                     .get_result(conn)
                     .optional()?;
@@ -108,15 +102,12 @@ impl User {
             }
         }
 
-        if user.featured_badge_code.is_some() {
-            let code = user.featured_badge_code.as_ref().unwrap();
-            if !code.is_empty() {
-                if !UserBadge::has_code(conn, id, code)? {
-                    return Err(ApiError::new(
-                        400,
-                        "You have not unlocked the selected badge.",
-                    ));
-                }
+        if let Some(code) = &user.featured_badge_code {
+            if !code.is_empty() && !UserBadge::has_code(conn, id, code)? {
+                return Err(ApiError::new(
+                    400,
+                    "You have not unlocked the selected badge.",
+                ));
             }
         }
 

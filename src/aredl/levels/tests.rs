@@ -260,7 +260,7 @@ async fn set_creators() {
     let req = test::TestRequest::post()
         .uri(&format!("/aredl/levels/{}/creators", level_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&vec![new_creator_id])
+        .set_json(vec![new_creator_id])
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -280,7 +280,7 @@ async fn add_and_remove_creators() {
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/levels/{}/creators", level_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&vec![user_id])
+        .set_json(vec![user_id])
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -295,7 +295,7 @@ async fn add_and_remove_creators() {
     let req = test::TestRequest::delete()
         .uri(&format!("/aredl/levels/{}/creators", level_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&vec![user_id])
+        .set_json(vec![user_id])
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());

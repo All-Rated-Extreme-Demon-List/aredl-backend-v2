@@ -204,13 +204,13 @@ impl ClanMember {
 
     fn add_members(
         clan_id: Uuid,
-        members: &Vec<Uuid>,
+        members: &[Uuid],
         connection: &mut DbConnection,
     ) -> Result<(), ApiError> {
         insert_into(clan_members::table)
             .values(
                 members
-                    .into_iter()
+                    .iter()
                     .map(|member| {
                         (
                             clan_members::clan_id.eq(clan_id),

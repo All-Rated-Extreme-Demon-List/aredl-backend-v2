@@ -156,7 +156,7 @@ async fn create(
     root_span: RootSpan,
     providers: web::Data<Arc<VideoProvidersAppState>>,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&body));
+    root_span.record("body", tracing::field::debug(&body));
     let created = web::block(move || {
         let conn = &mut db.connection()?;
         authenticated.ensure_not_banned(conn)?;
@@ -193,7 +193,7 @@ async fn patch(
     notify_tx: web::Data<broadcast::Sender<WebsocketNotification>>,
     providers: web::Data<Arc<VideoProvidersAppState>>,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&body));
+    root_span.record("body", tracing::field::debug(&body));
     let db_clone = db.clone();
     let providers_clone = providers.clone();
     let patched = web::block(move || {

@@ -629,14 +629,12 @@ async fn submission_aredlplus_boost() {
     let submission2: serde_json::Value =
         serde_json::from_slice(&resp_body).expect("Failed to parse response body");
 
-    assert_eq!(
-        submission1["priority"].as_bool().unwrap(),
-        false,
+    assert!(
+        !submission1["priority"].as_bool().unwrap(),
         "Priority field for user 1 is not false as expected"
     );
-    assert_eq!(
+    assert!(
         submission2["priority"].as_bool().unwrap(),
-        true,
         "Priority field for user 2 is not true as expected"
     );
 
@@ -909,7 +907,7 @@ async fn patch_submission_base_reviewer_cannot_edit_other_raw_submission() {
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"reviewer_notes": "Cannot review raw as base"}))
+        .set_json(json!({"reviewer_notes": "Cannot review raw as base"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
 
@@ -942,7 +940,7 @@ async fn patch_submission_base_reviewer_cannot_edit_other_under_consideration_su
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"reviewer_notes": "Cannot edit UC as base"}))
+        .set_json(json!({"reviewer_notes": "Cannot edit UC as base"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
 
@@ -976,7 +974,7 @@ async fn patch_submission_base_reviewer_can_edit_claimed_submission_without_raw(
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"reviewer_notes": "Reviewed by base"}))
+        .set_json(json!({"reviewer_notes": "Reviewed by base"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -1015,7 +1013,7 @@ async fn patch_submission_base_reviewer_cannot_edit_claimed_submission_assigned_
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"reviewer_notes": "Cannot edit others' claimed submissions"}))
+        .set_json(json!({"reviewer_notes": "Cannot edit others' claimed submissions"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
 
@@ -1066,7 +1064,7 @@ async fn patch_submission_no_changes() {
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({}))
+        .set_json(json!({}))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_error_response(resp, 400, Some("No changes were provided!")).await;
@@ -1083,7 +1081,7 @@ async fn patch_submission_invalid_urls() {
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"video_url":"not a url"}))
+        .set_json(json!({"video_url":"not a url"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_error_response(
@@ -1096,7 +1094,7 @@ async fn patch_submission_invalid_urls() {
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"raw_url":"not a url"}))
+        .set_json(json!({"raw_url":"not a url"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_error_response(resp, 400, Some("Invalid raw footage URL: Malformed URL")).await;
@@ -1119,7 +1117,7 @@ async fn patch_submission_banned_submitter() {
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"video_url": "https://www.youtube.com/watch?v=banupdate11"}))
+        .set_json(json!({"video_url": "https://www.youtube.com/watch?v=banupdate11"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_error_response(
@@ -1146,7 +1144,7 @@ async fn patch_submission_legacy_level_rejected() {
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"raw_url": "https://www.youtube.com/watch?v=rawupdate11"}))
+        .set_json(json!({"raw_url": "https://www.youtube.com/watch?v=rawupdate11"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_error_response(
@@ -1173,7 +1171,7 @@ async fn patch_submission_under_review_rejected() {
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"video_url": "https://www.youtube.com/watch?v=reviewed111"}))
+        .set_json(json!({"video_url": "https://www.youtube.com/watch?v=reviewed111"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_error_response(
@@ -1202,7 +1200,7 @@ async fn patch_resubmission_closed() {
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"video_url": "https://www.youtube.com/watch?v=closed11111"}))
+        .set_json(json!({"video_url": "https://www.youtube.com/watch?v=closed11111"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_error_response(
@@ -1225,7 +1223,7 @@ async fn patch_submission_mod_invalid_urls() {
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"video_url": "not a url"}))
+        .set_json(json!({"video_url": "not a url"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_error_response(
@@ -1238,7 +1236,7 @@ async fn patch_submission_mod_invalid_urls() {
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"raw_url": "not a url"}))
+        .set_json(json!({"raw_url": "not a url"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_error_response(resp, 400, Some("Invalid raw footage URL: Malformed URL")).await;
@@ -1255,7 +1253,7 @@ async fn patch_submission_mod_downgrades_for_own_submission() {
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({
+        .set_json(json!({
             "video_url": "https://www.youtube.com/watch?v=selfupdate1",
             "status": "Accepted",
             "reviewer_notes": "should be ignored",
@@ -1286,7 +1284,7 @@ async fn patch_submission_mod_no_changes() {
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({}))
+        .set_json(json!({}))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_error_response(resp, 400, Some("No changes were provided!")).await;
@@ -1400,7 +1398,7 @@ async fn post_submission_closed() {
     SubmissionsEnabled::disable(&mut db.connection().unwrap(), user).unwrap();
 
     let req = test::TestRequest::post()
-        .uri(&format!("/aredl/submissions"))
+        .uri("/aredl/submissions")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(&submission_data)
         .to_request();
@@ -1647,7 +1645,7 @@ async fn submission_under_review_sends_websocket_notification() {
     let req = test::TestRequest::patch()
         .uri(format!("/aredl/submissions/{submission}").as_str())
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"status": "UnderReview"}))
+        .set_json(json!({"status": "UnderReview"}))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -1781,7 +1779,7 @@ async fn shift_completes() {
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{sub_id}"))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"status": "Accepted"}))
+        .set_json(json!({"status": "Accepted"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -1909,7 +1907,7 @@ async fn accept_submission_triggers_record_timestamp_fetch_from_youtube() {
         .await
         .expect("Failed to create GoogleAuthState");
 
-    std::env::set_var("YOUTUBE_API_BASE_URL", &server.base_url());
+    std::env::set_var("YOUTUBE_API_BASE_URL", server.base_url());
 
     let providers_app_state = Arc::new(VideoProvidersAppState::new(
         ProviderRegistry::new(vec![Arc::new(YouTubeProvider) as Arc<dyn Provider>]),

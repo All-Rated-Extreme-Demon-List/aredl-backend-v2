@@ -74,10 +74,7 @@ impl PemonlistPlayer {
         let pemonlist_response: PemonlistResponse = resp.json().map_err(|e| {
             ApiError::new(
                 500,
-                &format!(
-                    "Failed to parse data received from pemonlist: {}",
-                    e.to_string()
-                ),
+                &format!("Failed to parse data received from pemonlist: {}", e),
             )
         })?;
 

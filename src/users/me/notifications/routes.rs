@@ -49,11 +49,11 @@ async fn clear(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let result = web::block(move || {
+    web::block(move || {
         Notification::clear_me_notifications(&mut db.connection()?, authenticated.user_id)
     })
     .await??;
-    Ok(HttpResponse::Ok().json(result))
+    Ok(HttpResponse::Ok().json(()))
 }
 
 #[derive(OpenApi)]

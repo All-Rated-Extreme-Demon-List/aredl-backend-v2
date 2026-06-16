@@ -72,14 +72,12 @@ impl<'a> ExifInfo<'a> {
         let mime = self.get_str("MIMEType");
         let ext = self.get_str("FileTypeExtension");
 
-        file_type.map_or(false, |s| {
-            ["mp4", "mov"].iter().any(|c| s.eq_ignore_ascii_case(c))
-        }) || mime.map_or(false, |s| {
-            let s = s.to_ascii_lowercase();
-            s.contains("mp4") || s.contains("quicktime")
-        }) || ext.map_or(false, |s| {
-            ["mp4", "mov"].iter().any(|c| s.eq_ignore_ascii_case(c))
-        })
+        file_type.is_some_and(|s| ["mp4", "mov"].iter().any(|c| s.eq_ignore_ascii_case(c)))
+            || mime.is_some_and(|s| {
+                let s = s.to_ascii_lowercase();
+                s.contains("mp4") || s.contains("quicktime")
+            })
+            || ext.is_some_and(|s| ["mp4", "mov"].iter().any(|c| s.eq_ignore_ascii_case(c)))
     }
 
     fn moov_offset(&self) -> Option<u64> {
@@ -190,7 +188,7 @@ impl ContentDataLocation {
         let exif_info = exif_value.and_then(ExifInfo::from_value);
 
         // if ffprobe fails, and it's an mp4, try looking for the moov right after the mdat
-        let try_mp4_moov = exif_info.as_ref().map_or(false, |info| {
+        let try_mp4_moov = exif_info.as_ref().is_some_and(|info| {
             ffprobe_field.data.is_none() && info.is_mp4_like() && info.moov_offset().is_some()
         });
 

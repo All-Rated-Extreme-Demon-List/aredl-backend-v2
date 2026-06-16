@@ -43,12 +43,12 @@ async fn sync_completions(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
 ) -> Result<HttpResponse, ApiError> {
-    let result = web::block(move || {
+    web::block(move || {
         let conn = &mut db.connection()?;
         Bounty::find_by_id(conn, id.into_inner())?.sync_completions(conn)
     })
     .await??;
-    Ok(HttpResponse::Ok().json(result))
+    Ok(HttpResponse::Ok().json(()))
 }
 
 #[derive(OpenApi)]

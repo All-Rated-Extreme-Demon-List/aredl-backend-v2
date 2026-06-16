@@ -70,11 +70,11 @@ impl BaseUser {
         })
     }
 
-    fn add_users(role_id: i32, users: &Vec<Uuid>, conn: &mut DbConnection) -> Result<(), ApiError> {
+    fn add_users(role_id: i32, users: &[Uuid], conn: &mut DbConnection) -> Result<(), ApiError> {
         insert_into(user_roles::table)
             .values(
                 users
-                    .into_iter()
+                    .iter()
                     .map(|user| {
                         (
                             user_roles::user_id.eq(user),
@@ -89,7 +89,7 @@ impl BaseUser {
 
     pub fn delete_users(
         role_id: i32,
-        users: &Vec<Uuid>,
+        users: &[Uuid],
         conn: &mut DbConnection,
     ) -> Result<(), ApiError> {
         diesel::delete(

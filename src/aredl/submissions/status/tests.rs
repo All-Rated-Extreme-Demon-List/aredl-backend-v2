@@ -32,7 +32,7 @@ async fn enable_submissions() {
     let status = SubmissionsEnabled::is_enabled(&mut db.connection().unwrap())
         .expect("Failed to get submission status");
 
-    assert_eq!(status, true)
+    assert!(status)
 }
 
 #[actix_web::test]
@@ -75,7 +75,7 @@ async fn disable_submissions() {
     let status = SubmissionsEnabled::is_enabled(&mut db.connection().unwrap())
         .expect("Failed to get submission status");
 
-    assert_eq!(status, false);
+    assert!(!status);
 
     let level_id = create_test_level(&db).await;
 
@@ -116,7 +116,7 @@ async fn get_submission_status() {
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let status: serde_json::Value = read_body_json(resp).await;
 
-    assert_eq!(status.as_bool().unwrap(), false);
+    assert!(!status.as_bool().unwrap());
 
     SubmissionsEnabled::enable(&mut db.connection().unwrap(), user_id)
         .expect("Failed to temporarily disable submissions");
@@ -130,7 +130,7 @@ async fn get_submission_status() {
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let status: serde_json::Value = read_body_json(resp).await;
 
-    assert_eq!(status.as_bool().unwrap(), true);
+    assert!(status.as_bool().unwrap());
 }
 
 #[actix_web::test]

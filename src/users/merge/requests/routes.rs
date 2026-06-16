@@ -122,7 +122,7 @@ async fn create(
     authenticated: Authenticated,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&options));
+    root_span.record("body", tracing::field::debug(&options));
     let result = web::block(move || {
         let conn = &mut db.connection()?;
 
@@ -162,10 +162,9 @@ async fn accept(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
 ) -> Result<HttpResponse, ApiError> {
-    let result =
-        web::block(move || MergeRequest::accept(&mut db.connection()?, id.into_inner())).await??;
+    web::block(move || MergeRequest::accept(&mut db.connection()?, id.into_inner())).await??;
 
-    Ok(HttpResponse::Ok().json(result))
+    Ok(HttpResponse::Ok().json(()))
 }
 
 #[utoipa::path(

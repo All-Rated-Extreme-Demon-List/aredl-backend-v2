@@ -5,7 +5,7 @@ use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::providers::VideoProvidersAppState;
-use actix_web::{delete, get, patch, post, web, HttpResponse};
+use actix_web::{HttpResponse, delete, get, patch, post, web};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
@@ -55,7 +55,7 @@ async fn create(
     authenticated: Authenticated,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&record));
+    root_span.record("body", tracing::field::debug(&record));
     let record = web::block(move || {
         Record::create(&mut db.connection()?, record.into_inner(), authenticated)
     })
@@ -88,7 +88,7 @@ async fn update(
     authenticated: Authenticated,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&record));
+    root_span.record("body", tracing::field::debug(&record));
     let record = web::block(move || {
         Record::update(
             &mut db.connection()?,
@@ -152,10 +152,9 @@ async fn delete(
     id: web::Path<Uuid>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let record =
-        web::block(move || Record::delete(&mut db.connection()?, id.into_inner(), authenticated))
-            .await??;
-    Ok(HttpResponse::Ok().json(record))
+    web::block(move || Record::delete(&mut db.connection()?, id.into_inner(), authenticated))
+        .await??;
+    Ok(HttpResponse::Ok().json(()))
 }
 
 #[utoipa::path(

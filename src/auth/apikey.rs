@@ -84,7 +84,7 @@ pub async fn create_api_key(
 
         let (api_key, expires) = token::create_token(
             UserClaims {
-                user_id: user_id,
+                user_id,
                 is_api_key: true,
             },
             &data.jwt_encoding_key,

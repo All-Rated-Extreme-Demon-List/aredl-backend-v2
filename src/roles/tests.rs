@@ -164,7 +164,7 @@ async fn update_role_fails_when_target_role_has_same_privilege_as_user() {
     let req = test::TestRequest::patch()
         .uri(&format!("/roles/{}", role_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"role_desc": "Should Not Work"}))
+        .set_json(json!({"role_desc": "Should Not Work"}))
         .to_request();
 
     let resp = test::call_service(&app, req).await;

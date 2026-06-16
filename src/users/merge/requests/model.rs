@@ -169,7 +169,7 @@ impl MergeRequest {
         if request.primary_user == request.secondary_user {
             return Err(ApiError::new(
                 400,
-                "You cannot merge your account with itself.".into(),
+                "You cannot merge your account with itself.",
             ));
         }
 
@@ -181,13 +181,10 @@ impl MergeRequest {
 
         if let Some((_user_id, is_placeholder)) = secondary_user_data {
             if !is_placeholder {
-                return Err(ApiError::new(400, "You can only submit merge requests for placeholder users. To merge your account with a user that is already linked to another discord account, please make a support post on our discord server.".into()));
+                return Err(ApiError::new(400, "You can only submit merge requests for placeholder users. To merge your account with a user that is already linked to another discord account, please make a support post on our discord server."));
             }
         } else {
-            return Err(ApiError::new(
-                404,
-                "The secondary user does not exist.".into(),
-            ));
+            return Err(ApiError::new(404, "The secondary user does not exist."));
         }
 
         let existing_request = merge_requests::table
@@ -199,7 +196,7 @@ impl MergeRequest {
         if let Some(existing) = existing_request {
             if !existing.is_rejected {
                 return Err(ApiError::new(409,
-					"You already submitted a merge request for your account. Please wait until it's either accepted or denied before submitting a new one.".into(),
+					"You already submitted a merge request for your account. Please wait until it's either accepted or denied before submitting a new one.",
 				));
             }
         }

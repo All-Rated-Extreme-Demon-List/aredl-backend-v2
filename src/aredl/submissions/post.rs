@@ -19,7 +19,6 @@ use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, Insertable, ToSchema)]
 #[diesel(table_name=submissions, check_for_backend(Pg))]
-
 pub struct SubmissionPostUser {
     /// UUID of the level this record is on.
     pub level_id: Uuid,
@@ -46,7 +45,6 @@ pub struct SubmissionPostUser {
 
 #[derive(Serialize, Deserialize, Debug, Insertable, ToSchema, Default)]
 #[diesel(table_name=submissions, check_for_backend(Pg))]
-
 pub struct SubmissionPostMod {
     /// [MOD ONLY] UUID of the user submitting the record.
     pub submitted_by: Option<Uuid>,
@@ -81,7 +79,6 @@ pub struct SubmissionPostMod {
 
 #[derive(Serialize, Deserialize, Debug, Insertable, ToSchema, Default)]
 #[diesel(table_name=submissions, check_for_backend(Pg))]
-
 pub struct SubmissionInsert {
     /// UUID of the user submitting the record.
     pub submitted_by: Uuid,

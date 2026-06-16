@@ -193,7 +193,7 @@ async fn update_background_level_aredl() {
     let req = test::TestRequest::patch()
         .uri("/users/@me")
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({ "background_level": level_id }))
+        .set_json(json!({ "background_level": level_id }))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -221,7 +221,7 @@ async fn update_background_level_arepl() {
     let req = test::TestRequest::patch()
         .uri("/users/@me")
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({ "background_level": level_id }))
+        .set_json(json!({ "background_level": level_id }))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -249,7 +249,7 @@ async fn update_background_level_not_beaten() {
     let req = test::TestRequest::patch()
         .uri("/users/@me")
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({ "background_level": level_id }))
+        .set_json(json!({ "background_level": level_id }))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -279,7 +279,7 @@ async fn reset_background_level_to_zero() {
     let req = test::TestRequest::patch()
         .uri("/users/@me")
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({ "background_level": 0 }))
+        .set_json(json!({ "background_level": 0 }))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -324,7 +324,7 @@ async fn sync_badges_and_feature_badge() {
     let patch_req = test::TestRequest::patch()
         .uri("/users/@me")
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({ "featured_badge_code": badge_code }))
+        .set_json(json!({ "featured_badge_code": badge_code }))
         .to_request();
 
     let patch_resp = test::call_service(&app, patch_req).await;
@@ -357,7 +357,7 @@ async fn cannot_feature_locked_badge() {
     let req = test::TestRequest::patch()
         .uri("/users/@me")
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({ "featured_badge_code": "global.level_completion.5" }))
+        .set_json(json!({ "featured_badge_code": "global.level_completion.5" }))
         .to_request();
 
     let resp = test::call_service(&app, req).await;

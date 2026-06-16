@@ -240,22 +240,22 @@ impl Submission {
                     SubmissionPatchMod::from_record_insert(record),
                     submissions::reviewer_id.eq(Some(authenticated.user_id)),
                 );
-                return Ok(diesel::update(
-                    submissions::table.filter(submissions::id.eq(submission_id)),
+                Ok(
+                    diesel::update(submissions::table.filter(submissions::id.eq(submission_id)))
+                        .set(submission_update)
+                        .returning(Submission::as_select())
+                        .get_result::<Self>(conn)?,
                 )
-                .set(submission_update)
-                .returning(Submission::as_select())
-                .get_result::<Self>(conn)?);
             }
             None => {
                 let submission_insert = (
                     SubmissionPostMod::from_record_insert(record),
                     submissions::reviewer_id.eq(Some(authenticated.user_id)),
                 );
-                return Ok(diesel::insert_into(submissions::table)
+                Ok(diesel::insert_into(submissions::table)
                     .values(submission_insert)
                     .returning(Submission::as_select())
-                    .get_result::<Self>(conn)?);
+                    .get_result::<Self>(conn)?)
             }
         }
     }
@@ -544,9 +544,8 @@ impl ResolvedRecord {
                 q = q.filter(records::level_id.eq(level));
             }
             if let Some(ref submitter) = options.submitter_filter {
-                q = q.filter(
-                    records::submitted_by.eq_any(user_filter(&submitter).select(users::id)),
-                );
+                q = q
+                    .filter(records::submitted_by.eq_any(user_filter(submitter).select(users::id)));
             }
             q
         };

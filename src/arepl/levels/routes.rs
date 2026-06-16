@@ -72,7 +72,7 @@ async fn create(
     level: web::Json<LevelPlace>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&level));
+    root_span.record("body", tracing::field::debug(&level));
     let level =
         web::block(move || Level::create(&mut db.connection()?, level.into_inner())).await??;
     Ok(HttpResponse::Ok().json(level))
@@ -101,7 +101,7 @@ async fn update(
     level: web::Json<LevelUpdate>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&level));
+    root_span.record("body", tracing::field::debug(&level));
     let level = web::block(move || {
         let conn = &mut db.connection()?;
         let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;

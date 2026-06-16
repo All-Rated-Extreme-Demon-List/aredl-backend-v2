@@ -25,8 +25,8 @@ use utoipa::OpenApi;
         (path = "/bounty-board", api=bounty::ApiDoc),
     ),
 )]
-
 pub struct ApiDoc;
+
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/aredl")

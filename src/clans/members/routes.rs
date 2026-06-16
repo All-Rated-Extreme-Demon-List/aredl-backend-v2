@@ -60,7 +60,7 @@ async fn add(
     members: web::Json<Vec<Uuid>>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&members));
+    root_span.record("body", tracing::field::debug(&members));
     let result = web::block(move || {
         ClanMember::add_all(&mut db.connection()?, *clan_id, members.into_inner())
     })
@@ -92,7 +92,7 @@ async fn set(
     members: web::Json<Vec<Uuid>>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&members));
+    root_span.record("body", tracing::field::debug(&members));
     let result = web::block(move || {
         ClanMember::set_all(&mut db.connection()?, *clan_id, members.into_inner())
     })
@@ -127,7 +127,7 @@ async fn delete(
     authenticated: Authenticated,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&members));
+    root_span.record("body", tracing::field::debug(&members));
     let clan_id = clan_id.into_inner();
     let result = web::block(move || {
         let conn = &mut db.connection()?;
@@ -171,7 +171,7 @@ async fn invite(
     authenticated: Authenticated,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&user));
+    root_span.record("body", tracing::field::debug(&user));
     let result = web::block(move || {
         let conn = &mut db.connection()?;
         authenticated.ensure_has_clan_permission(conn, *clan_id, 1)?;
@@ -219,7 +219,7 @@ async fn edit(
     authenticated: Authenticated,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&member));
+    root_span.record("body", tracing::field::debug(&member));
     let (clan_id, user_id) = path.into_inner();
     let result = web::block(move || {
         let conn = &mut db.connection()?;

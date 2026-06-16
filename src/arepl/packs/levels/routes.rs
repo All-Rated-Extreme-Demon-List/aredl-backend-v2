@@ -33,7 +33,7 @@ async fn set(
     levels: web::Json<Vec<Uuid>>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&levels));
+    root_span.record("body", tracing::field::debug(&levels));
     let levels = web::block(move || {
         BaseLevel::pack_set_all(&mut db.connection()?, *pack_id, levels.into_inner())
     })
@@ -66,7 +66,7 @@ async fn add(
     levels: web::Json<Vec<Uuid>>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&levels));
+    root_span.record("body", tracing::field::debug(&levels));
     let levels = web::block(move || {
         BaseLevel::pack_add_all(&mut db.connection()?, *pack_id, levels.into_inner())
     })
@@ -99,7 +99,7 @@ async fn delete(
     levels: web::Json<Vec<Uuid>>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&levels));
+    root_span.record("body", tracing::field::debug(&levels));
     let levels = web::block(move || {
         BaseLevel::pack_delete_all(&mut db.connection()?, *pack_id, levels.into_inner())
     })

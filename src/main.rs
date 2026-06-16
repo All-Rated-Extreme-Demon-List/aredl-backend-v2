@@ -210,7 +210,7 @@ impl RootSpanBuilder for AppRootSpanBuilder {
 }
 
 pub fn get_secret(var_name: &str) -> String {
-    let value = env::var(var_name).expect(&format!("Please set {} in .env", var_name));
+    let value = env::var(var_name).unwrap_or_else(|_| panic!("Please set {} in .env", var_name));
     if value.starts_with("/run/secrets/") {
         fs::read_to_string(value.trim())
             .expect("Failed to read secret file")
@@ -234,7 +234,7 @@ pub fn get_optional_secret(var_name: &str) -> Option<String> {
             Ok(v) => Some(v.trim().to_string()),
             Err(e) => {
                 tracing::warn!("Failed to read secret file for {}: {}", var_name, e);
-                return None;
+                None
             }
         }
     } else {

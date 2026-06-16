@@ -39,7 +39,7 @@ async fn direct_merge() {
     });
 
     let req = test::TestRequest::post()
-        .uri(format!("/users/merge/").as_str())
+        .uri("/users/merge/")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(&merge_data)
         .to_request();

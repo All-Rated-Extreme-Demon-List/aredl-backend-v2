@@ -24,7 +24,7 @@ async fn add_members() {
     let req = test::TestRequest::post()
         .uri(&format!("/clans/{}/members", clan_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&vec![user_id])
+        .set_json(vec![user_id])
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -72,7 +72,7 @@ async fn set_members() {
     let req = test::TestRequest::patch()
         .uri(&format!("/clans/{}/members", clan_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&vec![u1, u2])
+        .set_json(vec![u1, u2])
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -96,7 +96,7 @@ async fn set_members_removes_missing_members() {
     let req = test::TestRequest::patch()
         .uri(&format!("/clans/{}/members", clan_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&vec![u2])
+        .set_json(vec![u2])
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -140,7 +140,7 @@ async fn set_members_preserves_metadata() {
     let req = test::TestRequest::patch()
         .uri(&format!("/clans/{}/members", clan_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&vec![existing_user, new_user])
+        .set_json(vec![existing_user, new_user])
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -175,7 +175,7 @@ async fn delete_members() {
     let req = test::TestRequest::delete()
         .uri(&format!("/clans/{}/members", clan_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&vec![member_id])
+        .set_json(vec![member_id])
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -196,7 +196,7 @@ async fn delete_members_unauthorized() {
     let req = test::TestRequest::delete()
         .uri(&format!("/clans/{}/members", clan_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&vec![owner_id])
+        .set_json(vec![owner_id])
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_error_response(resp, 403, None).await;
@@ -214,7 +214,7 @@ async fn invite_member() {
     let req = test::TestRequest::post()
         .uri(&format!("/clans/{}/members/invite", clan_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"user_id": user_id}))
+        .set_json(json!({"user_id": user_id}))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -236,7 +236,7 @@ async fn invite_member_unauthorized() {
     let req = test::TestRequest::post()
         .uri(&format!("/clans/{}/members/invite", clan_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"user_id": user_id}))
+        .set_json(json!({"user_id": user_id}))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_error_response(resp, 403, None).await;
@@ -255,7 +255,7 @@ async fn edit_member() {
     let req = test::TestRequest::patch()
         .uri(&format!("/clans/{}/members/{}", clan_id, member_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"role": 1}))
+        .set_json(json!({"role": 1}))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -276,7 +276,7 @@ async fn edit_member_unauthorized() {
     let req = test::TestRequest::patch()
         .uri(&format!("/clans/{}/members/{}", clan_id, owner_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"role": 1}))
+        .set_json(json!({"role": 1}))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_error_response(resp, 403, None).await;
@@ -295,7 +295,7 @@ async fn edit_member_transfer_ownership() {
     let req = test::TestRequest::patch()
         .uri(&format!("/clans/{}/members/{}", clan_id, member_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"role": 2}))
+        .set_json(json!({"role": 2}))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -324,7 +324,7 @@ async fn invite_member_already_in_clan() {
     let req = test::TestRequest::post()
         .uri(&format!("/clans/{}/members/invite", clan_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"user_id": user_id}))
+        .set_json(json!({"user_id": user_id}))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_error_response(resp, 400, Some("This user is already in a clan")).await;

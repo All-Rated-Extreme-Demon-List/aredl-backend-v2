@@ -47,7 +47,7 @@ impl From<BlockingError> for ApiError {
 impl ResponseError for ApiError {
     fn error_response(&self) -> HttpResponse {
         let status_code = StatusCode::from_u16(self.error_status_code)
-            .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR);
+            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
 
         let error_message = match status_code.as_u16() < 500 {
             true => self.error_message.clone(),

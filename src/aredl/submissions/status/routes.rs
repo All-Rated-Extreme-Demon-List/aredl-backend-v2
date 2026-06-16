@@ -4,7 +4,7 @@ use crate::{
     auth::{Authenticated, Permission, UserAuth},
     error_handler::ApiError,
 };
-use actix_web::{get, post, web, HttpResponse};
+use actix_web::{HttpResponse, get, post, web};
 use std::sync::Arc;
 use utoipa::OpenApi;
 
@@ -80,7 +80,7 @@ async fn disable(
 async fn get_status_full(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
     let res =
         web::block(move || SubmissionsEnabledFull::get_status(&mut db.connection()?)).await??;
-    return Ok(HttpResponse::Ok().json(res));
+    Ok(HttpResponse::Ok().json(res))
 }
 
 #[utoipa::path(
@@ -99,7 +99,7 @@ async fn get_status_full(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse,
 #[get("")]
 async fn get_status(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
     let res = web::block(move || SubmissionsEnabled::is_enabled(&mut db.connection()?)).await??;
-    return Ok(HttpResponse::Ok().json(res));
+    Ok(HttpResponse::Ok().json(res))
 }
 
 #[utoipa::path(
@@ -119,7 +119,7 @@ async fn get_status(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiE
 async fn get_history(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
     let res =
         web::block(move || SubmissionsEnabledFull::get_statuses(&mut db.connection()?)).await??;
-    return Ok(HttpResponse::Ok().json(res));
+    Ok(HttpResponse::Ok().json(res))
 }
 
 #[derive(OpenApi)]

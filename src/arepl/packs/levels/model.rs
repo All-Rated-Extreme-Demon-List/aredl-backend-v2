@@ -62,15 +62,11 @@ impl BaseLevel {
         })
     }
 
-    fn add_levels(
-        pack_id: Uuid,
-        levels: &Vec<Uuid>,
-        conn: &mut DbConnection,
-    ) -> Result<(), ApiError> {
+    fn add_levels(pack_id: Uuid, levels: &[Uuid], conn: &mut DbConnection) -> Result<(), ApiError> {
         insert_into(pack_levels::table)
             .values(
                 levels
-                    .into_iter()
+                    .iter()
                     .map(|level| {
                         (
                             pack_levels::pack_id.eq(pack_id),
@@ -85,7 +81,7 @@ impl BaseLevel {
 
     pub fn delete_levels(
         pack_id: Uuid,
-        levels: &Vec<Uuid>,
+        levels: &[Uuid],
         conn: &mut DbConnection,
     ) -> Result<(), ApiError> {
         diesel::delete(

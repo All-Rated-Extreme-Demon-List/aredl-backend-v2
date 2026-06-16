@@ -94,7 +94,7 @@ async fn create_placeholder(
     options: web::Json<PlaceholderOptions>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&options));
+    root_span.record("body", tracing::field::debug(&options));
     let result =
         web::block(move || User::create_placeholder(&mut db.connection()?, options.into_inner()))
             .await??;
@@ -126,7 +126,7 @@ async fn update(
     authenticated: Authenticated,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&user));
+    root_span.record("body", tracing::field::debug(&user));
     let result = web::block(move || {
         let conn = &mut db.connection()?;
         let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
@@ -171,7 +171,7 @@ async fn ban(
     authenticated: Authenticated,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&user));
+    root_span.record("body", tracing::field::debug(&user));
     let result = web::block(move || {
         let conn = &mut db.connection()?;
         let user_id = User::from_str(conn, id.into_inner().as_str())?.id;

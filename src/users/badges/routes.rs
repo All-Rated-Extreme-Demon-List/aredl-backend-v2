@@ -99,7 +99,7 @@ async fn grant(
     badge: web::Json<UserBadgeGrant>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&badge));
+    root_span.record("body", tracing::field::debug(&badge));
     let badges = web::block(move || {
         let conn = &mut db.connection()?;
         let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
@@ -137,7 +137,7 @@ async fn remove(
     badge_codes: web::Json<Vec<String>>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&badge_codes));
+    root_span.record("body", tracing::field::debug(&badge_codes));
     let badges = web::block(move || {
         let conn = &mut db.connection()?;
         let user_id = User::from_str(conn, id.into_inner().as_str())?.id;

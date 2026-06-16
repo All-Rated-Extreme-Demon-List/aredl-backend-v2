@@ -120,7 +120,7 @@ where
             .clone();
 
         let token_claims = match decode_token(
-            &token.unwrap(),
+            token.unwrap(),
             &app_state.jwt_decoding_key,
             &["initial", "access"],
         ) {
@@ -142,43 +142,37 @@ where
 
         let conn = &mut db_state.connection().unwrap();
 
-        if let Err(_) = check_token_valid(&token_claims, &user_claims, conn) {
+        if check_token_valid(&token_claims, &user_claims, conn).is_err() {
             return Self::error_future(http_req, ApiError::new(403, "Token has been invalidated"));
         }
 
         let user_id = user_claims.user_id;
 
-        tracing::Span::current().record("user_id", &tracing::field::display(user_id));
+        tracing::Span::current().record("user_id", tracing::field::display(user_id));
 
-        match self.required_perm.clone() {
-            Some(required_perm) => {
-                let has_permission =
-                    permission::check_user_permission(conn, user_id, required_perm.clone());
-                match has_permission {
-                    Ok(permission) => {
-                        if !permission {
-                            return Self::error_future(
-                                http_req,
-                                ApiError::new(
-                                    403,
-                                    format!(
-                                        "You do not have the required permission ({}) to access this endpoint",
-                                        required_perm
-                                    )
-                                    .as_str(),
-                                ),
-                            );
-                        }
-                    }
-                    Err(_) => {
+        if let Some(required_perm) = self.required_perm.clone() {
+            let has_permission =
+                permission::check_user_permission(conn, user_id, required_perm.clone());
+            match has_permission {
+                Ok(permission) => {
+                    if !permission {
                         return Self::error_future(
                             http_req,
-                            ApiError::new(403, "Failed to load permissions"),
-                        )
+                            ApiError::new(
+                                403,
+                                format!("You do not have the required permission ({}) to access this endpoint",required_perm)
+                                .as_str(),
+                            ),
+                        );
                     }
                 }
+                Err(_) => {
+                    return Self::error_future(
+                        http_req,
+                        ApiError::new(403, "Failed to load permissions"),
+                    )
+                }
             }
-            None => {}
         }
 
         http_req.extensions_mut().insert::<UserClaims>(user_claims);

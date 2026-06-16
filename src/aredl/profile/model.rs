@@ -13,8 +13,8 @@ use crate::schema::{
     },
     clan_members, clans, roles, user_roles,
 };
-use crate::users::badges::UserBadge;
 use crate::users::User;
+use crate::users::badges::UserBadge;
 use chrono::{DateTime, Utc};
 use diesel::{
     ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
@@ -137,7 +137,7 @@ impl ProfileResolved {
             .map(|auth| auth.has_permission(conn, Permission::RoleManage))
             .unwrap_or(Ok(false))?
         {
-            roles = roles.into_iter().filter(|role| !role.hide).collect();
+            roles.retain(|role| !role.hide);
         }
 
         let rank = user_leaderboard::table
