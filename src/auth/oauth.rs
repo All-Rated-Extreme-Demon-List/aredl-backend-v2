@@ -127,7 +127,7 @@ impl OAuthClientConfig {
     }
 }
 
-fn build_oauth_return_uri(base: &str, return_path: &str, callback_path: &str) -> String {
+pub(super) fn build_oauth_return_uri(base: &str, return_path: &str, callback_path: &str) -> String {
     let base = base.trim().trim_end_matches('/');
     let base = if base.starts_with("http://") || base.starts_with("https://") {
         base.to_string()
@@ -141,27 +141,6 @@ fn build_oauth_return_uri(base: &str, return_path: &str, callback_path: &str) ->
     let callback_path = callback_path.trim().trim_matches('/');
 
     format!("{base}/{return_path}/{callback_path}")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::build_oauth_return_uri;
-
-    #[test]
-    fn builds_oauth_return_uri_from_host_base_and_provider_path() {
-        assert_eq!(
-            build_oauth_return_uri("api.aredl.net/v2dev", "/auth/patreon", "callback"),
-            "https://api.aredl.net/v2dev/auth/patreon/callback"
-        );
-    }
-
-    #[test]
-    fn builds_local_oauth_return_uri_with_http_scheme() {
-        assert_eq!(
-            build_oauth_return_uri("127.0.0.1:5000/api", "/auth/discord", "callback"),
-            "http://127.0.0.1:5000/api/auth/discord/callback"
-        );
-    }
 }
 
 #[derive(Clone)]

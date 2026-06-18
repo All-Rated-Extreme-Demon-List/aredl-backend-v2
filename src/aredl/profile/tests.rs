@@ -4,12 +4,10 @@ use {
         aredl::levels::test_utils::create_test_level_with_record,
         auth::{create_test_token, Permission},
         roles::test_utils::{add_user_to_role, create_test_hidden_role, create_test_role},
-        schema::users,
         test_utils::*,
-        users::test_utils::create_test_user,
+        users::test_utils::{create_test_user, set_test_user_discord_id},
     },
     actix_web::test::{self, read_body_json},
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
 };
 
 #[actix_web::test]
@@ -32,10 +30,7 @@ async fn get_profile_by_discord_id() {
     let (user, _) = create_test_user(&db, None).await;
     let discord_id = "1234567890";
 
-    diesel::update(users::table.filter(users::id.eq(user)))
-        .set(users::discord_id.eq(Some(discord_id)))
-        .execute(&mut db.connection().unwrap())
-        .expect("Failed to set discord id");
+    set_test_user_discord_id(&db, user, discord_id).await;
 
     let req = test::TestRequest::get()
         .uri(format!("/aredl/profile/{discord_id}").as_str())
@@ -74,7 +69,7 @@ async fn get_profile_hides_hidden_roles_except_for_role_manage() {
             .find(|r| r["id"] == visible_role_id)
             .expect("Visible role should be present in profile response");
 
-        assert_eq!(visible_role["hide"], false);
+        assert!(!visible_role["hide"].as_bool().unwrap());
     };
 
     let assert_hidden_role_is_exposed = |roles: &Vec<serde_json::Value>| {
@@ -87,8 +82,8 @@ async fn get_profile_hides_hidden_roles_except_for_role_manage() {
             .find(|r| r["id"] == visible_role_id)
             .expect("Visible role should be present in profile response");
 
-        assert_eq!(hidden_role["hide"], true);
-        assert_eq!(visible_role["hide"], false);
+        assert!(hidden_role["hide"].as_bool().unwrap());
+        assert!(!visible_role["hide"].as_bool().unwrap());
     };
 
     let anon_req = test::TestRequest::get()

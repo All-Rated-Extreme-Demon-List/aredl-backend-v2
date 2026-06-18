@@ -155,7 +155,7 @@ async fn get_submission_status_full() {
     let body: serde_json::Value = read_body_json(resp).await;
 
     assert_eq!(body["moderator"]["id"], user_id.to_string());
-    assert_eq!(body["enabled"], false);
+    assert!(!body["enabled"].as_bool().unwrap());
 }
 
 #[actix_web::test]
@@ -180,8 +180,8 @@ async fn get_submission_status_history() {
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let body: serde_json::Value = read_body_json(resp).await;
 
-    assert_eq!(body[0]["enabled"], true);
-    assert_eq!(body[1]["enabled"], false);
+    assert!(body[0]["enabled"].as_bool().unwrap());
+    assert!(!body[1]["enabled"].as_bool().unwrap());
     assert!(body
         .as_array()
         .unwrap()

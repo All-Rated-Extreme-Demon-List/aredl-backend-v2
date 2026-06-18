@@ -2,12 +2,13 @@
 use {
     crate::{
         auth::{create_test_token, Permission},
-        diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper},
         roles::test_utils::{add_user_to_role, create_test_hidden_role, create_test_role},
-        schema::users,
         test_utils::{assert_error_response, init_test_app},
         users::{
-            test_utils::{create_test_user, get_permission_privilege_level},
+            test_utils::{
+                create_test_user, get_permission_privilege_level, get_test_user,
+                set_test_user_discord_id,
+            },
             User, UserUpsert,
         },
     },
@@ -142,11 +143,7 @@ async fn redact_user_requires_redact_permission() {
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status().as_u16(), 403);
 
-    let ban_level = users::table
-        .filter(users::id.eq(user_id))
-        .select(users::ban_level)
-        .first::<i32>(&mut db.connection().unwrap())
-        .expect("Failed to read user ban_level");
+    let ban_level = get_test_user(&db, user_id).ban_level;
     assert_ne!(ban_level, 3);
 }
 
@@ -195,10 +192,7 @@ async fn find_user_by_discord_id() {
     let (user_id, username) = create_test_user(&db, None).await;
     let discord_id = "1234567890";
 
-    diesel::update(users::table.filter(users::id.eq(user_id)))
-        .set(users::discord_id.eq(Some(discord_id)))
-        .execute(&mut db.connection().unwrap())
-        .expect("Failed to update discord id");
+    set_test_user_discord_id(&db, user_id, discord_id).await;
 
     let req = test::TestRequest::get()
         .uri(&format!("/users/{}", discord_id))
@@ -412,11 +406,7 @@ async fn upsert_creates_and_updates_user() {
     assert_eq!(created.username, "new_user");
     assert_eq!(created.discord_id.as_deref(), Some("123"));
 
-    let fetched = users::table
-        .filter(users::id.eq(created.id))
-        .select(User::as_select())
-        .first::<User>(&mut db.connection().unwrap())
-        .unwrap();
+    let fetched = get_test_user(&db, created.id);
     assert_eq!(fetched.username, "new_user");
 
     let update_upsert = UserUpsert {

@@ -4,10 +4,10 @@ use {
         arepl::{
             levels::test_utils::create_test_level,
             statistics::submissions::ResolvedQueueLevelSubmissionsRow,
-            submissions::test_utils::create_test_submission, submissions::SubmissionStatus,
+            submissions::test_utils::{create_test_submission, set_test_submission_status},
+            submissions::SubmissionStatus,
         },
         auth::create_test_token,
-        schema::arepl::submissions,
         test_utils::init_test_app,
         users::test_utils::create_test_user,
     },
@@ -15,8 +15,9 @@ use {
         http::header,
         test::{self, read_body_json, TestRequest},
     },
-    diesel::{sql_query, ExpressionMethods, QueryDsl, RunQueryDsl},
 };
+
+use super::test_utils::refresh_test_submission_totals;
 
 #[actix_web::test]
 async fn total_submissions_counts_ordering_and_percent_unique_pairs() {
@@ -38,9 +39,7 @@ async fn total_submissions_counts_ordering_and_percent_unique_pairs() {
     create_test_submission(level1, u3, &db).await;
     create_test_submission(level2, u4, &db).await;
 
-    sql_query("REFRESH MATERIALIZED VIEW arepl.submission_totals")
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    refresh_test_submission_totals(&db);
 
     let req = TestRequest::get()
         .uri("/arepl/statistics/submissions")
@@ -81,14 +80,9 @@ async fn total_submissions_ignores_non_pending_unique_pairs() {
     create_test_submission(level1, u1, &db).await;
     let non_pending_id = create_test_submission(level1, u2, &db).await;
 
-    diesel::update(submissions::table.filter(submissions::id.eq(non_pending_id)))
-        .set(submissions::status.eq(SubmissionStatus::Denied))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_submission_status(&db, non_pending_id, SubmissionStatus::Denied);
 
-    sql_query("REFRESH MATERIALIZED VIEW arepl.submission_totals")
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    refresh_test_submission_totals(&db);
 
     let req = TestRequest::get()
         .uri("/arepl/statistics/submissions")

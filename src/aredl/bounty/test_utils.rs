@@ -2,14 +2,11 @@
 use {
     crate::{
         app_data::db::DbAppState,
-        aredl::{
-            bounty::{Bounty, BountyDifficulty, BountyPost, BountyType},
-            records::Record,
-        },
-        schema::aredl::{bounties, bounty_completed, records},
+        aredl::bounty::{Bounty, BountyDifficulty, BountyPost, BountyType},
+        schema::aredl::{bounties, bounty_completed},
     },
     chrono::{DateTime, Utc},
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper},
+    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
     serde_json::Value,
     std::sync::Arc,
     uuid::Uuid,
@@ -91,24 +88,10 @@ pub fn fetch_test_bounty(db: &Arc<DbAppState>, bounty_id: Uuid) -> Bounty {
 }
 
 #[cfg(test)]
-pub fn fetch_test_record(db: &Arc<DbAppState>, record_id: Uuid) -> Record {
-    records::table
-        .filter(records::id.eq(record_id))
-        .select(Record::as_select())
-        .first::<Record>(&mut db.connection().unwrap())
-        .expect("Failed to fetch test record")
-}
-
-#[cfg(test)]
-pub fn set_test_record_achieved_at(
-    db: &Arc<DbAppState>,
-    record_id: Uuid,
-    achieved_at: DateTime<Utc>,
-) {
-    diesel::update(records::table.filter(records::id.eq(record_id)))
-        .set(records::achieved_at.eq(achieved_at))
+pub fn delete_test_bounty(db: &Arc<DbAppState>, bounty_id: Uuid) {
+    diesel::delete(bounties::table.filter(bounties::id.eq(bounty_id)))
         .execute(&mut db.connection().unwrap())
-        .expect("Failed to update test record achieved_at");
+        .expect("Failed to delete test bounty");
 }
 
 #[cfg(test)]

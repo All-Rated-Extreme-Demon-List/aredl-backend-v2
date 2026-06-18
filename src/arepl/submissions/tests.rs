@@ -3,39 +3,45 @@ use {
     crate::{
         arepl::{
             bounty::test_utils::create_test_bounty,
-            levels::{test_utils::create_test_level, LevelStatus},
+            levels::{
+                test_utils::{create_test_level, set_test_level_status},
+                LevelStatus,
+            },
+            records::test_utils::{get_test_record, get_test_record_for_level_and_user},
             submissions::{
-                history::SubmissionHistory,
                 status::SubmissionsEnabled,
                 test_utils::{
                     create_test_submission, create_two_test_submissions_with_different_timestamps,
+                    get_test_submission, get_test_submission_optional,
+                    latest_test_submission_history, set_test_submission_raw_url,
+                    set_test_submission_raw_url_status_and_reviewer, set_test_submission_reviewer,
+                    set_test_submission_reviewer_with_private_notes, set_test_submission_status,
+                    set_test_submissions_raw_url,
                 },
-                Submission, SubmissionStatus,
+                SubmissionStatus,
             },
         },
-        auth::{create_test_token, Permission},
+        auth::{create_test_token, oauth::OAuthProvider, Permission},
         providers::{
             context::{google::new_google_context, ProviderContext},
             list::youtube::YouTubeProvider,
             model::{Provider, ProviderRegistry},
             test_utils::{
-                clear_google_env, mock_google_token_endpoint, mock_youtube_videos_endpoint,
-                seed_google_token, set_google_env,
+                clear_oauth_env, mock_google_token_endpoint, mock_youtube_videos_endpoint,
+                seed_oauth_token, set_oauth_env,
             },
             ProvidersAppState,
         },
         roles::test_utils::{add_user_to_role, create_test_role_with_desc},
-        schema::{
-            arepl::{levels, records, submission_history, submissions},
-            shifts, users,
+        shifts::{
+            test_utils::{create_test_shift, get_test_shift, set_test_shift_target_count},
+            ShiftStatus,
         },
-        shifts::{test_utils::create_test_shift, ShiftStatus},
         test_utils::*,
-        users::test_utils::create_test_user,
+        users::test_utils::{create_test_user, set_test_user_ban_level},
     },
     actix_web::test::{self, read_body_json},
     chrono::{DateTime, Duration as ChronoDuration, Utc},
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper},
     httpmock::prelude::*,
     serde_json::json,
     serial_test::serial,
@@ -145,10 +151,7 @@ async fn resolved_find_all_reviewer_filter_hides_base_reviewer_for_non_auditor()
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, owner, &db).await;
 
-    diesel::update(submissions::table.filter(submissions::id.eq(submission)))
-        .set(submissions::reviewer_id.eq::<Option<uuid::Uuid>>(Some(base_reviewer)))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_submission_reviewer(&db, submission, Some(base_reviewer));
 
     let req = test::TestRequest::get()
         .uri(format!("/arepl/submissions?reviewer_filter={}", base_reviewer).as_str())
@@ -175,10 +178,7 @@ async fn resolved_find_all_redacts_base_reviewer_but_auditor_can_filter_and_see(
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, owner, &db).await;
 
-    diesel::update(submissions::table.filter(submissions::id.eq(submission)))
-        .set(submissions::reviewer_id.eq::<Option<uuid::Uuid>>(Some(base_reviewer)))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_submission_reviewer(&db, submission, Some(base_reviewer));
 
     let req = test::TestRequest::get()
         .uri("/arepl/submissions")
@@ -295,13 +295,12 @@ async fn resolved_find_one_hides_base_reviewer_for_non_auditor_but_not_for_audit
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, owner, &db).await;
 
-    diesel::update(submissions::table.filter(submissions::id.eq(submission)))
-        .set((
-            submissions::reviewer_id.eq::<Option<uuid::Uuid>>(Some(base_reviewer)),
-            submissions::private_reviewer_notes.eq::<Option<String>>(Some("private".to_string())),
-        ))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_submission_reviewer_with_private_notes(
+        &db,
+        submission,
+        Some(base_reviewer),
+        Some("private"),
+    );
 
     let req = test::TestRequest::get()
         .uri(&format!("/arepl/submissions/{submission}"))
@@ -816,7 +815,7 @@ async fn submission_for_active_bounty_is_priority_for_non_plus_user() {
         resp.status()
     );
     let body: serde_json::Value = read_body_json(resp).await;
-    assert_eq!(body["priority"], true);
+    assert!(body["priority"].as_bool().unwrap());
 }
 
 #[actix_web::test]
@@ -830,11 +829,7 @@ async fn submission_banned_player() {
 
     let (banned, _) = create_test_user(&db, None).await;
 
-    diesel::update(users::table)
-        .filter(users::id.eq(banned))
-        .set(users::ban_level.eq(2))
-        .execute(&mut db.connection().unwrap())
-        .expect("Failed to ban user!");
+    set_test_user_ban_level(&db, banned, 2).await;
 
     let banned_token =
         create_test_token(banned, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -878,11 +873,7 @@ async fn patch_submission_banned_submitter() {
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, user, &db).await;
 
-    diesel::update(users::table)
-        .filter(users::id.eq(user))
-        .set(users::ban_level.eq(2))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_user_ban_level(&db, user, 2).await;
 
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission}"))
@@ -905,10 +896,7 @@ async fn patch_submission_legacy_level_rejected() {
     let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
     let level = create_test_level(&db).await;
 
-    diesel::update(levels::table.filter(levels::id.eq(level)))
-        .set(levels::status.eq(LevelStatus::Legacy))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_level_status(&db, level, LevelStatus::Legacy, Some(1)).await;
 
     let submission = create_test_submission(level, user, &db).await;
     let req = test::TestRequest::patch()
@@ -933,10 +921,7 @@ async fn patch_submission_under_review_rejected() {
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, user, &db).await;
 
-    diesel::update(submissions::table.filter(submissions::id.eq(submission)))
-        .set(submissions::status.eq(SubmissionStatus::Claimed))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_submission_status(&db, submission, SubmissionStatus::Claimed);
 
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission}"))
@@ -960,10 +945,7 @@ async fn patch_resubmission_closed() {
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, user, &db).await;
 
-    diesel::update(submissions::table.filter(submissions::id.eq(submission)))
-        .set(submissions::status.eq(SubmissionStatus::Accepted))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_submission_status(&db, submission, SubmissionStatus::Accepted);
 
     SubmissionsEnabled::disable(&mut db.connection().unwrap(), user).unwrap();
 
@@ -1032,11 +1014,7 @@ async fn patch_submission_mod_downgrades_for_own_submission() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let stored = submissions::table
-        .find(submission)
-        .select(Submission::as_select())
-        .first::<Submission>(&mut db.connection().unwrap())
-        .expect("Failed to fetch submission");
+    let stored = get_test_submission(&db, submission);
 
     assert_eq!(stored.status, SubmissionStatus::Pending);
     assert!(stored.reviewer_notes.is_none());
@@ -1115,10 +1093,7 @@ async fn claim_submission_base_reviewer_skips_raw_submissions() {
     let _raw_submission = create_test_submission(raw_level, submitter, &db).await;
     let non_raw_submission = create_test_submission(non_raw_level, submitter, &db).await;
 
-    diesel::update(submissions::table.filter(submissions::id.eq(non_raw_submission)))
-        .set(submissions::raw_url.eq::<Option<String>>(None))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_submission_raw_url(&db, non_raw_submission, None);
 
     let req = test::TestRequest::get()
         .uri("/arepl/submissions/claim")
@@ -1211,13 +1186,13 @@ async fn patch_submission_base_reviewer_cannot_edit_other_under_consideration_su
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, submitter, &db).await;
 
-    diesel::update(submissions::table.filter(submissions::id.eq(submission)))
-        .set((
-            submissions::raw_url.eq::<Option<String>>(None),
-            submissions::status.eq(SubmissionStatus::UnderConsideration),
-        ))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_submission_raw_url_status_and_reviewer(
+        &db,
+        submission,
+        None,
+        SubmissionStatus::UnderConsideration,
+        None,
+    );
 
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission}"))
@@ -1244,14 +1219,13 @@ async fn patch_submission_base_reviewer_can_edit_claimed_submission_without_raw(
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, submitter, &db).await;
 
-    diesel::update(submissions::table.filter(submissions::id.eq(submission)))
-        .set((
-            submissions::raw_url.eq::<Option<String>>(None),
-            submissions::status.eq(SubmissionStatus::Claimed),
-            submissions::reviewer_id.eq::<Option<Uuid>>(Some(base_reviewer)),
-        ))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_submission_raw_url_status_and_reviewer(
+        &db,
+        submission,
+        None,
+        SubmissionStatus::Claimed,
+        Some(base_reviewer),
+    );
 
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission}"))
@@ -1261,11 +1235,7 @@ async fn patch_submission_base_reviewer_can_edit_claimed_submission_without_raw(
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let stored = submissions::table
-        .find(submission)
-        .select(Submission::as_select())
-        .first::<Submission>(&mut db.connection().unwrap())
-        .expect("Failed to fetch submission");
+    let stored = get_test_submission(&db, submission);
 
     assert_eq!(stored.reviewer_id, Some(base_reviewer));
     assert_eq!(stored.reviewer_notes.as_deref(), Some("Reviewed by base"));
@@ -1283,14 +1253,13 @@ async fn patch_submission_base_reviewer_cannot_edit_claimed_submission_assigned_
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, submitter, &db).await;
 
-    diesel::update(submissions::table.filter(submissions::id.eq(submission)))
-        .set((
-            submissions::raw_url.eq::<Option<String>>(None),
-            submissions::status.eq(SubmissionStatus::Claimed),
-            submissions::reviewer_id.eq::<Option<Uuid>>(Some(other_reviewer)),
-        ))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_submission_raw_url_status_and_reviewer(
+        &db,
+        submission,
+        None,
+        SubmissionStatus::Claimed,
+        Some(other_reviewer),
+    );
 
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission}"))
@@ -1444,10 +1413,7 @@ async fn post_submission_legacy_level_rejected() {
     let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
     let level = create_test_level(&db).await;
 
-    diesel::update(levels::table.filter(levels::id.eq(level)))
-        .set(levels::status.eq(LevelStatus::Legacy))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_level_status(&db, level, LevelStatus::Legacy, Some(1)).await;
 
     let submission_data = json!({
         "level_id": level,
@@ -1535,11 +1501,7 @@ async fn delete_submission_requires_ownership_without_review_permission() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let still_exists = submissions::table
-        .find(owner_submission)
-        .select(submissions::id)
-        .first::<Uuid>(&mut db.connection().unwrap())
-        .is_ok();
+    let still_exists = get_test_submission_optional(&db, owner_submission).is_some();
     assert!(still_exists);
 }
 
@@ -1570,18 +1532,9 @@ async fn accept_submission() {
         resp.status()
     );
 
-    records::table
-        .filter(records::level_id.eq(level_id))
-        .filter(records::submitted_by.eq(user_id))
-        .select(records::id)
-        .first::<Uuid>(&mut db.connection().unwrap())
-        .expect("Failed to get new record!");
+    get_test_record_for_level_and_user(&db, level_id, user_id);
 
-    let accepted_submission = submissions::table
-        .filter(submissions::id.eq(submission))
-        .select(Submission::as_select())
-        .first::<Submission>(&mut db.connection().unwrap())
-        .expect("Failed to get accepted submission!");
+    let accepted_submission = get_test_submission(&db, submission);
 
     assert_eq!(
         accepted_submission.status,
@@ -1595,12 +1548,7 @@ async fn accept_submission() {
         "Reviewer notes do not match!"
     );
 
-    let history_entry = submission_history::table
-        .filter(submission_history::submission_id.eq(submission))
-        .order(submission_history::timestamp.desc())
-        .select(SubmissionHistory::as_select())
-        .first::<SubmissionHistory>(&mut db.connection().unwrap())
-        .expect("Failed to get submission history!");
+    let history_entry = latest_test_submission_history(&db, submission);
 
     assert_eq!(
         history_entry.status,
@@ -1642,11 +1590,7 @@ async fn deny_submission() {
         resp.status()
     );
 
-    let denied_submission = submissions::table
-        .filter(submissions::id.eq(submission))
-        .select(Submission::as_select())
-        .first::<Submission>(&mut db.connection().unwrap())
-        .expect("Failed to get denied submission!");
+    let denied_submission = get_test_submission(&db, submission);
     assert_eq!(
         denied_submission.status,
         SubmissionStatus::Denied,
@@ -1659,12 +1603,7 @@ async fn deny_submission() {
         "Reviewer notes do not match!"
     );
 
-    let history_entry = submission_history::table
-        .filter(submission_history::submission_id.eq(submission))
-        .order(submission_history::timestamp.desc())
-        .select(SubmissionHistory::as_select())
-        .first::<SubmissionHistory>(&mut db.connection().unwrap())
-        .expect("Failed to get submission history!");
+    let history_entry = latest_test_submission_history(&db, submission);
 
     assert_eq!(
         history_entry.status,
@@ -1706,11 +1645,7 @@ async fn submission_under_consideration() {
         resp.status()
     );
 
-    let uc_submission = submissions::table
-        .filter(submissions::id.eq(submission))
-        .select(Submission::as_select())
-        .first::<Submission>(&mut db.connection().unwrap())
-        .expect("Failed to get UC submission!");
+    let uc_submission = get_test_submission(&db, submission);
 
     assert_eq!(
         uc_submission.status,
@@ -1724,12 +1659,7 @@ async fn submission_under_consideration() {
         "Reviewer notes do not match!"
     );
 
-    let history_entry = submission_history::table
-        .filter(submission_history::submission_id.eq(submission))
-        .order(submission_history::timestamp.desc())
-        .select(SubmissionHistory::as_select())
-        .first::<SubmissionHistory>(&mut db.connection().unwrap())
-        .expect("Failed to get submission history!");
+    let history_entry = latest_test_submission_history(&db, submission);
 
     assert_eq!(
         history_entry.status,
@@ -1859,11 +1789,7 @@ async fn increment_shift() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let count: i32 = shifts::table
-        .find(shift_id)
-        .select(shifts::completed_count)
-        .first(&mut db.connection().unwrap())
-        .unwrap();
+    let count = get_test_shift(&db, shift_id).completed_count;
     assert_eq!(count, 1);
 }
 
@@ -1874,10 +1800,7 @@ async fn shift_completes() {
     let (mod_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
     let token = create_test_token(mod_id, &auth.jwt_encoding_key).unwrap();
     let shift_id = create_test_shift(&db, mod_id, true).await;
-    diesel::update(shifts::table.filter(shifts::id.eq(shift_id)))
-        .set(shifts::target_count.eq(1))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_shift_target_count(&db, shift_id, 1).await;
     let level = create_test_level(&db).await;
     create_test_submission(level, submitter_id, &db).await;
 
@@ -1898,11 +1821,7 @@ async fn shift_completes() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let status: ShiftStatus = shifts::table
-        .find(shift_id)
-        .select(shifts::status)
-        .first(&mut db.connection().unwrap())
-        .unwrap();
+    let status = get_test_shift(&db, shift_id).status;
     assert_eq!(status, ShiftStatus::Completed);
 }
 
@@ -1946,11 +1865,7 @@ async fn reviewer_submission_can_set_reviewer_fields_for_other_users() {
     let other_submission_id = Uuid::parse_str(other_body["id"].as_str().unwrap())
         .expect("Response missing submission id");
 
-    let stored_other_submission = submissions::table
-        .find(other_submission_id)
-        .select(Submission::as_select())
-        .first::<Submission>(&mut db.connection().unwrap())
-        .expect("Failed to fetch stored submission");
+    let stored_other_submission = get_test_submission(&db, other_submission_id);
 
     assert_eq!(
         stored_other_submission.status,
@@ -1990,11 +1905,7 @@ async fn reviewer_submission_can_set_reviewer_fields_for_other_users() {
     let reviewer_submission_id = Uuid::parse_str(reviewer_body["id"].as_str().unwrap())
         .expect("Response missing reviewer submission id");
 
-    let stored_reviewer_submission = submissions::table
-        .find(reviewer_submission_id)
-        .select(Submission::as_select())
-        .first::<Submission>(&mut db.connection().unwrap())
-        .expect("Failed to fetch reviewer submission");
+    let stored_reviewer_submission = get_test_submission(&db, reviewer_submission_id);
 
     assert_eq!(
         stored_reviewer_submission.status,
@@ -2010,10 +1921,10 @@ async fn reviewer_submission_can_set_reviewer_fields_for_other_users() {
 #[actix_web::test]
 #[serial]
 async fn accept_submission_triggers_record_timestamp_fetch_from_youtube() {
-    clear_google_env();
+    clear_oauth_env(OAuthProvider::Google);
 
     let server = MockServer::start_async().await;
-    set_google_env(&server.base_url());
+    set_oauth_env(OAuthProvider::Google, &server.base_url());
     mock_google_token_endpoint(&server, 3600, "test_access").await;
 
     let yt_mock =
@@ -2036,7 +1947,7 @@ async fn accept_submission_triggers_record_timestamp_fetch_from_youtube() {
     ));
 
     let (app, db, auth, _) = init_test_app_with_providers(providers_app_state).await;
-    seed_google_token(&db, "refresh_a");
+    seed_oauth_token(&db, OAuthProvider::Google, Some("refresh_a"));
 
     let (submitter_id, _) = create_test_user(&db, None).await;
     let submitter_token = create_test_token(submitter_id, &auth.jwt_encoding_key).unwrap();
@@ -2091,15 +2002,8 @@ async fn accept_submission_triggers_record_timestamp_fetch_from_youtube() {
         accept_resp.status()
     );
 
-    let (record_id, created_at): (Uuid, DateTime<Utc>) = {
-        let mut conn = db.connection().unwrap();
-        records::table
-            .filter(records::level_id.eq(level_id))
-            .filter(records::submitted_by.eq(submitter_id))
-            .select((records::id, records::created_at))
-            .first(&mut conn)
-            .expect("record should be created on accept")
-    };
+    let record = get_test_record_for_level_and_user(&db, level_id, submitter_id);
+    let created_at = record.created_at;
 
     let expected: DateTime<Utc> = "2009-10-25T06:57:33Z".parse().unwrap();
 
@@ -2107,14 +2011,7 @@ async fn accept_submission_triggers_record_timestamp_fetch_from_youtube() {
     let mut ok = false;
 
     for _ in 0..40 {
-        let achieved_at: DateTime<Utc> = {
-            let mut conn = db.connection().unwrap();
-            records::table
-                .filter(records::id.eq(record_id))
-                .select(records::achieved_at)
-                .first(&mut conn)
-                .unwrap()
-        };
+        let achieved_at = get_test_record(&db, record.id).achieved_at;
 
         last_seen = Some(achieved_at);
 
@@ -2134,7 +2031,7 @@ async fn accept_submission_triggers_record_timestamp_fetch_from_youtube() {
 
     assert_eq!(yt_mock.calls_async().await, 1);
 
-    clear_google_env();
+    clear_oauth_env(OAuthProvider::Google);
 }
 
 #[actix_web::test]
@@ -2156,12 +2053,7 @@ async fn patch_submission_mod_patch_non_claimed() {
     let submission_2 = create_test_submission(level_2, submitter_id, &db).await;
 
     // Remove the raw URL from the test submissions
-    diesel::update(
-        submissions::table.filter(submissions::id.eq_any(vec![submission_1, submission_2])),
-    )
-    .set(submissions::raw_url.eq(Option::<String>::None))
-    .execute(&mut db.connection().unwrap())
-    .expect("Failed to remove raw_urls");
+    set_test_submissions_raw_url(&db, vec![submission_1, submission_2], None);
 
     let patch_data = json!({
         "status": "Accepted"
@@ -2184,14 +2076,13 @@ async fn patch_submission_mod_patch_non_claimed() {
     .await;
 
     // Claim the submission
-    diesel::update(submissions::table.filter(submissions::id.eq(submission_1)))
-        .set((
-            submissions::status.eq(SubmissionStatus::Claimed),
-            submissions::reviewer_id.eq(mod_id),
-        ))
-        .returning(Submission::as_select())
-        .get_result::<Submission>(&mut db.connection().unwrap())
-        .expect("failed to claim submission");
+    set_test_submission_raw_url_status_and_reviewer(
+        &db,
+        submission_1,
+        None,
+        SubmissionStatus::Claimed,
+        Some(mod_id),
+    );
 
     // Retry accepting
     let req = test::TestRequest::patch()

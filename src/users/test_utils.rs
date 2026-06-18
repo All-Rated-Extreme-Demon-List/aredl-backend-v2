@@ -6,8 +6,10 @@ use crate::app_data::db::DbAppState;
 use crate::auth::Permission;
 use crate::schema::permissions;
 use crate::schema::{roles, user_roles, users};
+use crate::users::User;
+use chrono::{DateTime, Utc};
 
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
+use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
 
 use uuid::Uuid;
 
@@ -114,4 +116,48 @@ pub async fn set_test_user_ban_level(db: &Arc<DbAppState>, user_id: Uuid, ban_le
         .set(users::ban_level.eq(ban_level))
         .execute(&mut db.connection().unwrap())
         .expect("Failed to set user ban level");
+}
+
+#[cfg(test)]
+pub async fn set_test_user_last_country_update(
+    db: &Arc<DbAppState>,
+    user_id: Uuid,
+    last_country_update: DateTime<Utc>,
+) {
+    diesel::update(users::table)
+        .filter(users::id.eq(user_id))
+        .set(users::last_country_update.eq(last_country_update))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to set user last country update");
+}
+
+#[cfg(test)]
+pub async fn set_test_user_background_level(
+    db: &Arc<DbAppState>,
+    user_id: Uuid,
+    background_level: i32,
+) {
+    diesel::update(users::table)
+        .filter(users::id.eq(user_id))
+        .set(users::background_level.eq(background_level))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to set user background level");
+}
+
+#[cfg(test)]
+pub async fn set_test_user_discord_id(db: &Arc<DbAppState>, user_id: Uuid, discord_id: &str) {
+    diesel::update(users::table)
+        .filter(users::id.eq(user_id))
+        .set(users::discord_id.eq(Some(discord_id.to_string())))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to set user discord ID");
+}
+
+#[cfg(test)]
+pub fn get_test_user(db: &Arc<DbAppState>, user_id: Uuid) -> User {
+    users::table
+        .filter(users::id.eq(user_id))
+        .select(User::as_select())
+        .first::<User>(&mut db.connection().unwrap())
+        .expect("Failed to read test user")
 }

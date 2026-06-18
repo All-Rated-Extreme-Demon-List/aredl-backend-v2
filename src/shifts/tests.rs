@@ -4,16 +4,14 @@ use {
         auth::permission::get_permission_privilege_level,
         auth::{create_test_token, Permission},
         roles::test_utils::{add_user_to_role, create_test_role},
-        schema::shifts,
         shifts::{
             recurring::RecurringShift,
-            test_utils::{create_test_recurring_shift, create_test_shift},
+            test_utils::{create_test_recurring_shift, create_test_shift, test_shifts_for_user},
         },
         {test_utils::*, users::test_utils::create_test_user},
     },
     actix_web::test::{self, read_body_json},
     chrono::NaiveDate,
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
     serde_json::json,
 };
 
@@ -316,10 +314,7 @@ async fn create_shifts_from_recurring() {
         "Target count should match recurring shift"
     );
 
-    let db_shifts: Vec<crate::shifts::Shift> = shifts::table
-        .filter(shifts::user_id.eq(user_id))
-        .load(&mut db.connection().unwrap())
-        .expect("Failed to load shifts from database");
+    let db_shifts = test_shifts_for_user(&db, user_id);
 
     assert_eq!(db_shifts.len(), 1, "Should have one shift in database");
     assert_eq!(
@@ -360,10 +355,7 @@ async fn create_shifts_no_duplicates() {
         "Second call should create no shifts (no duplicates)"
     );
 
-    let db_shifts: Vec<crate::shifts::Shift> = shifts::table
-        .filter(shifts::user_id.eq(user_id))
-        .load(&mut db.connection().unwrap())
-        .expect("Failed to load shifts from database");
+    let db_shifts = test_shifts_for_user(&db, user_id);
 
     assert_eq!(db_shifts.len(), 1, "Should have only one shift in database");
 }
@@ -480,9 +472,5 @@ async fn create_shift_instantly() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert!(
-        resp.status().is_client_error(),
-        "Staff should not be able to create shift for another user, status is {}",
-        resp.status()
-    );
+    assert_error_response(resp, 403, Some("You can only create shifts for yourself.")).await;
 }

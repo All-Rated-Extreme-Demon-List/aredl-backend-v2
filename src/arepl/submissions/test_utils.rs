@@ -4,12 +4,12 @@ use {
         app_data::db::DbAppState,
         arepl::{
             levels::test_utils::create_test_level,
-            submissions::{history::SubmissionHistory, SubmissionStatus},
+            submissions::{history::SubmissionHistory, Submission, SubmissionStatus},
         },
         schema::arepl::{submission_history, submissions},
     },
     chrono::{DateTime, Utc},
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
+    diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper},
     std::sync::Arc,
     uuid::Uuid,
 };
@@ -71,6 +71,147 @@ pub fn set_history_timestamp(db: &Arc<DbAppState>, submission_id: Uuid, timestam
     .set(submission_history::timestamp.eq(timestamp))
     .execute(&mut db.connection().unwrap())
     .unwrap();
+}
+
+#[cfg(test)]
+pub fn set_test_submission_reviewer(
+    db: &Arc<DbAppState>,
+    submission_id: Uuid,
+    reviewer_id: Option<Uuid>,
+) {
+    diesel::update(submissions::table.filter(submissions::id.eq(submission_id)))
+        .set(submissions::reviewer_id.eq(reviewer_id))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to set test arepl submission reviewer");
+}
+
+#[cfg(test)]
+pub fn set_test_submission_reviewer_with_private_notes(
+    db: &Arc<DbAppState>,
+    submission_id: Uuid,
+    reviewer_id: Option<Uuid>,
+    private_reviewer_notes: Option<&str>,
+) {
+    diesel::update(submissions::table.filter(submissions::id.eq(submission_id)))
+        .set((
+            submissions::reviewer_id.eq(reviewer_id),
+            submissions::private_reviewer_notes.eq(private_reviewer_notes.map(str::to_string)),
+        ))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to set test arepl submission reviewer metadata");
+}
+
+#[cfg(test)]
+pub fn set_test_submission_status(
+    db: &Arc<DbAppState>,
+    submission_id: Uuid,
+    status: SubmissionStatus,
+) {
+    diesel::update(submissions::table.filter(submissions::id.eq(submission_id)))
+        .set(submissions::status.eq(status))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to set test arepl submission status");
+}
+
+#[cfg(test)]
+pub fn test_submission_priorities(
+    db: &Arc<DbAppState>,
+    submission_ids: [Uuid; 3],
+) -> std::collections::HashMap<Uuid, bool> {
+    submissions::table
+        .filter(submissions::id.eq_any(submission_ids))
+        .select((submissions::id, submissions::priority))
+        .load::<(Uuid, bool)>(&mut db.connection().unwrap())
+        .expect("Failed to load test arepl submission priorities")
+        .into_iter()
+        .collect()
+}
+
+#[cfg(test)]
+pub fn set_test_submission_raw_url_status_and_reviewer(
+    db: &Arc<DbAppState>,
+    submission_id: Uuid,
+    raw_url: Option<&str>,
+    status: SubmissionStatus,
+    reviewer_id: Option<Uuid>,
+) {
+    diesel::update(submissions::table.filter(submissions::id.eq(submission_id)))
+        .set((
+            submissions::raw_url.eq(raw_url.map(str::to_string)),
+            submissions::status.eq(status),
+            submissions::reviewer_id.eq(reviewer_id),
+        ))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to set test arepl submission review state");
+}
+
+#[cfg(test)]
+pub fn set_test_submission_raw_url(
+    db: &Arc<DbAppState>,
+    submission_id: Uuid,
+    raw_url: Option<&str>,
+) {
+    diesel::update(submissions::table.filter(submissions::id.eq(submission_id)))
+        .set(submissions::raw_url.eq(raw_url.map(str::to_string)))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to set test arepl submission raw URL");
+}
+
+#[cfg(test)]
+pub fn set_test_submissions_raw_url(
+    db: &Arc<DbAppState>,
+    submission_ids: Vec<Uuid>,
+    raw_url: Option<&str>,
+) {
+    diesel::update(submissions::table.filter(submissions::id.eq_any(submission_ids)))
+        .set(submissions::raw_url.eq(raw_url.map(str::to_string)))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to set test arepl submissions raw URL");
+}
+
+#[cfg(test)]
+pub fn get_test_submission(db: &Arc<DbAppState>, submission_id: Uuid) -> Submission {
+    get_test_submission_optional(db, submission_id).expect("Failed to fetch test arepl submission")
+}
+
+#[cfg(test)]
+pub fn get_test_submission_optional(
+    db: &Arc<DbAppState>,
+    submission_id: Uuid,
+) -> Option<Submission> {
+    submissions::table
+        .find(submission_id)
+        .select(Submission::as_select())
+        .first(&mut db.connection().unwrap())
+        .optional()
+        .expect("Failed to fetch test arepl submission")
+}
+
+#[cfg(test)]
+pub fn latest_test_submission_history(
+    db: &Arc<DbAppState>,
+    submission_id: Uuid,
+) -> SubmissionHistory {
+    submission_history::table
+        .filter(submission_history::submission_id.eq(submission_id))
+        .order(submission_history::timestamp.desc())
+        .select(SubmissionHistory::as_select())
+        .first::<SubmissionHistory>(&mut db.connection().unwrap())
+        .expect("Failed to get test arepl submission history")
+}
+
+#[cfg(test)]
+pub fn set_test_submission_history_reviewer(
+    db: &Arc<DbAppState>,
+    submission_id: Uuid,
+    reviewer_id: Option<Uuid>,
+) {
+    diesel::update(
+        submission_history::table.filter(submission_history::submission_id.eq(submission_id)),
+    )
+    .set(submission_history::reviewer_id.eq(reviewer_id))
+    .execute(&mut db.connection().unwrap())
+    .expect("Failed to set test arepl submission history reviewer");
 }
 
 #[cfg(test)]

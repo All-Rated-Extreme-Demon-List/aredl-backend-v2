@@ -9,27 +9,27 @@ use {
         arepl::{
             bounty::test_utils::{
                 count_test_bounty_completions, create_test_bounty, create_test_bounty_completion,
-                fetch_test_bounty, fetch_test_record, find_test_bounty,
-                set_test_record_achieved_at,
+                delete_test_bounty, fetch_test_bounty, find_test_bounty,
             },
             levels::test_utils::create_test_level,
-            records::test_utils::create_test_record,
+            records::test_utils::{
+                count_test_records_with_achieved_at, create_test_record, get_test_record,
+                set_test_record_achieved_at,
+            },
         },
-        auth::{create_test_token, Permission},
+        auth::{create_test_token, oauth::OAuthProvider, Permission},
         providers::{
             test_utils::{
-                clear_google_env, mock_google_token_endpoint, mock_youtube_videos_endpoint,
-                seed_google_token, set_google_env,
+                clear_oauth_env, mock_google_token_endpoint, mock_youtube_videos_endpoint,
+                seed_oauth_token, set_oauth_env,
             },
             ProvidersAppState,
         },
-        schema::arepl::{bounties, bounty_completed, records},
         test_utils::*,
         users::test_utils::create_test_user,
     },
     actix_web::test::{self, read_body_json},
     chrono::{DateTime, Duration as ChronoDuration, Utc},
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
     httpmock::prelude::*,
     serde_json::json,
     serial_test::serial,
@@ -230,10 +230,10 @@ async fn bounty_board_visibility_and_completed_by_user() {
     let user_body: serde_json::Value = read_body_json(user_resp).await;
     let user_hidden = find_test_bounty(&user_body, hidden_bounty.id);
     let user_public = find_test_bounty(&user_body, public_bounty.id);
-    assert_eq!(user_hidden["completed_by_user"], true);
+    assert!(user_hidden["completed_by_user"].as_bool().unwrap());
     assert!(user_hidden["target_submissions"].is_null());
     assert_eq!(user_hidden["current_completions"], 1);
-    assert_eq!(user_public["completed_by_user"], false);
+    assert!(!user_public["completed_by_user"].as_bool().unwrap());
     assert_eq!(user_public["current_completions"], 0);
     assert_eq!(user_public["target_submissions"], 5);
 
@@ -293,14 +293,8 @@ async fn bounty_completions_endpoint_and_delete_cascade() {
     assert_eq!(completed_body[0]["user"]["username"], username);
     assert!(completed_body[0]["completed_at"].is_string());
 
-    diesel::delete(bounties::table.filter(bounties::id.eq(bounty.id)))
-        .execute(&mut db.connection().unwrap())
-        .expect("Failed to delete test bounty");
-    let remaining = bounty_completed::table
-        .filter(bounty_completed::bounty_id.eq(bounty.id))
-        .count()
-        .get_result::<i64>(&mut db.connection().unwrap())
-        .expect("Failed to count cascaded bounty completions");
+    delete_test_bounty(&db, bounty.id);
+    let remaining = count_test_bounty_completions(&db, bounty.id);
     assert_eq!(remaining, 0);
 }
 
@@ -325,7 +319,7 @@ async fn bounty_sync_completions_endpoint_adds_matching_records() {
 
     for user_id in [user_1, user_2, user_3] {
         let record_id = create_test_record(&db, user_id, level_id).await;
-        set_test_record_achieved_at(&db, record_id, inside);
+        set_test_record_achieved_at(&db, record_id, inside).await;
     }
 
     let before_record = create_test_record(&db, before_user, level_id).await;
@@ -333,15 +327,17 @@ async fn bounty_sync_completions_endpoint_adds_matching_records() {
         &db,
         before_record,
         "2025-12-31T23:59:59Z".parse::<DateTime<Utc>>().unwrap(),
-    );
+    )
+    .await;
     let after_record = create_test_record(&db, after_user, level_id).await;
     set_test_record_achieved_at(
         &db,
         after_record,
         "2026-02-01T00:00:01Z".parse::<DateTime<Utc>>().unwrap(),
-    );
+    )
+    .await;
     let other_level_record = create_test_record(&db, other_level_user, other_level_id).await;
-    set_test_record_achieved_at(&db, other_level_record, inside);
+    set_test_record_achieved_at(&db, other_level_record, inside).await;
 
     assert_eq!(count_test_bounty_completions(&db, bounty.id), 0);
 
@@ -372,7 +368,7 @@ async fn bounty_completion_windows_and_overlaps() {
     let (user_id, _) = create_test_user(&db, None).await;
     let achieved_at = "2026-01-10T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
     let record_id = create_test_record(&db, user_id, level_id).await;
-    set_test_record_achieved_at(&db, record_id, achieved_at);
+    set_test_record_achieved_at(&db, record_id, achieved_at).await;
 
     let closed_before = create_test_bounty(
         &db,
@@ -420,7 +416,7 @@ async fn bounty_completion_windows_and_overlaps() {
     )
     .await;
 
-    fetch_test_record(&db, record_id)
+    get_test_record(&db, record_id)
         .complete_bounty_if_exists(&mut db.connection().unwrap())
         .expect("Failed to complete bounties");
 
@@ -451,8 +447,8 @@ async fn bounty_target_count_closes_and_stays_strict() {
     .await;
 
     let record_1 = create_test_record(&db, user_1, level_id).await;
-    set_test_record_achieved_at(&db, record_1, achieved_at);
-    let record_1 = fetch_test_record(&db, record_1);
+    set_test_record_achieved_at(&db, record_1, achieved_at).await;
+    let record_1 = get_test_record(&db, record_1);
     record_1
         .complete_bounty_if_exists(&mut db.connection().unwrap())
         .expect("Failed to complete first bounty");
@@ -467,8 +463,8 @@ async fn bounty_target_count_closes_and_stays_strict() {
 
     let before_close = Utc::now();
     let record_2 = create_test_record(&db, user_2, level_id).await;
-    set_test_record_achieved_at(&db, record_2, achieved_at);
-    fetch_test_record(&db, record_2)
+    set_test_record_achieved_at(&db, record_2, achieved_at).await;
+    get_test_record(&db, record_2)
         .complete_bounty_if_exists(&mut db.connection().unwrap())
         .expect("Failed to complete second bounty");
     let closed_bounty = fetch_test_bounty(&db, bounty.id);
@@ -480,8 +476,8 @@ async fn bounty_target_count_closes_and_stays_strict() {
     assert_ne!(closed_bounty.end_date, Some(original_end));
 
     let record_3 = create_test_record(&db, user_3, level_id).await;
-    set_test_record_achieved_at(&db, record_3, achieved_at);
-    fetch_test_record(&db, record_3)
+    set_test_record_achieved_at(&db, record_3, achieved_at).await;
+    get_test_record(&db, record_3)
         .complete_bounty_if_exists(&mut db.connection().unwrap())
         .expect("Failed to process third bounty");
     assert_eq!(count_test_bounty_completions(&db, bounty.id), 2);
@@ -490,9 +486,9 @@ async fn bounty_target_count_closes_and_stays_strict() {
 #[actix_web::test]
 #[serial]
 async fn bounty_completion_uses_fetched_video_timestamp() {
-    clear_google_env();
+    clear_oauth_env(OAuthProvider::Google);
     let server = MockServer::start_async().await;
-    set_google_env(&server.base_url());
+    set_oauth_env(OAuthProvider::Google, &server.base_url());
     mock_google_token_endpoint(&server, 3600, "test_access").await;
     let yt_mock =
         mock_youtube_videos_endpoint(&server, "xvFZjo5PgG0", "2009-10-25T06:57:33Z").await;
@@ -511,7 +507,7 @@ async fn bounty_completion_uses_fetched_video_timestamp() {
         },
     ));
     let (app, db, auth, _) = init_test_app_with_providers(providers_app_state).await;
-    seed_google_token(&db, "refresh_a");
+    seed_oauth_token(&db, OAuthProvider::Google, Some("refresh_a"));
     let (moderator_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
     let moderator_token = create_test_token(moderator_id, &auth.jwt_encoding_key).unwrap();
     let (inside_user, _) = create_test_user(&db, None).await;
@@ -582,11 +578,7 @@ async fn bounty_completion_uses_fetched_video_timestamp() {
 
     let expected_achieved_at = "2009-10-25T06:57:33Z".parse::<DateTime<Utc>>().unwrap();
     for _ in 0..40 {
-        let updated = records::table
-            .filter(records::achieved_at.eq(expected_achieved_at))
-            .count()
-            .get_result::<i64>(&mut db.connection().unwrap())
-            .expect("Failed to count updated records");
+        let updated = count_test_records_with_achieved_at(&db, expected_achieved_at);
         if updated >= 2 {
             break;
         }
@@ -597,5 +589,5 @@ async fn bounty_completion_uses_fetched_video_timestamp() {
     assert_eq!(count_test_bounty_completions(&db, inside_bounty.id), 1);
     assert_eq!(count_test_bounty_completions(&db, outside_bounty.id), 0);
 
-    clear_google_env();
+    clear_oauth_env(OAuthProvider::Google);
 }

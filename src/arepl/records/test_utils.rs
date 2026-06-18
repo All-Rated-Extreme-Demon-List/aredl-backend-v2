@@ -2,11 +2,14 @@
 use {
     crate::{
         app_data::db::DbAppState,
-        arepl::{levels::test_utils::create_test_level_with_record, submissions::SubmissionStatus},
+        arepl::{
+            levels::test_utils::create_test_level_with_record, records::Record,
+            submissions::SubmissionStatus,
+        },
         schema::arepl::{records, submissions},
     },
     chrono::{DateTime, Utc},
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
+    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper},
     std::sync::Arc,
     uuid::Uuid,
 };
@@ -31,6 +34,41 @@ pub async fn create_test_record(db: &Arc<DbAppState>, user_id: Uuid, level_id: U
         .select(records::id)
         .first::<Uuid>(conn)
         .expect("Failed to retrieve test aredl record ID")
+}
+
+#[cfg(test)]
+pub fn get_test_record(db: &Arc<DbAppState>, record_id: Uuid) -> Record {
+    records::table
+        .filter(records::id.eq(record_id))
+        .select(Record::as_select())
+        .first::<Record>(&mut db.connection().unwrap())
+        .expect("Failed to get test arepl record")
+}
+
+#[cfg(test)]
+pub fn get_test_record_for_level_and_user(
+    db: &Arc<DbAppState>,
+    level_id: Uuid,
+    user_id: Uuid,
+) -> Record {
+    records::table
+        .filter(records::level_id.eq(level_id))
+        .filter(records::submitted_by.eq(user_id))
+        .select(Record::as_select())
+        .first::<Record>(&mut db.connection().unwrap())
+        .expect("Failed to get test arepl record for level and user")
+}
+
+#[cfg(test)]
+pub fn count_test_records_with_achieved_at(
+    db: &Arc<DbAppState>,
+    achieved_at: DateTime<Utc>,
+) -> i64 {
+    records::table
+        .filter(records::achieved_at.eq(achieved_at))
+        .count()
+        .get_result(&mut db.connection().unwrap())
+        .expect("Failed to count test arepl records with achieved_at")
 }
 
 #[cfg(test)]
@@ -78,6 +116,14 @@ pub async fn set_test_record_verification(
         .set(records::is_verification.eq(is_verification))
         .execute(&mut db.connection().unwrap())
         .expect("Failed to update test arepl record verification status");
+}
+
+#[cfg(test)]
+pub async fn set_test_record_mobile(db: &Arc<DbAppState>, record_id: Uuid, mobile: bool) {
+    diesel::update(records::table.filter(records::id.eq(record_id)))
+        .set(records::mobile.eq(mobile))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to update test arepl record mobile flag");
 }
 
 #[cfg(test)]

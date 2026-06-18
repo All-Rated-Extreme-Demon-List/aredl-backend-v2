@@ -4,11 +4,11 @@ use std::sync::Arc;
 #[cfg(test)]
 use crate::app_data::db::DbAppState;
 #[cfg(test)]
-use crate::aredl::levels::LevelStatus;
+use crate::aredl::levels::{Level, LevelStatus};
 #[cfg(test)]
-use crate::schema::aredl::{levels, levels_created};
+use crate::schema::aredl::{levels, levels_created, pack_levels, position_history};
 #[cfg(test)]
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
+use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
 #[cfg(test)]
 use rand::Rng;
 #[cfg(test)]
@@ -88,6 +88,14 @@ pub async fn set_test_level_status(
 }
 
 #[cfg(test)]
+pub async fn set_test_level_position(db: &Arc<DbAppState>, level_id: Uuid, position: Option<i32>) {
+    diesel::update(levels::table.filter(levels::id.eq(level_id)))
+        .set(levels::position.eq(position))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to update test aredl level position");
+}
+
+#[cfg(test)]
 pub async fn create_test_level_with_record(db: &Arc<DbAppState>, user_id: Uuid) -> (Uuid, Uuid) {
     let level_id = create_test_level(db).await;
     let record_id = create_test_record(db, user_id, level_id).await;
@@ -95,8 +103,41 @@ pub async fn create_test_level_with_record(db: &Arc<DbAppState>, user_id: Uuid) 
 }
 
 #[cfg(test)]
+pub async fn get_test_level(db: &Arc<DbAppState>, level_id: Uuid) -> Level {
+    levels::table
+        .filter(levels::id.eq(level_id))
+        .select(Level::as_select())
+        .first::<Level>(&mut db.connection().unwrap())
+        .expect("Failed to get test aredl level")
+}
+
+#[cfg(test)]
 pub async fn refresh_test_position_history(db: &Arc<DbAppState>) {
     sql_query("REFRESH MATERIALIZED VIEW aredl.position_history_full_view")
         .execute(&mut db.connection().unwrap())
         .expect("Failed to refresh position history view");
+}
+
+#[cfg(test)]
+pub fn latest_test_position_history_created_at(
+    db: &Arc<DbAppState>,
+    level_id: Uuid,
+) -> chrono::DateTime<chrono::Utc> {
+    position_history::table
+        .filter(position_history::affected_level.eq(level_id))
+        .order_by(position_history::i.desc())
+        .select(position_history::created_at)
+        .first(&mut db.connection().unwrap())
+        .expect("Failed to fetch test aredl level position history timestamp")
+}
+
+#[cfg(test)]
+pub fn add_test_level_to_pack(db: &Arc<DbAppState>, level_id: Uuid, pack_id: Uuid) {
+    diesel::insert_into(pack_levels::table)
+        .values((
+            pack_levels::pack_id.eq(pack_id),
+            pack_levels::level_id.eq(level_id),
+        ))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to add test aredl level to pack");
 }

@@ -9,6 +9,8 @@ pub mod patreon;
 pub mod permission;
 mod refresh;
 mod routes;
+#[cfg(test)]
+pub mod test_utils;
 mod tests;
 mod token;
 

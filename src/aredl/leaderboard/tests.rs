@@ -3,16 +3,14 @@ use crate::aredl::records::test_utils::create_test_record;
 use {
     crate::{
         aredl::leaderboard::test_utils::refresh_test_leaderboards,
-        aredl::levels::test_utils::{create_test_level, create_test_level_with_record},
-        clans::test_utils::{create_test_clan, create_test_clan_member},
-        schema::{aredl::levels, users},
+        aredl::levels::test_utils::{
+            create_test_level, create_test_level_with_record, get_test_level,
+        },
+        clans::test_utils::{create_named_test_clan, create_test_clan, create_test_clan_member},
         test_utils::*,
-        users::test_utils::create_test_user,
+        users::test_utils::{create_test_user, set_test_user_country},
     },
-    crate::{clans::Clan, schema::clans},
     actix_web::test::{self, read_body_json},
-    diesel::SelectableHelper,
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
 };
 
 #[actix_web::test]
@@ -24,13 +22,7 @@ async fn get_leaderboard() {
 
     refresh_test_leaderboards(&db).await;
 
-    let level_score = i64::from(
-        levels::table
-            .filter(levels::id.eq(level_id))
-            .select(levels::points)
-            .get_result::<i32>(&mut db.connection().unwrap())
-            .expect("hi"),
-    );
+    let level_score = i64::from(get_test_level(&db, level_id).await.points);
 
     let req = test::TestRequest::get()
         .uri("/aredl/leaderboard/")
@@ -80,11 +72,7 @@ async fn get_country_leaderboard() {
     let (user, _) = create_test_user(&db, None).await;
     create_test_level_with_record(&db, user).await;
 
-    diesel::update(users::table)
-        .filter(users::id.eq(user))
-        .set(users::country.eq(us_id))
-        .execute(&mut db.connection().unwrap())
-        .expect("Failed to assign country to user!");
+    set_test_user_country(&db, user, Some(us_id)).await;
 
     refresh_test_leaderboards(&db).await;
 
@@ -148,11 +136,7 @@ async fn leaderboard_filters() {
     create_test_level_with_record(&db, u2).await;
     create_test_level_with_record(&db, u2).await;
 
-    diesel::update(users::table)
-        .filter(users::id.eq(u1))
-        .set(users::country.eq(us_id))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_user_country(&db, u1, Some(us_id)).await;
 
     let clan_id = create_test_clan(&db).await;
     create_test_clan_member(&db, clan_id, u1, 0).await;
@@ -206,14 +190,8 @@ async fn country_clan_leaderboard_orders() {
     create_test_level_with_record(&db, u2).await;
     create_test_level_with_record(&db, u2).await;
 
-    diesel::update(users::table.filter(users::id.eq(u1)))
-        .set(users::country.eq(840))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
-    diesel::update(users::table.filter(users::id.eq(u2)))
-        .set(users::country.eq(124))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_user_country(&db, u1, Some(840)).await;
+    set_test_user_country(&db, u2, Some(124)).await;
 
     let clan_id = create_test_clan(&db).await;
     create_test_clan_member(&db, clan_id, u1, 0).await;
@@ -241,25 +219,19 @@ async fn get_clans_leaderboard_with_filters() {
 
     let level_id = create_test_level(&db).await;
 
-    let mkl = diesel::insert_into(clans::table)
-        .values((
-            clans::global_name.eq("Mika Lore"),
-            clans::tag.eq("MKL"),
-            clans::description.eq("This should be searchable via \"MKL\""),
-        ))
-        .returning(Clan::as_returning())
-        .get_result(&mut db.connection().unwrap())
-        .unwrap();
+    let mkl = create_named_test_clan(
+        &db,
+        "Mika Lore",
+        "MKL",
+        Some("This should be searchable via \"MKL\""),
+    )
+    .await;
 
     let user1 = create_test_user(&db, None).await.0;
     create_test_clan_member(&db, mkl.id, user1, 0).await;
     create_test_record(&db, user1, level_id).await;
 
-    let clan2 = diesel::insert_into(clans::table)
-        .values((clans::global_name.eq("Test clan"), clans::tag.eq("TTC")))
-        .returning(Clan::as_returning())
-        .get_result(&mut db.connection().unwrap())
-        .unwrap();
+    let clan2 = create_named_test_clan(&db, "Test clan", "TTC", None).await;
 
     let user2 = create_test_user(&db, None).await.0;
     create_test_clan_member(&db, clan2.id, user2, 0).await;

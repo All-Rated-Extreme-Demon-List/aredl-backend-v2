@@ -1,4 +1,6 @@
 #[cfg(test)]
+use std::collections::HashSet;
+#[cfg(test)]
 use std::sync::Arc;
 
 #[cfg(test)]
@@ -83,4 +85,15 @@ pub async fn add_user_to_role(db: &Arc<DbAppState>, role_id: i32, user_id: Uuid)
         ))
         .execute(&mut db.connection().unwrap())
         .expect("Failed to assign role to user!");
+}
+
+#[cfg(test)]
+pub fn users_with_role(db: &Arc<DbAppState>, role_id: i32) -> HashSet<Uuid> {
+    user_roles::table
+        .filter(user_roles::role_id.eq(role_id))
+        .select(user_roles::user_id)
+        .load::<Uuid>(&mut db.connection().unwrap())
+        .expect("Failed to load users with test role")
+        .into_iter()
+        .collect()
 }

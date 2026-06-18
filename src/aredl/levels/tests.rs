@@ -3,19 +3,17 @@ use {
     crate::{
         aredl::{
             levels::test_utils::{
-                add_test_level_creators, create_test_level, create_test_level_with_record,
+                add_test_level_creators, add_test_level_to_pack, create_test_level,
+                create_test_level_with_record, latest_test_position_history_created_at,
                 refresh_test_position_history,
             },
             packs::test_utils::create_test_pack,
         },
         auth::{create_test_token, Permission},
-        schema::aredl::{pack_levels, position_history},
         test_utils::*,
         users::test_utils::create_test_user,
     },
     actix_web::test::{self, read_body_json},
-    chrono::{DateTime, Utc},
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
     serde_json::json,
     tokio::time::{sleep, Duration},
 };
@@ -132,23 +130,13 @@ async fn list_levels_at_timestamp() {
     let first_level = create_test_level(&db).await;
     refresh_test_position_history(&db).await;
 
-    let at: DateTime<Utc> = position_history::table
-        .filter(position_history::affected_level.eq(first_level))
-        .order_by(position_history::i.desc())
-        .select(position_history::created_at)
-        .first(&mut db.connection().unwrap())
-        .expect("Failed to fetch first level position history timestamp");
+    let at = latest_test_position_history_created_at(&db, first_level);
 
     sleep(Duration::from_millis(50)).await;
     let second_level = create_test_level(&db).await;
     refresh_test_position_history(&db).await;
 
-    let second_at: DateTime<Utc> = position_history::table
-        .filter(position_history::affected_level.eq(second_level))
-        .order_by(position_history::i.desc())
-        .select(position_history::created_at)
-        .first(&mut db.connection().unwrap())
-        .expect("Failed to fetch second level position history timestamp");
+    let second_at = latest_test_position_history_created_at(&db, second_level);
 
     let req = test::TestRequest::get()
         .uri(&format!(
@@ -344,13 +332,7 @@ async fn get_level_pack() {
     let level = create_test_level(&db).await;
     let pack = create_test_pack(&db).await;
     // insert the pack into the level
-    diesel::insert_into(pack_levels::table)
-        .values((
-            pack_levels::pack_id.eq(pack),
-            pack_levels::level_id.eq(level),
-        ))
-        .execute(&mut db.connection().unwrap())
-        .expect("Failed to add level to pack!");
+    add_test_level_to_pack(&db, level, pack);
 
     let req = test::TestRequest::get()
         .uri(&format!("/aredl/levels/{}/packs", level))

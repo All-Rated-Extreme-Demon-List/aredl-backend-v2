@@ -14,8 +14,9 @@ use {
         http::header,
         test::{self, read_body_json},
     },
-    diesel::{sql_query, RunQueryDsl},
 };
+
+use super::test_utils::refresh_test_record_totals;
 
 #[actix_web::test]
 async fn total_records_counts_and_ordering() {
@@ -31,9 +32,7 @@ async fn total_records_counts_and_ordering() {
     create_test_record(&db, user_2, level1).await;
     create_test_record(&db, user_3, level1).await;
 
-    sql_query("REFRESH MATERIALIZED VIEW aredl.record_totals")
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    refresh_test_record_totals(&db);
 
     let req = test::TestRequest::get()
         .uri("/aredl/statistics/records")

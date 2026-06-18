@@ -2,12 +2,13 @@
 use {
     crate::{
         aredl::changelog::test_utils::insert_history_entry,
-        aredl::levels::{test_utils::create_test_level, LevelStatus},
-        schema::aredl::levels,
+        aredl::levels::{
+            test_utils::{create_test_level, set_test_level_position, set_test_level_status},
+            LevelStatus,
+        },
         test_utils::*,
     },
     actix_web::test::{self, read_body_json},
-    diesel::{query_dsl::methods::FilterDsl, ExpressionMethods, RunQueryDsl},
 };
 #[actix_web::test]
 async fn get_changelog() {
@@ -27,32 +28,14 @@ async fn changelog_actions_and_pagination() {
     create_test_level(&db).await;
     let l3 = create_test_level(&db).await;
 
-    {
-        let conn = &mut db.connection().unwrap();
-        // raise and lower
-        diesel::update(levels::table.filter(levels::id.eq(l1)))
-            .set(levels::position.eq(1))
-            .execute(conn)
-            .unwrap();
-        diesel::update(levels::table.filter(levels::id.eq(l1)))
-            .set(levels::position.eq(3))
-            .execute(conn)
-            .unwrap();
-        // swap
-        diesel::update(levels::table.filter(levels::id.eq(l3)))
-            .set(levels::position.eq(2))
-            .execute(conn)
-            .unwrap();
-        // move to legacy and back
-        diesel::update(levels::table.filter(levels::id.eq(l1)))
-            .set(levels::status.eq(LevelStatus::Legacy))
-            .execute(conn)
-            .unwrap();
-        diesel::update(levels::table.filter(levels::id.eq(l1)))
-            .set(levels::status.eq(LevelStatus::MainList))
-            .execute(conn)
-            .unwrap();
-    }
+    // raise and lower
+    set_test_level_position(&db, l1, Some(1)).await;
+    set_test_level_position(&db, l1, Some(3)).await;
+    // swap
+    set_test_level_position(&db, l3, Some(2)).await;
+    // move to legacy and back
+    set_test_level_status(&db, l1, LevelStatus::Legacy, Some(3)).await;
+    set_test_level_status(&db, l1, LevelStatus::MainList, Some(3)).await;
 
     // removed
     insert_history_entry(

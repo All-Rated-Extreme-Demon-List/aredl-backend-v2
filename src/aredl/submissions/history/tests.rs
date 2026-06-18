@@ -2,15 +2,16 @@
 use {
     crate::{
         aredl::{
-            levels::test_utils::create_test_level, submissions::test_utils::create_test_submission,
+            levels::test_utils::create_test_level,
+            submissions::test_utils::{
+                create_test_submission, set_test_submission_history_reviewer,
+            },
         },
         auth::{create_test_token, Permission},
-        schema::aredl::submission_history,
         test_utils::*,
         users::test_utils::create_test_user,
     },
     actix_web::test::{self, read_body_json},
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
     serde_json::json,
     uuid::Uuid,
 };
@@ -255,12 +256,7 @@ async fn get_submission_history_redacts_base_reviewer_for_non_auditor_but_not_fo
     );
 
     // Make the reviewer in history a base reviewer to validate redaction behavior.
-    diesel::update(
-        submission_history::table.filter(submission_history::submission_id.eq(submission)),
-    )
-    .set(submission_history::reviewer_id.eq::<Option<Uuid>>(Some(base_reviewer_id)))
-    .execute(&mut db.connection().unwrap())
-    .unwrap();
+    set_test_submission_history_reviewer(&db, submission, Some(base_reviewer_id));
 
     let req = test::TestRequest::get()
         .uri(format!("/aredl/submissions/{submission}/history").as_str())

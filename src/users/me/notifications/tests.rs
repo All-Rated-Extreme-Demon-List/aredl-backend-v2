@@ -1,34 +1,20 @@
+use super::test_utils::{count_test_notifications, create_test_notification};
 #[cfg(test)]
 use {
     crate::{
-        auth::create_test_token,
-        schema::notifications,
-        test_utils::init_test_app,
-        users::me::notifications::{Notification, NotificationType},
-        users::test_utils::create_test_user,
+        auth::create_test_token, test_utils::init_test_app,
+        users::me::notifications::NotificationType, users::test_utils::create_test_user,
     },
     actix_web::test::{self, read_body_json},
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
 };
+
 #[actix_web::test]
 async fn list_notifications() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, None).await;
 
-    Notification::create(
-        &mut db.connection().unwrap(),
-        user_id,
-        "One".into(),
-        NotificationType::Info,
-    )
-    .unwrap();
-    Notification::create(
-        &mut db.connection().unwrap(),
-        user_id,
-        "Two".into(),
-        NotificationType::Success,
-    )
-    .unwrap();
+    create_test_notification(&db, user_id, "One", NotificationType::Info);
+    create_test_notification(&db, user_id, "Two", NotificationType::Success);
 
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::get()
@@ -48,20 +34,8 @@ async fn clear_notifications() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, None).await;
 
-    Notification::create(
-        &mut db.connection().unwrap(),
-        user_id,
-        "One".into(),
-        NotificationType::Info,
-    )
-    .unwrap();
-    Notification::create(
-        &mut db.connection().unwrap(),
-        user_id,
-        "Two".into(),
-        NotificationType::Failure,
-    )
-    .unwrap();
+    create_test_notification(&db, user_id, "One", NotificationType::Info);
+    create_test_notification(&db, user_id, "Two", NotificationType::Failure);
 
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::post()
@@ -71,10 +45,6 @@ async fn clear_notifications() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let remaining: i64 = notifications::table
-        .filter(notifications::user_id.eq(user_id))
-        .count()
-        .get_result(&mut db.connection().unwrap())
-        .unwrap();
+    let remaining = count_test_notifications(&db, user_id);
     assert_eq!(remaining, 0);
 }

@@ -1,14 +1,17 @@
-use uuid::Uuid;
 #[cfg(test)]
 use {
     crate::{
         aredl::{
             levels::test_utils::{create_test_level, create_test_level_with_record},
-            records::{test_utils::create_test_record, Record},
-            submissions::test_utils::create_test_submission,
+            records::test_utils::{
+                create_test_record, get_test_record, test_records_for_level, test_records_for_user,
+            },
+            submissions::test_utils::{
+                create_test_submission, get_test_submission_optional, set_test_submission_locked,
+                test_submission_history_count,
+            },
         },
         auth::{create_test_token, Permission},
-        schema::aredl::{records, submission_history, submissions},
         test_utils::*,
         users::{
             merge::test_utils::create_test_merge_log,
@@ -16,7 +19,6 @@ use {
         },
     },
     actix_web::test::{self, read_body_json},
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper},
     serde_json::json,
 };
 
@@ -47,11 +49,7 @@ async fn direct_merge() {
     let res = test::call_service(&app, req).await;
     assert!(res.status().is_success(), "status is {}", res.status());
 
-    let records = records::table
-        .filter(records::submitted_by.eq(user_1_id))
-        .select(Record::as_select())
-        .get_results::<Record>(&mut db.connection().unwrap())
-        .expect("Failed to collect records!");
+    let records = test_records_for_user(&db, user_1_id);
 
     assert_eq!(records.len(), 2, "User does not have exactly 2 records!");
     assert!(
@@ -104,34 +102,15 @@ async fn direct_merge_secondary_accepted_beats_primary_pending_preserves_history
 
     let primary_sub_id = create_test_submission(level_id, primary_id, &db).await;
 
-    diesel::update(submissions::table.filter(submissions::id.eq(primary_sub_id)))
-        .set(submissions::locked.eq(true))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_submission_locked(&db, primary_sub_id, true);
 
     let secondary_record_id = create_test_record(&db, secondary_id, level_id).await;
-    let secondary_sub_id: Uuid = records::table
-        .filter(records::id.eq(secondary_record_id))
-        .select(records::submission_id)
-        .first(&mut db.connection().unwrap())
-        .unwrap();
+    let secondary_sub_id = get_test_record(&db, secondary_record_id).submission_id;
 
-    diesel::update(submissions::table.filter(submissions::id.eq(secondary_sub_id)))
-        .set(submissions::locked.eq(true))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_submission_locked(&db, secondary_sub_id, true);
 
-    let primary_hist_before: i64 = submission_history::table
-        .filter(submission_history::submission_id.eq(primary_sub_id))
-        .select(diesel::dsl::count_star())
-        .first(&mut db.connection().unwrap())
-        .unwrap();
-
-    let secondary_hist_before: i64 = submission_history::table
-        .filter(submission_history::submission_id.eq(secondary_sub_id))
-        .select(diesel::dsl::count_star())
-        .first(&mut db.connection().unwrap())
-        .unwrap();
+    let primary_hist_before = test_submission_history_count(&db, primary_sub_id);
+    let secondary_hist_before = test_submission_history_count(&db, secondary_sub_id);
 
     assert_eq!(primary_hist_before, 2);
     assert_eq!(secondary_hist_before, 2);
@@ -151,38 +130,22 @@ async fn direct_merge_secondary_accepted_beats_primary_pending_preserves_history
     assert!(res.status().is_success(), "status is {}", res.status());
 
     // pending submission should be deleted (accepted wins)
-    let primary_exists: i64 = submissions::table
-        .filter(submissions::id.eq(primary_sub_id))
-        .select(diesel::dsl::count_star())
-        .first(&mut db.connection().unwrap())
-        .unwrap();
-    assert_eq!(primary_exists, 0);
+    let primary_exists = get_test_submission_optional(&db, primary_sub_id).is_some();
+    assert!(!primary_exists);
 
     // accepted submission stays
-    let secondary_exists: i64 = submissions::table
-        .filter(submissions::id.eq(secondary_sub_id))
-        .select(diesel::dsl::count_star())
-        .first(&mut db.connection().unwrap())
-        .unwrap();
-    assert_eq!(secondary_exists, 1);
+    let secondary_exists = get_test_submission_optional(&db, secondary_sub_id).is_some();
+    assert!(secondary_exists);
 
     // history preserved
-    let secondary_hist_after: i64 = submission_history::table
-        .filter(submission_history::submission_id.eq(secondary_sub_id))
-        .select(diesel::dsl::count_star())
-        .first(&mut db.connection().unwrap())
-        .unwrap();
+    let secondary_hist_after = test_submission_history_count(&db, secondary_sub_id);
 
     assert_eq!(
         secondary_hist_after,
         primary_hist_before + secondary_hist_before
     );
 
-    let rec_owner: Uuid = records::table
-        .filter(records::id.eq(secondary_record_id))
-        .select(records::submitted_by)
-        .first(&mut db.connection().unwrap())
-        .unwrap();
+    let rec_owner = get_test_record(&db, secondary_record_id).submitted_by;
     assert_eq!(rec_owner, primary_id);
 }
 
@@ -200,38 +163,14 @@ async fn direct_merge_both_accepted_primary_kept_history_preserved() {
     let primary_record_id = create_test_record(&db, primary_id, level_id).await;
     let secondary_record_id = create_test_record(&db, secondary_id, level_id).await;
 
-    let primary_sub_id: Uuid = records::table
-        .filter(records::id.eq(primary_record_id))
-        .select(records::submission_id)
-        .first(&mut db.connection().unwrap())
-        .unwrap();
+    let primary_sub_id = get_test_record(&db, primary_record_id).submission_id;
+    let secondary_sub_id = get_test_record(&db, secondary_record_id).submission_id;
 
-    let secondary_sub_id: Uuid = records::table
-        .filter(records::id.eq(secondary_record_id))
-        .select(records::submission_id)
-        .first(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_submission_locked(&db, primary_sub_id, true);
+    set_test_submission_locked(&db, secondary_sub_id, true);
 
-    diesel::update(submissions::table.filter(submissions::id.eq(primary_sub_id)))
-        .set(submissions::locked.eq(true))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
-
-    diesel::update(submissions::table.filter(submissions::id.eq(secondary_sub_id)))
-        .set(submissions::locked.eq(true))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
-
-    let primary_hist_before: i64 = submission_history::table
-        .filter(submission_history::submission_id.eq(primary_sub_id))
-        .select(diesel::dsl::count_star())
-        .first(&mut db.connection().unwrap())
-        .unwrap();
-    let secondary_hist_before: i64 = submission_history::table
-        .filter(submission_history::submission_id.eq(secondary_sub_id))
-        .select(diesel::dsl::count_star())
-        .first(&mut db.connection().unwrap())
-        .unwrap();
+    let primary_hist_before = test_submission_history_count(&db, primary_sub_id);
+    let secondary_hist_before = test_submission_history_count(&db, secondary_sub_id);
     assert_eq!(primary_hist_before, 2);
     assert_eq!(secondary_hist_before, 2);
 
@@ -250,44 +189,24 @@ async fn direct_merge_both_accepted_primary_kept_history_preserved() {
     assert!(res.status().is_success(), "status is {}", res.status());
 
     // secondary submission should be gone
-    let secondary_exists: i64 = submissions::table
-        .filter(submissions::id.eq(secondary_sub_id))
-        .select(diesel::dsl::count_star())
-        .first(&mut db.connection().unwrap())
-        .unwrap();
-    assert_eq!(secondary_exists, 0);
+    let secondary_exists = get_test_submission_optional(&db, secondary_sub_id).is_some();
+    assert!(!secondary_exists);
 
     // primary submission should remain
-    let primary_exists: i64 = submissions::table
-        .filter(submissions::id.eq(primary_sub_id))
-        .select(diesel::dsl::count_star())
-        .first(&mut db.connection().unwrap())
-        .unwrap();
-    assert_eq!(primary_exists, 1);
+    let primary_exists = get_test_submission_optional(&db, primary_sub_id).is_some();
+    assert!(primary_exists);
 
     // primary history should now include both
-    let primary_hist_after: i64 = submission_history::table
-        .filter(submission_history::submission_id.eq(primary_sub_id))
-        .select(diesel::dsl::count_star())
-        .first(&mut db.connection().unwrap())
-        .unwrap();
+    let primary_hist_after = test_submission_history_count(&db, primary_sub_id);
     assert_eq!(
         primary_hist_after,
         primary_hist_before + secondary_hist_before
     );
 
     // only one record for the level, owned by primary
-    let record_count: i64 = records::table
-        .filter(records::level_id.eq(level_id))
-        .select(diesel::dsl::count_star())
-        .first(&mut db.connection().unwrap())
-        .unwrap();
-    assert_eq!(record_count, 1);
+    let records = test_records_for_level(&db, level_id);
+    assert_eq!(records.len(), 1);
 
-    let kept_owner: Uuid = records::table
-        .filter(records::level_id.eq(level_id))
-        .select(records::submitted_by)
-        .first(&mut db.connection().unwrap())
-        .unwrap();
+    let kept_owner = records[0].submitted_by;
     assert_eq!(kept_owner, primary_id);
 }

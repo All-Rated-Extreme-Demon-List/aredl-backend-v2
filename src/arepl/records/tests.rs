@@ -5,25 +5,24 @@ use {
             levels::test_utils::{create_test_level, create_test_level_with_record},
             records::test_utils::{
                 create_test_record, create_two_test_records_with_different_timestamps,
+                set_test_record_mobile, set_test_record_verification,
             },
         },
-        auth::{create_test_token, Permission},
+        auth::{create_test_token, oauth::OAuthProvider, Permission},
         providers::{
             context::{google::new_google_context, ProviderContext},
             list::youtube::YouTubeProvider,
             model::{Provider, ProviderRegistry},
             test_utils::{
-                clear_google_env, mock_google_token_endpoint, mock_youtube_videos_endpoint,
-                seed_google_token, set_google_env,
+                clear_oauth_env, mock_google_token_endpoint, mock_youtube_videos_endpoint,
+                seed_oauth_token, set_oauth_env,
             },
             ProvidersAppState,
         },
-        schema::arepl::records,
         {test_utils::*, users::test_utils::create_test_user},
     },
     actix_web::test::{self, read_body_json},
     chrono::{DateTime, Utc},
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
     httpmock::prelude::*,
     serde_json::json,
     serial_test::serial,
@@ -246,10 +245,7 @@ async fn get_records_mobile_filter() {
     let (_, mobile_record) = create_test_level_with_record(&db, user_id).await;
 
     create_test_level_with_record(&db, user_id).await;
-    diesel::update(records::table.filter(records::id.eq(mobile_record)))
-        .set(records::mobile.eq(true))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_record_mobile(&db, mobile_record, true).await;
 
     let req = test::TestRequest::get()
         .uri("/arepl/records?mobile_filter=true")
@@ -270,10 +266,7 @@ async fn get_records_verification_filter() {
     let (_, verification_record) = create_test_level_with_record(&db, user_id).await;
 
     create_test_level_with_record(&db, user_id).await;
-    diesel::update(records::table.filter(records::id.eq(verification_record)))
-        .set(records::is_verification.eq(true))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_record_verification(&db, verification_record, true).await;
 
     let req = test::TestRequest::get()
         .uri("/arepl/records?verification_filter=true")
@@ -561,9 +554,9 @@ async fn get_records_sort_longest_completion_time() {
 #[actix_web::test]
 #[serial]
 async fn update_timestamp_endpoint_fetches_youtube_published_at() {
-    clear_google_env();
+    clear_oauth_env(OAuthProvider::Google);
     let server = MockServer::start_async().await;
-    set_google_env(&server.base_url());
+    set_oauth_env(OAuthProvider::Google, &server.base_url());
     mock_google_token_endpoint(&server, 3600, "test_access").await;
 
     let yt_mock =
@@ -586,7 +579,7 @@ async fn update_timestamp_endpoint_fetches_youtube_published_at() {
     ));
 
     let (app, db, auth, _) = init_test_app_with_providers(providers_app_state).await;
-    seed_google_token(&db, "refresh_a");
+    seed_oauth_token(&db, OAuthProvider::Google, Some("refresh_a"));
 
     let (submitter_id, _) = create_test_user(&db, None).await;
     let (moderator_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
@@ -645,5 +638,5 @@ async fn update_timestamp_endpoint_fetches_youtube_published_at() {
     let expected: DateTime<Utc> = "2009-10-25T06:57:33Z".parse().unwrap();
     assert_eq!(got_dt, expected);
 
-    clear_google_env();
+    clear_oauth_env(OAuthProvider::Google);
 }

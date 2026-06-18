@@ -2,6 +2,7 @@
 use {
     crate::{
         app_data::providers::model::{Provider, ProviderId},
+        auth::oauth::OAuthProvider,
         providers::{
             context::{
                 google::new_google_context, patreon::new_patreon_context,
@@ -10,13 +11,11 @@ use {
             init_app_state,
             list::{medal::MedalProvider, twitch::TwitchProvider, youtube::YouTubeProvider},
             test_utils::{
-                clear_google_env, clear_patreon_env, clear_twitch_env, mock_google_token_endpoint,
-                mock_google_token_refresh_endpoint, mock_medal_content_endpoint,
-                mock_patreon_token_endpoint, mock_twitch_token_endpoint,
-                mock_twitch_videos_endpoint, mock_youtube_videos_endpoint,
-                raw_stored_google_refresh_token, seed_google_token, seed_patreon_token,
-                set_google_env, set_patreon_env, set_twitch_env, stored_google_refresh_token,
-                stored_patreon_refresh_token,
+                clear_oauth_env, mock_google_token_endpoint, mock_google_token_refresh_endpoint,
+                mock_medal_content_endpoint, mock_patreon_token_endpoint,
+                mock_twitch_token_endpoint, mock_twitch_videos_endpoint,
+                mock_youtube_videos_endpoint, raw_stored_oauth_refresh_token, seed_oauth_token,
+                set_oauth_env, stored_oauth_refresh_token,
             },
         },
         test_utils::init_test_app,
@@ -317,12 +316,12 @@ async fn reject_unsupported_or_malformed_urls() {
 #[actix_web::test]
 #[serial]
 async fn google_auth_fetches_once_then_uses_cache() {
-    clear_google_env();
+    clear_oauth_env(OAuthProvider::Google);
 
     let server = MockServer::start_async().await;
-    set_google_env(&server.base_url());
+    set_oauth_env(OAuthProvider::Google, &server.base_url());
     let (_, db, _, _) = init_test_app().await;
-    seed_google_token(&db, "refresh_a");
+    seed_oauth_token(&db, OAuthProvider::Google, Some("refresh_a"));
 
     let mock = mock_google_token_refresh_endpoint(&server, 3600, "token1", "refresh_a", None).await;
 
@@ -335,26 +334,29 @@ async fn google_auth_fetches_once_then_uses_cache() {
 
     assert_eq!(t1, "token1");
     assert_eq!(t2, "token1");
-    assert_eq!(stored_google_refresh_token(&db), "refresh_a");
-    assert!(raw_stored_google_refresh_token(&db).starts_with("enc:v1:"));
+    assert_eq!(
+        stored_oauth_refresh_token(&db, OAuthProvider::Google),
+        "refresh_a"
+    );
+    assert!(raw_stored_oauth_refresh_token(&db, OAuthProvider::Google).starts_with("enc:v1:"));
     assert_eq!(
         mock.calls_async().await,
         1,
         "should only request token once"
     );
 
-    clear_google_env();
+    clear_oauth_env(OAuthProvider::Google);
 }
 
 #[actix_web::test]
 #[serial]
 async fn google_auth_refreshes_when_immediately_expired() {
-    clear_google_env();
+    clear_oauth_env(OAuthProvider::Google);
 
     let server = MockServer::start_async().await;
-    set_google_env(&server.base_url());
+    set_oauth_env(OAuthProvider::Google, &server.base_url());
     let (_, db, _, _) = init_test_app().await;
-    seed_google_token(&db, "refresh_a");
+    seed_oauth_token(&db, OAuthProvider::Google, Some("refresh_a"));
 
     let first_mock =
         mock_google_token_refresh_endpoint(&server, 60, "token1", "refresh_a", Some("refresh_b"))
@@ -372,20 +374,23 @@ async fn google_auth_refreshes_when_immediately_expired() {
 
     assert_eq!(first_mock.calls_async().await, 1);
     assert_eq!(second_mock.calls_async().await, 1);
-    assert_eq!(stored_google_refresh_token(&db), "refresh_c");
+    assert_eq!(
+        stored_oauth_refresh_token(&db, OAuthProvider::Google),
+        "refresh_c"
+    );
 
-    clear_google_env();
+    clear_oauth_env(OAuthProvider::Google);
 }
 
 #[actix_web::test]
 #[serial]
 async fn google_auth_refreshes_after_expiry() {
-    clear_google_env();
+    clear_oauth_env(OAuthProvider::Google);
 
     let server = MockServer::start_async().await;
-    set_google_env(&server.base_url());
+    set_oauth_env(OAuthProvider::Google, &server.base_url());
     let (_, db, _, _) = init_test_app().await;
-    seed_google_token(&db, "refresh_a");
+    seed_oauth_token(&db, OAuthProvider::Google, Some("refresh_a"));
 
     let first_mock =
         mock_google_token_refresh_endpoint(&server, 61, "token1", "refresh_a", Some("refresh_b"))
@@ -404,20 +409,23 @@ async fn google_auth_refreshes_after_expiry() {
 
     assert_eq!(first_mock.calls_async().await, 1);
     assert_eq!(second_mock.calls_async().await, 1);
-    assert_eq!(stored_google_refresh_token(&db), "refresh_c");
+    assert_eq!(
+        stored_oauth_refresh_token(&db, OAuthProvider::Google),
+        "refresh_c"
+    );
 
-    clear_google_env();
+    clear_oauth_env(OAuthProvider::Google);
 }
 
 #[actix_web::test]
 #[serial]
 async fn patreon_auth_fetches_once_then_uses_cache() {
-    clear_patreon_env();
+    clear_oauth_env(OAuthProvider::Patreon);
 
     let server = MockServer::start_async().await;
-    set_patreon_env(&server.base_url());
+    set_oauth_env(OAuthProvider::Patreon, &server.base_url());
     let (_, db, _, _) = init_test_app().await;
-    seed_patreon_token(&db, "refresh_a");
+    seed_oauth_token(&db, OAuthProvider::Patreon, Some("refresh_a"));
 
     let mock = mock_patreon_token_endpoint(&server, 3600, "token1", "refresh_a", "refresh_b").await;
 
@@ -430,25 +438,28 @@ async fn patreon_auth_fetches_once_then_uses_cache() {
 
     assert_eq!(t1, "token1");
     assert_eq!(t2, "token1");
-    assert_eq!(stored_patreon_refresh_token(&db), "refresh_b");
+    assert_eq!(
+        stored_oauth_refresh_token(&db, OAuthProvider::Patreon),
+        "refresh_b"
+    );
     assert_eq!(
         mock.calls_async().await,
         1,
         "should only request token once"
     );
 
-    clear_patreon_env();
+    clear_oauth_env(OAuthProvider::Patreon);
 }
 
 #[actix_web::test]
 #[serial]
 async fn patreon_auth_refreshes_when_immediately_expired() {
-    clear_patreon_env();
+    clear_oauth_env(OAuthProvider::Patreon);
 
     let server = MockServer::start_async().await;
-    set_patreon_env(&server.base_url());
+    set_oauth_env(OAuthProvider::Patreon, &server.base_url());
     let (_, db, _, _) = init_test_app().await;
-    seed_patreon_token(&db, "refresh_a");
+    seed_oauth_token(&db, OAuthProvider::Patreon, Some("refresh_a"));
 
     let first_mock =
         mock_patreon_token_endpoint(&server, 60, "token1", "refresh_a", "refresh_b").await;
@@ -464,20 +475,23 @@ async fn patreon_auth_refreshes_when_immediately_expired() {
 
     assert_eq!(first_mock.calls_async().await, 1);
     assert_eq!(second_mock.calls_async().await, 1);
-    assert_eq!(stored_patreon_refresh_token(&db), "refresh_c");
+    assert_eq!(
+        stored_oauth_refresh_token(&db, OAuthProvider::Patreon),
+        "refresh_c"
+    );
 
-    clear_patreon_env();
+    clear_oauth_env(OAuthProvider::Patreon);
 }
 
 #[actix_web::test]
 #[serial]
 async fn patreon_auth_refreshes_after_expiry() {
-    clear_patreon_env();
+    clear_oauth_env(OAuthProvider::Patreon);
 
     let server = MockServer::start_async().await;
-    set_patreon_env(&server.base_url());
+    set_oauth_env(OAuthProvider::Patreon, &server.base_url());
     let (_, db, _, _) = init_test_app().await;
-    seed_patreon_token(&db, "refresh_a");
+    seed_oauth_token(&db, OAuthProvider::Patreon, Some("refresh_a"));
 
     let first_mock =
         mock_patreon_token_endpoint(&server, 61, "token1", "refresh_a", "refresh_b").await;
@@ -494,20 +508,23 @@ async fn patreon_auth_refreshes_after_expiry() {
 
     assert_eq!(first_mock.calls_async().await, 1);
     assert_eq!(second_mock.calls_async().await, 1);
-    assert_eq!(stored_patreon_refresh_token(&db), "refresh_c");
+    assert_eq!(
+        stored_oauth_refresh_token(&db, OAuthProvider::Patreon),
+        "refresh_c"
+    );
 
-    clear_patreon_env();
+    clear_oauth_env(OAuthProvider::Patreon);
 }
 
 #[actix_web::test]
 #[serial]
 async fn patreon_auth_returns_error_for_failed_token_response() {
-    clear_patreon_env();
+    clear_oauth_env(OAuthProvider::Patreon);
 
     let server = MockServer::start_async().await;
-    set_patreon_env(&server.base_url());
+    set_oauth_env(OAuthProvider::Patreon, &server.base_url());
     let (_, db, _, _) = init_test_app().await;
-    seed_patreon_token(&db, "refresh_a");
+    seed_oauth_token(&db, OAuthProvider::Patreon, Some("refresh_a"));
 
     server
         .mock_async(|when, then| {
@@ -522,16 +539,16 @@ async fn patreon_auth_returns_error_for_failed_token_response() {
 
     assert!(state.get_access_token(&db).await.is_err());
 
-    clear_patreon_env();
+    clear_oauth_env(OAuthProvider::Patreon);
 }
 
 #[actix_web::test]
 #[serial]
 async fn twitch_auth_fetches_once_then_uses_cache() {
-    clear_twitch_env();
+    clear_oauth_env(OAuthProvider::Twitch);
 
     let server = MockServer::start_async().await;
-    set_twitch_env(&server.base_url());
+    set_oauth_env(OAuthProvider::Twitch, &server.base_url());
     let (_, db, _, _) = init_test_app().await;
 
     let mock = mock_twitch_token_endpoint(&server, 3600, "token1").await;
@@ -551,16 +568,16 @@ async fn twitch_auth_fetches_once_then_uses_cache() {
         "should only request token once"
     );
 
-    clear_twitch_env();
+    clear_oauth_env(OAuthProvider::Twitch);
 }
 
 #[actix_web::test]
 #[serial]
 async fn twitch_auth_refreshes_when_immediately_expired() {
-    clear_twitch_env();
+    clear_oauth_env(OAuthProvider::Twitch);
 
     let server = MockServer::start_async().await;
-    set_twitch_env(&server.base_url());
+    set_oauth_env(OAuthProvider::Twitch, &server.base_url());
     let (_, db, _, _) = init_test_app().await;
 
     let mock = mock_twitch_token_endpoint(&server, 60, "token1").await;
@@ -578,16 +595,16 @@ async fn twitch_auth_refreshes_when_immediately_expired() {
         "should refresh due to immediate expiry"
     );
 
-    clear_twitch_env();
+    clear_oauth_env(OAuthProvider::Twitch);
 }
 
 #[actix_web::test]
 #[serial]
 async fn twitch_auth_refreshes_after_expiry() {
-    clear_twitch_env();
+    clear_oauth_env(OAuthProvider::Twitch);
 
     let server = MockServer::start_async().await;
-    set_twitch_env(&server.base_url());
+    set_oauth_env(OAuthProvider::Twitch, &server.base_url());
     let (_, db, _, _) = init_test_app().await;
 
     let mock = mock_twitch_token_endpoint(&server, 61, "token1").await;
@@ -602,18 +619,18 @@ async fn twitch_auth_refreshes_after_expiry() {
 
     assert_eq!(mock.calls_async().await, 2, "should refresh after expiry");
 
-    clear_twitch_env();
+    clear_oauth_env(OAuthProvider::Twitch);
 }
 
 #[actix_web::test]
 #[serial]
 async fn youtube_fetch_metadata_returns_published_at() {
-    clear_google_env();
+    clear_oauth_env(OAuthProvider::Google);
 
     let server = MockServer::start_async().await;
-    set_google_env(&server.base_url());
+    set_oauth_env(OAuthProvider::Google, &server.base_url());
     let (_, db, _, _) = init_test_app().await;
-    seed_google_token(&db, "refresh_a");
+    seed_oauth_token(&db, OAuthProvider::Google, Some("refresh_a"));
     mock_google_token_endpoint(&server, 3600, "test_access").await;
 
     let yt_mock =
@@ -650,7 +667,7 @@ async fn youtube_fetch_metadata_returns_published_at() {
     let expected: DateTime<Utc> = "2009-10-25T06:57:33Z".parse().unwrap();
     assert_eq!(meta.published_at, Some(expected));
 
-    clear_google_env();
+    clear_oauth_env(OAuthProvider::Google);
 }
 
 #[actix_web::test]
@@ -696,11 +713,11 @@ async fn medal_fetch_metadata_returns_published_at_from_created_ms() {
 #[actix_web::test]
 #[serial]
 async fn twitch_fetch_metadata_returns_published_at() {
-    clear_twitch_env();
+    clear_oauth_env(OAuthProvider::Twitch);
 
     let server = MockServer::start_async().await;
 
-    set_twitch_env(&server.base_url());
+    set_oauth_env(OAuthProvider::Twitch, &server.base_url());
     let (_, db, _, _) = init_test_app().await;
     let token_mock = mock_twitch_token_endpoint(&server, 3600, "test_access").await;
 
@@ -747,5 +764,5 @@ async fn twitch_fetch_metadata_returns_published_at() {
     let expected: DateTime<Utc> = "2009-10-25T06:57:33Z".parse().unwrap();
     assert_eq!(meta.published_at, Some(expected));
 
-    clear_twitch_env();
+    clear_oauth_env(OAuthProvider::Twitch);
 }

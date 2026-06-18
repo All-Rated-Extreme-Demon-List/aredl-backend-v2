@@ -1,17 +1,21 @@
 #[cfg(test)]
 use {
     crate::{
-        aredl::{levels::test_utils::create_test_level_with_record, records::Record},
+        aredl::{
+            levels::test_utils::create_test_level_with_record,
+            records::test_utils::test_records_for_user,
+        },
         auth::{create_test_token, Permission},
-        schema::{aredl::records, merge_requests},
         test_utils::*,
         users::{
-            merge::requests::test_utils::create_test_merge_req,
+            merge::requests::test_utils::{
+                create_test_merge_req, get_test_merge_request, get_test_merge_request_optional,
+                set_test_merge_request_claimed, set_test_merge_request_rejected,
+            },
             test_utils::{create_test_placeholder_user, create_test_user},
         },
     },
     actix_web::test::{self, read_body_json},
-    diesel::{dsl::exists, select, ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper},
     serde_json::json,
 };
 
@@ -82,11 +86,7 @@ async fn accept_merge_request() {
     let res = test::call_service(&app, req).await;
     assert!(res.status().is_success(), "status is {}", res.status());
 
-    let records = records::table
-        .filter(records::submitted_by.eq(user_1_id))
-        .select(Record::as_select())
-        .get_results::<Record>(&mut db.connection().unwrap())
-        .expect("Failed to collect records!");
+    let records = test_records_for_user(&db, user_1_id);
 
     assert_eq!(records.len(), 2, "User does not have exactly 2 records!");
     assert!(
@@ -98,11 +98,7 @@ async fn accept_merge_request() {
         "Did not return second record!"
     );
 
-    let merge_exists = select(exists(
-        merge_requests::table.filter(merge_requests::id.eq(merge)),
-    ))
-    .get_result::<bool>(&mut db.connection().unwrap())
-    .expect("Failed to check for merge!");
+    let merge_exists = get_test_merge_request_optional(&db, merge).is_some();
 
     assert!(!merge_exists, "Merge request exists!")
 }
@@ -131,11 +127,7 @@ async fn reject_merge_request() {
     assert!(res.status().is_success(), "status is {}", res.status());
     let body: serde_json::Value = read_body_json(res).await;
 
-    let records = records::table
-        .filter(records::submitted_by.eq(user_1_id))
-        .count()
-        .get_result::<i64>(&mut db.connection().unwrap())
-        .expect("Failed to get records!");
+    let records = test_records_for_user(&db, user_1_id).len();
 
     assert_eq!(records, 1, "User does not have exactly 2 records!");
 
@@ -316,11 +308,7 @@ async fn list_merge_requests_filter_is_claimed() {
     let claimed_merge = create_test_merge_req(&db, user_1_id, user_2_id).await;
     let unclaimed_merge = create_test_merge_req(&db, user_3_id, user_2_id).await;
 
-    diesel::update(merge_requests::table)
-        .filter(merge_requests::id.eq(claimed_merge))
-        .set(merge_requests::is_claimed.eq(true))
-        .execute(&mut db.connection().unwrap())
-        .expect("Failed to claim merge request");
+    set_test_merge_request_claimed(&db, claimed_merge, true);
 
     let req = test::TestRequest::get()
         .uri("/users/merge/requests?claimed_filter=true")
@@ -355,11 +343,7 @@ async fn list_merge_requests_filter_is_rejected() {
     let rejected_merge = create_test_merge_req(&db, user_1_id, user_2_id).await;
     let pending_merge = create_test_merge_req(&db, user_3_id, user_2_id).await;
 
-    diesel::update(merge_requests::table)
-        .filter(merge_requests::id.eq(rejected_merge))
-        .set(merge_requests::is_rejected.eq(true))
-        .execute(&mut db.connection().unwrap())
-        .expect("Failed to reject merge request");
+    set_test_merge_request_rejected(&db, rejected_merge, true);
 
     let req = test::TestRequest::get()
         .uri("/users/merge/requests?rejected_filter=true")
@@ -478,11 +462,7 @@ async fn unclaim_merge_request() {
 
     let merge = create_test_merge_req(&db, user_1_id, user_2_id).await;
 
-    diesel::update(merge_requests::table)
-        .filter(merge_requests::id.eq(merge))
-        .set(merge_requests::is_claimed.eq(true))
-        .execute(&mut db.connection().unwrap())
-        .expect("Failed to claim merge request");
+    set_test_merge_request_claimed(&db, merge, true);
 
     let req = test::TestRequest::post()
         .uri(&format!("/users/merge/requests/{merge}/unclaim"))
@@ -492,10 +472,6 @@ async fn unclaim_merge_request() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
 
-    let claimed: bool = merge_requests::table
-        .filter(merge_requests::id.eq(merge))
-        .select(merge_requests::is_claimed)
-        .first(&mut db.connection().unwrap())
-        .expect("Failed to fetch merge request");
+    let claimed = get_test_merge_request(&db, merge).is_claimed;
     assert!(!claimed, "Request should be unclaimed");
 }

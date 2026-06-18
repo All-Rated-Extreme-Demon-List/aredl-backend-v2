@@ -2,13 +2,11 @@
 use {
     crate::{
         auth::{create_test_token, Permission},
-        clans::test_utils::{create_test_clan, create_test_clan_member},
-        schema::clan_members,
+        clans::test_utils::{count_test_clan_members, create_test_clan, create_test_clan_member},
         test_utils::{assert_error_response, init_test_app},
         users::test_utils::create_test_user,
     },
     actix_web::test::{self, read_body_json},
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
     serde_json::json,
     uuid::Uuid,
 };
@@ -29,12 +27,7 @@ async fn create_and_join() {
     assert!(resp.status().is_success());
     let clan: serde_json::Value = read_body_json(resp).await;
     let clan_id = Uuid::parse_str(clan["id"].as_str().unwrap()).unwrap();
-    let count: i64 = clan_members::table
-        .filter(clan_members::clan_id.eq(clan_id))
-        .filter(clan_members::user_id.eq(user_id))
-        .count()
-        .get_result(&mut db.connection().unwrap())
-        .unwrap();
+    let count = count_test_clan_members(&db, clan_id, user_id);
     assert_eq!(count, 1);
 }
 

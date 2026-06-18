@@ -4,15 +4,19 @@ use {
         aredl::levels::test_utils::{
             create_test_level as create_test_aredl_level,
             create_test_level_with_record as create_test_aredl_level_with_record,
+            get_test_level as get_test_aredl_level,
         },
-        arepl::levels::test_utils::create_test_level_with_record,
+        arepl::levels::test_utils::{
+            create_test_level_with_record, get_test_level as get_test_arepl_level,
+        },
         auth::create_test_token,
-        schema::{aredl, arepl, users},
         test_utils::init_test_app,
-        users::test_utils::create_test_user,
+        users::test_utils::{
+            create_test_user, set_test_user_background_level, set_test_user_ban_level,
+            set_test_user_last_country_update,
+        },
     },
     actix_web::test::{self, read_body_json},
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
     serde_json::json,
 };
 
@@ -130,10 +134,7 @@ async fn update_authenticated_user_banned() {
     let user_token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    diesel::update(users::table.filter(users::id.eq(user_id)))
-        .set(users::ban_level.eq(2))
-        .execute(&mut db.connection().unwrap())
-        .expect("Failed to ban user");
+    set_test_user_ban_level(&db, user_id, 2).await;
 
     let update_payload = json!({
         "ban_level": 1
@@ -156,10 +157,7 @@ async fn update_authenticated_user_country_cooldown() {
     let user_token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    diesel::update(users::table.filter(users::id.eq(user_id)))
-        .set(users::last_country_update.eq(chrono::Utc::now()))
-        .execute(&mut db.connection().unwrap())
-        .expect("Failed to update last country update");
+    set_test_user_last_country_update(&db, user_id, chrono::Utc::now()).await;
 
     let update_payload = json!({
         "country": 10
@@ -184,11 +182,7 @@ async fn update_background_level_aredl() {
 
     let (level_uuid, _) = create_test_aredl_level_with_record(&db, user_id).await;
 
-    let level_id = aredl::levels::table
-        .filter(aredl::levels::id.eq(level_uuid))
-        .select(aredl::levels::level_id)
-        .first::<i32>(&mut db.connection().unwrap())
-        .expect("Failed to get level ID");
+    let level_id = get_test_aredl_level(&db, level_uuid).await.level_id;
 
     let req = test::TestRequest::patch()
         .uri("/users/@me")
@@ -212,11 +206,7 @@ async fn update_background_level_arepl() {
 
     let (level_uuid, _) = create_test_level_with_record(&db, user_id).await;
 
-    let level_id = arepl::levels::table
-        .filter(arepl::levels::id.eq(level_uuid))
-        .select(arepl::levels::level_id)
-        .first::<i32>(&mut db.connection().unwrap())
-        .expect("Failed to get level ID");
+    let level_id = get_test_arepl_level(&db, level_uuid).await.level_id;
 
     let req = test::TestRequest::patch()
         .uri("/users/@me")
@@ -240,11 +230,7 @@ async fn update_background_level_not_beaten() {
 
     let level_uuid = create_test_aredl_level(&db).await;
 
-    let level_id = aredl::levels::table
-        .filter(aredl::levels::id.eq(level_uuid))
-        .select(aredl::levels::level_id)
-        .first::<i32>(&mut db.connection().unwrap())
-        .expect("Failed to get level ID");
+    let level_id = get_test_aredl_level(&db, level_uuid).await.level_id;
 
     let req = test::TestRequest::patch()
         .uri("/users/@me")
@@ -265,16 +251,9 @@ async fn reset_background_level_to_zero() {
 
     let (level_uuid, _) = create_test_aredl_level_with_record(&db, user_id).await;
 
-    let level_id = aredl::levels::table
-        .filter(aredl::levels::id.eq(level_uuid))
-        .select(aredl::levels::level_id)
-        .first::<i32>(&mut db.connection().unwrap())
-        .unwrap();
+    let level_id = get_test_aredl_level(&db, level_uuid).await.level_id;
 
-    diesel::update(users::table.filter(users::id.eq(user_id)))
-        .set(users::background_level.eq(level_id))
-        .execute(&mut db.connection().unwrap())
-        .expect("Failed to set initial background level");
+    set_test_user_background_level(&db, user_id, level_id).await;
 
     let req = test::TestRequest::patch()
         .uri("/users/@me")

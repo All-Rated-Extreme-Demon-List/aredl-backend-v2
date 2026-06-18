@@ -24,11 +24,16 @@ fn set_token_encryption_env() {
 }
 
 #[cfg(test)]
-pub fn set_discord_env(server_base: &str) {
-    std::env::set_var(
-        "DISCORD_OAUTH_CLIENT_CONFIG",
-        format!(
-            r#"{{
+pub fn set_oauth_env(provider: OAuthProvider, server_base: &str) {
+    if provider != OAuthProvider::Discord {
+        set_token_encryption_env();
+    }
+
+    let (env_key, value) = match provider {
+        OAuthProvider::Discord => (
+            "DISCORD_OAUTH_CLIENT_CONFIG",
+            format!(
+                r#"{{
                     "client_id": "test_discord_client_id",
                     "client_secret": "test_discord_client_secret",
                     "issuer_uri": "{0}",
@@ -41,23 +46,13 @@ pub fn set_discord_env(server_base: &str) {
                     "use_openid_scope": true,
                     "auth_type": "request_body"
                 }}"#,
-            server_base
+                server_base
+            ),
         ),
-    );
-}
-
-#[cfg(test)]
-pub fn clear_discord_env() {
-    std::env::remove_var("DISCORD_OAUTH_CLIENT_CONFIG");
-}
-
-#[cfg(test)]
-pub fn set_google_env(server_base: &str) {
-    set_token_encryption_env();
-    std::env::set_var(
-        "GOOGLE_OAUTH_CLIENT_CONFIG",
-        format!(
-            r#"{{
+        OAuthProvider::Google => (
+            "GOOGLE_OAUTH_CLIENT_CONFIG",
+            format!(
+                r#"{{
                     "client_id": "test_client_id",
                     "client_secret": "test_client_secret",
                     "token_uri": "{0}/token",
@@ -66,15 +61,62 @@ pub fn set_google_env(server_base: &str) {
                     "authorize_uri": "{0}/oauth2/authorize",
                     "redirect_uri": "https://example.com/google/callback"
                 }}"#,
-            server_base
+                server_base
+            ),
         ),
-    );
+        OAuthProvider::Patreon => (
+            "PATREON_OAUTH_CLIENT_CONFIG",
+            format!(
+                r#"{{
+                    "client_id": "test_patreon_client_id",
+                    "client_secret": "test_patreon_client_secret",
+                    "issuer_uri": "{0}/oauth2/authorize",
+                    "authorize_uri": "{0}/oauth2/authorize",
+                    "token_uri": "{0}/api/oauth2/token",
+                    "api_base_uri": "{0}",
+                    "redirect_uri": "https://example.com/patreon/callback",
+                    "scopes": ["identity"],
+                    "use_pkce": false,
+                    "use_openid_scope": false,
+                    "auth_type": "request_body"
+                }}"#,
+                server_base
+            ),
+        ),
+        OAuthProvider::Twitch => (
+            "TWITCH_OAUTH_CLIENT_CONFIG",
+            format!(
+                r#"{{
+                    "client_id": "test_twitch_client_id",
+                    "client_secret": "test_twitch_client_secret",
+                    "token_uri": "{0}/oauth2/token",
+                    "api_base_uri": "{0}",
+                    "issuer_uri": "{0}",
+                    "authorize_uri": "{0}/oauth2/authorize",
+                    "redirect_uri": "https://example.com/twitch/callback"
+                }}"#,
+                server_base
+            ),
+        ),
+    };
+
+    std::env::set_var(env_key, value);
 }
 
 #[cfg(test)]
-pub fn clear_google_env() {
-    std::env::remove_var("GOOGLE_OAUTH_CLIENT_CONFIG");
-    std::env::remove_var("OAUTH_TOKEN_ENCRYPTION_KEY");
+pub fn clear_oauth_env(provider: OAuthProvider) {
+    let env_key = match provider {
+        OAuthProvider::Discord => "DISCORD_OAUTH_CLIENT_CONFIG",
+        OAuthProvider::Google => "GOOGLE_OAUTH_CLIENT_CONFIG",
+        OAuthProvider::Patreon => "PATREON_OAUTH_CLIENT_CONFIG",
+        OAuthProvider::Twitch => "TWITCH_OAUTH_CLIENT_CONFIG",
+    };
+
+    std::env::remove_var(env_key);
+
+    if provider != OAuthProvider::Discord {
+        std::env::remove_var("OAUTH_TOKEN_ENCRYPTION_KEY");
+    }
 }
 
 #[cfg(test)]
@@ -140,51 +182,6 @@ pub async fn mock_google_token_refresh_endpoint<'a>(
 }
 
 #[cfg(test)]
-pub fn seed_google_token(db: &DbAppState, refresh_token: &str) {
-    seed_oauth_token(db, OAuthProvider::Google, Some(refresh_token));
-}
-
-#[cfg(test)]
-pub fn stored_google_refresh_token(db: &DbAppState) -> String {
-    stored_oauth_refresh_token(db, OAuthProvider::Google)
-}
-
-#[cfg(test)]
-pub fn raw_stored_google_refresh_token(db: &DbAppState) -> String {
-    raw_stored_oauth_refresh_token(db, OAuthProvider::Google)
-}
-
-#[cfg(test)]
-pub fn set_patreon_env(server_base: &str) {
-    set_token_encryption_env();
-    std::env::set_var(
-        "PATREON_OAUTH_CLIENT_CONFIG",
-        format!(
-            r#"{{
-                    "client_id": "test_patreon_client_id",
-                    "client_secret": "test_patreon_client_secret",
-                    "issuer_uri": "{0}/oauth2/authorize",
-                    "authorize_uri": "{0}/oauth2/authorize",
-                    "token_uri": "{0}/api/oauth2/token",
-                    "api_base_uri": "{0}",
-                    "redirect_uri": "https://example.com/patreon/callback",
-                    "scopes": ["identity"],
-                    "use_pkce": false,
-                    "use_openid_scope": false,
-                    "auth_type": "request_body"
-                }}"#,
-            server_base
-        ),
-    );
-}
-
-#[cfg(test)]
-pub fn clear_patreon_env() {
-    std::env::remove_var("PATREON_OAUTH_CLIENT_CONFIG");
-    std::env::remove_var("OAUTH_TOKEN_ENCRYPTION_KEY");
-}
-
-#[cfg(test)]
 pub async fn mock_patreon_token_endpoint<'a>(
     server: &'a MockServer,
     expires_in: u64,
@@ -216,12 +213,7 @@ pub async fn mock_patreon_token_endpoint<'a>(
 }
 
 #[cfg(test)]
-pub fn seed_patreon_token(db: &DbAppState, refresh_token: &str) {
-    seed_oauth_token(db, OAuthProvider::Patreon, Some(refresh_token));
-}
-
-#[cfg(test)]
-fn seed_oauth_token(db: &DbAppState, provider: OAuthProvider, refresh_token: Option<&str>) {
+pub fn seed_oauth_token(db: &DbAppState, provider: OAuthProvider, refresh_token: Option<&str>) {
     diesel::insert_into(oauth_tokens::table)
         .values((
             oauth_tokens::provider.eq(provider),
@@ -241,51 +233,20 @@ fn seed_oauth_token(db: &DbAppState, provider: OAuthProvider, refresh_token: Opt
 }
 
 #[cfg(test)]
-pub fn stored_patreon_refresh_token(db: &DbAppState) -> String {
-    stored_oauth_refresh_token(db, OAuthProvider::Patreon)
-}
-
-#[cfg(test)]
-fn stored_oauth_refresh_token(db: &DbAppState, provider: OAuthProvider) -> String {
+pub fn stored_oauth_refresh_token(db: &DbAppState, provider: OAuthProvider) -> String {
     let refresh_token = raw_stored_oauth_refresh_token(db, provider);
 
     decrypt_db_token_value(&refresh_token, &oauth_token_aad(provider, "refresh_token")).unwrap()
 }
 
 #[cfg(test)]
-fn raw_stored_oauth_refresh_token(db: &DbAppState, provider: OAuthProvider) -> String {
+pub fn raw_stored_oauth_refresh_token(db: &DbAppState, provider: OAuthProvider) -> String {
     oauth_tokens::table
         .filter(oauth_tokens::provider.eq(provider))
         .select(oauth_tokens::refresh_token)
         .first::<Option<String>>(&mut db.connection().unwrap())
         .unwrap()
         .expect("expected refresh token")
-}
-
-#[cfg(test)]
-pub fn set_twitch_env(server_base: &str) {
-    set_token_encryption_env();
-    std::env::set_var(
-        "TWITCH_OAUTH_CLIENT_CONFIG",
-        format!(
-            r#"{{
-                    "client_id": "test_twitch_client_id",
-                    "client_secret": "test_twitch_client_secret",
-                    "token_uri": "{0}/oauth2/token",
-                    "api_base_uri": "{0}",
-                    "issuer_uri": "{0}",
-                    "authorize_uri": "{0}/oauth2/authorize",
-                    "redirect_uri": "https://example.com/twitch/callback"
-                }}"#,
-            server_base
-        ),
-    );
-}
-
-#[cfg(test)]
-pub fn clear_twitch_env() {
-    std::env::remove_var("TWITCH_OAUTH_CLIENT_CONFIG");
-    std::env::remove_var("OAUTH_TOKEN_ENCRYPTION_KEY");
 }
 
 #[cfg(test)]
