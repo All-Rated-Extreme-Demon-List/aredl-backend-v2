@@ -5,7 +5,7 @@ use crate::{
     arepl::submissions::{status::SubmissionsEnabled, *},
     auth::{Authenticated, Permission},
     error_handler::ApiError,
-    providers::VideoProvidersAppState,
+    providers::ProvidersAppState,
     schema::arepl::{levels, submissions},
 };
 use diesel::{
@@ -191,7 +191,7 @@ impl Submission {
         conn: &mut DbConnection,
         mut submission_body: SubmissionPostMod,
         authenticated: Authenticated,
-        providers: &VideoProvidersAppState,
+        providers: &ProvidersAppState,
     ) -> Result<Self, ApiError> {
         submission_body.video_url = providers
             .validate_completion_video_url(&submission_body.video_url)

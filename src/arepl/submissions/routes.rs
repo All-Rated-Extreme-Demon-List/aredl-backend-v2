@@ -14,7 +14,7 @@ use crate::{
     error_handler::ApiError,
     notifications::WebsocketNotification,
     page_helper::{PageQuery, Paginated},
-    providers::VideoProvidersAppState,
+    providers::ProvidersAppState,
 };
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
@@ -154,7 +154,7 @@ async fn create(
     body: web::Json<SubmissionPostMod>,
     authenticated: Authenticated,
     root_span: RootSpan,
-    providers: web::Data<Arc<VideoProvidersAppState>>,
+    providers: web::Data<Arc<ProvidersAppState>>,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&body));
     let created = web::block(move || {
@@ -191,7 +191,7 @@ async fn patch(
     authenticated: Authenticated,
     root_span: RootSpan,
     notify_tx: web::Data<broadcast::Sender<WebsocketNotification>>,
-    providers: web::Data<Arc<VideoProvidersAppState>>,
+    providers: web::Data<Arc<ProvidersAppState>>,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&body));
     let db_clone = db.clone();

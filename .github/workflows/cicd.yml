@@ -11,9 +11,6 @@ env:
   CARGO_TERM_COLOR: always
   TEST_DATABASE_URL: postgres://postgres:password@localhost:5432/aredl_test
   JWT_SECRET: ${{ secrets.JWT_SECRET }}
-  DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
-  DISCORD_CLIENT_SECRET: ${{ secrets.DISCORD_CLIENT_SECRET }}
-  DISCORD_REDIRECT_URI: ${{ secrets.DISCORD_REDIRECT_URI }}
   BUILD_PROFILE: release
 
 jobs:
@@ -167,7 +164,7 @@ jobs:
       docs_api_server: https://api.aredl.net/v2
       api_net: api_net
       db_alias: db_prod
-      discord_redirect_uri: discord_redirect_uri_prod
+      oauth_return_uri_base: oauth_return_uri_base_prod
       auth_callback_allow_localhost: false
     secrets:
       API_HOST: ${{ secrets.API_HOST }}
@@ -246,7 +243,7 @@ jobs:
       docs_api_server: https://api.aredl.net/v2dev
       api_net: api_net_dev
       db_alias: db_dev
-      discord_redirect_uri: discord_redirect_uri_dev
+      oauth_return_uri_base: oauth_return_uri_base_dev
       auth_callback_allow_localhost: true
     secrets:
       API_HOST: ${{ secrets.DEV_API_HOST }}

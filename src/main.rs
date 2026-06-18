@@ -20,6 +20,7 @@ mod auth;
 mod cache_control;
 mod clans;
 mod docs;
+mod external_connections;
 mod health;
 mod notifications;
 mod page_helper;
@@ -35,7 +36,7 @@ use crate::docs::ApiDoc;
 use crate::scheduled::{
     data_cleaner::start_data_cleaner, refresh_discord_avatars::start_discord_avatars_refresher,
     refresh_level_data::start_level_data_refresher, refresh_matviews::start_matviews_refresher,
-    shifts_creator::start_recurrent_shift_creator,
+    shifts_creator::start_recurrent_shift_creator, sync_patreon_plus::start_patreon_plus_sync,
 };
 use actix_cors::Cors;
 use actix_governor::GovernorConfigBuilder;
@@ -100,7 +101,7 @@ async fn main() -> std::io::Result<()> {
 
     let auth_app_state = auth_data::init_app_state().await;
 
-    let providers_app_state = providers::init_app_state().await;
+    let providers_app_state = providers::init_app_state(db_app_state.clone()).await;
 
     db_app_state.run_pending_migrations();
 
@@ -108,11 +109,13 @@ async fn main() -> std::io::Result<()> {
 
     start_data_cleaner(db_app_state.clone(), notify_tx.clone()).await;
 
-    start_level_data_refresher(db_app_state.clone()).await;
+    start_level_data_refresher(db_app_state.clone(), providers_app_state.clone()).await;
 
     start_recurrent_shift_creator(db_app_state.clone(), notify_tx.clone()).await;
 
-    start_discord_avatars_refresher(db_app_state.clone()).await;
+    start_discord_avatars_refresher(db_app_state.clone(), providers_app_state.clone()).await;
+
+    start_patreon_plus_sync(db_app_state.clone(), providers_app_state.clone()).await;
 
     let mut listenfd = ListenFd::from_env();
     let mut server = HttpServer::new(move || {

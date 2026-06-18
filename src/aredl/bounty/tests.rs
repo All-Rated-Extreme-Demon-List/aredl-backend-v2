@@ -2,7 +2,7 @@
 use {
     crate::{
         app_data::providers::{
-            context::{GoogleAuthState, ProviderContext},
+            context::{google::new_google_context, ProviderContext},
             list::youtube::YouTubeProvider,
             model::{Provider, ProviderRegistry},
         },
@@ -19,9 +19,9 @@ use {
         providers::{
             test_utils::{
                 clear_google_env, mock_google_token_endpoint, mock_youtube_videos_endpoint,
-                set_google_env,
+                seed_google_token, set_google_env,
             },
-            VideoProvidersAppState,
+            ProvidersAppState,
         },
         schema::aredl::{bounties, bounty_completed, records},
         test_utils::*,
@@ -496,19 +496,22 @@ async fn bounty_completion_uses_fetched_video_timestamp() {
     mock_google_token_endpoint(&server, 3600, "test_access").await;
     let yt_mock =
         mock_youtube_videos_endpoint(&server, "xvFZjo5PgG0", "2009-10-25T06:57:33Z").await;
-    let google_auth = GoogleAuthState::new()
+    let google_auth = new_google_context()
         .await
-        .expect("Failed to create GoogleAuthState");
-    std::env::set_var("YOUTUBE_API_BASE_URL", server.base_url());
-    let providers_app_state = Arc::new(VideoProvidersAppState::new(
+        .expect("Failed to create Google OAuth context");
+    let providers_app_state = Arc::new(ProvidersAppState::new(
         ProviderRegistry::new(vec![Arc::new(YouTubeProvider) as Arc<dyn Provider>]),
         ProviderContext {
             http: reqwest::Client::new(),
+            db: None,
+            discord_auth: None,
             google_auth: Some(Arc::new(google_auth)),
+            patreon_auth: None,
             twitch_auth: None,
         },
     ));
     let (app, db, auth, _) = init_test_app_with_providers(providers_app_state).await;
+    seed_google_token(&db, "refresh_a");
     let (moderator_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
     let moderator_token = create_test_token(moderator_id, &auth.jwt_encoding_key).unwrap();
     let (inside_user, _) = create_test_user(&db, None).await;
@@ -593,6 +596,5 @@ async fn bounty_completion_uses_fetched_video_timestamp() {
     assert_eq!(count_test_bounty_completions(&db, inside_bounty.id), 1);
     assert_eq!(count_test_bounty_completions(&db, outside_bounty.id), 0);
 
-    std::env::remove_var("YOUTUBE_API_BASE_URL");
     clear_google_env();
 }

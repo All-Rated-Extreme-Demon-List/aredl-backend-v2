@@ -21,7 +21,7 @@ on:
       db_alias:
         required: true
         type: string
-      discord_redirect_uri:
+      oauth_return_uri_base:
         required: true
         type: string
       auth_callback_allow_localhost:
@@ -72,7 +72,7 @@ jobs:
             echo "DOCS_API_SERVER=${{ inputs.docs_api_server }}"
             echo "API_NET=${{ inputs.api_net }}"
             echo "DB_ALIAS=${{ inputs.db_alias }}"
-            echo "DISCORD_REDIRECT_URI=${{ inputs.discord_redirect_uri }}"
+            echo "OAUTH_RETURN_URI_BASE=${{ inputs.oauth_return_uri_base }}"
             echo "AUTH_CALLBACK_ALLOW_LOCALHOST=${{ inputs.auth_callback_allow_localhost }}"
           } >> .env
 
@@ -101,7 +101,7 @@ jobs:
             DOCS_API_SERVER='${{ inputs.docs_api_server }}' \
             API_NET='${{ inputs.api_net }}' \
             DB_ALIAS='${{ inputs.db_alias }}' \
-            DISCORD_REDIRECT_URI='${{ inputs.discord_redirect_uri }}' \
+            OAUTH_RETURN_URI_BASE='${{ inputs.oauth_return_uri_base }}' \
             AUTH_CALLBACK_ALLOW_LOCALHOST='${{ inputs.auth_callback_allow_localhost }}' \
             docker stack deploy \
               --with-registry-auth \

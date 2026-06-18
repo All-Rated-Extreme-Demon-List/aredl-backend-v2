@@ -119,18 +119,20 @@ impl Provider for YouTubeProvider {
             .google_auth
             .as_ref()
             .ok_or_else(|| ApiError::new(500, "Youtube support isn't available"))?;
+        let db = context
+            .db
+            .as_ref()
+            .ok_or_else(|| ApiError::new(500, "Google token storage isn't available"))?;
 
         let token = google_auth
-            .get_access_token()
+            .get_access_token(db)
             .await
             .map_err(|e| ApiError::new(502, &format!("Failed to acquire Youtube token: {e}")))?;
 
-        let youtube_base = std::env::var("YOUTUBE_API_BASE_URL")
-            .unwrap_or_else(|_| "https://www.googleapis.com/youtube/v3".to_string());
-
         let url = format!(
-            "{}/videos?part=snippet&id={}",
-            youtube_base, matched.content_id
+            "{}/youtube/v3/videos?part=snippet&id={}",
+            google_auth.api_base_uri.trim_end_matches('/'),
+            matched.content_id
         );
 
         let mut headers = HeaderMap::new();

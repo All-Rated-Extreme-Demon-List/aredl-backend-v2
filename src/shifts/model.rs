@@ -1,5 +1,10 @@
 use crate::{
-    app_data::db::DbConnection, auth::Authenticated, error_handler::ApiError, page_helper::{PageQuery, Paginated}, schema::{shifts, users}, users::ExtendedBaseUser
+    app_data::db::DbConnection,
+    auth::Authenticated,
+    error_handler::ApiError,
+    page_helper::{PageQuery, Paginated},
+    schema::{shifts, users},
+    users::ExtendedBaseUser,
 };
 use chrono::{DateTime, Timelike, Utc};
 use diesel::{
@@ -117,12 +122,17 @@ pub struct ShiftCreate {
 }
 
 impl Shift {
-    pub fn create(conn: &mut DbConnection, new_shift: ShiftCreate, authenticated: Authenticated) -> Result<Self, ApiError> {
-        let mut end_at = Utc::now().with_second(0).unwrap() + chrono::Duration::hours(new_shift.length.into());
+    pub fn create(
+        conn: &mut DbConnection,
+        new_shift: ShiftCreate,
+        authenticated: Authenticated,
+    ) -> Result<Self, ApiError> {
+        let mut end_at =
+            Utc::now().with_second(0).unwrap() + chrono::Duration::hours(new_shift.length.into());
         if end_at.minute() != 0 {
             end_at = end_at.with_minute(0).unwrap() + chrono::Duration::hours(1);
         }
-        
+
         let created = diesel::insert_into(shifts::table)
             .values((
                 shifts::user_id.eq(new_shift.user_id.unwrap_or(authenticated.user_id)),

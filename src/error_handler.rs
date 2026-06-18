@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::fmt;
 use std::fmt::Formatter;
+use url::ParseError;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ApiError {
@@ -41,6 +42,12 @@ impl From<DieselError> for ApiError {
 impl From<BlockingError> for ApiError {
     fn from(_error: BlockingError) -> Self {
         ApiError::new(500, "Internal server error")
+    }
+}
+
+impl From<ParseError> for ApiError {
+    fn from(error: ParseError) -> Self {
+        ApiError::new(500, &format!("Failed to parse URL: {}", error))
     }
 }
 

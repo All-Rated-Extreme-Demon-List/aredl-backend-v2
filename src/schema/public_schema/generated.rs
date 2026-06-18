@@ -7,6 +7,10 @@ pub mod public {
         pub struct NotificationType;
 
         #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+        #[diesel(postgres_type(name = "oauth_provider"))]
+        pub struct OauthProvider;
+
+        #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
         #[diesel(postgres_type(name = "shift_status"))]
         pub struct ShiftStatus;
 
@@ -93,11 +97,43 @@ pub mod public {
     }
 
     diesel::table! {
+        use diesel::sql_types::*;
+        use super::sql_types::OauthProvider;
+
+        oauth_connected_accounts (id) {
+            id -> Uuid,
+            user_id -> Uuid,
+            provider -> OauthProvider,
+            provider_user_id -> Text,
+            provider_user_name -> Nullable<Text>,
+            created_at -> Timestamptz,
+        }
+    }
+
+    diesel::table! {
+        use diesel::sql_types::*;
+        use super::sql_types::OauthProvider;
+
         oauth_requests (csrf_state) {
             csrf_state -> Varchar,
-            pkce_verifier -> Varchar,
+            pkce_verifier -> Nullable<Varchar>,
             callback -> Nullable<Varchar>,
             created_at -> Nullable<Timestamptz>,
+            provider -> OauthProvider,
+            user_id -> Nullable<Uuid>,
+        }
+    }
+
+    diesel::table! {
+        use diesel::sql_types::*;
+        use super::sql_types::OauthProvider;
+
+        oauth_tokens (provider) {
+            provider -> OauthProvider,
+            access_token -> Nullable<Text>,
+            refresh_token -> Nullable<Text>,
+            expires_at -> Nullable<Timestamptz>,
+            updated_at -> Timestamptz,
         }
     }
 
@@ -194,6 +230,8 @@ pub mod public {
     diesel::joinable!(clan_members -> users (user_id));
     diesel::joinable!(merge_logs -> users (primary_user));
     diesel::joinable!(notifications -> users (user_id));
+    diesel::joinable!(oauth_connected_accounts -> users (user_id));
+    diesel::joinable!(oauth_requests -> users (user_id));
     diesel::joinable!(user_badges -> users (user_id));
     diesel::joinable!(user_roles -> roles (role_id));
     diesel::joinable!(user_roles -> users (user_id));
@@ -206,7 +244,9 @@ pub mod public {
         merge_logs,
         merge_requests,
         notifications,
+        oauth_connected_accounts,
         oauth_requests,
+        oauth_tokens,
         permissions,
         recurrent_shifts,
         roles,

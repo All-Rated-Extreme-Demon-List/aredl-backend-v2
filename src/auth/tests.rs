@@ -2,8 +2,10 @@
 use {
     crate::{
         auth::{create_test_token, token},
+        external_connections::OAuthProvider,
+        providers::test_utils::{clear_patreon_env, set_discord_env, set_patreon_env},
         schema::{
-            oauth_requests,
+            oauth_connected_accounts, oauth_requests,
             users::dsl::{access_valid_after, id as user_id_col, users},
         },
         test_utils::init_test_app,
@@ -14,16 +16,83 @@ use {
         test::{self, read_body_json},
     },
     diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
-    httpmock::prelude::*,
+    httpmock::{prelude::*, Mock},
     serial_test::serial,
 };
+
+#[cfg(test)]
+async fn mock_patreon_code_exchange<'a>(
+    server: &'a MockServer,
+    code: &'a str,
+    access_token: &'a str,
+) -> Mock<'a> {
+    server
+        .mock_async(move |when, then| {
+            when.method(POST)
+                .path("/api/oauth2/token")
+                .body_includes("grant_type=authorization_code")
+                .body_includes(format!("code={}", code))
+                .body_includes("client_id=test_patreon_client_id")
+                .body_includes("client_secret=test_patreon_client_secret");
+
+            then.status(200)
+                .header("content-type", "application/json")
+                .body(format!(
+                    r#"{{ "access_token": "{}", "token_type": "Bearer", "expires_in": 3600 }}"#,
+                    access_token
+                ));
+        })
+        .await
+}
+
+#[cfg(test)]
+async fn mock_patreon_identity<'a>(
+    server: &'a MockServer,
+    access_token: &'a str,
+    patreon_id: &'a str,
+    full_name: &'a str,
+) -> Mock<'a> {
+    server
+        .mock_async(move |when, then| {
+            when.method(GET)
+                .path("/api/oauth2/v2/identity")
+                .header("authorization", format!("Bearer {}", access_token));
+
+            then.status(200)
+                .header("content-type", "application/json")
+                .json_body(serde_json::json!({
+                    "data": {
+                        "id": patreon_id,
+                        "type": "user",
+                        "attributes": {
+                            "full_name": full_name,
+                            "vanity": null
+                        }
+                    }
+                }));
+        })
+        .await
+}
+
+#[cfg(test)]
+fn patreon_connections_for_user(
+    db: &std::sync::Arc<crate::app_data::db::DbAppState>,
+    user_id: uuid::Uuid,
+) -> Vec<String> {
+    oauth_connected_accounts::table
+        .filter(oauth_connected_accounts::provider.eq(OAuthProvider::Patreon))
+        .filter(oauth_connected_accounts::user_id.eq(user_id))
+        .select(oauth_connected_accounts::provider_user_id)
+        .load::<String>(&mut db.connection().unwrap())
+        .unwrap()
+}
 
 #[actix_web::test]
 async fn discord_auth_redirects_to_discord() {
     std::env::set_var("AUTH_CALLBACK_ALLOWED_DOMAINS", "example.com");
     std::env::remove_var("AUTH_CALLBACK_ALLOW_LOCALHOST");
     let discord_base_url = "https://test-discord.com";
-    std::env::set_var("DISCORD_BASE_URL", discord_base_url);
+    set_discord_env(discord_base_url);
 
     let (app, _, _, _) = init_test_app().await;
 
@@ -53,6 +122,7 @@ async fn discord_auth_redirects_to_discord() {
 async fn discord_auth_allows_localhost_callback_by_default() {
     std::env::set_var("AUTH_CALLBACK_ALLOWED_DOMAINS", "example.com");
     std::env::remove_var("AUTH_CALLBACK_ALLOW_LOCALHOST");
+    set_discord_env("https://test-discord.com");
 
     let (app, _, _, _) = init_test_app().await;
 
@@ -69,6 +139,7 @@ async fn discord_auth_allows_localhost_callback_by_default() {
 async fn discord_auth_rejects_untrusted_callback() {
     std::env::set_var("AUTH_CALLBACK_ALLOWED_DOMAINS", "example.com");
     std::env::remove_var("AUTH_CALLBACK_ALLOW_LOCALHOST");
+    set_discord_env("https://test-discord.com");
 
     let (app, _, _, _) = init_test_app().await;
 
@@ -85,6 +156,7 @@ async fn discord_auth_rejects_untrusted_callback() {
 async fn discord_auth_allows_configured_subdomain_callback() {
     std::env::set_var("AUTH_CALLBACK_ALLOWED_DOMAINS", "example.com");
     std::env::remove_var("AUTH_CALLBACK_ALLOW_LOCALHOST");
+    set_discord_env("https://test-discord.com");
 
     let (app, _, _, _) = init_test_app().await;
 
@@ -97,7 +169,74 @@ async fn discord_auth_allows_configured_subdomain_callback() {
 }
 
 #[actix_web::test]
-async fn discord_refresh_returns_new_token() {
+async fn patreon_link_requires_authentication() {
+    let (app, _, _, _) = init_test_app().await;
+
+    let req = test::TestRequest::post()
+        .uri("/auth/patreon/link")
+        .set_json(serde_json::json!({}))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), actix_web::http::StatusCode::UNAUTHORIZED);
+}
+
+#[actix_web::test]
+#[serial]
+async fn patreon_link_rejects_untrusted_callback() {
+    std::env::set_var("AUTH_CALLBACK_ALLOWED_DOMAINS", "example.com");
+    std::env::remove_var("AUTH_CALLBACK_ALLOW_LOCALHOST");
+
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
+
+    let req = test::TestRequest::post()
+        .uri("/auth/patreon/link")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(serde_json::json!({"callback": "https://unauthorized.com"}))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), actix_web::http::StatusCode::BAD_REQUEST);
+}
+
+#[actix_web::test]
+#[serial]
+async fn patreon_link_returns_authorize_url() {
+    clear_patreon_env();
+    std::env::set_var("AUTH_CALLBACK_ALLOWED_DOMAINS", "example.com");
+    std::env::remove_var("AUTH_CALLBACK_ALLOW_LOCALHOST");
+
+    let server = MockServer::start_async().await;
+    set_patreon_env(&server.base_url());
+
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
+
+    let req = test::TestRequest::post()
+        .uri("/auth/patreon/link")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(serde_json::json!({"callback": "https://example.com/patreon/linked"}))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert!(resp.status().is_success());
+    let body: serde_json::Value = read_body_json(resp).await;
+    let authorize_url = body["authorize_url"].as_str().unwrap();
+
+    assert!(authorize_url.starts_with(&format!("{}/oauth2/authorize", server.base_url())));
+    assert!(authorize_url.contains("response_type=code"));
+    assert!(authorize_url.contains("client_id=test_patreon_client_id"));
+    assert!(authorize_url.contains("scope=identity"));
+    assert!(authorize_url.contains("state="));
+
+    clear_patreon_env();
+}
+
+#[actix_web::test]
+async fn refresh_returns_new_token() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, None).await;
 
@@ -113,7 +252,7 @@ async fn discord_refresh_returns_new_token() {
     .unwrap();
 
     let req = test::TestRequest::get()
-        .uri("/auth/discord/refresh")
+        .uri("/auth/refresh")
         .insert_header(("Authorization", format!("Bearer {}", refresh)))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -124,7 +263,7 @@ async fn discord_refresh_returns_new_token() {
 }
 
 #[actix_web::test]
-async fn discord_refresh_returns_both_tokens_when_about_to_expire() {
+async fn refresh_returns_both_tokens_when_about_to_expire() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, None).await;
 
@@ -140,7 +279,7 @@ async fn discord_refresh_returns_both_tokens_when_about_to_expire() {
     .unwrap();
 
     let req = test::TestRequest::get()
-        .uri("/auth/discord/refresh")
+        .uri("/auth/refresh")
         .insert_header(("Authorization", format!("Bearer {}", refresh)))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -168,23 +307,21 @@ async fn discord_refresh_returns_both_tokens_when_about_to_expire() {
 }
 
 #[actix_web::test]
-async fn discord_refresh_fails_without_token() {
+async fn refresh_fails_without_token() {
     let (app, _, _, _) = init_test_app().await;
 
-    let req = test::TestRequest::get()
-        .uri("/auth/discord/refresh")
-        .to_request();
+    let req = test::TestRequest::get().uri("/auth/refresh").to_request();
     let resp = test::call_service(&app, req).await;
 
     assert_eq!(resp.status(), actix_web::http::StatusCode::BAD_REQUEST);
 }
 
 #[actix_web::test]
-async fn discord_refresh_fails_with_invalid_token() {
+async fn refresh_fails_with_invalid_token() {
     let (app, _, _, _) = init_test_app().await;
 
     let req = test::TestRequest::get()
-        .uri("/auth/discord/refresh")
+        .uri("/auth/refresh")
         .insert_header(("Authorization", "Bearer invalid_token"))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -193,7 +330,7 @@ async fn discord_refresh_fails_with_invalid_token() {
 }
 
 #[actix_web::test]
-async fn discord_refresh_fails_with_access_token() {
+async fn refresh_fails_with_access_token() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, None).await;
 
@@ -209,7 +346,7 @@ async fn discord_refresh_fails_with_access_token() {
     .unwrap();
 
     let req = test::TestRequest::get()
-        .uri("/auth/discord/refresh")
+        .uri("/auth/refresh")
         .insert_header(("Authorization", format!("Bearer {}", access_token)))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -218,7 +355,7 @@ async fn discord_refresh_fails_with_access_token() {
 }
 
 #[actix_web::test]
-async fn discord_refresh_fails_with_expired_token() {
+async fn refresh_fails_with_expired_token() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, None).await;
 
@@ -234,7 +371,7 @@ async fn discord_refresh_fails_with_expired_token() {
     .unwrap();
 
     let req = test::TestRequest::get()
-        .uri("/auth/discord/refresh")
+        .uri("/auth/refresh")
         .insert_header(("Authorization", format!("Bearer {}", expired_token)))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -329,7 +466,7 @@ async fn discord_callback_returns_auth() {
         })
         .await;
 
-    std::env::set_var("DISCORD_BASE_URL", server.base_url());
+    set_discord_env(&server.base_url());
 
     let (app, db, _, _) = init_test_app().await;
 
@@ -396,7 +533,7 @@ async fn discord_callback_with_callback_url_redirects() {
         })
         .await;
 
-    std::env::set_var("DISCORD_BASE_URL", server.base_url());
+    set_discord_env(&server.base_url());
 
     let (app, db, _, _) = init_test_app().await;
 
@@ -426,7 +563,147 @@ async fn discord_callback_with_callback_url_redirects() {
 }
 
 #[actix_web::test]
+#[serial]
+async fn patreon_callback_links_current_site_user() {
+    clear_patreon_env();
+
+    let server = MockServer::start_async().await;
+    set_patreon_env(&server.base_url());
+
+    mock_patreon_code_exchange(&server, "abc", "patreon_access").await;
+    mock_patreon_identity(&server, "patreon_access", "patreon_123", "Patron One").await;
+
+    let (app, db, _, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
+
+    diesel::insert_into(oauth_requests::table)
+        .values((
+            oauth_requests::csrf_state.eq("patreon_state"),
+            oauth_requests::pkce_verifier.eq::<Option<String>>(None),
+            oauth_requests::callback.eq::<Option<String>>(None),
+            oauth_requests::provider.eq(OAuthProvider::Patreon),
+            oauth_requests::user_id.eq(Some(user_id)),
+        ))
+        .execute(&mut db.connection().unwrap())
+        .unwrap();
+
+    let req = test::TestRequest::get()
+        .uri("/auth/patreon/callback?code=abc&state=patreon_state")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert!(resp.status().is_success());
+    assert_eq!(
+        patreon_connections_for_user(&db, user_id),
+        vec!["patreon_123"]
+    );
+
+    clear_patreon_env();
+}
+
+#[actix_web::test]
+#[serial]
+async fn patreon_callback_transfers_existing_patreon_link() {
+    clear_patreon_env();
+
+    let server = MockServer::start_async().await;
+    set_patreon_env(&server.base_url());
+
+    mock_patreon_code_exchange(&server, "abc", "patreon_access").await;
+    mock_patreon_identity(&server, "patreon_access", "patreon_123", "Patron One").await;
+
+    let (app, db, _, _) = init_test_app().await;
+    let (previous_user, _) = create_test_user(&db, None).await;
+    let (current_user, _) = create_test_user(&db, None).await;
+
+    diesel::insert_into(oauth_connected_accounts::table)
+        .values((
+            oauth_connected_accounts::user_id.eq(previous_user),
+            oauth_connected_accounts::provider.eq(OAuthProvider::Patreon),
+            oauth_connected_accounts::provider_user_id.eq("patreon_123"),
+            oauth_connected_accounts::provider_user_name.eq::<Option<String>>(None),
+        ))
+        .execute(&mut db.connection().unwrap())
+        .unwrap();
+
+    diesel::insert_into(oauth_requests::table)
+        .values((
+            oauth_requests::csrf_state.eq("patreon_state"),
+            oauth_requests::pkce_verifier.eq::<Option<String>>(None),
+            oauth_requests::callback.eq::<Option<String>>(None),
+            oauth_requests::provider.eq(OAuthProvider::Patreon),
+            oauth_requests::user_id.eq(Some(current_user)),
+        ))
+        .execute(&mut db.connection().unwrap())
+        .unwrap();
+
+    let req = test::TestRequest::get()
+        .uri("/auth/patreon/callback?code=abc&state=patreon_state")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert!(resp.status().is_success());
+    assert!(patreon_connections_for_user(&db, previous_user).is_empty());
+    assert_eq!(
+        patreon_connections_for_user(&db, current_user),
+        vec!["patreon_123"]
+    );
+
+    clear_patreon_env();
+}
+
+#[actix_web::test]
+#[serial]
+async fn patreon_callback_replaces_current_users_old_patreon_link() {
+    clear_patreon_env();
+
+    let server = MockServer::start_async().await;
+    set_patreon_env(&server.base_url());
+
+    mock_patreon_code_exchange(&server, "abc", "patreon_access").await;
+    mock_patreon_identity(&server, "patreon_access", "patreon_new", "Patron Two").await;
+
+    let (app, db, _, _) = init_test_app().await;
+    let (current_user, _) = create_test_user(&db, None).await;
+
+    diesel::insert_into(oauth_connected_accounts::table)
+        .values((
+            oauth_connected_accounts::user_id.eq(current_user),
+            oauth_connected_accounts::provider.eq(OAuthProvider::Patreon),
+            oauth_connected_accounts::provider_user_id.eq("patreon_old"),
+            oauth_connected_accounts::provider_user_name.eq::<Option<String>>(None),
+        ))
+        .execute(&mut db.connection().unwrap())
+        .unwrap();
+
+    diesel::insert_into(oauth_requests::table)
+        .values((
+            oauth_requests::csrf_state.eq("patreon_state"),
+            oauth_requests::pkce_verifier.eq::<Option<String>>(None),
+            oauth_requests::callback.eq::<Option<String>>(None),
+            oauth_requests::provider.eq(OAuthProvider::Patreon),
+            oauth_requests::user_id.eq(Some(current_user)),
+        ))
+        .execute(&mut db.connection().unwrap())
+        .unwrap();
+
+    let req = test::TestRequest::get()
+        .uri("/auth/patreon/callback?code=abc&state=patreon_state")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert!(resp.status().is_success());
+    assert_eq!(
+        patreon_connections_for_user(&db, current_user),
+        vec!["patreon_new"]
+    );
+
+    clear_patreon_env();
+}
+
+#[actix_web::test]
 async fn discord_callback_fails_with_invalid_state() {
+    set_discord_env("https://test-discord.com");
     let (app, db, _, _) = init_test_app().await;
 
     diesel::insert_into(oauth_requests::table)
@@ -448,6 +725,7 @@ async fn discord_callback_fails_with_invalid_state() {
 
 #[actix_web::test]
 async fn discord_callback_fails_without_oauth_request() {
+    set_discord_env("https://test-discord.com");
     let (app, _, _, _) = init_test_app().await;
 
     let req = test::TestRequest::get()

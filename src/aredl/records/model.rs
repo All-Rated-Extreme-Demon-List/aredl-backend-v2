@@ -8,7 +8,7 @@ use crate::aredl::submissions::{Submission, SubmissionStatus};
 use crate::auth::Authenticated;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
-use crate::providers::VideoProvidersAppState;
+use crate::providers::ProvidersAppState;
 use crate::schema::{aredl::levels, aredl::records, aredl::submissions, users};
 use crate::users::badges::UserBadge;
 use crate::users::{user_filter, ExtendedBaseUser};
@@ -357,7 +357,7 @@ impl Record {
 impl Record {
     pub async fn fetch_completion_timestamp(
         record: Record,
-        providers: &VideoProvidersAppState,
+        providers: &ProvidersAppState,
     ) -> DateTime<Utc> {
         let result = async {
             let matched = providers.parse_url(&record.video_url)?;
@@ -394,7 +394,7 @@ impl Record {
     pub async fn update_timestamp(
         db: web::Data<Arc<DbAppState>>,
         record_id: Uuid,
-        providers: &VideoProvidersAppState,
+        providers: &ProvidersAppState,
     ) -> Result<Self, ApiError> {
         let db_clone = db.clone();
         let record: Record = web::block(move || {
@@ -430,7 +430,7 @@ impl Record {
     pub async fn post_accept_actions(
         db: web::Data<Arc<DbAppState>>,
         submission: Submission,
-        providers: web::Data<Arc<VideoProvidersAppState>>,
+        providers: web::Data<Arc<ProvidersAppState>>,
     ) {
         tokio::spawn(async move {
             let record = match Record::find_from_submission(

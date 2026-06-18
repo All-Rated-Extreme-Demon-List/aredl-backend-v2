@@ -4,7 +4,7 @@ use crate::{
     auth::{Authenticated, Permission, UserAuth},
     error_handler::ApiError,
 };
-use actix_web::{HttpResponse, get, post, web};
+use actix_web::{get, post, web, HttpResponse};
 use std::sync::Arc;
 use utoipa::OpenApi;
 

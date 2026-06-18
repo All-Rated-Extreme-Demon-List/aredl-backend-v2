@@ -1,0 +1,40 @@
+use crate::auth::oauth::OAuthClientConfig;
+use crate::external_connections::OAuthProvider;
+use crate::get_optional_secret;
+use crate::providers::context::backend_oauth::{
+    BackendGrantType, BackendTokenState, OAuthProviderContext,
+};
+
+pub async fn new_patreon_context() -> Option<OAuthProviderContext> {
+    let client_secret = get_optional_secret("PATREON_OAUTH_CLIENT_CONFIG")?;
+
+    let mut config: OAuthClientConfig = match serde_json::from_str(&client_secret) {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::warn!("Failed to parse PATREON_OAUTH_CLIENT_CONFIG: {}", e);
+            return None;
+        }
+    };
+
+    if config.scopes.is_empty() {
+        config.scopes.push("identity".to_string());
+    }
+    config
+        .return_path
+        .get_or_insert("/auth/patreon".to_string());
+    config.use_pkce.get_or_insert(false);
+    config.use_openid_scope.get_or_insert(false);
+
+    match OAuthProviderContext::new(
+        OAuthProvider::Patreon,
+        config,
+        "https://www.patreon.com/api".to_string(),
+        Some(BackendTokenState::new(BackendGrantType::RefreshToken)),
+    ) {
+        Ok(context) => Some(context),
+        Err(e) => {
+            tracing::warn!("Failed to create Patreon OAuth context: {}", e);
+            None
+        }
+    }
+}

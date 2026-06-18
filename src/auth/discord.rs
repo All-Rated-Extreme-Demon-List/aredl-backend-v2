@@ -1,66 +1,24 @@
 use std::sync::Arc;
 
 use actix_http::header;
-use actix_web::{get, web, HttpRequest, HttpResponse};
-use chrono::{DateTime, Duration, TimeZone, Utc};
+use actix_web::{get, web, HttpResponse};
+use chrono::{DateTime, Duration, Utc};
 use diesel::prelude::*;
-use openidconnect::core::{CoreAuthenticationFlow, CoreClient, CoreJsonWebKeySet};
-use openidconnect::{
-    AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce,
-    OAuth2TokenResponse, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, TokenUrl,
-};
 
 use serde::{Deserialize, Serialize};
-use url::Url;
 use utoipa::{OpenApi, ToSchema};
 
-use crate::app_data::auth::{AuthAppState, DiscordClient};
-use crate::app_data::db::{DbAppState, DbConnection};
-use crate::auth::token::UserClaims;
-use crate::auth::token::{self, check_token_valid};
+use crate::app_data::auth::AuthAppState;
+use crate::app_data::db::DbAppState;
+use crate::auth::oauth::{exchange_oauth_code, OAuthCallbackQuery, OAuthRequestData};
+use crate::auth::token::{self, UserClaims};
+use crate::auth::OAuthOptions;
 use crate::error_handler::ApiError;
+use crate::external_connections::OAuthProvider;
+use crate::providers::ProvidersAppState;
 use crate::roles::Role;
-use crate::schema::{oauth_requests, permissions, roles, user_roles};
+use crate::schema::{permissions, roles, user_roles};
 use crate::users::{User, UserUpsert};
-use crate::{get_optional_secret, get_secret};
-
-#[derive(Deserialize)]
-struct OAuthCallbackQuery {
-    code: AuthorizationCode,
-    state: String,
-}
-
-#[derive(Serialize, Deserialize, Insertable, Queryable, Selectable)]
-#[diesel(table_name=oauth_requests)]
-struct OAuthRequestData {
-    pub csrf_state: String,
-    pub pkce_verifier: String,
-    pub callback: Option<String>,
-}
-
-impl OAuthRequestData {
-    fn find(conn: &mut DbConnection, csrf_state: &str) -> Result<Self, ApiError> {
-        let request_data = oauth_requests::table
-            .filter(oauth_requests::csrf_state.eq(csrf_state))
-            .select(OAuthRequestData::as_select())
-            .first::<OAuthRequestData>(conn)?;
-        Ok(request_data)
-    }
-
-    fn delete(conn: &mut DbConnection, csrf_state: &str) -> Result<(), ApiError> {
-        diesel::delete(oauth_requests::table)
-            .filter(oauth_requests::csrf_state.eq(csrf_state))
-            .execute(conn)?;
-        Ok(())
-    }
-
-    fn create(conn: &mut DbConnection, data: Self) -> Result<(), ApiError> {
-        diesel::insert_into(oauth_requests::table)
-            .values(data)
-            .execute(conn)?;
-        Ok(())
-    }
-}
 
 #[derive(Serialize, Deserialize, ToSchema)]
 struct DiscordUser {
@@ -107,63 +65,6 @@ struct AuthResponse {
     pub roles: Vec<Role>,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
-struct AuthRefreshResponse {
-    /// The new access token to use for authentication. Expires after 30 minutes.
-    pub access_token: String,
-    /// Timestamp of when the access token expires.
-    pub access_expires: DateTime<Utc>,
-    /// The new refresh token to use for getting a new access token. Expires after 2 weeks.
-    pub refresh_token: Option<String>,
-    /// Timestamp of when the refresh token expires.
-    pub refresh_expires: Option<DateTime<Utc>>,
-}
-#[derive(Debug, Serialize, Deserialize)]
-struct AuthOptions {
-    pub callback: Option<String>,
-}
-
-impl AuthOptions {
-    fn validate(&self) -> Result<(), ApiError> {
-        if let Some(callback) = &self.callback {
-            let Ok(url) = Url::parse(callback) else {
-                return Err(ApiError::new(400, "Invalid callback URL"));
-            };
-
-            if !matches!(url.scheme(), "http" | "https") {
-                return Err(ApiError::new(400, "Invalid callback URL"));
-            }
-
-            let Some(host) = url.host_str().map(|host| host.to_ascii_lowercase()) else {
-                return Err(ApiError::new(400, "Invalid callback URL"));
-            };
-
-            let allow_localhost = get_optional_secret("AUTH_CALLBACK_ALLOW_LOCALHOST")
-                .map(|value| value != "0" && !value.eq_ignore_ascii_case("false"))
-                .unwrap_or(true);
-
-            if allow_localhost && matches!(host.as_str(), "localhost" | "127.0.0.1" | "::1") {
-                return Ok(());
-            }
-
-            let allowed_domains = get_secret("AUTH_CALLBACK_ALLOWED_DOMAINS");
-            if allowed_domains
-                .split(',')
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .map(|value| value.to_ascii_lowercase())
-                .any(|domain| host == *domain || host.ends_with(&format!(".{}", domain)))
-            {
-                return Ok(());
-            }
-
-            return Err(ApiError::new(400, "Invalid callback URL"));
-        }
-
-        Ok(())
-    }
-}
-
 #[utoipa::path(
     get,
     summary = "Login with Discord",
@@ -175,37 +76,28 @@ impl AuthOptions {
 )]
 #[get("")]
 async fn discord_auth(
-    data: web::Data<Arc<AuthAppState>>,
     db: web::Data<Arc<DbAppState>>,
-    options: web::Query<AuthOptions>,
+    providers: web::Data<Arc<ProvidersAppState>>,
+    options: web::Query<OAuthOptions>,
 ) -> Result<HttpResponse, ApiError> {
     if options.callback.is_some() {
         options.validate()?;
     }
 
+    let discord_provider = providers
+        .context
+        .discord_auth
+        .clone()
+        .ok_or_else(|| ApiError::new(503, "Discord integration is not configured"))?;
+
     let authorize_url = web::block(move || {
-        let client = &data.discord_client;
-        let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
-
-        let (authorize_url, csrf_state, _) = client
-            .authorize_url(
-                CoreAuthenticationFlow::AuthorizationCode,
-                CsrfToken::new_random,
-                Nonce::new_random,
-            )
-            .add_scope(Scope::new("identify".to_string()))
-            .set_pkce_challenge(pkce_challenge.clone())
-            .url();
-
-        OAuthRequestData::create(
+        OAuthRequestData::init_request(
             &mut db.connection()?,
-            OAuthRequestData {
-                csrf_state: csrf_state.secret().clone(),
-                pkce_verifier: pkce_verifier.secret().to_string(),
-                callback: options.callback.clone(),
-            },
-        )?;
-        Ok::<_, ApiError>(authorize_url)
+            discord_provider.user_oauth()?,
+            OAuthProvider::Discord,
+            options.callback.clone(),
+            None,
+        )
     })
     .await??;
 
@@ -228,35 +120,33 @@ async fn discord_callback(
     db: web::Data<Arc<DbAppState>>,
     query: web::Query<OAuthCallbackQuery>,
     data: web::Data<Arc<AuthAppState>>,
+    providers: web::Data<Arc<ProvidersAppState>>,
 ) -> Result<HttpResponse, ApiError> {
-    let client = &data.discord_client;
+    let discord_provider = providers
+        .context
+        .discord_auth
+        .clone()
+        .ok_or_else(|| ApiError::new(503, "Discord integration is not configured"))?;
     let state = query.state.clone();
 
     let db2 = db.clone();
 
     let request_data = web::block(move || {
         let conn = &mut db.connection()?;
-        let data = OAuthRequestData::find(conn, state.as_str())?;
-        OAuthRequestData::delete(conn, state.as_str())?;
-        Ok::<OAuthRequestData, ApiError>(data)
+        OAuthRequestData::consume_request(conn, OAuthProvider::Discord, state.as_str())
     })
     .await??;
 
-    let http_client = reqwest::Client::new();
+    let access_token = exchange_oauth_code(
+        &discord_provider.user_oauth()?.client,
+        &query.code,
+        request_data.pkce_verifier,
+    )
+    .await?;
 
-    let token_response = client
-        .exchange_code(query.code.clone())
-        .set_pkce_verifier(PkceCodeVerifier::new(request_data.pkce_verifier))
-        .request_async(&http_client)
-        .await
-        .map_err(|_| ApiError::new(401, "Failed to request token!"))?;
-    let access_token = token_response.access_token();
-
-    let discord_base =
-        std::env::var("DISCORD_BASE_URL").unwrap_or_else(|_| "https://discord.com".to_string());
     let discord_user_data = reqwest::Client::new()
-        .get(format!("{}/api/users/@me", discord_base))
-        .bearer_auth(access_token.secret())
+        .get(format!("{}/api/users/@me", discord_provider.api_base_uri))
+        .bearer_auth(access_token)
         .send()
         .await
         .map_err(|_| ApiError::new(500, "Failed to request discord data"))?
@@ -347,120 +237,16 @@ async fn discord_callback(
     }))
 }
 
-#[utoipa::path(
-    get,
-    summary = "[Auth]Refresh Discord auth",
-    description = "Get a new access token for Discord auth. If the refresh token is about to expire, will also return a new one.",
-    tag = "Authentication",
-    responses(
-        (status = 200, body = AuthRefreshResponse)
-    ),
-    security(
-        ("refresh_token" = []),
-    )
-)]
-#[get("/refresh")]
-async fn discord_refresh(
-    data: web::Data<Arc<AuthAppState>>,
-    db: web::Data<Arc<DbAppState>>,
-    req: HttpRequest,
-) -> Result<HttpResponse, ApiError> {
-    let refresh_token = req
-        .headers()
-        .get(header::AUTHORIZATION)
-        .and_then(|h| h.to_str().ok())
-        .map(|h| h.strip_prefix("Bearer ").unwrap_or("").to_string());
-
-    if refresh_token.is_none() {
-        return Err(ApiError::new(400, "No token provided"));
-    }
-
-    let decoded_token_claims = token::decode_token(
-        refresh_token.unwrap(),
-        &data.jwt_decoding_key,
-        &["refresh", "initial"],
-    )?;
-
-    let decoded_user_claims = token::decode_user_claims(&decoded_token_claims)?;
-
-    let conn = &mut db.connection()?;
-    check_token_valid(&decoded_token_claims, &decoded_user_claims, conn)?;
-
-    let user_id = decoded_user_claims.user_id;
-
-    let (access_token, access_expires) = token::create_token(
-        UserClaims {
-            user_id,
-            is_api_key: false,
-        },
-        &data.jwt_encoding_key,
-        Duration::minutes(30),
-        "access",
-    )?;
-
-    let mut response = serde_json::json!({
-        "access_token": access_token,
-        "access_expires": access_expires,
-    });
-
-    let now = Utc::now();
-    let refresh_exp = Utc
-        .timestamp_opt(decoded_token_claims.exp as i64, 0)
-        .single()
-        .ok_or_else(|| ApiError::new(500, "Failed to parse expiration timestamp"))?;
-
-    if refresh_exp - now < Duration::days(2) {
-        let (new_refresh_token, refresh_expires) = token::create_token(
-            UserClaims {
-                user_id,
-                is_api_key: false,
-            },
-            &data.jwt_encoding_key,
-            Duration::weeks(2),
-            "refresh",
-        )?;
-
-        response["refresh_token"] = serde_json::Value::String(new_refresh_token);
-        response["refresh_expires"] = serde_json::Value::String(refresh_expires.to_rfc3339());
-    }
-
-    Ok(HttpResponse::Ok().json(response))
-}
-
-pub(crate) async fn create_discord_client() -> Result<DiscordClient, Box<dyn std::error::Error>> {
-    let discord_client_id = ClientId::new(get_secret("DISCORD_CLIENT_ID"));
-
-    let discord_client_secret = ClientSecret::new(get_secret("DISCORD_CLIENT_SECRET"));
-
-    let discord_redirect_uri = RedirectUrl::new(get_secret("DISCORD_REDIRECT_URI"))?;
-
-    let base_discord_url =
-        std::env::var("DISCORD_BASE_URL").unwrap_or_else(|_| "https://discord.com".to_string());
-
-    let issuer = IssuerUrl::new(base_discord_url.clone())?;
-    let auth_url = AuthUrl::new(format!("{}/oauth2/authorize", base_discord_url).to_string())?;
-    let token_url = TokenUrl::new(format!("{}/api/oauth2/token", base_discord_url).to_string())?;
-
-    Ok(
-        CoreClient::new(discord_client_id, issuer, CoreJsonWebKeySet::default())
-            .set_client_secret(discord_client_secret)
-            .set_auth_uri(auth_url)
-            .set_token_uri(token_url)
-            .set_redirect_uri(discord_redirect_uri),
-    )
-}
-
 #[derive(OpenApi)]
 #[openapi(
-    components(schemas(AuthResponse, AuthRefreshResponse)),
-    paths(discord_auth, discord_callback, discord_refresh,)
+    components(schemas(AuthResponse)),
+    paths(discord_auth, discord_callback,)
 )]
 pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
-        web::scope("/auth/discord")
+        web::scope("/discord")
             .service(discord_auth)
-            .service(discord_callback)
-            .service(discord_refresh),
+            .service(discord_callback),
     );
 }

@@ -3,7 +3,7 @@ use crate::auth::{Permission, UserAuth};
 use crate::cache_control::CacheController;
 use crate::error_handler::ApiError;
 use crate::{app_data::db::DbAppState, aredl::bounty::Bounty};
-use actix_web::{HttpResponse, get, post, web};
+use actix_web::{get, post, web, HttpResponse};
 use std::sync::Arc;
 use utoipa::OpenApi;
 use uuid::Uuid;

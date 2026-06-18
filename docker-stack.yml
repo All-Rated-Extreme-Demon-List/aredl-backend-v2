@@ -48,28 +48,32 @@ services:
       POSTGRES_USER: /run/secrets/postgres_user
       POSTGRES_PASSWORD: /run/secrets/postgres_password
 
-      DISCORD_CLIENT_ID: /run/secrets/discord_client_id
-      DISCORD_CLIENT_SECRET: /run/secrets/discord_client_secret
-      DISCORD_REDIRECT_URI: /run/secrets/discord_redirect_uri
+      
       DISCORD_BOT_TOKEN: /run/secrets/discord_bot_token
 
       AUTH_CALLBACK_ALLOWED_DOMAINS: /run/secrets/auth_callback_allowed_domains
       AUTH_CALLBACK_ALLOW_LOCALHOST: ${AUTH_CALLBACK_ALLOW_LOCALHOST}
+      OAUTH_RETURN_URI_BASE: ${OAUTH_RETURN_URI_BASE}
 
       MATVIEWS_REFRESH_SCHEDULE: /run/secrets/matviews_refresh_schedule
       LEVEL_DATA_REFRESH_SCHEDULE: /run/secrets/level_data_refresh_schedule
       DISCORD_AVATARS_REFRESH_SCHEDULE: /run/secrets/discord_avatars_refresh_schedule
       DATA_CLEANER_SCHEDULE: /run/secrets/data_cleaner_schedule
       RECURRING_SHIFTS_SCHEDULE: /run/secrets/recurring_shifts_schedule
+      PATREON_SYNC_SCHEDULE: /run/secrets/patreon_sync_schedule
 
-      GOOGLE_API_KEY: /run/secrets/google_api_key
       EDEL_SHEET_ID: /run/secrets/edel_sheet_id
       NLW_SHEET_ID: /run/secrets/nlw_sheet_id
 
-      GOOGLE_OAUTH_CLIENT: /run/secrets/google_oauth_client
-      GOOGLE_OAUTH_REFRESH: /run/secrets/google_oauth_refresh
-      TWITCH_OAUTH_CLIENT_ID: /run/secrets/twitch_oauth_client_id
-      TWITCH_OAUTH_CLIENT_SECRET: /run/secrets/twitch_oauth_client_secret
+      OAUTH_TOKEN_ENCRYPTION_KEY: /run/secrets/oauth_token_encryption_key
+      OAUTH_RETURN_URI_BASE: /run/secrets/oauth_return_uri_base
+
+      GOOGLE_OAUTH_CLIENT_CONFIG: /run/secrets/google_oauth_client_config
+      TWITCH_OAUTH_CLIENT_CONFIG: /run/secrets/twitch_oauth_client_config
+      DISCORD_OAUTH_CLIENT_CONFIG: /run/secrets/discord_oauth_client_config
+      PATREON_OAUTH_CLIENT_CONFIG: /run/secrets/patreon_oauth_client_config
+
+      PATREON_CAMPAIGN_ID: /run/secrets/patreon_campaign_id
 
     logging:
       driver: loki
@@ -88,25 +92,25 @@ services:
       - postgres_user
       - postgres_password
       - jwt_secret
-      - discord_client_id
-      - discord_client_secret
+      - discord_oauth_client_config
       - discord_bot_token
       - auth_callback_allowed_domains
-      - source: ${DISCORD_REDIRECT_URI}
-        target: discord_redirect_uri
       - matviews_refresh_schedule
       - level_data_refresh_schedule
       - recurring_shifts_schedule
       - discord_avatars_refresh_schedule
       - data_cleaner_schedule
-      - google_api_key
+      - patreon_sync_schedule
       - edel_sheet_id
       - nlw_sheet_id
-      - google_oauth_client
-      - google_oauth_refresh
-      - twitch_oauth_client_id
-      - twitch_oauth_client_secret
-      
+      - google_oauth_client_config
+      - twitch_oauth_client_config
+      - patreon_campaign_id
+      - patreon_oauth_client_config
+      - oauth_token_encryption_key
+      - source: ${OAUTH_RETURN_URI_BASE}
+        target: oauth_return_uri_base
+
     networks:
       - api_net
          
@@ -120,14 +124,6 @@ secrets:
   postgres_password:
     external: true
   jwt_secret:
-    external: true
-  discord_client_id:
-    external: true
-  discord_client_secret:
-    external: true
-  discord_redirect_uri_prod:
-    external: true
-  discord_redirect_uri_dev:
     external: true
   auth_callback_allowed_domains:
     external: true
@@ -143,19 +139,27 @@ secrets:
     external: true
   discord_avatars_refresh_schedule:
     external: true
-  google_api_key:
+  patreon_sync_schedule:
     external: true
   edel_sheet_id:
     external: true
   nlw_sheet_id:
     external: true
-  google_oauth_client:
+  google_oauth_client_config:
     external: true
-  google_oauth_refresh:
+  twitch_oauth_client_config:
     external: true
-  twitch_oauth_client_id:
+  discord_oauth_client_config:
     external: true
-  twitch_oauth_client_secret:
+  patreon_oauth_client_config:
+    external: true
+  patreon_campaign_id:
+    external: true
+  oauth_token_encryption_key:
+    external: true
+  oauth_return_uri_base_prod:
+    external: true
+  oauth_return_uri_base_dev:
     external: true
 networks:
   api_net:

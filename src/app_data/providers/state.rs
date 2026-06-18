@@ -1,7 +1,7 @@
 use url::Url;
 
 use super::{
-    context::{GoogleAuthState, ProviderContext},
+    context::ProviderContext,
     list::{
         bilibili::BiliBiliProvider, gdrive::GoogleDriveProvider, medal::MedalProvider,
         mega::MegaProvider, outplayed::OutplayedProvider, twitch::TwitchProvider,
@@ -11,16 +11,23 @@ use super::{
         ContentDataLocation, ContentMetadata, NormalizedProviderMatch, Provider, ProviderRegistry,
     },
 };
-use crate::{error_handler::ApiError, providers::context::TwitchAuthState};
+use crate::{
+    app_data::db::DbAppState,
+    error_handler::ApiError,
+    providers::context::{
+        discord::new_discord_context, google::new_google_context, patreon::new_patreon_context,
+        twitch::new_twitch_context,
+    },
+};
 
 use std::sync::Arc;
 
-pub struct VideoProvidersAppState {
+pub struct ProvidersAppState {
     registry: ProviderRegistry,
-    context: ProviderContext,
+    pub context: ProviderContext,
 }
 
-impl VideoProvidersAppState {
+impl ProvidersAppState {
     pub fn new(registry: ProviderRegistry, context: ProviderContext) -> Self {
         Self { registry, context }
     }
@@ -92,14 +99,19 @@ impl VideoProvidersAppState {
     }
 }
 
-pub async fn init_app_state() -> Arc<VideoProvidersAppState> {
+pub async fn init_app_state(db: Arc<DbAppState>) -> Arc<ProvidersAppState> {
     let http = reqwest::Client::new();
-    let google_state = GoogleAuthState::new().await.map(Arc::new);
-    let twitch_state = TwitchAuthState::new().await.map(Arc::new);
+    let discord_state = new_discord_context().await.map(Arc::new);
+    let google_state = new_google_context().await.map(Arc::new);
+    let patreon_state = new_patreon_context().await.map(Arc::new);
+    let twitch_state = new_twitch_context().await.map(Arc::new);
 
     let context = ProviderContext {
         http,
+        db: Some(db),
+        discord_auth: discord_state,
         google_auth: google_state,
+        patreon_auth: patreon_state,
         twitch_auth: twitch_state,
     };
 
@@ -114,5 +126,5 @@ pub async fn init_app_state() -> Arc<VideoProvidersAppState> {
         Arc::new(MegaProvider) as Arc<dyn Provider>,
     ]);
 
-    Arc::new(VideoProvidersAppState::new(registry, context))
+    Arc::new(ProvidersAppState::new(registry, context))
 }

@@ -1,6 +1,7 @@
 use crate::app_data::db::{DbAppState, DbConnection};
 use crate::error_handler::ApiError;
 use crate::get_secret;
+use crate::providers::ProvidersAppState;
 use crate::schema::aredl;
 use crate::schema::arepl;
 use chrono::Utc;
@@ -16,13 +17,17 @@ use std::time::Duration;
 use tokio::task;
 use uuid::Uuid;
 
-pub async fn start_level_data_refresher(db: Arc<DbAppState>) {
+pub async fn start_level_data_refresher(db: Arc<DbAppState>, providers: Arc<ProvidersAppState>) {
     let schedule = Schedule::from_str(&get_secret("LEVEL_DATA_REFRESH_SCHEDULE")).unwrap();
     let schedule = Arc::new(schedule);
 
-    let google_api_key = get_secret("GOOGLE_API_KEY");
     let edel_sheet_id = get_secret("EDEL_SHEET_ID");
     let nlw_sheet_id = get_secret("NLW_SHEET_ID");
+
+    let Some(google_auth) = providers.context.google_auth.clone() else {
+        tracing::warn!("Failed to refresh level data: Google OAuth is not configured");
+        return;
+    };
 
     let db_clone = db.clone();
     task::spawn(async move {
@@ -30,6 +35,14 @@ pub async fn start_level_data_refresher(db: Arc<DbAppState>) {
             tokio::time::sleep(Duration::from_secs(5)).await;
 
             tracing::info!("Refreshing level data");
+
+            let google_access_token = match google_auth.get_access_token(&db).await {
+                Ok(token) => token,
+                Err(e) => {
+                    tracing::error!("Failed to get Google access token: {e}");
+                    continue;
+                }
+            };
 
             let conn = &mut match db.connection() {
                 Ok(c) => c,
@@ -39,13 +52,13 @@ pub async fn start_level_data_refresher(db: Arc<DbAppState>) {
                 }
             };
 
-            let edel_result = update_edel_data(conn, &google_api_key, &edel_sheet_id).await;
+            let edel_result = update_edel_data(conn, &google_access_token, &edel_sheet_id).await;
 
             if edel_result.is_err() {
                 tracing::error!("Failed to refresh edel {}", edel_result.err().unwrap());
             }
 
-            let nlw_result = update_nlw_data(conn, &google_api_key, &nlw_sheet_id).await;
+            let nlw_result = update_nlw_data(conn, &google_access_token, &nlw_sheet_id).await;
 
             if nlw_result.is_err() {
                 tracing::error!("Failed to refresh nlw {}", nlw_result.err().unwrap());
@@ -180,10 +193,10 @@ async fn aredl_update_gddl_data(
 
 async fn update_edel_data(
     conn: &mut DbConnection,
-    api_key: &String,
+    access_token: &str,
     spreadsheet_id: &String,
 ) -> Result<(), ApiError> {
-    let ids_result = read_spreadsheet(api_key, spreadsheet_id, "'IDS'!B:D").await?;
+    let ids_result = read_spreadsheet(access_token, spreadsheet_id, "'IDS'!B:D").await?;
 
     let data: Vec<(i32, f64, bool)> = ids_result
         .values
@@ -237,10 +250,10 @@ async fn update_edel_data(
 
 async fn update_nlw_data(
     conn: &mut DbConnection,
-    api_key: &String,
+    access_token: &str,
     spreadsheet_id: &String,
 ) -> Result<(), ApiError> {
-    let ids_result = read_spreadsheet(api_key, spreadsheet_id, "'IDS'!C:D").await?;
+    let ids_result = read_spreadsheet(access_token, spreadsheet_id, "'IDS'!C:D").await?;
 
     let data: Vec<(i32, String)> = ids_result
         .values
@@ -291,20 +304,25 @@ struct SheetValues {
 }
 
 async fn read_spreadsheet(
-    api_key: &String,
+    access_token: &str,
     spreadsheet_id: &String,
     range: &str,
 ) -> Result<SheetValues, ApiError> {
     let url = format!(
-        "https://sheets.googleapis.com/v4/spreadsheets/{}/values/{}?key={}",
-        spreadsheet_id, range, api_key
+        "https://sheets.googleapis.com/v4/spreadsheets/{}/values/{}",
+        spreadsheet_id, range
     );
-    let response = reqwest::get(&url).await.map_err(|e| {
-        ApiError::new(
-            400,
-            format!("Failed to request spreadsheet: {}", e).as_str(),
-        )
-    })?;
+    let response = reqwest::Client::new()
+        .get(&url)
+        .bearer_auth(access_token)
+        .send()
+        .await
+        .map_err(|e| {
+            ApiError::new(
+                400,
+                format!("Failed to request spreadsheet: {}", e).as_str(),
+            )
+        })?;
     if !response.status().is_success() {
         return Err(ApiError::new(400, "Failed to request spreadsheet"));
     }

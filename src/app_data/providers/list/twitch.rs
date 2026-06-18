@@ -108,13 +108,17 @@ impl Provider for TwitchProvider {
             .twitch_auth
             .as_ref()
             .ok_or_else(|| ApiError::new(500, "Twitch support isn't available"))?;
+        let db = context
+            .db
+            .as_ref()
+            .ok_or_else(|| ApiError::new(500, "Twitch token storage isn't available"))?;
 
-        let access_token = twitch_auth.get_access_token().await?;
+        let access_token = twitch_auth.get_access_token(db).await?;
 
-        let twitch_base = std::env::var("TWITCH_API_BASE_URL")
-            .unwrap_or_else(|_| "https://api.twitch.tv/helix".to_string());
-
-        let url = format!("{}/videos?id={}", twitch_base, matched.content_id);
+        let url = format!(
+            "{}/videos?id={}",
+            twitch_auth.api_base_uri, matched.content_id
+        );
 
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -124,7 +128,7 @@ impl Provider for TwitchProvider {
         );
         headers.insert(
             "Client-Id",
-            HeaderValue::from_str(&twitch_auth.client_id)
+            HeaderValue::from_str(&twitch_auth.config.client_id)
                 .map_err(|_| ApiError::new(500, "Invalid Twitch client id"))?,
         );
 

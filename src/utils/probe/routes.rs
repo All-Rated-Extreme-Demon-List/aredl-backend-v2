@@ -5,14 +5,14 @@ use utoipa::OpenApi;
 use crate::{
     auth::{Permission, UserAuth},
     error_handler::ApiError,
-    providers::VideoProvidersAppState,
+    providers::ProvidersAppState,
     utils::probe::model::ProbeRequest,
 };
 
 #[post("", wrap = "UserAuth::require(Permission::SubmissionReviewFull)")]
 pub async fn probe_file(
     req: web::Json<ProbeRequest>,
-    providers_state: web::Data<Arc<VideoProvidersAppState>>,
+    providers_state: web::Data<Arc<ProvidersAppState>>,
 ) -> Result<HttpResponse, ApiError> {
     let providers_state = providers_state.get_ref();
 

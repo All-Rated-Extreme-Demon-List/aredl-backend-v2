@@ -6,8 +6,8 @@ use crate::schema::aredl::{levels, position_history, position_history_full_view,
 use crate::schema::users;
 use crate::users::{BaseUser, BaseUserWithBanLevel};
 use chrono::{DateTime, Utc};
-use diesel::PgSortExpressionMethods;
 use diesel::prelude::*;
+use diesel::PgSortExpressionMethods;
 use diesel::{ExpressionMethods, RunQueryDsl};
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};

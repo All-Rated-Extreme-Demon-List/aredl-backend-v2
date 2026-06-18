@@ -5,7 +5,7 @@ use crate::{
     auth::{Authenticated, Permission},
     error_handler::ApiError,
     notifications::WebsocketNotification,
-    providers::VideoProvidersAppState,
+    providers::ProvidersAppState,
     schema::{
         arepl::{levels, submissions},
         shifts, users,
@@ -151,7 +151,7 @@ impl SubmissionPatchUser {
         id: Uuid,
         conn: &mut DbConnection,
         authenticated: Authenticated,
-        providers: &VideoProvidersAppState,
+        providers: &ProvidersAppState,
     ) -> Result<Submission, ApiError> {
         let user = authenticated.user_id;
 
@@ -273,7 +273,7 @@ impl SubmissionPatchMod {
         conn: &mut DbConnection,
         authenticated: Authenticated,
         notify_tx: broadcast::Sender<WebsocketNotification>,
-        providers: &VideoProvidersAppState,
+        providers: &ProvidersAppState,
     ) -> Result<Submission, ApiError> {
         if patch == Self::default() {
             return Err(ApiError::new(400, "No changes were provided!"));

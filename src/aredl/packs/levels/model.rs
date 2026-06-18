@@ -3,7 +3,7 @@ use crate::aredl::levels::BaseLevel;
 use crate::error_handler::ApiError;
 use crate::schema::{aredl::levels, aredl::pack_levels};
 use diesel::{
-    Connection, ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl, SelectableHelper, insert_into,
+    insert_into, Connection, ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl, SelectableHelper,
 };
 use uuid::Uuid;
 

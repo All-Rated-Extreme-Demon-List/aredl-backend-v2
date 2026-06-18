@@ -69,5 +69,5 @@ pub async fn logout_all(
 pub struct ApiDoc;
 
 pub fn init_routes(config: &mut web::ServiceConfig) {
-    config.service(web::scope("/auth/logout-all").service(logout_all));
+    config.service(web::scope("/logout-all").service(logout_all));
 }

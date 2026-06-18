@@ -103,14 +103,19 @@ impl Provider for GoogleDriveProvider {
             .google_auth
             .as_ref()
             .ok_or_else(|| ApiError::new(500, "Google Drive support isn't available"))?;
+        let db = context
+            .db
+            .as_ref()
+            .ok_or_else(|| ApiError::new(500, "Google token storage isn't available"))?;
 
         let token = google_auth
-            .get_access_token()
+            .get_access_token(db)
             .await
             .map_err(|e| ApiError::new(502, &format!("Failed to acquire Drive token: {e}")))?;
 
         let url = format!(
-            "https://www.googleapis.com/drive/v3/files/{}?alt=media&supportsAllDrives=true",
+            "{}/drive/v3/files/{}?alt=media&supportsAllDrives=true",
+            google_auth.api_base_uri.trim_end_matches('/'),
             matched.content_id
         );
 

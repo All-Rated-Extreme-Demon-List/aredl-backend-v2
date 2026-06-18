@@ -4,7 +4,7 @@ use crate::app_data::{
     providers::init_app_state as providers_init_app_state,
 };
 #[cfg(test)]
-use crate::providers::VideoProvidersAppState;
+use crate::providers::ProvidersAppState;
 use actix_http::Request;
 
 use actix_web::{
@@ -86,7 +86,7 @@ pub async fn init_test_app() -> (
 
     let db_app_state = init_test_db_state();
 
-    let providers_app_state = providers_init_app_state().await;
+    let providers_app_state = providers_init_app_state(db_app_state.clone()).await;
 
     let app = test::init_service(
         App::new()
@@ -114,7 +114,7 @@ pub async fn init_test_app() -> (
 
 #[cfg(test)]
 pub async fn init_test_app_with_providers(
-    providers_app_state: Arc<VideoProvidersAppState>,
+    providers_app_state: Arc<ProvidersAppState>,
 ) -> (
     impl Service<Request, Response = ServiceResponse<BoxBody>, Error = Error>,
     Arc<DbAppState>,
@@ -128,6 +128,13 @@ pub async fn init_test_app_with_providers(
     let (notify_tx, _notify_rx) = broadcast::channel::<WebsocketNotification>(100);
 
     let db_app_state = init_test_db_state();
+    let providers_app_state = match Arc::try_unwrap(providers_app_state) {
+        Ok(mut providers_app_state) => {
+            providers_app_state.context.db = Some(db_app_state.clone());
+            Arc::new(providers_app_state)
+        }
+        Err(providers_app_state) => providers_app_state,
+    };
 
     let app = test::init_service(
         App::new()

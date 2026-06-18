@@ -3,16 +3,23 @@ use {
     crate::{
         app_data::providers::model::{Provider, ProviderId},
         providers::{
-            context::{GoogleAuthState, ProviderContext, TwitchAuthState},
+            context::{
+                google::new_google_context, patreon::new_patreon_context,
+                twitch::new_twitch_context, ProviderContext,
+            },
             init_app_state,
             list::{medal::MedalProvider, twitch::TwitchProvider, youtube::YouTubeProvider},
             test_utils::{
-                clear_google_env, clear_twitch_env, mock_google_token_endpoint,
-                mock_medal_content_endpoint, mock_twitch_token_endpoint,
-                mock_twitch_videos_endpoint, mock_youtube_videos_endpoint, set_google_env,
-                set_twitch_env,
+                clear_google_env, clear_patreon_env, clear_twitch_env, mock_google_token_endpoint,
+                mock_google_token_refresh_endpoint, mock_medal_content_endpoint,
+                mock_patreon_token_endpoint, mock_twitch_token_endpoint,
+                mock_twitch_videos_endpoint, mock_youtube_videos_endpoint,
+                raw_stored_google_refresh_token, seed_google_token, seed_patreon_token,
+                set_google_env, set_patreon_env, set_twitch_env, stored_google_refresh_token,
+                stored_patreon_refresh_token,
             },
         },
+        test_utils::init_test_app,
     },
     chrono::{DateTime, Utc},
     httpmock::prelude::*,
@@ -23,7 +30,8 @@ use {
 
 #[tokio::test]
 async fn match_and_normalize_all_supported_providers() {
-    let providers = init_app_state().await;
+    let (_, db, _, _) = init_test_app().await;
+    let providers = init_app_state(db).await;
 
     // (input_url, expected_provider, expected_content_id, expected_normalized_url)
     let cases: Vec<(&str, ProviderId, &str, &str)> = vec![
@@ -264,7 +272,8 @@ async fn match_and_normalize_all_supported_providers() {
 
 #[tokio::test]
 async fn reject_unsupported_or_malformed_urls() {
-    let providers = init_app_state().await;
+    let (_, db, _, _) = init_test_app().await;
+    let providers = init_app_state(db).await;
 
     let invalid_urls: Vec<&str> = vec![
         "not a url",
@@ -312,18 +321,22 @@ async fn google_auth_fetches_once_then_uses_cache() {
 
     let server = MockServer::start_async().await;
     set_google_env(&server.base_url());
+    let (_, db, _, _) = init_test_app().await;
+    seed_google_token(&db, "refresh_a");
 
-    let mock = mock_google_token_endpoint(&server, 3600, "token1").await;
+    let mock = mock_google_token_refresh_endpoint(&server, 3600, "token1", "refresh_a", None).await;
 
-    let state = GoogleAuthState::new()
+    let state = new_google_context()
         .await
-        .expect("expected GoogleAuthState");
+        .expect("expected Google OAuth context");
 
-    let t1 = state.get_access_token().await.unwrap();
-    let t2 = state.get_access_token().await.unwrap();
+    let t1 = state.get_access_token(&db).await.unwrap();
+    let t2 = state.get_access_token(&db).await.unwrap();
 
     assert_eq!(t1, "token1");
     assert_eq!(t2, "token1");
+    assert_eq!(stored_google_refresh_token(&db), "refresh_a");
+    assert!(raw_stored_google_refresh_token(&db).starts_with("enc:v1:"));
     assert_eq!(
         mock.calls_async().await,
         1,
@@ -340,21 +353,26 @@ async fn google_auth_refreshes_when_immediately_expired() {
 
     let server = MockServer::start_async().await;
     set_google_env(&server.base_url());
+    let (_, db, _, _) = init_test_app().await;
+    seed_google_token(&db, "refresh_a");
 
-    let mock = mock_google_token_endpoint(&server, 60, "token1").await;
+    let first_mock =
+        mock_google_token_refresh_endpoint(&server, 60, "token1", "refresh_a", Some("refresh_b"))
+            .await;
+    let second_mock =
+        mock_google_token_refresh_endpoint(&server, 60, "token2", "refresh_b", Some("refresh_c"))
+            .await;
 
-    let state = GoogleAuthState::new()
+    let state = new_google_context()
         .await
-        .expect("expected GoogleAuthState");
+        .expect("expected Google OAuth context");
 
-    let _ = state.get_access_token().await.unwrap();
-    let _ = state.get_access_token().await.unwrap();
+    let _ = state.get_access_token(&db).await.unwrap();
+    let _ = state.get_access_token(&db).await.unwrap();
 
-    assert_eq!(
-        mock.calls_async().await,
-        2,
-        "should refresh due to immediate expiry"
-    );
+    assert_eq!(first_mock.calls_async().await, 1);
+    assert_eq!(second_mock.calls_async().await, 1);
+    assert_eq!(stored_google_refresh_token(&db), "refresh_c");
 
     clear_google_env();
 }
@@ -366,20 +384,145 @@ async fn google_auth_refreshes_after_expiry() {
 
     let server = MockServer::start_async().await;
     set_google_env(&server.base_url());
+    let (_, db, _, _) = init_test_app().await;
+    seed_google_token(&db, "refresh_a");
 
-    let mock = mock_google_token_endpoint(&server, 61, "token1").await;
+    let first_mock =
+        mock_google_token_refresh_endpoint(&server, 61, "token1", "refresh_a", Some("refresh_b"))
+            .await;
+    let second_mock =
+        mock_google_token_refresh_endpoint(&server, 61, "token2", "refresh_b", Some("refresh_c"))
+            .await;
 
-    let state = GoogleAuthState::new()
+    let state = new_google_context()
         .await
-        .expect("expected GoogleAuthState");
+        .expect("expected Google OAuth context");
 
-    let _ = state.get_access_token().await.unwrap();
+    let _ = state.get_access_token(&db).await.unwrap();
     tokio::time::sleep(std::time::Duration::from_millis(1200)).await;
-    let _ = state.get_access_token().await.unwrap();
+    let _ = state.get_access_token(&db).await.unwrap();
 
-    assert_eq!(mock.calls_async().await, 2, "should refresh after expiry");
+    assert_eq!(first_mock.calls_async().await, 1);
+    assert_eq!(second_mock.calls_async().await, 1);
+    assert_eq!(stored_google_refresh_token(&db), "refresh_c");
 
     clear_google_env();
+}
+
+#[actix_web::test]
+#[serial]
+async fn patreon_auth_fetches_once_then_uses_cache() {
+    clear_patreon_env();
+
+    let server = MockServer::start_async().await;
+    set_patreon_env(&server.base_url());
+    let (_, db, _, _) = init_test_app().await;
+    seed_patreon_token(&db, "refresh_a");
+
+    let mock = mock_patreon_token_endpoint(&server, 3600, "token1", "refresh_a", "refresh_b").await;
+
+    let state = new_patreon_context()
+        .await
+        .expect("expected Patreon OAuth context");
+
+    let t1 = state.get_access_token(&db).await.unwrap();
+    let t2 = state.get_access_token(&db).await.unwrap();
+
+    assert_eq!(t1, "token1");
+    assert_eq!(t2, "token1");
+    assert_eq!(stored_patreon_refresh_token(&db), "refresh_b");
+    assert_eq!(
+        mock.calls_async().await,
+        1,
+        "should only request token once"
+    );
+
+    clear_patreon_env();
+}
+
+#[actix_web::test]
+#[serial]
+async fn patreon_auth_refreshes_when_immediately_expired() {
+    clear_patreon_env();
+
+    let server = MockServer::start_async().await;
+    set_patreon_env(&server.base_url());
+    let (_, db, _, _) = init_test_app().await;
+    seed_patreon_token(&db, "refresh_a");
+
+    let first_mock =
+        mock_patreon_token_endpoint(&server, 60, "token1", "refresh_a", "refresh_b").await;
+    let second_mock =
+        mock_patreon_token_endpoint(&server, 60, "token2", "refresh_b", "refresh_c").await;
+
+    let state = new_patreon_context()
+        .await
+        .expect("expected Patreon OAuth context");
+
+    let _ = state.get_access_token(&db).await.unwrap();
+    let _ = state.get_access_token(&db).await.unwrap();
+
+    assert_eq!(first_mock.calls_async().await, 1);
+    assert_eq!(second_mock.calls_async().await, 1);
+    assert_eq!(stored_patreon_refresh_token(&db), "refresh_c");
+
+    clear_patreon_env();
+}
+
+#[actix_web::test]
+#[serial]
+async fn patreon_auth_refreshes_after_expiry() {
+    clear_patreon_env();
+
+    let server = MockServer::start_async().await;
+    set_patreon_env(&server.base_url());
+    let (_, db, _, _) = init_test_app().await;
+    seed_patreon_token(&db, "refresh_a");
+
+    let first_mock =
+        mock_patreon_token_endpoint(&server, 61, "token1", "refresh_a", "refresh_b").await;
+    let second_mock =
+        mock_patreon_token_endpoint(&server, 61, "token2", "refresh_b", "refresh_c").await;
+
+    let state = new_patreon_context()
+        .await
+        .expect("expected Patreon OAuth context");
+
+    let _ = state.get_access_token(&db).await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(1200)).await;
+    let _ = state.get_access_token(&db).await.unwrap();
+
+    assert_eq!(first_mock.calls_async().await, 1);
+    assert_eq!(second_mock.calls_async().await, 1);
+    assert_eq!(stored_patreon_refresh_token(&db), "refresh_c");
+
+    clear_patreon_env();
+}
+
+#[actix_web::test]
+#[serial]
+async fn patreon_auth_returns_error_for_failed_token_response() {
+    clear_patreon_env();
+
+    let server = MockServer::start_async().await;
+    set_patreon_env(&server.base_url());
+    let (_, db, _, _) = init_test_app().await;
+    seed_patreon_token(&db, "refresh_a");
+
+    server
+        .mock_async(|when, then| {
+            when.method(POST).path("/api/oauth2/token");
+            then.status(401).body("invalid");
+        })
+        .await;
+
+    let state = new_patreon_context()
+        .await
+        .expect("expected Patreon OAuth context");
+
+    assert!(state.get_access_token(&db).await.is_err());
+
+    clear_patreon_env();
 }
 
 #[actix_web::test]
@@ -389,15 +532,16 @@ async fn twitch_auth_fetches_once_then_uses_cache() {
 
     let server = MockServer::start_async().await;
     set_twitch_env(&server.base_url());
+    let (_, db, _, _) = init_test_app().await;
 
     let mock = mock_twitch_token_endpoint(&server, 3600, "token1").await;
 
-    let state = TwitchAuthState::new()
+    let state = new_twitch_context()
         .await
-        .expect("expected TwitchAuthState");
+        .expect("expected Twitch OAuth context");
 
-    let t1 = state.get_access_token().await.unwrap();
-    let t2 = state.get_access_token().await.unwrap();
+    let t1 = state.get_access_token(&db).await.unwrap();
+    let t2 = state.get_access_token(&db).await.unwrap();
 
     assert_eq!(t1, "token1");
     assert_eq!(t2, "token1");
@@ -417,15 +561,16 @@ async fn twitch_auth_refreshes_when_immediately_expired() {
 
     let server = MockServer::start_async().await;
     set_twitch_env(&server.base_url());
+    let (_, db, _, _) = init_test_app().await;
 
     let mock = mock_twitch_token_endpoint(&server, 60, "token1").await;
 
-    let state = TwitchAuthState::new()
+    let state = new_twitch_context()
         .await
-        .expect("expected TwitchAuthState");
+        .expect("expected Twitch OAuth context");
 
-    let _ = state.get_access_token().await.unwrap();
-    let _ = state.get_access_token().await.unwrap();
+    let _ = state.get_access_token(&db).await.unwrap();
+    let _ = state.get_access_token(&db).await.unwrap();
 
     assert_eq!(
         mock.calls_async().await,
@@ -443,16 +588,17 @@ async fn twitch_auth_refreshes_after_expiry() {
 
     let server = MockServer::start_async().await;
     set_twitch_env(&server.base_url());
+    let (_, db, _, _) = init_test_app().await;
 
     let mock = mock_twitch_token_endpoint(&server, 61, "token1").await;
 
-    let state = TwitchAuthState::new()
+    let state = new_twitch_context()
         .await
-        .expect("expected TwitchAuthState");
+        .expect("expected Twitch OAuth context");
 
-    let _ = state.get_access_token().await.unwrap();
+    let _ = state.get_access_token(&db).await.unwrap();
     tokio::time::sleep(std::time::Duration::from_millis(1200)).await;
-    let _ = state.get_access_token().await.unwrap();
+    let _ = state.get_access_token(&db).await.unwrap();
 
     assert_eq!(mock.calls_async().await, 2, "should refresh after expiry");
 
@@ -466,22 +612,25 @@ async fn youtube_fetch_metadata_returns_published_at() {
 
     let server = MockServer::start_async().await;
     set_google_env(&server.base_url());
+    let (_, db, _, _) = init_test_app().await;
+    seed_google_token(&db, "refresh_a");
     mock_google_token_endpoint(&server, 3600, "test_access").await;
 
     let yt_mock =
         mock_youtube_videos_endpoint(&server, "xvFZjo5PgG0", "2009-10-25T06:57:33Z").await;
 
-    let google_auth = GoogleAuthState::new()
+    let google_auth = new_google_context()
         .await
-        .expect("Failed to create GoogleAuthState");
+        .expect("Failed to create Google OAuth context");
 
     let context = ProviderContext {
         http: reqwest::Client::new(),
+        db: Some(db),
+        discord_auth: None,
         google_auth: Some(Arc::new(google_auth)),
+        patreon_auth: None,
         twitch_auth: None,
     };
-
-    std::env::set_var("YOUTUBE_API_BASE_URL", server.base_url());
 
     let provider = YouTubeProvider;
 
@@ -501,7 +650,6 @@ async fn youtube_fetch_metadata_returns_published_at() {
     let expected: DateTime<Utc> = "2009-10-25T06:57:33Z".parse().unwrap();
     assert_eq!(meta.published_at, Some(expected));
 
-    std::env::remove_var("YOUTUBE_API_BASE_URL");
     clear_google_env();
 }
 
@@ -515,7 +663,10 @@ async fn medal_fetch_metadata_returns_published_at_from_created_ms() {
 
     let context = ProviderContext {
         http: reqwest::Client::new(),
+        db: None,
+        discord_auth: None,
         google_auth: None,
+        patreon_auth: None,
         twitch_auth: None,
     };
 
@@ -550,19 +701,22 @@ async fn twitch_fetch_metadata_returns_published_at() {
     let server = MockServer::start_async().await;
 
     set_twitch_env(&server.base_url());
+    let (_, db, _, _) = init_test_app().await;
     let token_mock = mock_twitch_token_endpoint(&server, 3600, "test_access").await;
 
-    std::env::set_var("TWITCH_API_BASE_URL", server.base_url());
     let twitch_mock =
         mock_twitch_videos_endpoint(&server, "987654321", "2009-10-25T06:57:33Z").await;
 
-    let twitch_auth = TwitchAuthState::new()
+    let twitch_auth = new_twitch_context()
         .await
-        .expect("Failed to create TwitchAuthState");
+        .expect("Failed to create Twitch OAuth context");
 
     let context = ProviderContext {
         http: reqwest::Client::new(),
+        db: Some(db),
+        discord_auth: None,
         google_auth: None,
+        patreon_auth: None,
         twitch_auth: Some(Arc::new(twitch_auth)),
     };
 
@@ -593,6 +747,5 @@ async fn twitch_fetch_metadata_returns_published_at() {
     let expected: DateTime<Utc> = "2009-10-25T06:57:33Z".parse().unwrap();
     assert_eq!(meta.published_at, Some(expected));
 
-    std::env::remove_var("TWITCH_API_BASE_URL");
     clear_twitch_env();
 }

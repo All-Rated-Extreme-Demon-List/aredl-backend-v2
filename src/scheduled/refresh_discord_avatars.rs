@@ -1,5 +1,6 @@
 use crate::app_data::db::DbAppState;
 use crate::get_secret;
+use crate::providers::ProvidersAppState;
 use crate::schema::users;
 use chrono::Utc;
 use cron::Schedule;
@@ -42,12 +43,19 @@ async fn sleep_for_ratelimit(headers: &HeaderMap, default_sleep_ms: u64) {
     tokio::time::sleep(Duration::from_millis(default_sleep_ms)).await;
 }
 
-pub async fn start_discord_avatars_refresher(db: Arc<DbAppState>) {
+pub async fn start_discord_avatars_refresher(
+    db: Arc<DbAppState>,
+    providers: Arc<ProvidersAppState>,
+) {
     let schedule = Schedule::from_str(&get_secret("DISCORD_AVATARS_REFRESH_SCHEDULE")).unwrap();
     let schedule = Arc::new(schedule);
 
-    let discord_base =
-        std::env::var("DISCORD_BASE_URL").unwrap_or_else(|_| "https://discord.com".to_string());
+    let discord_base = providers
+        .context
+        .discord_auth
+        .as_ref()
+        .map(|discord_auth| discord_auth.api_base_uri.clone())
+        .unwrap_or_else(|| "https://discord.com".to_string());
 
     let client = reqwest::Client::builder()
         .user_agent("AredlBackend/2.0 (+https://api.aredl.net)")

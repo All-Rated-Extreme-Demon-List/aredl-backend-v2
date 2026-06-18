@@ -104,5 +104,5 @@ pub async fn create_api_key(
 pub struct ApiDoc;
 
 pub fn init_routes(config: &mut web::ServiceConfig) {
-    config.service(web::scope("/auth/api-key").service(create_api_key));
+    config.service(web::scope("/api-key").service(create_api_key));
 }

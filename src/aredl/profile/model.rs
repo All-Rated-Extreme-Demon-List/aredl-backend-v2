@@ -13,8 +13,8 @@ use crate::schema::{
     },
     clan_members, clans, roles, user_roles,
 };
-use crate::users::User;
 use crate::users::badges::UserBadge;
+use crate::users::User;
 use chrono::{DateTime, Utc};
 use diesel::{
     ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,

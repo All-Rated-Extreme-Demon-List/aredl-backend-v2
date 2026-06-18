@@ -1,18 +1,18 @@
-use {crate::aredl::records::test_utils::create_test_record};
+use crate::aredl::records::test_utils::create_test_record;
 #[cfg(test)]
 use {
     crate::{
         aredl::leaderboard::test_utils::refresh_test_leaderboards,
-        aredl::levels::test_utils::{create_test_level_with_record, create_test_level},
+        aredl::levels::test_utils::{create_test_level, create_test_level_with_record},
         clans::test_utils::{create_test_clan, create_test_clan_member},
         schema::{aredl::levels, users},
         test_utils::*,
         users::test_utils::create_test_user,
     },
-    actix_web::test::{self, read_body_json},
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
     crate::{clans::Clan, schema::clans},
+    actix_web::test::{self, read_body_json},
     diesel::SelectableHelper,
+    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
 };
 
 #[actix_web::test]
@@ -256,10 +256,7 @@ async fn get_clans_leaderboard_with_filters() {
     create_test_record(&db, user1, level_id).await;
 
     let clan2 = diesel::insert_into(clans::table)
-        .values((
-            clans::global_name.eq("Test clan"),
-            clans::tag.eq("TTC")
-        ))
+        .values((clans::global_name.eq("Test clan"), clans::tag.eq("TTC")))
         .returning(Clan::as_returning())
         .get_result(&mut db.connection().unwrap())
         .unwrap();

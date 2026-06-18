@@ -4,8 +4,8 @@ use crate::aredl::records::{Record, RecordsQueryOptions, ResolvedRecord, Resolve
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
-use crate::providers::VideoProvidersAppState;
-use actix_web::{HttpResponse, delete, get, patch, post, web};
+use crate::providers::ProvidersAppState;
+use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
@@ -124,7 +124,7 @@ async fn update(
 async fn update_timestamp(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
-    providers: web::Data<Arc<VideoProvidersAppState>>,
+    providers: web::Data<Arc<ProvidersAppState>>,
 ) -> Result<HttpResponse, ApiError> {
     let record = Record::update_timestamp(db, id.into_inner(), providers.get_ref()).await?;
     Ok(HttpResponse::Ok().json(record))
