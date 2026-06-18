@@ -1,9 +1,9 @@
 use crate::app_data::db::DbAppState;
+use crate::auth::oauth::OAuthProvider;
 use crate::auth::oauth::{exchange_oauth_code, OAuthCallbackQuery, OAuthRequestData};
 use crate::auth::OAuthOptions;
 use crate::auth::{Authenticated, UserAuth};
 use crate::error_handler::ApiError;
-use crate::external_connections::OAuthProvider;
 use crate::providers::ProvidersAppState;
 use crate::schema::oauth_connected_accounts;
 use actix_http::header;

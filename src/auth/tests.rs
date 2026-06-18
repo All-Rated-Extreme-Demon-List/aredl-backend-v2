@@ -1,8 +1,7 @@
 #[cfg(test)]
 use {
     crate::{
-        auth::{create_test_token, token},
-        external_connections::OAuthProvider,
+        auth::{create_test_token, oauth::OAuthProvider, token},
         providers::test_utils::{clear_patreon_env, set_discord_env, set_patreon_env},
         schema::{
             oauth_connected_accounts, oauth_requests,

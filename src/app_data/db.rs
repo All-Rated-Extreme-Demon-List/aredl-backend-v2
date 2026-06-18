@@ -89,6 +89,7 @@ fn init_test_db_schema_and_seed() {
             ("reviewers_audit", 85),
             ("role_manage", 85),
             ("shift_manage", 90),
+            ("external_connections_manage", 90),
         ];
 
         diesel::insert_into(permissions::table)

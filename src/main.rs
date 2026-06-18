@@ -20,7 +20,6 @@ mod auth;
 mod cache_control;
 mod clans;
 mod docs;
-mod external_connections;
 mod health;
 mod notifications;
 mod page_helper;

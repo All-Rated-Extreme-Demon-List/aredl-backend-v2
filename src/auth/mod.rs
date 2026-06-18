@@ -1,9 +1,10 @@
 mod apikey;
 mod authenticated;
+pub mod connected_accounts;
 pub mod discord;
 mod logout;
 mod middleware;
-pub(crate) mod oauth;
+pub mod oauth;
 pub mod patreon;
 pub mod permission;
 mod refresh;

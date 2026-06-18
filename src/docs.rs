@@ -164,6 +164,7 @@ Each permission then requires the user's privilege level to be higher or equal t
 | **ReviewersAudit** | 85 |
 | **RoleManage** | 85 |
 | **ShiftManage** | 90 |
+| **ExternalConnectionsManage** | 90 |
 "#;
 
 #[derive(OpenApi)]
@@ -186,7 +187,7 @@ struct MainApiDoc;
 #[openapi(
     info(
         title = "AREDL API",
-        version = "2.01",
+        version = "2.2.0",
 
         description = API_DESCRIPTION,
     ),

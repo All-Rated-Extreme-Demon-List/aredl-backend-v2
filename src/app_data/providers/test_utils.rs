@@ -8,7 +8,7 @@ use crate::providers::context::backend_oauth::oauth_token_aad;
 use {
     crate::{
         app_data::{db::DbAppState, providers::context::decrypt_db_token_value},
-        external_connections::OAuthProvider,
+        auth::oauth::OAuthProvider,
         schema::oauth_tokens,
     },
     chrono::{DateTime, Utc},

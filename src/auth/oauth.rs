@@ -1,9 +1,10 @@
 use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
-use crate::external_connections::OAuthProvider;
 use crate::schema::oauth_requests;
 use crate::{get_optional_secret, get_secret};
+use chrono::{DateTime, Utc};
 use diesel::{Connection, ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel_derive_enum::DbEnum;
 use openidconnect::core::{CoreAuthenticationFlow, CoreClient, CoreJsonWebKeySet};
 use openidconnect::{
     AuthType, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce,
@@ -23,6 +24,26 @@ pub type OAuthClient = CoreClient<
     openidconnect::EndpointSet,
     openidconnect::EndpointNotSet,
 >;
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema, DbEnum, PartialEq, Eq)]
+#[ExistingTypePath = "crate::schema::sql_types::OauthProvider"]
+#[DbValueStyle = "PascalCase"]
+pub enum OAuthProvider {
+    Discord,
+    Patreon,
+    Google,
+    Twitch,
+}
+
+#[derive(Debug, Clone, Queryable, Selectable, Serialize, Deserialize, ToSchema)]
+#[diesel(table_name = crate::schema::oauth_tokens)]
+pub struct OAuthToken {
+    pub provider: OAuthProvider,
+    pub access_token: Option<String>,
+    pub refresh_token: Option<String>,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub updated_at: DateTime<Utc>,
+}
 
 #[derive(Debug, Default, Serialize, Deserialize, ToSchema)]
 pub struct OAuthOptions {

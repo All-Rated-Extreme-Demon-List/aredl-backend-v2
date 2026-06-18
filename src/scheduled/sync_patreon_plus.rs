@@ -1,8 +1,8 @@
 use crate::app_data::db::{DbAppState, DbConnection};
 use crate::aredl::submissions::SubmissionStatus as AredlSubmissionStatus;
 use crate::arepl::submissions::SubmissionStatus as AreplSubmissionStatus;
+use crate::auth::oauth::OAuthProvider;
 use crate::error_handler::ApiError;
-use crate::external_connections::OAuthProvider;
 use crate::get_secret;
 use crate::providers::{context::backend_oauth::OAuthProviderContext, ProvidersAppState};
 use crate::schema::{aredl, arepl, oauth_connected_accounts, roles, user_roles};
@@ -327,7 +327,7 @@ mod tests {
             SubmissionStatus as AreplSubmissionStatus,
         },
     };
-    use crate::external_connections::OAuthProvider;
+    use crate::auth::oauth::OAuthProvider;
     use crate::roles::test_utils::{add_user_to_role, create_test_role_with_desc};
     use crate::schema::{aredl, arepl, oauth_connected_accounts, user_roles};
     use crate::test_utils::init_test_app;

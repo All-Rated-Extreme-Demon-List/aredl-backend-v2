@@ -1,7 +1,7 @@
 use crate::app_data::db::DbAppState;
 use crate::auth::oauth::{OAuthClientConfig, OAuthProviderState};
+use crate::auth::oauth::{OAuthProvider, OAuthToken};
 use crate::error_handler::ApiError;
-use crate::external_connections::{OAuthProvider, OAuthToken};
 use crate::get_secret;
 use crate::schema::oauth_tokens;
 

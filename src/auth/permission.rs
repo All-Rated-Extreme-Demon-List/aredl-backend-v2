@@ -28,6 +28,7 @@ pub enum Permission {
     SubmissionStatusManage,
     ReviewersAudit,
     NotificationsSubscribe,
+    ExternalConnectionsManage,
     BountyManage,
 }
 

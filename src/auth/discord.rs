@@ -10,11 +10,11 @@ use utoipa::{OpenApi, ToSchema};
 
 use crate::app_data::auth::AuthAppState;
 use crate::app_data::db::DbAppState;
+use crate::auth::oauth::OAuthProvider;
 use crate::auth::oauth::{exchange_oauth_code, OAuthCallbackQuery, OAuthRequestData};
 use crate::auth::token::{self, UserClaims};
 use crate::auth::OAuthOptions;
 use crate::error_handler::ApiError;
-use crate::external_connections::OAuthProvider;
 use crate::providers::ProvidersAppState;
 use crate::roles::Role;
 use crate::schema::{permissions, roles, user_roles};

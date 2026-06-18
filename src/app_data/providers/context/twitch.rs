@@ -1,5 +1,5 @@
 use crate::auth::oauth::OAuthClientConfig;
-use crate::external_connections::OAuthProvider;
+use crate::auth::oauth::OAuthProvider;
 use crate::get_optional_secret;
 use crate::providers::context::backend_oauth::OAuthProviderContext;
 use crate::providers::context::backend_oauth::{BackendGrantType, BackendTokenState};
