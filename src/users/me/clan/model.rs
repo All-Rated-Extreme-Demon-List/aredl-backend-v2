@@ -16,11 +16,11 @@ impl Clan {
             .optional()?;
 
         if member.is_none() {
-            return Err(ApiError::new(404, "You are not part of a clan"));
+            return Err(ApiError::NotFound("You are not part of a clan"));
         }
 
         if member.unwrap().role == 2 {
-            return Err(ApiError::new(403, "You can not leave a clan you're the owner of. You need to either transfer ownership first, or kick all other members and delete the clan."));
+            return Err(ApiError::Conflict( "You can not leave a clan you're the owner of. You need to either transfer ownership first, or kick all other members and delete the clan."));
         }
 
         delete(clan_members::table)

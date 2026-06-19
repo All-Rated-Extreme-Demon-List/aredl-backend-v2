@@ -147,24 +147,21 @@ async fn aredl_update_gddl_data(
         .user_agent("AredlBackend/2.0 (+https://api.aredl.net)")
         .build()
         .map_err(|e| {
-            ApiError::new(
-                400,
-                format!("Failed to build HTTP client: {:?}", e).as_str(),
-            )
+            ApiError::InternalServerError(format!("Failed to build HTTP client: {:?}", e).as_str())
         })?;
 
     let response = client
         .get(&url)
         .send()
         .await
-        .map_err(|e| ApiError::new(400, &format!("Request failed: {:?}", e)))?
+        .map_err(|e| ApiError::BadGateway(format!("Request failed: {:?}", e)))?
         .error_for_status()
-        .map_err(|e| ApiError::new(400, &format!("HTTP error: {:?}", e)))?;
+        .map_err(|e| ApiError::BadGateway(format!("HTTP error: {:?}", e)))?;
 
     let data: GDDLResponse = response
         .json()
         .await
-        .map_err(|e| ApiError::new(400, format!("Failed to request gddl: {:?}", e).as_str()))?;
+        .map_err(|e| ApiError::BadGateway(format!("Failed to request gddl: {:?}", e)))?;
 
     let rating = match (two_player, data.two_player_rating, data.rating) {
         (true, Some(two_player_rating), _) => Some(two_player_rating),
@@ -318,20 +315,14 @@ async fn read_spreadsheet(
         .send()
         .await
         .map_err(|e| {
-            ApiError::new(
-                400,
-                format!("Failed to request spreadsheet: {}", e).as_str(),
-            )
+            ApiError::BadGateway(format!("Failed to request spreadsheet: {}", e).as_str())
         })?;
     if !response.status().is_success() {
-        return Err(ApiError::new(400, "Failed to request spreadsheet"));
+        return Err(ApiError::BadGateway("Failed to request spreadsheet"));
     }
 
     let sheet_values: SheetValues = response.json().await.map_err(|e| {
-        ApiError::new(
-            400,
-            format!("Failed to request spreadsheet: {}", e).as_str(),
-        )
+        ApiError::BadGateway(format!("Failed to request spreadsheet: {}", e).as_str())
     })?;
 
     Ok(sheet_values)

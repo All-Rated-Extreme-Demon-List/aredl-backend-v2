@@ -91,19 +91,16 @@ impl Provider for MedalProvider {
             .get(&url)
             .send()
             .await
-            .map_err(|e| ApiError::new(502, &format!("Medal API error: {e}")))?;
+            .map_err(|e| ApiError::BadGateway(format!("Medal API error: {e}")))?;
 
         if !response.status().is_success() {
-            return Err(ApiError::new(
-                response.status().as_u16(),
-                "Medal API returned non-success",
-            ));
+            return Err(ApiError::BadGateway("Medal API returned non-success"));
         }
 
         let json: Value = response
             .json()
             .await
-            .map_err(|e| ApiError::new(500, &format!("Failed to parse Medal response: {e}")))?;
+            .map_err(|e| ApiError::BadGateway(format!("Failed to parse Medal response: {e}")))?;
 
         let created_ms = json.get("created").and_then(|v| v.as_i64()).or_else(|| {
             json.get("created")

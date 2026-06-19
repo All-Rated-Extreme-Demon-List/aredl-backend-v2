@@ -113,8 +113,7 @@ async fn create_shift_now(
         if !authenticated.has_permission(&mut conn, Permission::ShiftManage)?
             && data.user_id.is_some_and(|id| id != authenticated.user_id)
         {
-            return Err(ApiError::new(
-                403,
+            return Err(ApiError::Forbidden(
                 "You can only create shifts for yourself.",
             ));
         }

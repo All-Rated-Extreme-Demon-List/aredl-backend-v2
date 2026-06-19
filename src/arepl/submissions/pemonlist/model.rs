@@ -57,7 +57,9 @@ impl PemonlistPlayer {
             .first::<Option<String>>(conn)?;
 
         if player_discord_id.is_none() {
-            return Err(ApiError::new(400, "Given user does not have a discord id"));
+            return Err(ApiError::UnprocessableEntity(
+                "Given user does not have a discord id",
+            ));
         }
 
         let player_discord_id = player_discord_id.unwrap();
@@ -69,24 +71,27 @@ impl PemonlistPlayer {
         let resp = client
             .get(&url)
             .send()
-            .map_err(|e| ApiError::new(500, &e.to_string()))?;
+            .map_err(|e| ApiError::BadGateway(e.to_string()))?;
 
         let pemonlist_response: PemonlistResponse = resp.json().map_err(|e| {
-            ApiError::new(
-                500,
-                &format!("Failed to parse data received from pemonlist: {}", e),
-            )
+            ApiError::BadGateway(format!(
+                "Failed to parse data received from pemonlist: {}",
+                e
+            ))
         })?;
 
         let pemonlist_data = match pemonlist_response {
             PemonlistResponse::Err(err) if err.error && err.code == "bad_user" => {
-                return Err(ApiError::new(
-                    404,
-                    &format!("Player {} not found on pemonlist", player_discord_id),
-                ));
+                return Err(ApiError::NotFound(format!(
+                    "Player {} not found on pemonlist",
+                    player_discord_id
+                )));
             }
             PemonlistResponse::Err(err) => {
-                return Err(ApiError::new(500, &format!("{}: {})", err.code, err.error)));
+                return Err(ApiError::BadGateway(format!(
+                    "{}: {})",
+                    err.code, err.error
+                )));
             }
             PemonlistResponse::Ok(player) => player,
         };
@@ -184,30 +189,29 @@ impl PemonlistPlayer {
         let mut parts = hms.split(':');
         let hours = parts
             .next()
-            .ok_or_else(|| ApiError::new(500, "Malformed hour timestamp"))?;
+            .ok_or_else(|| ApiError::BadGateway("Malformed hour timestamp"))?;
         let minutes = parts
             .next()
-            .ok_or_else(|| ApiError::new(500, "Malformed minute timestamp"))?;
+            .ok_or_else(|| ApiError::BadGateway("Malformed minute timestamp"))?;
         let seconds = parts
             .next()
-            .ok_or_else(|| ApiError::new(500, "Malformed second timestamp"))?;
+            .ok_or_else(|| ApiError::BadGateway("Malformed second timestamp"))?;
         if parts.next().is_some() {
-            return Err(ApiError::new(500, "Malformed formatted_time"));
+            return Err(ApiError::BadGateway("Malformed formatted_time"));
         }
 
         let hours: i64 = hours
             .parse()
-            .map_err(|e| ApiError::new(500, &format!("Failed to parse hours: {e}")))?;
+            .map_err(|e| ApiError::BadGateway(format!("Failed to parse hours: {e}")))?;
         let minutes: i64 = minutes
             .parse()
-            .map_err(|e| ApiError::new(500, &format!("Failed to parse minutes: {e}")))?;
+            .map_err(|e| ApiError::BadGateway(format!("Failed to parse minutes: {e}")))?;
         let seconds: i64 = seconds
             .parse()
-            .map_err(|e| ApiError::new(500, &format!("Failed to parse seconds: {e}")))?;
+            .map_err(|e| ApiError::BadGateway(format!("Failed to parse seconds: {e}")))?;
 
         if hours < 0 || !(0..60).contains(&minutes) || !(0..60).contains(&seconds) {
-            return Err(ApiError::new(
-                500,
+            return Err(ApiError::BadGateway(
                 "Malformed formatted_time (out of range)",
             ));
         }
@@ -224,7 +228,7 @@ impl PemonlistPlayer {
             }
             millis
                 .parse::<i64>()
-                .map_err(|e| ApiError::new(500, &format!("Failed to parse milliseconds: {}", e)))?
+                .map_err(|e| ApiError::BadGateway(format!("Failed to parse milliseconds: {}", e)))?
         };
 
         Ok(hours * 3_600_000 + minutes * 60_000 + seconds * 1_000 + milliseconds)

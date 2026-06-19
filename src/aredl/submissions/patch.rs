@@ -152,7 +152,7 @@ impl SubmissionPatchUser {
         let user = authenticated.user_id;
 
         if patch == Self::default() {
-            return Err(ApiError::new(400, "No changes were provided!"));
+            return Err(ApiError::BadRequest("No changes were provided!"));
         }
 
         if let Some(video_url) = patch.video_url.as_ref() {
@@ -179,8 +179,7 @@ impl SubmissionPatchUser {
             .first::<i32>(conn)?;
 
         if submitter_ban >= 2 {
-            return Err(ApiError::new(
-                403,
+            return Err(ApiError::Forbidden(
                 "You have been banned from submitting records.",
             ));
         }
@@ -191,15 +190,13 @@ impl SubmissionPatchUser {
             .first::<Submission>(conn)?;
 
         if old_submission.submitted_by != user {
-            return Err(ApiError::new(
-                403,
+            return Err(ApiError::Forbidden(
                 "You can only edit your own submissions.",
             ));
         }
 
         if old_submission.locked {
-            return Err(ApiError::new(
-                403,
+            return Err(ApiError::Forbidden(
                 "This submission has been locked and cannot be edited",
             ));
         }
@@ -208,8 +205,7 @@ impl SubmissionPatchUser {
             SubmissionStatus::Claimed
             | SubmissionStatus::UnderConsideration
             | SubmissionStatus::UnderReview => {
-                return Err(ApiError::new(
-                    409,
+                return Err(ApiError::Conflict(
                     "This submission is currently being reviewed and cannot be edited.",
                 ));
             }
@@ -219,8 +215,7 @@ impl SubmissionPatchUser {
         if !SubmissionsEnabled::is_enabled(conn)?
             && old_submission.status != SubmissionStatus::Pending
         {
-            return Err(ApiError::new(
-                400,
+            return Err(ApiError::BadRequest(
                 "Submissions are currently closed. You can only edit pending submissions.",
             ));
         }
@@ -232,16 +227,12 @@ impl SubmissionPatchUser {
 
         match level_status {
             LevelStatus::Legacy => {
-                return Err(ApiError::new(
-                    400,
+                return Err(ApiError::UnprocessableEntity(
                     "This level is on the legacy list and is not accepting records!",
                 ));
             }
             LevelStatus::Removed => {
-                return Err(ApiError::new(
-                    400,
-                    "This level has been removed from the list.",
-                ));
+                return Err(ApiError::Gone("This level has been removed from the list."));
             }
             _ => {}
         }
@@ -272,7 +263,7 @@ impl SubmissionPatchMod {
         providers: &ProvidersAppState,
     ) -> Result<Submission, ApiError> {
         if patch == Self::default() {
-            return Err(ApiError::new(400, "No changes were provided!"));
+            return Err(ApiError::BadRequest("No changes were provided!"));
         }
 
         if let Some(video_url) = patch.video_url.as_ref() {
@@ -317,8 +308,7 @@ impl SubmissionPatchMod {
                 || old_submission.status != SubmissionStatus::Claimed
                 || old_submission.reviewer_id != Some(authenticated.user_id))
         {
-            return Err(ApiError::new(
-                403,
+            return Err(ApiError::Forbidden(
                 "You do not have permission to edit this submission.",
             ));
         }

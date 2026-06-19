@@ -79,10 +79,7 @@ impl Role {
             .has_higher_privilege_than(conn, target_role.privilege_level)?
             .then_some(())
             .ok_or_else(|| {
-                ApiError::new(
-                    403,
-                    "You do not have sufficient permissions to edit this role.",
-                )
+                ApiError::Forbidden("You do not have sufficient permissions to edit this role.")
             })?;
 
         Ok(())
@@ -97,8 +94,7 @@ impl Role {
             .has_higher_privilege_than(conn, role.privilege_level)?
             .then_some(())
             .ok_or_else(|| {
-                ApiError::new(
-                    403,
+                ApiError::Forbidden(
                     "You can not create a role with higher permissions than yourself.",
                 )
             })?;

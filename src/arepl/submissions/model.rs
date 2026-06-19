@@ -190,8 +190,7 @@ impl Submission {
             {
                 id
             } else {
-                return Err(ApiError::new(
-                    404,
+                return Err(ApiError::NotFound(
                     "There are no submissions available to claim",
                 ));
             };

@@ -149,10 +149,9 @@ impl UserBadge {
             .iter()
             .any(|badge| badge == badge_code)
         {
-            return Err(ApiError::new(
-                400,
-                &format!("Unknown badge code: {badge_code}"),
-            ));
+            return Err(ApiError::BadRequest(format!(
+                "Unknown badge code: {badge_code}"
+            )));
         }
 
         Ok(())

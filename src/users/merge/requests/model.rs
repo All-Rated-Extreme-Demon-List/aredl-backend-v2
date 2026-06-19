@@ -167,8 +167,7 @@ impl MergeRequestPage {
 impl MergeRequest {
     pub fn upsert(conn: &mut DbConnection, request: MergeRequestUpsert) -> Result<Self, ApiError> {
         if request.primary_user == request.secondary_user {
-            return Err(ApiError::new(
-                400,
+            return Err(ApiError::UnprocessableEntity(
                 "You cannot merge your account with itself.",
             ));
         }
@@ -181,10 +180,10 @@ impl MergeRequest {
 
         if let Some((_user_id, is_placeholder)) = secondary_user_data {
             if !is_placeholder {
-                return Err(ApiError::new(400, "You can only submit merge requests for placeholder users. To merge your account with a user that is already linked to another discord account, please make a support post on our discord server."));
+                return Err(ApiError::Conflict("You can only submit merge requests for placeholder users. To merge your account with a user that is already linked to another discord account, please make a support post on our discord server."));
             }
         } else {
-            return Err(ApiError::new(404, "The secondary user does not exist."));
+            return Err(ApiError::NotFound("The secondary user does not exist."));
         }
 
         let existing_request = merge_requests::table
@@ -195,7 +194,7 @@ impl MergeRequest {
 
         if let Some(existing) = existing_request {
             if !existing.is_rejected {
-                return Err(ApiError::new(409,
+                return Err(ApiError::Conflict(
 					"You already submitted a merge request for your account. Please wait until it's either accepted or denied before submitting a new one.",
 				));
             }

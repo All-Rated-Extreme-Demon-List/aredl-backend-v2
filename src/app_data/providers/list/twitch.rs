@@ -107,11 +107,11 @@ impl Provider for TwitchProvider {
         let twitch_auth = context
             .twitch_auth
             .as_ref()
-            .ok_or_else(|| ApiError::new(500, "Twitch support isn't available"))?;
+            .ok_or_else(|| ApiError::ServiceUnavailable("Twitch support isn't available"))?;
         let db = context
             .db
             .as_ref()
-            .ok_or_else(|| ApiError::new(500, "Twitch token storage isn't available"))?;
+            .ok_or_else(|| ApiError::ServiceUnavailable("Twitch token storage isn't available"))?;
 
         let access_token = twitch_auth.get_access_token(db).await?;
 
@@ -124,12 +124,12 @@ impl Provider for TwitchProvider {
         headers.insert(
             "Authorization",
             HeaderValue::from_str(&format!("Bearer {}", access_token))
-                .map_err(|_| ApiError::new(500, "Invalid Twitch access token"))?,
+                .map_err(|_| ApiError::InternalServerError("Invalid Twitch access token"))?,
         );
         headers.insert(
             "Client-Id",
             HeaderValue::from_str(&twitch_auth.config.client_id)
-                .map_err(|_| ApiError::new(500, "Invalid Twitch client id"))?,
+                .map_err(|_| ApiError::InternalServerError("Invalid Twitch client id"))?,
         );
 
         let response = context
@@ -138,20 +138,17 @@ impl Provider for TwitchProvider {
             .headers(headers)
             .send()
             .await
-            .map_err(|e| ApiError::new(502, &format!("Twitch API error: {e}")))?;
+            .map_err(|e| ApiError::BadGateway(format!("Twitch API error: {e}")))?;
 
         if !response.status().is_success() {
             tracing::warn!("full Twitch API response: {:?}", response);
-            return Err(ApiError::new(
-                response.status().as_u16(),
-                "Twitch API returned non-success",
-            ));
+            return Err(ApiError::BadGateway("Twitch API returned non-success"));
         }
 
         let json: Value = response
             .json()
             .await
-            .map_err(|e| ApiError::new(500, &format!("Failed to parse Twitch response: {e}")))?;
+            .map_err(|e| ApiError::BadGateway(format!("Failed to parse Twitch response: {e}")))?;
 
         let first = json
             .get("data")

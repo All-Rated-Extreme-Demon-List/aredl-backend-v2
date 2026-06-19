@@ -40,9 +40,9 @@ impl ProvidersAppState {
     pub fn validate_is_url(&self, url: &str) -> Result<Url, ApiError> {
         let input = url.trim();
         if input.chars().any(|char| char.is_whitespace()) {
-            return Err(ApiError::new(400, "Malformed URL"));
+            return Err(ApiError::BadRequest("Malformed URL"));
         }
-        let url = Url::parse(input).map_err(|_| ApiError::new(400, "Malformed URL"))?;
+        let url = Url::parse(input).map_err(|_| ApiError::BadRequest("Malformed URL"))?;
         Ok(url)
     }
 
@@ -52,11 +52,10 @@ impl ProvidersAppState {
         let provider = self
             .registry
             .get(matched.provider)
-            .ok_or_else(|| ApiError::new(500, "Provider not registered"))?;
+            .ok_or_else(|| ApiError::InternalServerError("Provider not registered"))?;
 
         if !provider.usage().allowed_for_completion() {
-            return Err(ApiError::new(
-                422,
+            return Err(ApiError::UnprocessableEntity(
                 "This provider is not allowed for this field",
             ));
         }
@@ -83,7 +82,7 @@ impl ProvidersAppState {
         let provider = self
             .registry
             .get(matched.provider)
-            .ok_or_else(|| ApiError::new(500, "Provider not registered"))?;
+            .ok_or_else(|| ApiError::InternalServerError("Provider not registered"))?;
         provider.get_content_location(matched, &self.context).await
     }
 
@@ -94,7 +93,7 @@ impl ProvidersAppState {
         let provider = self
             .registry
             .get(matched.provider)
-            .ok_or_else(|| ApiError::new(500, "Provider not registered"))?;
+            .ok_or_else(|| ApiError::InternalServerError("Provider not registered"))?;
         provider.fetch_metadata(matched, &self.context).await
     }
 }

@@ -95,8 +95,7 @@ impl ProviderRegistry {
                 None => continue,
             }
         }
-        Err(ApiError::new(
-            422,
+        Err(ApiError::UnprocessableEntity(
             "URL does not match any known supported providers. Please refer to our guidelines for a list of supported websites.",
         ))
     }
@@ -163,7 +162,7 @@ impl ContentDataLocation {
         let end = start
             .checked_add(len)
             .and_then(|v| v.checked_sub(1))
-            .ok_or_else(|| ApiError::new(500, "Invalid range parameters"))?;
+            .ok_or_else(|| ApiError::InternalServerError("Invalid range parameters"))?;
 
         let range = format!("bytes={}-{}", start, end);
 
@@ -173,20 +172,19 @@ impl ContentDataLocation {
             .header(header::RANGE, range)
             .send()
             .await
-            .map_err(|e| ApiError::new(502, &format!("Failed to request file range: {e}")))?;
+            .map_err(|e| ApiError::BadGateway(format!("Failed to request file range: {e}")))?;
 
         if !response.status().is_success() && response.status() != StatusCode::PARTIAL_CONTENT {
             let status = response.status();
-            return Err(ApiError::new(
-                status.as_u16(),
-                &format!("Failed to request file range: {status}"),
-            ));
+            return Err(ApiError::BadGateway(format!(
+                "Failed to request file range: {status}"
+            )));
         }
 
         let bytes = response
             .bytes()
             .await
-            .map_err(|e| ApiError::new(500, &format!("Failed to read file bytes: {e}")))?;
+            .map_err(|e| ApiError::BadGateway(format!("Failed to read file bytes: {e}")))?;
 
         Ok(bytes.to_vec())
     }

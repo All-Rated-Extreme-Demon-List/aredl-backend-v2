@@ -3,7 +3,9 @@ use crate::error_handler::ApiError;
 use crate::schema::users;
 use crate::users::User;
 use chrono::{DateTime, Duration, TimeZone, Utc};
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::{
+    result::Error as DieselError, ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper,
+};
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -33,7 +35,7 @@ pub fn create_token(
     let expire_datetime = now + expires_in;
     let exp = expire_datetime.timestamp() as usize;
     let user_claims_serialized = serde_json::to_string(&user_claims)
-        .map_err(|_| ApiError::new(500, "Failed to serialize user claims!"))?;
+        .map_err(|_| ApiError::InternalServerError("Failed to serialize user claims!"))?;
 
     let claims = TokenClaims {
         sub: user_claims_serialized,
@@ -43,7 +45,7 @@ pub fn create_token(
     };
 
     let token = encode(&Header::default(), &claims, encoding_key)
-        .map_err(|_| ApiError::new(400, "Failed to create token!"))?;
+        .map_err(|_| ApiError::InternalServerError("Failed to create token!"))?;
 
     Ok((token, expire_datetime))
 }
@@ -57,18 +59,19 @@ pub fn decode_token<T: Into<String>>(
 
     let decoded =
         decode::<TokenClaims>(&token_str, decoding_key, &Validation::new(Algorithm::HS256))
-            .map_err(|e| ApiError::new(401, format!("Invalid token! {}", e).as_str()))?;
+            .map_err(|e| ApiError::Unauthorized(format!("Invalid token! {}", e).as_str()))?;
 
     if !expected_types.is_empty() && !expected_types.contains(&decoded.claims.token_type.as_str()) {
-        return Err(ApiError::new(401, "Invalid token type"));
+        return Err(ApiError::Unauthorized("Invalid token type"));
     }
 
     Ok(decoded.claims)
 }
 
 pub fn decode_user_claims(token_claims: &TokenClaims) -> Result<UserClaims, ApiError> {
-    serde_json::from_str(&token_claims.sub)
-        .map_err(|e| ApiError::new(401, format!("Failed to decode user claims! {}", e).as_str()))
+    serde_json::from_str(&token_claims.sub).map_err(|e| {
+        ApiError::Unauthorized(format!("Failed to decode user claims! {}", e).as_str())
+    })
 }
 
 pub fn check_token_valid(
@@ -80,15 +83,18 @@ pub fn check_token_valid(
         .filter(users::id.eq(user_claims.user_id))
         .select(User::as_select())
         .first::<User>(conn)
-        .map_err(|_| ApiError::new(401, "User not found"))?;
+        .map_err(|e| match e {
+            DieselError::NotFound => ApiError::Unauthorized("User not found"),
+            _ => ApiError::InternalServerError("Failed to validate token"),
+        })?;
 
     let token_issue_time = match Utc.timestamp_opt(token_claims.iat as i64, 0) {
         chrono::LocalResult::Single(dt) => dt,
-        _ => return Err(ApiError::new(401, "Invalid token issue time")),
+        _ => return Err(ApiError::Unauthorized("Invalid token issue time")),
     };
 
     if token_issue_time < user_record.access_valid_after {
-        return Err(ApiError::new(401, "Token has been invalidated"));
+        return Err(ApiError::Unauthorized("Token has been invalidated"));
     }
 
     Ok(())

@@ -88,7 +88,7 @@ async fn discord_auth(
         .context
         .discord_auth
         .clone()
-        .ok_or_else(|| ApiError::new(503, "Discord integration is not configured"))?;
+        .ok_or_else(|| ApiError::ServiceUnavailable("Discord integration is not configured"))?;
 
     let authorize_url = web::block(move || {
         OAuthRequestData::init_request(
@@ -126,7 +126,7 @@ async fn discord_callback(
         .context
         .discord_auth
         .clone()
-        .ok_or_else(|| ApiError::new(503, "Discord integration is not configured"))?;
+        .ok_or_else(|| ApiError::ServiceUnavailable("Discord integration is not configured"))?;
     let state = query.state.clone();
 
     let db2 = db.clone();
@@ -149,10 +149,10 @@ async fn discord_callback(
         .bearer_auth(access_token)
         .send()
         .await
-        .map_err(|_| ApiError::new(500, "Failed to request discord data"))?
+        .map_err(|_| ApiError::BadGateway("Failed to request discord data"))?
         .json::<DiscordUser>()
         .await
-        .map_err(|_| ApiError::new(500, "Failed to load discord data"))?;
+        .map_err(|_| ApiError::BadGateway("Failed to load discord data"))?;
 
     let (user, roles, scopes) = web::block(move || {
         let conn = &mut db2.connection()?;

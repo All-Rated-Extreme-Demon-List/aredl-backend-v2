@@ -91,9 +91,9 @@ pub struct OAuthClientConfig {
 
 impl OAuthClientConfig {
     pub fn authorize_uri(&self) -> Result<String, ApiError> {
-        self.authorize_uri
-            .clone()
-            .ok_or_else(|| ApiError::new(500, "OAuth client config missing authorize_uri"))
+        self.authorize_uri.clone().ok_or_else(|| {
+            ApiError::InternalServerError("OAuth client config missing authorize_uri")
+        })
     }
 
     pub fn redirect_uri(&self) -> Result<String, ApiError> {
@@ -105,8 +105,7 @@ impl OAuthClientConfig {
                 Ok(build_oauth_return_uri(&base, return_path, "callback"))
             }
             _ => self.redirect_uri.clone().ok_or_else(|| {
-                ApiError::new(
-                    500,
+                ApiError::InternalServerError(
                     "OAuth provider config missing return_path or redirect_uri",
                 )
             }),
@@ -117,7 +116,9 @@ impl OAuthClientConfig {
         self.issuer_uri
             .clone()
             .or_else(|| self.authorize_uri.clone())
-            .ok_or_else(|| ApiError::new(500, "OAuth provider config missing issuer_uri"))
+            .ok_or_else(|| {
+                ApiError::InternalServerError("OAuth provider config missing issuer_uri")
+            })
     }
 
     pub fn auth_type(&self) -> OAuthAuthTypeConfig {
@@ -188,15 +189,15 @@ impl OAuthOptions {
     pub fn validate(&self) -> Result<(), ApiError> {
         if let Some(callback) = &self.callback {
             let Ok(url) = Url::parse(callback) else {
-                return Err(ApiError::new(400, "Invalid callback URL"));
+                return Err(ApiError::BadRequest("Invalid callback URL"));
             };
 
             if !matches!(url.scheme(), "http" | "https") {
-                return Err(ApiError::new(400, "Invalid callback URL"));
+                return Err(ApiError::BadRequest("Invalid callback URL"));
             }
 
             let Some(host) = url.host_str().map(|host| host.to_ascii_lowercase()) else {
-                return Err(ApiError::new(400, "Invalid callback URL"));
+                return Err(ApiError::BadRequest("Invalid callback URL"));
             };
 
             let allow_localhost = get_optional_secret("AUTH_CALLBACK_ALLOW_LOCALHOST")
@@ -218,7 +219,7 @@ impl OAuthOptions {
                 return Ok(());
             }
 
-            return Err(ApiError::new(400, "Invalid callback URL"));
+            return Err(ApiError::BadRequest("Invalid callback URL"));
         }
 
         Ok(())
@@ -315,7 +316,7 @@ pub async fn exchange_oauth_code(
     let token_response = request
         .request_async(&http_client)
         .await
-        .map_err(|_| ApiError::new(401, "Failed to request token!"))?;
+        .map_err(|_| ApiError::BadGateway("Failed to request token!"))?;
 
     Ok(token_response.access_token().secret().clone())
 }

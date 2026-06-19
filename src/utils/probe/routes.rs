@@ -22,8 +22,7 @@ pub async fn probe_file(
         .get_content_location(&matched)
         .await?
         .ok_or_else(|| {
-            ApiError::new(
-                422,
+            ApiError::UnprocessableEntity(
                 "Not supported for this provider yet, or failed to retrieve content location",
             )
         })?

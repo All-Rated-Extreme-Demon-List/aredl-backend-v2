@@ -260,7 +260,9 @@ impl Record {
     ) -> Result<Self, ApiError> {
         conn.transaction(|conn| -> Result<Self, ApiError> {
             if authenticated.user_id == record.submitted_by {
-                return Err(ApiError::new(400, "You cannot create records for yourself"));
+                return Err(ApiError::Forbidden(
+                    "You cannot create records for yourself",
+                ));
             }
             // Create the corresponding submission first and let triggers initialize the record
             let submission =
@@ -300,7 +302,9 @@ impl Record {
                 .first(conn)?;
 
             if authenticated.user_id == submitted_by {
-                return Err(ApiError::new(400, "You cannot update records for yourself"));
+                return Err(ApiError::Forbidden(
+                    "You cannot update records for yourself",
+                ));
             }
 
             diesel::update(submissions::table)
@@ -364,7 +368,7 @@ impl Record {
             let metadata = providers
                 .fetch_metadata(&matched)
                 .await?
-                .ok_or_else(|| ApiError::new(422, "Failed to fetch metadata"))?;
+                .ok_or_else(|| ApiError::BadGateway("Failed to fetch metadata"))?;
             Ok::<_, ApiError>(metadata.published_at)
         }
         .await;

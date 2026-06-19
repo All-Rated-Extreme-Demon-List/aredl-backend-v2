@@ -167,25 +167,21 @@ async fn fetch_active_patreon_user_ids(
         let response = request
             .send()
             .await
-            .map_err(|e| ApiError::new(502, &format!("Failed to request Patreon members: {e}")))?;
+            .map_err(|e| ApiError::BadGateway(format!("Failed to request Patreon members: {e}")))?;
 
         let status = response.status();
         if !status.is_success() {
             let body = response.text().await.unwrap_or_default();
-            return Err(ApiError::new(
-                502,
-                &format!("Failed to request Patreon members ({status}): {body}"),
-            ));
+            return Err(ApiError::BadGateway(format!(
+                "Failed to request Patreon members ({status}): {body}"
+            )));
         }
 
         let page = response
             .json::<PatreonMembersResponse>()
             .await
             .map_err(|e| {
-                ApiError::new(
-                    500,
-                    &format!("Failed to parse Patreon members response: {e}"),
-                )
+                ApiError::BadGateway(format!("Failed to parse Patreon members response: {e}"))
             })?;
 
         total_member_count += page.data.len();

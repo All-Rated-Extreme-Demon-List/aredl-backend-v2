@@ -173,8 +173,7 @@ async fn delete(
             .select(count_star())
             .first(conn)?;
         if members_count > 1 && !has_staff_permission {
-            return Err(ApiError::new(
-                403,
+            return Err(ApiError::Forbidden(
                 "You cannot delete a clan unless you're the only member left in it.",
             ));
         }

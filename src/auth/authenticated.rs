@@ -27,7 +27,7 @@ impl FromRequest for Authenticated {
 
         let result = match value {
             Some(claims) => Ok(Authenticated(claims)),
-            None => Err(ApiError::new(401, "Authentication error")),
+            None => Err(ApiError::Unauthorized("Authentication error")),
         };
 
         ready(result)
@@ -37,7 +37,7 @@ impl FromRequest for Authenticated {
 impl Authenticated {
     pub fn ensure_not_banned(&self, conn: &mut DbConnection) -> Result<(), ApiError> {
         if User::is_banned(self.user_id, conn)? {
-            return Err(ApiError::new(403, "You have been banned from the list."));
+            return Err(ApiError::Forbidden("You have been banned from the list."));
         }
         Ok(())
     }
@@ -48,13 +48,10 @@ impl Authenticated {
         permission: Permission,
     ) -> Result<(), ApiError> {
         if !self.has_permission(conn, permission.clone())? {
-            return Err(ApiError::new(
-                403,
-                &format!(
-                    "You do not have the required permission ({}) to perform this action",
-                    permission
-                ),
-            ));
+            return Err(ApiError::Forbidden(format!(
+                "You do not have the required permission ({}) to perform this action",
+                permission
+            )));
         }
         Ok(())
     }
@@ -68,8 +65,7 @@ impl Authenticated {
         let target_user_privilege = permission::get_privilege_level(conn, target_user_id)?;
 
         if acting_user_privilege <= target_user_privilege {
-            return Err(ApiError::new(
-                403,
+            return Err(ApiError::Forbidden(
                 "You do not have sufficient privilege to affect this user.",
             ));
         }
@@ -109,8 +105,7 @@ impl Authenticated {
 
         let has_permission = self.has_permission(conn, Permission::ClanModify)?;
         if (member.is_none() || member.unwrap().role < clan_role_level) && !has_permission {
-            return Err(ApiError::new(
-                403,
+            return Err(ApiError::Forbidden(
                 "You do not have the required permission to perform this action",
             ));
         }

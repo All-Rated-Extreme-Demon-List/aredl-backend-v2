@@ -107,21 +107,22 @@ impl ContentDataLocation {
         let output = command
             .output()
             .await
-            .map_err(|e| ApiError::new(500, &format!("Failed to run ffprobe: {e}")))?;
+            .map_err(|e| ApiError::InternalServerError(format!("Failed to run ffprobe: {e}")))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(ApiError::new(
-                422,
-                &format!("Failed to run ffprobe: {stderr}"),
-            ));
+            return Err(ApiError::UnprocessableEntity(format!(
+                "Failed to run ffprobe: {stderr}"
+            )));
         }
 
-        let stdout = String::from_utf8(output.stdout)
-            .map_err(|e| ApiError::new(500, &format!("Failed to decode ffprobe output: {e}")))?;
+        let stdout = String::from_utf8(output.stdout).map_err(|e| {
+            ApiError::InternalServerError(format!("Failed to decode ffprobe output: {e}"))
+        })?;
 
-        let value: JsonValue = serde_json::from_str(&stdout)
-            .map_err(|e| ApiError::new(500, &format!("Failed to parse ffprobe output: {e}")))?;
+        let value: JsonValue = serde_json::from_str(&stdout).map_err(|e| {
+            ApiError::InternalServerError(format!("Failed to parse ffprobe output: {e}"))
+        })?;
 
         Ok(value)
     }
@@ -139,21 +140,22 @@ impl ContentDataLocation {
         let output = command
             .output()
             .await
-            .map_err(|e| ApiError::new(500, &format!("Failed to run exiftool: {e}")))?;
+            .map_err(|e| ApiError::InternalServerError(format!("Failed to run exiftool: {e}")))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(ApiError::new(
-                422,
-                &format!("Failed to run exiftool: {stderr}"),
-            ));
+            return Err(ApiError::UnprocessableEntity(format!(
+                "Failed to run exiftool: {stderr}"
+            )));
         }
 
-        let stdout = String::from_utf8(output.stdout)
-            .map_err(|e| ApiError::new(500, &format!("Failed to decode exiftool output: {e}")))?;
+        let stdout = String::from_utf8(output.stdout).map_err(|e| {
+            ApiError::InternalServerError(format!("Failed to decode exiftool output: {e}"))
+        })?;
 
-        let value: JsonValue = serde_json::from_str(&stdout)
-            .map_err(|e| ApiError::new(500, &format!("Failed to parse exiftool output: {e}")))?;
+        let value: JsonValue = serde_json::from_str(&stdout).map_err(|e| {
+            ApiError::InternalServerError(format!("Failed to parse exiftool output: {e}"))
+        })?;
 
         Ok(value)
     }
@@ -244,15 +246,15 @@ impl ContentDataLocation {
 
 pub async fn save_to_temp_file(bytes: &[u8]) -> Result<std::path::PathBuf, ApiError> {
     let mut file = NamedTempFile::new()
-        .map_err(|e| ApiError::new(500, &format!("Failed to create temp file: {e}")))?;
+        .map_err(|e| ApiError::InternalServerError(format!("Failed to create temp file: {e}")))?;
 
     file.write_all(bytes)
-        .map_err(|e| ApiError::new(500, &format!("Failed to write temp file: {e}")))?;
+        .map_err(|e| ApiError::InternalServerError(format!("Failed to write temp file: {e}")))?;
 
     let path = file.path().to_path_buf();
 
     file.keep()
-        .map_err(|e| ApiError::new(500, &format!("Failed to persist temp file: {e}")))?;
+        .map_err(|e| ApiError::InternalServerError(format!("Failed to persist temp file: {e}")))?;
 
     Ok(path)
 }

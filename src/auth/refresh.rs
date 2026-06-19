@@ -47,7 +47,7 @@ async fn refresh_auth(
         .map(|h| h.strip_prefix("Bearer ").unwrap_or("").to_string());
 
     if refresh_token.is_none() {
-        return Err(ApiError::new(400, "No token provided"));
+        return Err(ApiError::Unauthorized("No token provided"));
     }
 
     let decoded_token_claims = token::decode_token(
@@ -82,7 +82,7 @@ async fn refresh_auth(
     let refresh_exp = Utc
         .timestamp_opt(decoded_token_claims.exp as i64, 0)
         .single()
-        .ok_or_else(|| ApiError::new(500, "Failed to parse expiration timestamp"))?;
+        .ok_or_else(|| ApiError::InternalServerError("Failed to parse expiration timestamp"))?;
 
     if refresh_exp - now < Duration::days(2) {
         let (new_refresh_token, refresh_expires) = token::create_token(

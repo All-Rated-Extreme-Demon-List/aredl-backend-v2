@@ -19,9 +19,9 @@ pub struct DbAppState {
 
 impl DbAppState {
     pub fn connection(&self) -> Result<DbConnection, ApiError> {
-        self.pool
-            .get()
-            .map_err(|e| ApiError::new(500, &format!("Failed to get db connection: {}", e)))
+        self.pool.get().map_err(|e| {
+            ApiError::InternalServerError(format!("Failed to get db connection: {}", e))
+        })
     }
 
     pub fn run_pending_migrations(&self) {

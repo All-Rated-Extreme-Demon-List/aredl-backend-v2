@@ -118,16 +118,16 @@ impl Provider for YouTubeProvider {
         let google_auth = context
             .google_auth
             .as_ref()
-            .ok_or_else(|| ApiError::new(500, "Youtube support isn't available"))?;
+            .ok_or_else(|| ApiError::ServiceUnavailable("Youtube support isn't available"))?;
         let db = context
             .db
             .as_ref()
-            .ok_or_else(|| ApiError::new(500, "Google token storage isn't available"))?;
+            .ok_or_else(|| ApiError::ServiceUnavailable("Google token storage isn't available"))?;
 
         let token = google_auth
             .get_access_token(db)
             .await
-            .map_err(|e| ApiError::new(502, &format!("Failed to acquire Youtube token: {e}")))?;
+            .map_err(|e| ApiError::BadGateway(format!("Failed to acquire Youtube token: {e}")))?;
 
         let url = format!(
             "{}/youtube/v3/videos?part=snippet&id={}",
@@ -147,19 +147,16 @@ impl Provider for YouTubeProvider {
             .headers(headers)
             .send()
             .await
-            .map_err(|e| ApiError::new(502, &format!("YouTube API error: {e}")))?;
+            .map_err(|e| ApiError::BadGateway(format!("YouTube API error: {e}")))?;
 
         if !response.status().is_success() {
-            return Err(ApiError::new(
-                response.status().as_u16(),
-                "YouTube API returned non-success",
-            ));
+            return Err(ApiError::BadGateway("YouTube API returned non-success"));
         }
 
         let json: JsonValue = response
             .json()
             .await
-            .map_err(|e| ApiError::new(500, &format!("Failed to parse YouTube response: {e}")))?;
+            .map_err(|e| ApiError::BadGateway(format!("Failed to parse YouTube response: {e}")))?;
 
         let items = json
             .get("items")

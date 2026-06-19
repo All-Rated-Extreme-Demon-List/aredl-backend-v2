@@ -210,7 +210,7 @@ impl Submission {
             if authenticated.user_id == inserted_submission.submitted_by
                 && !(SubmissionsEnabled::is_enabled(connection)?)
             {
-                return Err(ApiError::new(400, "Submissions are currently disabled"));
+                return Err(ApiError::Forbidden("Submissions are currently disabled"));
             }
 
             // check if any submissions exist already
@@ -222,8 +222,7 @@ impl Submission {
                 .optional()?;
 
             if exists_submission.is_some() {
-                return Err(ApiError::new(
-                    409,
+                return Err(ApiError::Conflict(
                     "You already have a submission for this level",
                 ));
             }
@@ -241,19 +240,15 @@ impl Submission {
                 .optional()?;
 
             match level_info {
-                None => return Err(ApiError::new(404, "Could not find this level")),
+                None => return Err(ApiError::NotFound("Could not find this level")),
                 Some((status, position, requires_raw_footage)) => {
                     if status == LevelStatus::Legacy {
-                        return Err(ApiError::new(
-                            400,
+                        return Err(ApiError::UnprocessableEntity(
                             "This level is on the legacy list and is not accepting records.",
                         ));
                     }
                     if status == LevelStatus::Removed {
-                        return Err(ApiError::new(
-                            400,
-                            "This level has been removed from the list.",
-                        ));
+                        return Err(ApiError::Gone("This level has been removed from the list."));
                     }
 
                     let raw_is_required = match status {
@@ -263,7 +258,9 @@ impl Submission {
                     };
 
                     if raw_is_required && inserted_submission.raw_url.is_none() {
-                        return Err(ApiError::new(400, "This level requires raw footage"));
+                        return Err(ApiError::UnprocessableEntity(
+                            "This level requires raw footage",
+                        ));
                     }
                 }
             }

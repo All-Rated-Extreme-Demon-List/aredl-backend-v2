@@ -102,22 +102,19 @@ pub struct ClanListQueryOptions {
 impl Clan {
     pub fn create_empty(conn: &mut DbConnection, clan: ClanCreate) -> Result<Self, ApiError> {
         if clan.global_name.len() > 100 {
-            return Err(ApiError::new(
-                400,
+            return Err(ApiError::UnprocessableEntity(
                 "The clan name can at most be 100 characters long.",
             ));
         }
 
         if clan.tag.len() > 5 {
-            return Err(ApiError::new(
-                400,
+            return Err(ApiError::UnprocessableEntity(
                 "The clan tag can at most be 5 characters long.",
             ));
         }
 
         if clan.description.is_some() && clan.description.as_ref().unwrap().len() > 300 {
-            return Err(ApiError::new(
-                400,
+            return Err(ApiError::UnprocessableEntity(
                 "The clan description can at most be 300 characters long.",
             ));
         }
@@ -140,26 +137,23 @@ impl Clan {
             .optional()?;
 
         if existing_clan_member.is_some() {
-            return Err(ApiError::new(400, "You are already in a clan."));
+            return Err(ApiError::Conflict("You are already in a clan."));
         }
 
         if clan.global_name.len() > 100 {
-            return Err(ApiError::new(
-                400,
+            return Err(ApiError::UnprocessableEntity(
                 "The clan name can at most be 100 characters long.",
             ));
         }
 
         if clan.tag.len() > 5 {
-            return Err(ApiError::new(
-                400,
+            return Err(ApiError::UnprocessableEntity(
                 "The clan tag can at most be 5 characters long.",
             ));
         }
 
         if clan.description.is_some() && clan.description.as_ref().unwrap().len() > 300 {
-            return Err(ApiError::new(
-                400,
+            return Err(ApiError::UnprocessableEntity(
                 "The clan description can at most be 300 characters long.",
             ));
         }
@@ -222,22 +216,19 @@ impl Clan {
         clan: ClanUpdate,
     ) -> Result<Self, ApiError> {
         if clan.global_name.is_some() && clan.global_name.as_ref().unwrap().len() > 100 {
-            return Err(ApiError::new(
-                400,
+            return Err(ApiError::UnprocessableEntity(
                 "The clan name can at most be 100 characters long.",
             ));
         }
 
         if clan.tag.is_some() && clan.tag.as_ref().unwrap().len() > 5 {
-            return Err(ApiError::new(
-                400,
+            return Err(ApiError::UnprocessableEntity(
                 "The clan tag can at most be 5 characters long.",
             ));
         }
 
         if clan.description.is_some() && clan.description.as_ref().unwrap().len() > 300 {
-            return Err(ApiError::new(
-                400,
+            return Err(ApiError::UnprocessableEntity(
                 "The clan description can at most be 300 characters long.",
             ));
         }

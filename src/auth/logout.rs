@@ -37,7 +37,7 @@ pub async fn logout_all(
         .map(|h| h.strip_prefix("Bearer ").unwrap_or("").to_string());
 
     if token.is_none() {
-        return Err(ApiError::new(400, "No token provided"));
+        return Err(ApiError::Unauthorized("No token provided"));
     }
 
     web::block(move || {

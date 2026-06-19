@@ -260,7 +260,7 @@ impl User {
 
         match user {
             Some(ban_level) => Ok(ban_level > 1),
-            None => Err(ApiError::new(404, "User not found")),
+            None => Err(ApiError::NotFound("User not found")),
         }
     }
 

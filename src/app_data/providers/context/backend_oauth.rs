@@ -99,25 +99,19 @@ impl OAuthProviderContext {
 
     pub fn backend_token_state(&self) -> Result<&BackendTokenState, ApiError> {
         self.backend_token.as_ref().ok_or_else(|| {
-            ApiError::new(
-                500,
-                &format!(
-                    "Backend token state not initialized for provider {:?}",
-                    self.provider
-                ),
-            )
+            ApiError::InternalServerError(format!(
+                "Backend token state not initialized for provider {:?}",
+                self.provider
+            ))
         })
     }
 
     pub fn user_oauth(&self) -> Result<&OAuthProviderState, ApiError> {
         self.user_oauth.as_ref().ok_or_else(|| {
-            ApiError::new(
-                500,
-                &format!(
-                    "User OAuth not initialized for provider {:?}",
-                    self.provider
-                ),
-            )
+            ApiError::InternalServerError(format!(
+                "User OAuth not initialized for provider {:?}",
+                self.provider
+            ))
         })
     }
 
@@ -133,10 +127,7 @@ impl OAuthProviderContext {
             .send()
             .await
             .map_err(|e| {
-                ApiError::new(
-                    502,
-                    &format!("Failed to request {:?} token: {e}", self.provider),
-                )
+                ApiError::BadGateway(format!("Failed to request {:?} token: {e}", self.provider))
             })?;
 
         let status = resp.status();
@@ -144,20 +135,17 @@ impl OAuthProviderContext {
         if !status.is_success() {
             let body = resp.text().await.unwrap_or_default();
 
-            return Err(ApiError::new(
-                502,
-                &format!(
-                    "Failed to request {:?} token ({status}): {body}",
-                    self.provider
-                ),
-            ));
+            return Err(ApiError::BadGateway(format!(
+                "Failed to request {:?} token ({status}): {body}",
+                self.provider
+            )));
         }
 
         resp.json::<OAuthGrantResponse>().await.map_err(|e| {
-            ApiError::new(
-                500,
-                &format!("Failed to parse {:?} token response: {e}", self.provider),
-            )
+            ApiError::BadGateway(format!(
+                "Failed to parse {:?} token response: {e}",
+                self.provider
+            ))
         })
     }
 
@@ -165,13 +153,10 @@ impl OAuthProviderContext {
         let token = self.read_optional_stored_token(db)?;
 
         let Some(token) = token else {
-            return Err(ApiError::new(
-                500,
-                &format!(
-                    "Missing {:?} backend OAuth token. Seed oauth_tokens for provider {:?}",
-                    self.provider, self.provider
-                ),
-            ));
+            return Err(ApiError::ServiceUnavailable(format!(
+                "Missing {:?} backend OAuth token. Seed oauth_tokens for provider {:?}",
+                self.provider, self.provider
+            )));
         };
 
         Ok(token)
@@ -329,10 +314,9 @@ fn token_cipher() -> Result<&'static XChaCha20Poly1305, ApiError> {
     });
 
     cipher_result.as_ref().map_err(|message| {
-        ApiError::new(
-            500,
-            &format!("Failed to initialize backend OAuth token encryption: {message}"),
-        )
+        ApiError::InternalServerError(format!(
+            "Failed to initialize backend OAuth token encryption: {message}"
+        ))
     })
 }
 
@@ -348,7 +332,7 @@ fn encrypt_db_token_value(value: &str, aad: &[u8]) -> Result<String, ApiError> {
                 aad,
             },
         )
-        .map_err(|_| ApiError::new(500, "Failed to encrypt backend OAuth token"))?;
+        .map_err(|_| ApiError::InternalServerError("Failed to encrypt backend OAuth token"))?;
 
     Ok(format!(
         "{ENCRYPTED_TOKEN_PREFIX}{}:{}",
@@ -362,21 +346,21 @@ pub(crate) fn decrypt_db_token_value(value: &str, aad: &[u8]) -> Result<String, 
         return Ok(value.to_string());
     };
 
-    let (nonce_b64, ciphertext_b64) = encrypted_value
-        .split_once(':')
-        .ok_or_else(|| ApiError::new(500, "Invalid encrypted backend OAuth token format"))?;
+    let (nonce_b64, ciphertext_b64) = encrypted_value.split_once(':').ok_or_else(|| {
+        ApiError::InternalServerError("Invalid encrypted backend OAuth token format")
+    })?;
 
-    let nonce_bytes = URL_SAFE_NO_PAD
-        .decode(nonce_b64)
-        .map_err(|_| ApiError::new(500, "Invalid encrypted backend OAuth token nonce encoding"))?;
+    let nonce_bytes = URL_SAFE_NO_PAD.decode(nonce_b64).map_err(|_| {
+        ApiError::InternalServerError("Invalid encrypted backend OAuth token nonce encoding")
+    })?;
 
-    let nonce_array: [u8; 24] = nonce_bytes
-        .try_into()
-        .map_err(|_| ApiError::new(500, "Invalid encrypted backend OAuth token nonce"))?;
+    let nonce_array: [u8; 24] = nonce_bytes.try_into().map_err(|_| {
+        ApiError::InternalServerError("Invalid encrypted backend OAuth token nonce")
+    })?;
 
-    let ciphertext = URL_SAFE_NO_PAD
-        .decode(ciphertext_b64)
-        .map_err(|_| ApiError::new(500, "Invalid encrypted backend OAuth token encoding"))?;
+    let ciphertext = URL_SAFE_NO_PAD.decode(ciphertext_b64).map_err(|_| {
+        ApiError::InternalServerError("Invalid encrypted backend OAuth token encoding")
+    })?;
 
     let nonce = XNonce::from(nonce_array);
     let cipher = token_cipher()?;
@@ -389,8 +373,8 @@ pub(crate) fn decrypt_db_token_value(value: &str, aad: &[u8]) -> Result<String, 
                 aad,
             },
         )
-        .map_err(|_| ApiError::new(500, "Failed to decrypt backend OAuth token"))?;
+        .map_err(|_| ApiError::InternalServerError("Failed to decrypt backend OAuth token"))?;
 
     String::from_utf8(plaintext)
-        .map_err(|_| ApiError::new(500, "Decrypted backend OAuth token is not UTF-8"))
+        .map_err(|_| ApiError::InternalServerError("Decrypted backend OAuth token is not UTF-8"))
 }

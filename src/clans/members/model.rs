@@ -235,7 +235,7 @@ impl ClanInvite {
             .first::<Uuid>(conn)
             .optional()?;
         if user_in_clan.is_some() {
-            return Err(ApiError::new(400, "This user is already in a clan"));
+            return Err(ApiError::Conflict("This user is already in a clan"));
         }
 
         let invited_by = users::table

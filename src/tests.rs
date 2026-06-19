@@ -6,7 +6,7 @@ use {
         page_helper::{PageQuery, Paginated},
         test_utils::assert_error_response,
     },
-    actix_web::{http::header, test, web, App, HttpResponse},
+    actix_web::{error::ErrorForbidden, http::header, test, web, App, HttpResponse},
 };
 
 #[test]
@@ -140,31 +140,59 @@ async fn cache_control_auth_public_uses_private_cache_with_authorization() {
 
 #[test]
 async fn error_handler_api_error_new_and_display() {
-    let err = ApiError::new(404, "Not found");
+    let err = ApiError::NotFound("Not found");
     assert_eq!(err.error_status_code, 404);
     assert_eq!(err.to_string(), "Not found");
 }
 
+#[test]
+async fn error_handler_api_error_named_status_and_display() {
+    let err = ApiError::Forbidden("Forbidden");
+    assert_eq!(err.error_status_code, 403);
+    assert_eq!(err.to_string(), "Forbidden");
+}
+
+#[test]
+async fn error_handler_converts_actix_error_helpers() {
+    let err = ApiError::from(ErrorForbidden("Forbidden"));
+    assert_eq!(err.error_status_code, 403);
+    assert_eq!(err.to_string(), "Forbidden");
+}
+
 #[actix_web::test]
 async fn error_handler_client_error_response_preserves_message() {
-    let app = test::init_service(
-        App::new().route(
+    let app =
+        test::init_service(App::new().route(
             "/",
-            web::get()
-                .to(|| async { Err::<HttpResponse, ApiError>(ApiError::new(400, "bad request")) }),
-        ),
-    )
-    .await;
+            web::get().to(|| async {
+                Err::<HttpResponse, ApiError>(ApiError::BadRequest("bad request"))
+            }),
+        ))
+        .await;
 
     let resp = test::call_service(&app, test::TestRequest::get().uri("/").to_request()).await;
     assert_error_response(resp, 400, Some("bad request")).await;
 }
 
 #[actix_web::test]
+async fn error_handler_named_status_response_preserves_client_message() {
+    let app = test::init_service(App::new().route(
+        "/",
+        web::get().to(|| async { Err::<HttpResponse, ApiError>(ApiError::Forbidden("forbidden")) }),
+    ))
+    .await;
+
+    let resp = test::call_service(&app, test::TestRequest::get().uri("/").to_request()).await;
+    assert_error_response(resp, 403, Some("forbidden")).await;
+}
+
+#[actix_web::test]
 async fn error_handler_server_error_response_masks_message() {
     let app = test::init_service(App::new().route(
         "/",
-        web::get().to(|| async { Err::<HttpResponse, ApiError>(ApiError::new(500, "details")) }),
+        web::get().to(|| async {
+            Err::<HttpResponse, ApiError>(ApiError::InternalServerError("details"))
+        }),
     ))
     .await;
 

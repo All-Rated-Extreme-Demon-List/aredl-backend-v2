@@ -43,7 +43,7 @@ impl User {
             .first(conn)?;
 
         if user.ban_level.is_some() && current_ban_level > 1 {
-            return Err(ApiError::new(403, "You have been banned from the list."));
+            return Err(ApiError::Forbidden("You have been banned from the list."));
         }
 
         if user.country.is_some() {
@@ -51,22 +51,20 @@ impl User {
             let current_time = Utc::now();
             if current_time < next_allowed_change {
                 let remaining = next_allowed_change - current_time;
-                return Err(ApiError::new(400, &format!(
+                return Err(ApiError::BadRequest(format!(
                     "You have recently changed your country, please wait {} days and {} hours before changing it again.",
                     remaining.num_days(), remaining.num_hours() % 24)));
             }
         }
 
         if user.global_name.is_some() && user.global_name.as_ref().unwrap().len() > 35 {
-            return Err(ApiError::new(
-                400,
+            return Err(ApiError::BadRequest(
                 "The display name can at most be 35 characters long.",
             ));
         }
 
         if user.description.is_some() && user.description.as_ref().unwrap().len() > 300 {
-            return Err(ApiError::new(
-                400,
+            return Err(ApiError::BadRequest(
                 "The description can at most be 300 characters long.",
             ));
         }
@@ -94,8 +92,7 @@ impl User {
                     .optional()?;
 
                 if beaten_aredl_level.is_none() && beaten_arepl_level.is_none() {
-                    return Err(ApiError::new(
-                        400,
+                    return Err(ApiError::BadRequest(
                         "You have not beaten the selected level.",
                     ));
                 }
@@ -104,8 +101,7 @@ impl User {
 
         if let Some(code) = &user.featured_badge_code {
             if !code.is_empty() && !UserBadge::has_code(conn, id, code)? {
-                return Err(ApiError::new(
-                    400,
+                return Err(ApiError::BadRequest(
                     "You have not unlocked the selected badge.",
                 ));
             }

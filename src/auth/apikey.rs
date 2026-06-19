@@ -54,7 +54,7 @@ pub async fn create_api_key(
         .map(|h| h.strip_prefix("Bearer ").unwrap_or("").to_string());
 
     if access_token.is_none() {
-        return Err(ApiError::new(400, "No token provided"));
+        return Err(ApiError::Unauthorized("No token provided"));
     }
 
     let lifetime_minutes = options.lifetime_minutes;
@@ -76,8 +76,7 @@ pub async fn create_api_key(
         let lifetime = Duration::minutes(lifetime_minutes);
 
         if lifetime > Duration::days(365) {
-            return Err(ApiError::new(
-                400,
+            return Err(ApiError::UnprocessableEntity(
                 "API key lifetime cannot exceed 1 year (525600 minutes)",
             ));
         }

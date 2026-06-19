@@ -12,8 +12,7 @@ fn parse_gd_id(s: &str) -> Result<(i32, bool), ApiError> {
         (s.parse::<i32>(), false)
     };
 
-    let id =
-        parsed_id.map_err(|_| ApiError::new(400, format!("Failed to parse {}", s).as_str()))?;
+    let id = parsed_id.map_err(|_| ApiError::BadRequest(format!("Failed to parse {}", s)))?;
 
     Ok((id, two_player))
 }
@@ -43,7 +42,7 @@ fn resolve_gd_id(conn: &mut DbConnection, s: &str) -> Result<Uuid, ApiError> {
         .filter(levels::two_player.eq(two_player))
         .select(levels::id)
         .first::<Uuid>(conn)
-        .map_err(|_| ApiError::new(404, format!("Failed to resolve {}", s).as_str()))?;
+        .map_err(|_| ApiError::NotFound(format!("Failed to resolve {}", s)))?;
     Ok(resolved_id)
 }
 

@@ -48,8 +48,7 @@ impl ClanInvite {
                 .first::<ClanInvite>(connection)?;
 
             if invite.user_id != authenticated.user_id {
-                return Err(ApiError::new(
-                    403,
+                return Err(ApiError::Forbidden(
                     "You can not accept an invite that's not yours",
                 ));
             }
@@ -102,8 +101,7 @@ impl ClanInvite {
             .first::<ClanInvite>(conn)?;
 
         if invite.user_id != authenticated.user_id {
-            return Err(ApiError::new(
-                403,
+            return Err(ApiError::Forbidden(
                 "You can not reject an invite that's not yours",
             ));
         }

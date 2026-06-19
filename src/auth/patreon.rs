@@ -68,7 +68,7 @@ async fn patreon_link(
         .context
         .patreon_auth
         .clone()
-        .ok_or_else(|| ApiError::new(503, "Patreon integration is not configured"))?;
+        .ok_or_else(|| ApiError::ServiceUnavailable("Patreon integration is not configured"))?;
 
     let callback = options.callback.clone();
     let user_id = authenticated.user_id;
@@ -107,7 +107,7 @@ async fn patreon_callback(
         .context
         .patreon_auth
         .clone()
-        .ok_or_else(|| ApiError::new(503, "Patreon integration is not configured"))?;
+        .ok_or_else(|| ApiError::ServiceUnavailable("Patreon integration is not configured"))?;
 
     let state = query.state.clone();
     let db_for_request = db.clone();
@@ -122,7 +122,7 @@ async fn patreon_callback(
 
     let user_id = request_data
         .user_id
-        .ok_or_else(|| ApiError::new(400, "Invalid Patreon OAuth request"))?;
+        .ok_or_else(|| ApiError::BadRequest("Invalid Patreon OAuth request"))?;
 
     let access_token = exchange_oauth_code(
         &patreon_auth.user_oauth()?.client,
@@ -169,8 +169,8 @@ async fn patreon_callback(
     .await??;
 
     if let Some(callback) = request_data.callback {
-        let mut callback_url =
-            Url::parse(&callback).map_err(|_| ApiError::new(400, "Invalid callback URL"))?;
+        let mut callback_url = Url::parse(&callback)
+            .map_err(|_| ApiError::InternalServerError("Invalid callback URL"))?;
         callback_url
             .query_pairs_mut()
             .append_pair("patreon", "linked");
@@ -194,25 +194,21 @@ async fn fetch_patreon_identity(
         .query(&[("fields[user]", "full_name,vanity")])
         .send()
         .await
-        .map_err(|e| ApiError::new(502, &format!("Failed to request patreon identity: {e}")))?;
+        .map_err(|e| ApiError::BadGateway(format!("Failed to request patreon identity: {e}")))?;
 
     let status = response.status();
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
-        return Err(ApiError::new(
-            502,
-            &format!("Failed to request patreon identity ({status}): {body}"),
-        ));
+        return Err(ApiError::BadGateway(format!(
+            "Failed to request patreon identity ({status}): {body}"
+        )));
     }
 
     response
         .json::<PatreonIdentityResponse>()
         .await
         .map_err(|e| {
-            ApiError::new(
-                500,
-                &format!("Failed to parse patreon identity response: {e}"),
-            )
+            ApiError::BadGateway(format!("Failed to parse patreon identity response: {e}"))
         })
 }
 

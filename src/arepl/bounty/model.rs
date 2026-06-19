@@ -231,14 +231,13 @@ impl Bounty {
     pub fn create(conn: &mut DbConnection, new_bounty: BountyPost) -> Result<Self, ApiError> {
         if let Some(end_date) = new_bounty.end_date {
             if end_date <= new_bounty.start_date {
-                return Err(ApiError::new(400, "End date must be after start date."));
+                return Err(ApiError::BadRequest("End date must be after start date."));
             }
         }
 
         if let Some(target) = new_bounty.target_submissions {
             if target <= 0 {
-                return Err(ApiError::new(
-                    400,
+                return Err(ApiError::BadRequest(
                     "Target submissions must be a positive integer.",
                 ));
             }
@@ -262,14 +261,13 @@ impl Bounty {
 
         if let Some(end_date) = end_date {
             if end_date <= start_date {
-                return Err(ApiError::new(400, "End date must be after start date."));
+                return Err(ApiError::BadRequest("End date must be after start date."));
             }
         }
 
         if let Some(target) = patch.target_submissions {
             if target <= 0 {
-                return Err(ApiError::new(
-                    400,
+                return Err(ApiError::BadRequest(
                     "Target submissions must be a positive integer.",
                 ));
             }

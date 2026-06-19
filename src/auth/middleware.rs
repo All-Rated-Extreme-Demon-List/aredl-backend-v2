@@ -98,7 +98,7 @@ where
             return if require_auth {
                 Self::error_future(
                     http_req,
-                    ApiError::new(403, "You must be authenticated to access this endpoint"),
+                    ApiError::Unauthorized("You must be authenticated to access this endpoint"),
                 )
             } else {
                 // auth is not required
@@ -126,7 +126,10 @@ where
         ) {
             Ok(claims) => claims,
             Err(_) => {
-                return Self::error_future(http_req, ApiError::new(403, "Failed to decode token"))
+                return Self::error_future(
+                    http_req,
+                    ApiError::Unauthorized("Failed to decode token"),
+                )
             }
         };
 
@@ -135,7 +138,7 @@ where
             Err(_) => {
                 return Self::error_future(
                     http_req,
-                    ApiError::new(403, "Failed to extract user claims"),
+                    ApiError::Unauthorized("Failed to extract user claims"),
                 )
             }
         };
@@ -143,7 +146,10 @@ where
         let conn = &mut db_state.connection().unwrap();
 
         if check_token_valid(&token_claims, &user_claims, conn).is_err() {
-            return Self::error_future(http_req, ApiError::new(403, "Token has been invalidated"));
+            return Self::error_future(
+                http_req,
+                ApiError::Unauthorized("Token has been invalidated"),
+            );
         }
 
         let user_id = user_claims.user_id;
@@ -158,8 +164,7 @@ where
                     if !permission {
                         return Self::error_future(
                             http_req,
-                            ApiError::new(
-                                403,
+                            ApiError::Forbidden(
                                 format!("You do not have the required permission ({}) to access this endpoint",required_perm)
                                 .as_str(),
                             ),
@@ -169,7 +174,7 @@ where
                 Err(_) => {
                     return Self::error_future(
                         http_req,
-                        ApiError::new(403, "Failed to load permissions"),
+                        ApiError::InternalServerError("Failed to load permissions"),
                     )
                 }
             }
