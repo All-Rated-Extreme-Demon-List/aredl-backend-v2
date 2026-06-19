@@ -113,7 +113,11 @@ impl Clan {
             ));
         }
 
-        if clan.description.is_some() && clan.description.as_ref().unwrap().len() > 300 {
+        if clan
+            .description
+            .as_deref()
+            .is_some_and(|description| description.len() > 300)
+        {
             return Err(ApiError::UnprocessableEntity(
                 "The clan description can at most be 300 characters long.",
             ));
@@ -152,7 +156,11 @@ impl Clan {
             ));
         }
 
-        if clan.description.is_some() && clan.description.as_ref().unwrap().len() > 300 {
+        if clan
+            .description
+            .as_deref()
+            .is_some_and(|description| description.len() > 300)
+        {
             return Err(ApiError::UnprocessableEntity(
                 "The clan description can at most be 300 characters long.",
             ));
@@ -215,19 +223,27 @@ impl Clan {
         clan_id: Uuid,
         clan: ClanUpdate,
     ) -> Result<Self, ApiError> {
-        if clan.global_name.is_some() && clan.global_name.as_ref().unwrap().len() > 100 {
+        if clan
+            .global_name
+            .as_deref()
+            .is_some_and(|global_name| global_name.len() > 100)
+        {
             return Err(ApiError::UnprocessableEntity(
                 "The clan name can at most be 100 characters long.",
             ));
         }
 
-        if clan.tag.is_some() && clan.tag.as_ref().unwrap().len() > 5 {
+        if clan.tag.as_deref().is_some_and(|tag| tag.len() > 5) {
             return Err(ApiError::UnprocessableEntity(
                 "The clan tag can at most be 5 characters long.",
             ));
         }
 
-        if clan.description.is_some() && clan.description.as_ref().unwrap().len() > 300 {
+        if clan
+            .description
+            .as_deref()
+            .is_some_and(|description| description.len() > 300)
+        {
             return Err(ApiError::UnprocessableEntity(
                 "The clan description can at most be 300 characters long.",
             ));

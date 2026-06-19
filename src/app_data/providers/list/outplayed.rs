@@ -1,10 +1,10 @@
 use async_trait::async_trait;
-use regex::Regex;
 use url::Url;
 
 use crate::providers::model::ProviderMatch;
 
 use super::super::model::{Provider, ProviderId, ProviderUsage};
+use super::super::parse::is_ascii_id;
 
 pub struct OutplayedProvider;
 
@@ -30,10 +30,7 @@ impl Provider for OutplayedProvider {
         let _game = parts.next()?;
         let content_id = parts.next()?;
 
-        if !Regex::new(r"^[A-Za-z0-9_-]{1,128}$")
-            .unwrap()
-            .is_match(content_id)
-        {
+        if !is_ascii_id(content_id, 1, 128) {
             return None;
         }
 

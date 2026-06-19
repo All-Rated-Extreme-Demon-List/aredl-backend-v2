@@ -1,32 +1,33 @@
 use crate::app_data::db::{DbAppState, DbConnection};
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, StartupError};
 use crate::get_secret;
 use crate::providers::ProvidersAppState;
+use crate::scheduled::{parse_startup_schedule, sleep_until_next, startup_schedule};
 use crate::schema::aredl;
 use crate::schema::arepl;
 use chrono::Utc;
-use cron::Schedule;
 use diesel::dsl::exists;
 use diesel::{
     select, BoolExpressionMethods, Connection, ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl,
 };
 use serde::Deserialize;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::task;
 use uuid::Uuid;
 
-pub async fn start_level_data_refresher(db: Arc<DbAppState>, providers: Arc<ProvidersAppState>) {
-    let schedule = Schedule::from_str(&get_secret("LEVEL_DATA_REFRESH_SCHEDULE")).unwrap();
-    let schedule = Arc::new(schedule);
+pub async fn start_level_data_refresher(
+    db: Arc<DbAppState>,
+    providers: Arc<ProvidersAppState>,
+) -> Result<(), StartupError> {
+    let schedule = startup_schedule("LEVEL_DATA_REFRESH_SCHEDULE")?;
 
-    let edel_sheet_id = get_secret("EDEL_SHEET_ID");
-    let nlw_sheet_id = get_secret("NLW_SHEET_ID");
+    let edel_sheet_id = get_secret("EDEL_SHEET_ID")?;
+    let nlw_sheet_id = get_secret("NLW_SHEET_ID")?;
 
     let Some(google_auth) = providers.context.google_auth.clone() else {
         tracing::warn!("Failed to refresh level data: Google OAuth is not configured");
-        return;
+        return Ok(());
     };
 
     let db_clone = db.clone();
@@ -52,28 +53,19 @@ pub async fn start_level_data_refresher(db: Arc<DbAppState>, providers: Arc<Prov
                 }
             };
 
-            let edel_result = update_edel_data(conn, &google_access_token, &edel_sheet_id).await;
-
-            if edel_result.is_err() {
-                tracing::error!("Failed to refresh edel {}", edel_result.err().unwrap());
+            if let Err(error) = update_edel_data(conn, &google_access_token, &edel_sheet_id).await {
+                tracing::error!("Failed to refresh edel {error}");
             }
 
-            let nlw_result = update_nlw_data(conn, &google_access_token, &nlw_sheet_id).await;
-
-            if nlw_result.is_err() {
-                tracing::error!("Failed to refresh nlw {}", nlw_result.err().unwrap());
+            if let Err(error) = update_nlw_data(conn, &google_access_token, &nlw_sheet_id).await {
+                tracing::error!("Failed to refresh nlw {error}");
             }
 
-            let now = Utc::now();
-            let next = schedule.upcoming(Utc).next().unwrap();
-            let duration = next - now;
-
-            tokio::time::sleep(Duration::from_secs(duration.num_seconds() as u64)).await;
+            sleep_until_next(&schedule).await;
         }
     });
 
-    let schedule = Schedule::from_str("@hourly").expect("Failed to parse schedule");
-    let schedule = Arc::new(schedule);
+    let schedule = parse_startup_schedule("GDDL updater schedule", "@hourly")?;
 
     task::spawn(async move {
         loop {
@@ -116,13 +108,11 @@ pub async fn start_level_data_refresher(db: Arc<DbAppState>, providers: Arc<Prov
                 }
             }
 
-            let now = Utc::now();
-            let next = schedule.upcoming(Utc).next().unwrap();
-            let duration = next - now;
-
-            tokio::time::sleep(Duration::from_secs(duration.num_seconds() as u64)).await;
+            sleep_until_next(&schedule).await;
         }
     });
+
+    Ok(())
 }
 
 #[derive(Deserialize)]

@@ -46,12 +46,12 @@ async fn refresh_auth(
         .and_then(|h| h.to_str().ok())
         .map(|h| h.strip_prefix("Bearer ").unwrap_or("").to_string());
 
-    if refresh_token.is_none() {
+    let Some(refresh_token) = refresh_token else {
         return Err(ApiError::Unauthorized("No token provided"));
-    }
+    };
 
     let decoded_token_claims = token::decode_token(
-        refresh_token.unwrap(),
+        refresh_token,
         &data.jwt_decoding_key,
         &["refresh", "initial"],
     )?;

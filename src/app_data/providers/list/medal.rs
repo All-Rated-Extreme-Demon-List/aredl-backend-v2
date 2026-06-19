@@ -1,11 +1,11 @@
 use async_trait::async_trait;
 use chrono::{DateTime, TimeZone, Utc};
-use regex::Regex;
 use serde_json::Value;
 use url::Url;
 
 use crate::{error_handler::ApiError, providers::model::ProviderMatch};
 
+use super::super::parse::is_ascii_id;
 use super::super::{
     context::ProviderContext,
     model::{ContentMetadata, NormalizedProviderMatch, Provider, ProviderId, ProviderUsage},
@@ -57,10 +57,7 @@ impl Provider for MedalProvider {
             _ => None,
         }?;
 
-        if !Regex::new(r"^[A-Za-z0-9_-]{1,128}$")
-            .unwrap()
-            .is_match(content_id)
-        {
+        if !is_ascii_id(content_id, 1, 128) {
             return None;
         }
 

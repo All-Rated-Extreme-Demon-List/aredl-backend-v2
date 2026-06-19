@@ -1,4 +1,4 @@
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, StartupError};
 use crate::get_secret;
 use diesel::r2d2::ConnectionManager;
 use diesel::{r2d2, PgConnection};
@@ -24,27 +24,30 @@ impl DbAppState {
         })
     }
 
-    pub fn run_pending_migrations(&self) {
-        self.connection()
-            .unwrap()
+    pub fn run_pending_migrations(&self) -> Result<(), StartupError> {
+        self.connection()?
             .run_pending_migrations(MIGRATIONS)
-            .expect("Failed to run pending migrations!");
+            .map_err(|error| {
+                StartupError::Init(format!("Failed to run database migrations: {error}"))
+            })?;
+
+        Ok(())
     }
 }
 
-pub fn init_app_state() -> Arc<DbAppState> {
+pub fn init_app_state() -> Result<Arc<DbAppState>, StartupError> {
     let db_url = format!(
         "postgres://{}:{}@db:5432/aredl",
-        get_secret("POSTGRES_USER"),
-        get_secret("POSTGRES_PASSWORD")
+        get_secret("POSTGRES_USER")?,
+        get_secret("POSTGRES_PASSWORD")?
     );
     let manager = ConnectionManager::<PgConnection>::new(db_url);
     let pool = Pool::builder()
         .test_on_check_out(true)
         .build(manager)
-        .expect("Failed to create db pool");
+        .map_err(|error| StartupError::Init(format!("Failed to start database pool: {error}")))?;
 
-    Arc::new(DbAppState { pool })
+    Ok(Arc::new(DbAppState { pool }))
 }
 
 #[cfg(test)]

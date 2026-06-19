@@ -1,11 +1,10 @@
 use crate::app_data::db::DbAppState;
-use crate::get_secret;
+use crate::error_handler::StartupError;
+use crate::scheduled::{sleep_until_next, startup_schedule};
 use crate::schema::matview_refresh_log;
 use chrono::Utc;
-use cron::Schedule;
 use diesel::upsert::excluded;
 use diesel::{ExpressionMethods, RunQueryDsl};
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::task;
@@ -17,9 +16,8 @@ pub struct MatviewRefreshLog {
     pub last_refresh: chrono::DateTime<Utc>,
 }
 
-pub async fn start_matviews_refresher(db: Arc<DbAppState>) {
-    let schedule = Schedule::from_str(&get_secret("MATVIEWS_REFRESH_SCHEDULE")).unwrap();
-    let schedule = Arc::new(schedule);
+pub async fn start_matviews_refresher(db: Arc<DbAppState>) -> Result<(), StartupError> {
+    let schedule = startup_schedule("MATVIEWS_REFRESH_SCHEDULE")?;
 
     let schemas = ["aredl", "arepl"];
     let views = [
@@ -79,11 +77,9 @@ pub async fn start_matviews_refresher(db: Arc<DbAppState>) {
                 }
             }
 
-            let now = Utc::now();
-            let next = schedule.upcoming(Utc).next().unwrap();
-            let duration = next - now;
-
-            tokio::time::sleep(Duration::from_secs(duration.num_seconds() as u64)).await;
+            sleep_until_next(&schedule).await;
         }
     });
+
+    Ok(())
 }

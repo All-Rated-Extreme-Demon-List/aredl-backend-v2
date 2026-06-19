@@ -86,11 +86,10 @@ pub struct SubmissionPatchMod {
 impl Submission {
     pub fn update_user_shift(
         conn: &mut DbConnection,
-        notify_tx: broadcast::Sender<WebsocketNotification>,
         user_id: Uuid,
         old_status: SubmissionStatus,
         new_status: SubmissionStatus,
-    ) -> Result<(), ApiError> {
+    ) -> Result<Option<Shift>, ApiError> {
         let from_ok = matches!(
             old_status,
             SubmissionStatus::Pending
@@ -127,21 +126,14 @@ impl Submission {
                     .get_result::<Shift>(conn)?;
 
                 if updated_shift.completed_count >= updated_shift.target_count {
-                    let notification = WebsocketNotification {
-                        notification_type: "SHIFT_COMPLETED".into(),
-                        data: serde_json::to_value(&updated_shift)
-                            .expect("Failed to serialize shift"),
-                    };
-                    if let Err(e) = notify_tx.send(notification) {
-                        tracing::error!("Failed to send shift notification: {}", e);
-                    }
                     diesel::update(shifts::table.filter(shifts::id.eq(shift_id)))
                         .set(shifts::status.eq(ShiftStatus::Completed))
                         .execute(conn)?;
+                    return Ok(Some(updated_shift));
                 }
             }
         }
-        Ok(())
+        Ok(None)
     }
 }
 
@@ -317,86 +309,88 @@ impl SubmissionPatchMod {
             ));
         }
 
-        let result = conn.transaction(|connection| -> Result<Submission, ApiError> {
-            let updated = diesel::update(submissions::table)
-                .filter(submissions::id.eq(id))
-                .set((
-                    patch.clone(),
-                    submissions::reviewer_id.eq(Some(authenticated.user_id)),
-                ))
-                .returning(Submission::as_select())
-                .get_result::<Submission>(connection)?;
+        let (result, websocket_type, completed_shift) = conn.transaction(
+            |connection| -> Result<(Submission, Option<&'static str>, Option<Shift>), ApiError> {
+                let updated = diesel::update(submissions::table)
+                    .filter(submissions::id.eq(id))
+                    .set((
+                        patch.clone(),
+                        submissions::reviewer_id.eq(Some(authenticated.user_id)),
+                    ))
+                    .returning(Submission::as_select())
+                    .get_result::<Submission>(connection)?;
 
-            let old_status = old_submission.status;
-            let new_status = patch.status.unwrap_or(old_status.clone());
+                let old_status = old_submission.status;
+                let new_status = patch.status.unwrap_or(old_status.clone());
 
-            // Side effects when status changes to reviewed state
-            if (new_status == SubmissionStatus::Accepted
-                || new_status == SubmissionStatus::Denied
-                || new_status == SubmissionStatus::UnderConsideration)
-                && old_status != new_status
-            {
-                // Send user notification
-                let level_name = levels::table
-                    .filter(levels::id.eq(updated.level_id))
-                    .select(levels::name)
-                    .first::<String>(connection)?;
+                // Side effects when status changes to reviewed state
+                if (new_status == SubmissionStatus::Accepted
+                    || new_status == SubmissionStatus::Denied
+                    || new_status == SubmissionStatus::UnderConsideration)
+                    && old_status != new_status
+                {
+                    // Send user notification
+                    let level_name = levels::table
+                        .filter(levels::id.eq(updated.level_id))
+                        .select(levels::name)
+                        .first::<String>(connection)?;
 
-                let (notif_type, message) = match new_status {
-                    SubmissionStatus::Accepted => (
-                        NotificationType::Success,
-                        format!("Your submission for {:?} has been accepted!", level_name),
-                    ),
-                    SubmissionStatus::Denied => (
-                        NotificationType::Failure,
-                        format!("Your submission for {:?} has been denied.", level_name),
-                    ),
-                    _ => (
-                        NotificationType::Info,
-                        format!(
-                            "Your submission for {:?} has been put under consideration.",
-                            level_name
+                    let (notif_type, message) = match new_status {
+                        SubmissionStatus::Accepted => (
+                            NotificationType::Success,
+                            format!("Your submission for {:?} has been accepted!", level_name),
                         ),
-                    ),
-                };
-
-                Notification::create(connection, updated.submitted_by, message, notif_type)?;
-            }
-
-            // Send websocket notification
-            if old_status != new_status {
-                let ws_type = match new_status {
-                    SubmissionStatus::Accepted => "SUBMISSION_ACCEPTED",
-                    SubmissionStatus::Denied => "SUBMISSION_DENIED",
-                    SubmissionStatus::UnderConsideration => "SUBMISSION_UNDER_CONSIDERATION",
-                    SubmissionStatus::UnderReview => "SUBMISSION_UNDER_REVIEW",
-                    _ => "",
-                };
-
-                if !ws_type.is_empty() {
-                    let notification = WebsocketNotification {
-                        notification_type: ws_type.into(),
-                        data: serde_json::to_value(&updated)
-                            .expect("Failed to serialize submission"),
+                        SubmissionStatus::Denied => (
+                            NotificationType::Failure,
+                            format!("Your submission for {:?} has been denied.", level_name),
+                        ),
+                        _ => (
+                            NotificationType::Info,
+                            format!(
+                                "Your submission for {:?} has been put under consideration.",
+                                level_name
+                            ),
+                        ),
                     };
-                    let _ = notify_tx.send(notification);
+
+                    Notification::create(connection, updated.submitted_by, message, notif_type)?;
                 }
-            }
 
-            if new_status == SubmissionStatus::Accepted {
-                UserBadge::update_user_badges(connection, updated.submitted_by)?;
-            }
+                let websocket_type = if old_status != new_status {
+                    match new_status {
+                        SubmissionStatus::Accepted => Some("SUBMISSION_ACCEPTED"),
+                        SubmissionStatus::Denied => Some("SUBMISSION_DENIED"),
+                        SubmissionStatus::UnderConsideration => {
+                            Some("SUBMISSION_UNDER_CONSIDERATION")
+                        }
+                        SubmissionStatus::UnderReview => Some("SUBMISSION_UNDER_REVIEW"),
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
 
-            Submission::update_user_shift(
-                connection,
-                notify_tx.clone(),
-                authenticated.user_id,
-                old_status,
-                new_status,
-            )?;
+                if new_status == SubmissionStatus::Accepted {
+                    UserBadge::update_user_badges(connection, updated.submitted_by)?;
+                }
 
-            Ok(updated)
-        })?;
+                let completed_shift = Submission::update_user_shift(
+                    connection,
+                    authenticated.user_id,
+                    old_status,
+                    new_status,
+                )?;
+
+                Ok((updated, websocket_type, completed_shift))
+            },
+        )?;
+
+        if let Some(notification_type) = websocket_type {
+            WebsocketNotification::send(&notify_tx, notification_type, &result);
+        }
+        if let Some(completed_shift) = completed_shift {
+            WebsocketNotification::send(&notify_tx, "SHIFT_COMPLETED", &completed_shift);
+        }
 
         Ok(result)
     }

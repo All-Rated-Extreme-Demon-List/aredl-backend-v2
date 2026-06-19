@@ -127,10 +127,11 @@ impl Shift {
         new_shift: ShiftCreate,
         authenticated: Authenticated,
     ) -> Result<Self, ApiError> {
-        let mut end_at =
-            Utc::now().with_second(0).unwrap() + chrono::Duration::hours(new_shift.length.into());
+        let mut end_at = Utc::now().with_second(0).expect("Constant should not fail")
+            + chrono::Duration::hours(new_shift.length.into());
         if end_at.minute() != 0 {
-            end_at = end_at.with_minute(0).unwrap() + chrono::Duration::hours(1);
+            end_at = end_at.with_minute(0).expect("Constant should not fail")
+                + chrono::Duration::hours(1);
         }
 
         let created = diesel::insert_into(shifts::table)

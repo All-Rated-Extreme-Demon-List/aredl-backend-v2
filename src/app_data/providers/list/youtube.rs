@@ -1,9 +1,10 @@
 use async_trait::async_trait;
-use regex::Regex;
-use reqwest::header::HeaderMap;
+use reqwest::header::{HeaderMap, HeaderValue};
 use serde_json::Value as JsonValue;
+use url::form_urlencoded::Serializer;
 use url::Url;
 
+use super::super::parse::{is_ascii_id, is_youtube_timestamp};
 use super::super::{
     context::ProviderContext,
     model::{ContentMetadata, NormalizedProviderMatch, Provider, ProviderId, ProviderUsage},
@@ -68,23 +69,17 @@ impl Provider for YouTubeProvider {
         };
 
         let content_id = content_id?;
-        if !Regex::new(r"^[A-Za-z0-9_-]{11}$")
-            .unwrap()
-            .is_match(&content_id)
-        {
+        if !is_ascii_id(&content_id, 11, 11) {
             return None;
         }
 
-        let timestamp = timestamp.map(|s| s.trim().to_string()).filter(|s| {
-            !s.is_empty()
-                && Regex::new(r"^(?:\d{1,10}|\d{1,4}h)?(?:\d{1,4}m)?(?:\d{1,4}s)?$")
-                    .unwrap()
-                    .is_match(s)
-        });
+        let timestamp = timestamp
+            .map(|s| s.trim().to_string())
+            .filter(|s| is_youtube_timestamp(s));
 
-        let other_id = list_id.map(|s| s.trim().to_string()).filter(|s| {
-            !s.is_empty() && Regex::new(r"^[A-Za-z0-9_-]{1,256}$").unwrap().is_match(s)
-        });
+        let other_id = list_id
+            .map(|s| s.trim().to_string())
+            .filter(|s| is_ascii_id(s, 1, 256));
 
         Some(ProviderMatch {
             provider: ProviderId::YouTube,
@@ -95,19 +90,17 @@ impl Provider for YouTubeProvider {
     }
 
     fn normalize_url(&self, _raw_url: &Url, matched: &ProviderMatch) -> String {
-        let mut normalized =
-            Url::parse("https://www.youtube.com/watch").expect("static url is valid");
-        {
-            let mut query_params = normalized.query_pairs_mut();
-            query_params.append_pair("v", &matched.content_id);
-            if let Some(ts) = matched.timestamp.as_ref().filter(|s| !s.is_empty()) {
-                query_params.append_pair("t", ts);
-            }
-            if let Some(list) = matched.other_id.as_ref().filter(|s| !s.is_empty()) {
-                query_params.append_pair("list", list);
-            }
+        let mut query = Serializer::new(String::new());
+        query.append_pair("v", &matched.content_id);
+
+        if let Some(ts) = matched.timestamp.as_ref().filter(|s| !s.is_empty()) {
+            query.append_pair("t", ts);
         }
-        normalized.to_string()
+        if let Some(list) = matched.other_id.as_ref().filter(|s| !s.is_empty()) {
+            query.append_pair("list", list);
+        }
+
+        format!("https://www.youtube.com/watch?{}", query.finish())
     }
 
     async fn fetch_metadata(
@@ -138,7 +131,8 @@ impl Provider for YouTubeProvider {
         let mut headers = HeaderMap::new();
         headers.insert(
             "Authorization",
-            reqwest::header::HeaderValue::from_str(&format!("Bearer {}", token)).unwrap(),
+            HeaderValue::from_str(&format!("Bearer {}", token))
+                .map_err(|_| ApiError::InternalServerError("Invalid Youtube access token"))?,
         );
 
         let response = context

@@ -53,15 +53,15 @@ pub async fn create_api_key(
         .and_then(|h| h.to_str().ok())
         .map(|h| h.strip_prefix("Bearer ").unwrap_or("").to_string());
 
-    if access_token.is_none() {
+    let Some(access_token) = access_token else {
         return Err(ApiError::Unauthorized("No token provided"));
-    }
+    };
 
     let lifetime_minutes = options.lifetime_minutes;
 
     let response = web::block(move || {
         let decoded_token_claims =
-            token::decode_token(access_token.unwrap(), &data.jwt_decoding_key, &["access"])?;
+            token::decode_token(access_token, &data.jwt_decoding_key, &["access"])?;
 
         let decoded_user_claims = token::decode_user_claims(&decoded_token_claims)?;
 

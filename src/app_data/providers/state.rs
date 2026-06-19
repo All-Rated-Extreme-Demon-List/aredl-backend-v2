@@ -42,7 +42,8 @@ impl ProvidersAppState {
         if input.chars().any(|char| char.is_whitespace()) {
             return Err(ApiError::BadRequest("Malformed URL"));
         }
-        let url = Url::parse(input).map_err(|_| ApiError::BadRequest("Malformed URL"))?;
+        let url = Url::parse(input)
+            .map_err(|error| ApiError::BadRequest(format!("Malformed URL: {}", error)))?;
         Ok(url)
     }
 
@@ -66,13 +67,11 @@ impl ProvidersAppState {
     // raw footage only enforces a valid url, but if it matches a provider, normalize it
     pub fn validate_raw_footage_url(&self, url: &str) -> Result<String, ApiError> {
         self.validate_is_url(url)?;
-        let matched = self.parse_url(url);
 
-        if matched.is_err() {
-            return Ok(url.to_string());
+        match self.parse_url(url) {
+            Ok(matched) => Ok(matched.normalized_url),
+            Err(_) => Ok(url.to_string()),
         }
-
-        Ok(matched.unwrap().normalized_url)
     }
 
     pub async fn get_content_location(

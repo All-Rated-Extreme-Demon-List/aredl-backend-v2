@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use regex::Regex;
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde_json::Value;
 use url::Url;
@@ -10,6 +9,7 @@ use crate::{
     providers::model::{ContentMetadata, ProviderMatch},
 };
 
+use super::super::parse::{is_ascii_digits, is_twitch_timestamp};
 use super::super::{
     context::ProviderContext,
     model::{NormalizedProviderMatch, Provider, ProviderId, ProviderUsage},
@@ -69,15 +69,13 @@ impl Provider for TwitchProvider {
             }
         };
 
-        if !Regex::new(r"^\d{1,30}$").unwrap().is_match(&content_id) {
+        if !is_ascii_digits(&content_id, 1, 30) {
             return None;
         }
 
         let timestamp = timestamp
             .map(|value| value.trim().to_string())
-            .filter(|value| {
-                !value.is_empty() && Regex::new(r"^[0-9hms]+$").unwrap().is_match(value)
-            });
+            .filter(|value| is_twitch_timestamp(value));
 
         Some(ProviderMatch {
             provider: ProviderId::Twitch,
@@ -88,15 +86,14 @@ impl Provider for TwitchProvider {
     }
 
     fn normalize_url(&self, _raw_url: &Url, matched: &ProviderMatch) -> String {
-        let mut normalized = Url::parse(&format!(
-            "https://www.twitch.tv/videos/{}",
-            matched.content_id
-        ))
-        .unwrap();
-        if let Some(t) = matched.timestamp.as_deref().filter(|s| !s.is_empty()) {
-            normalized.query_pairs_mut().append_pair("t", t);
+        let mut normalized = format!("https://www.twitch.tv/videos/{}", matched.content_id);
+
+        if let Some(timestamp) = matched.timestamp.as_deref().filter(|s| !s.is_empty()) {
+            normalized.push_str("?t=");
+            normalized.push_str(timestamp);
         }
-        normalized.to_string()
+
+        normalized
     }
 
     async fn fetch_metadata(

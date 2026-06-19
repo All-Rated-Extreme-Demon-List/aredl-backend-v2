@@ -1,9 +1,11 @@
 use crate::{
-    aredl, arepl, auth, clans, get_secret, health, notifications, roles, shifts, users, utils,
+    aredl, arepl, auth, clans, get_optional_secret, health, notifications, roles, shifts, users,
+    utils,
 };
 use serde_json::json;
 use utoipa::openapi::extensions::Extensions;
 use utoipa::openapi::path::Operation;
+use utoipa::openapi::schema::Components;
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityScheme};
 use utoipa::openapi::{PathItem, Server};
 use utoipa::{Modify, OpenApi};
@@ -205,15 +207,17 @@ struct ServerAddon;
 impl Modify for ServerAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
         let mut server: Server = Default::default();
-        server.url = std::env::var("DOCS_API_SERVER")
-            .unwrap_or_else(|_| format!("http://127.0.0.1:{}", get_secret("PORT")).to_string());
+        server.url = std::env::var("DOCS_API_SERVER").unwrap_or_else(|_| {
+            let port = get_optional_secret("PORT").unwrap_or_else(|| "8080".to_string());
+            format!("http://127.0.0.1:{port}")
+        });
         server.description = Some("API Server".to_string());
         openapi.servers = Some(vec![server]);
     }
 }
 impl Modify for SecurityAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
-        let components = openapi.components.as_mut().unwrap();
+        let components = openapi.components.get_or_insert_with(Components::default);
         components.add_security_scheme(
             "api_key",
             SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::new("api-key"))),

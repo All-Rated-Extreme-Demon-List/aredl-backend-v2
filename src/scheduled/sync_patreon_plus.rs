@@ -2,18 +2,15 @@ use crate::app_data::db::{DbAppState, DbConnection};
 use crate::aredl::submissions::SubmissionStatus as AredlSubmissionStatus;
 use crate::arepl::submissions::SubmissionStatus as AreplSubmissionStatus;
 use crate::auth::oauth::OAuthProvider;
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, StartupError};
 use crate::get_secret;
 use crate::providers::{context::backend_oauth::OAuthProviderContext, ProvidersAppState};
+use crate::scheduled::{sleep_until_next, startup_schedule};
 use crate::schema::{aredl, arepl, oauth_connected_accounts, roles, user_roles};
-use chrono::Utc;
-use cron::Schedule;
 use diesel::{Connection, ExpressionMethods, QueryDsl, RunQueryDsl};
 use serde::Deserialize;
 use std::collections::HashSet;
-use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::task;
 use uuid::Uuid;
 
@@ -78,20 +75,24 @@ pub struct PatreonPlusSyncResult {
     pub arepl_prioritized_count: usize,
 }
 
-pub async fn start_patreon_plus_sync(db: Arc<DbAppState>, providers: Arc<ProvidersAppState>) {
-    let schedule = Schedule::from_str(&get_secret("PATREON_SYNC_SCHEDULE")).unwrap();
-    let schedule = Arc::new(schedule);
-    let campaign_id = get_secret("PATREON_CAMPAIGN_ID");
+pub async fn start_patreon_plus_sync(
+    db: Arc<DbAppState>,
+    providers: Arc<ProvidersAppState>,
+) -> Result<(), StartupError> {
+    let schedule = startup_schedule("PATREON_SYNC_SCHEDULE")?;
+    let campaign_id = get_secret("PATREON_CAMPAIGN_ID")?;
 
     let Some(patreon_auth) = providers.context.patreon_auth.clone() else {
         tracing::warn!("Patreon sync is enabled, but Patreon auth is not configured");
-        return;
+        return Ok(());
     };
 
     let client = reqwest::Client::builder()
         .user_agent("AredlBackend/2.0 (+https://api.aredl.net)")
         .build()
-        .expect("Failed to build reqwest client");
+        .map_err(|error| {
+            StartupError::Init(format!("Failed to start Patreon sync HTTP client: {error}"))
+        })?;
     let patreon_base = patreon_auth.api_base_uri.clone();
 
     task::spawn(async move {
@@ -127,13 +128,11 @@ pub async fn start_patreon_plus_sync(db: Arc<DbAppState>, providers: Arc<Provide
                 Err(e) => tracing::error!("Failed to fetch Patreon members: {e}"),
             }
 
-            let now = Utc::now();
-            let next = schedule.upcoming(Utc).next().unwrap();
-            let duration = next - now;
-
-            tokio::time::sleep(Duration::from_secs(duration.num_seconds() as u64)).await;
+            sleep_until_next(&schedule).await;
         }
     });
+
+    Ok(())
 }
 
 async fn fetch_active_patreon_user_ids(

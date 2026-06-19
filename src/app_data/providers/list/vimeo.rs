@@ -1,10 +1,10 @@
 use async_trait::async_trait;
-use regex::Regex;
 use url::Url;
 
 use crate::providers::model::ProviderMatch;
 
 use super::super::model::{Provider, ProviderId, ProviderUsage};
+use super::super::parse::is_ascii_digits;
 
 pub struct VimeoProvider;
 
@@ -38,7 +38,7 @@ impl Provider for VimeoProvider {
             path.split('/').next()
         }?;
 
-        if !Regex::new(r"^[0-9]{1,20}$").unwrap().is_match(content_id) {
+        if !is_ascii_digits(content_id, 1, 20) {
             return None;
         }
 

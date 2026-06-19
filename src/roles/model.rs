@@ -150,19 +150,21 @@ impl RoleResolved {
                 let mut role: Option<Role> = None;
                 let mut users_vec = Vec::new();
 
-                for (r, u) in group {
-                    role.get_or_insert(r);
-                    if let Some(u) = u {
+                for (current_role, user) in group {
+                    role.get_or_insert(current_role);
+                    if let Some(u) = user {
                         users_vec.push(u);
                     }
                 }
 
-                RoleResolved {
-                    role: role.expect("group always has at least one row"),
+                Ok(RoleResolved {
+                    role: role.ok_or_else(|| {
+                        ApiError::InternalServerError("Role unexpectedly without users")
+                    })?,
                     users: users_vec,
-                }
+                })
             })
-            .collect_vec();
+            .collect::<Result<Vec<RoleResolved>, ApiError>>()?;
 
         Ok(resolved)
     }

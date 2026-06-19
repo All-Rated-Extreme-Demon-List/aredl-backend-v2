@@ -1,10 +1,10 @@
 use async_trait::async_trait;
-use regex::Regex;
 use url::Url;
 
 use crate::providers::model::ProviderMatch;
 
 use super::super::model::{Provider, ProviderId, ProviderUsage};
+use super::super::parse::is_ascii_alphanumeric;
 
 pub struct BiliBiliProvider;
 
@@ -29,7 +29,7 @@ impl Provider for BiliBiliProvider {
         let mut parts = path.split('/');
         match (parts.next(), parts.next()) {
             (Some("video"), Some(id)) => {
-                if !Regex::new(r"^[A-Za-z0-9]+$").unwrap().is_match(id) {
+                if !is_ascii_alphanumeric(id) {
                     return None;
                 }
 

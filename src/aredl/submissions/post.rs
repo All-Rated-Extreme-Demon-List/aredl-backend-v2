@@ -203,7 +203,7 @@ impl Submission {
             )?);
         }
 
-        conn.transaction(|connection| -> Result<Self, ApiError> {
+        let submission = conn.transaction(|connection| -> Result<Self, ApiError> {
             let inserted_submission =
                 SubmissionInsert::from_mod(connection, submission_body, &authenticated)?;
 
@@ -270,13 +270,11 @@ impl Submission {
                 .returning(Self::as_select())
                 .get_result(connection)?;
 
-            let notification = WebsocketNotification {
-                notification_type: "SUBMISSION_CREATED".into(),
-                data: serde_json::to_value(&submission).expect("Failed to serialize submission"),
-            };
-            let _ = notify_tx.send(notification);
-
             Ok(submission)
-        })
+        })?;
+
+        WebsocketNotification::send(&notify_tx, "SUBMISSION_CREATED", &submission);
+
+        Ok(submission)
     }
 }

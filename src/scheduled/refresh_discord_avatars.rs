@@ -1,15 +1,15 @@
 use crate::app_data::db::DbAppState;
+use crate::error_handler::StartupError;
 use crate::get_secret;
 use crate::providers::ProvidersAppState;
+use crate::scheduled::{sleep_until_next, startup_schedule};
 use crate::schema::users;
 use chrono::Utc;
-use cron::Schedule;
 use diesel::PgSortExpressionMethods;
 use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl, RunQueryDsl};
 use reqwest::header::{HeaderMap, AUTHORIZATION};
 use reqwest::StatusCode;
 use serde::Deserialize;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::task;
@@ -46,9 +46,8 @@ async fn sleep_for_ratelimit(headers: &HeaderMap, default_sleep_ms: u64) {
 pub async fn start_discord_avatars_refresher(
     db: Arc<DbAppState>,
     providers: Arc<ProvidersAppState>,
-) {
-    let schedule = Schedule::from_str(&get_secret("DISCORD_AVATARS_REFRESH_SCHEDULE")).unwrap();
-    let schedule = Arc::new(schedule);
+) -> Result<(), StartupError> {
+    let schedule = startup_schedule("DISCORD_AVATARS_REFRESH_SCHEDULE")?;
 
     let discord_base = providers
         .context
@@ -60,9 +59,13 @@ pub async fn start_discord_avatars_refresher(
     let client = reqwest::Client::builder()
         .user_agent("AredlBackend/2.0 (+https://api.aredl.net)")
         .build()
-        .expect("Failed to build reqwest client");
+        .map_err(|error| {
+            StartupError::Init(format!(
+                "Failed to start Discord avatar refresh HTTP client: {error}"
+            ))
+        })?;
 
-    let discord_bot_token = get_secret("DISCORD_BOT_TOKEN");
+    let discord_bot_token = get_secret("DISCORD_BOT_TOKEN")?;
 
     task::spawn(async move {
         loop {
@@ -76,7 +79,7 @@ pub async fn start_discord_avatars_refresher(
                 }
             };
 
-            let users_to_refresh = users::table
+            let users_to_refresh = match users::table
                 .filter(users::discord_id.is_not_null())
                 .filter(
                     users::last_discord_avatar_update
@@ -88,7 +91,14 @@ pub async fn start_discord_avatars_refresher(
                 .limit(BATCH_LIMIT)
                 .select((users::id, users::discord_id))
                 .load::<(uuid::Uuid, Option<String>)>(conn)
-                .expect("Failed to load users for avatar refresh");
+            {
+                Ok(users) => users,
+                Err(error) => {
+                    tracing::error!("Failed to load users for avatar refresh: {error}");
+                    sleep_until_next(&schedule).await;
+                    continue;
+                }
+            };
 
             if users_to_refresh.is_empty() {
                 tracing::info!("No stale user avatars to refresh");
@@ -184,11 +194,9 @@ pub async fn start_discord_avatars_refresher(
                 }
             }
 
-            let now = Utc::now();
-            let next = schedule.upcoming(Utc).next().unwrap();
-            let duration = next - now;
-
-            tokio::time::sleep(Duration::from_secs(duration.num_seconds() as u64)).await;
+            sleep_until_next(&schedule).await;
         }
     });
+
+    Ok(())
 }

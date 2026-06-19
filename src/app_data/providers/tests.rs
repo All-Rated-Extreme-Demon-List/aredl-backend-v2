@@ -537,7 +537,7 @@ async fn patreon_auth_returns_error_for_failed_token_response() {
         .await
         .expect("expected Patreon OAuth context");
 
-    assert!(state.get_access_token(&db).await.is_err());
+    state.get_access_token(&db).await.unwrap_err();
 
     clear_oauth_env(OAuthProvider::Patreon);
 }

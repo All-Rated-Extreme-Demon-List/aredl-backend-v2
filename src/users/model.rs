@@ -192,7 +192,9 @@ pub fn user_filter<'a>(input: &'a String) -> users::BoxedQuery<'a, Pg> {
 impl BaseUser {
     pub fn hidden() -> Self {
         BaseUser {
-            id: "00000000-0000-0000-0000-000000000000".parse().unwrap(),
+            id: "00000000-0000-0000-0000-000000000000"
+                .parse()
+                .expect("Constant should not fail"),
             username: "Hidden user".to_string(),
             global_name: "Hidden user".to_string(),
         }
@@ -218,7 +220,9 @@ impl BaseUser {
 impl ExtendedBaseUser {
     pub fn hidden() -> Self {
         ExtendedBaseUser {
-            id: "00000000-0000-0000-0000-000000000000".parse().unwrap(),
+            id: "00000000-0000-0000-0000-000000000000"
+                .parse()
+                .expect("Constant should not fail"),
             username: "Hidden user".to_string(),
             global_name: "Hidden user".to_string(),
             country: None,

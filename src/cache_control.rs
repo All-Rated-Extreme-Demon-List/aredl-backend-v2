@@ -21,6 +21,16 @@ enum CacheMode {
     AuthPublicMaxAge(u32),
 }
 
+fn cache_header_value(directives: Vec<CacheDirective>) -> HeaderValue {
+    match CacheControl(directives).try_into_value() {
+        Ok(value) => value,
+        Err(error) => {
+            tracing::error!("Failed to build cache-control header: {error}");
+            HeaderValue::from_static("no-store")
+        }
+    }
+}
+
 impl CacheController {
     pub fn default_no_store() -> Self {
         Self {
@@ -70,24 +80,18 @@ where
 
     fn new_transform(&self, service: S) -> Self::Future {
         let cache_mode = match &self.cache_mode {
-            CacheMode::Static(directives) => CacheModeRuntime::Static(
-                CacheControl(directives.clone())
-                    .try_into_value()
-                    .expect("Invalid cache directive"),
-            ),
+            CacheMode::Static(directives) => {
+                CacheModeRuntime::Static(cache_header_value(directives.clone()))
+            }
             CacheMode::AuthPublicMaxAge(seconds) => CacheModeRuntime::AuthPublicMaxAge {
-                public_header_value: CacheControl(vec![
+                public_header_value: cache_header_value(vec![
                     CacheDirective::Public,
                     CacheDirective::MaxAge(*seconds),
-                ])
-                .try_into_value()
-                .expect("Invalid cache directive"),
-                private_header_value: CacheControl(vec![
+                ]),
+                private_header_value: cache_header_value(vec![
                     CacheDirective::Private,
                     CacheDirective::MaxAge(*seconds),
-                ])
-                .try_into_value()
-                .expect("Invalid cache directive"),
+                ]),
             },
         };
 

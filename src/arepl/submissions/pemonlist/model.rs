@@ -56,13 +56,11 @@ impl PemonlistPlayer {
             .select(users::discord_id)
             .first::<Option<String>>(conn)?;
 
-        if player_discord_id.is_none() {
+        let Some(player_discord_id) = player_discord_id else {
             return Err(ApiError::UnprocessableEntity(
                 "Given user does not have a discord id",
             ));
-        }
-
-        let player_discord_id = player_discord_id.unwrap();
+        };
 
         let client = reqwest::blocking::Client::new();
         let base_url = std::env::var("PEMONLIST_API_URL")
@@ -105,11 +103,9 @@ impl PemonlistPlayer {
                 .first::<ExtendedBaseLevel>(conn)
                 .optional()?;
 
-            if existing_level.is_none() {
+            let Some(existing_level) = existing_level else {
                 continue;
-            }
-
-            let existing_level = existing_level.unwrap();
+            };
 
             // find existing submission for this user/level in arepl.submissions
             let existing_submission: Option<Submission> = submissions::table

@@ -15,11 +15,11 @@ impl Clan {
             .first::<ClanMember>(conn)
             .optional()?;
 
-        if member.is_none() {
+        let Some(member) = member else {
             return Err(ApiError::NotFound("You are not part of a clan"));
-        }
+        };
 
-        if member.unwrap().role == 2 {
+        if member.role == 2 {
             return Err(ApiError::Conflict( "You can not leave a clan you're the owner of. You need to either transfer ownership first, or kick all other members and delete the clan."));
         }
 

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map as JsonMap, Value as JsonValue};
-use std::{fs::remove_file, io::Write, process::Stdio};
+use std::{io::Write, path::Path, process::Stdio};
 use tempfile::NamedTempFile;
 use tokio::{join, process::Command};
 use utoipa::ToSchema;
@@ -88,7 +88,7 @@ impl<'a> ExifInfo<'a> {
 }
 
 impl ContentDataLocation {
-    async fn get_ffprobe(path: &str) -> Result<JsonValue, ApiError> {
+    async fn get_ffprobe(path: &Path) -> Result<JsonValue, ApiError> {
         let mut command = Command::new("/usr/local/bin/ffprobe");
         command
             .arg("-v")
@@ -127,7 +127,7 @@ impl ContentDataLocation {
         Ok(value)
     }
 
-    async fn get_exiftool(path: &str) -> Result<JsonValue, ApiError> {
+    async fn get_exiftool(path: &Path) -> Result<JsonValue, ApiError> {
         let mut command = Command::new("/usr/bin/exiftool");
         command
             .arg("-api")
@@ -165,15 +165,12 @@ impl ContentDataLocation {
         let mut ffprobe_field = ProbeField::new();
 
         let head_bytes = self.fetch_head().await?;
-        let head_path = save_to_temp_file(&head_bytes)
-            .await?
-            .to_str()
-            .unwrap()
-            .to_string();
+        let head_file = save_to_temp_file(&head_bytes)?;
+        let head_path = head_file.path();
 
         let (ffprobe_head_res, exif_head_res) =
-            join!(async { Self::get_ffprobe(&head_path).await }, async {
-                Self::get_exiftool(&head_path).await
+            join!(async { Self::get_ffprobe(head_path).await }, async {
+                Self::get_exiftool(head_path).await
             },);
 
         match ffprobe_head_res {
@@ -200,15 +197,12 @@ impl ContentDataLocation {
                     match self.fetch_from_offset(moov_offset).await {
                         Err(_e) => {}
                         Ok(moov_bytes) => {
-                            let moov_path = save_to_temp_file(&moov_bytes)
-                                .await?
-                                .to_str()
-                                .unwrap()
-                                .to_string();
+                            let moov_file = save_to_temp_file(&moov_bytes)?;
+                            let moov_path = moov_file.path();
 
                             let (ffprobe_moov_res, exif_moov_res) =
-                                join!(async { Self::get_ffprobe(&moov_path).await }, async {
-                                    Self::get_exiftool(&moov_path).await
+                                join!(async { Self::get_ffprobe(moov_path).await }, async {
+                                    Self::get_exiftool(moov_path).await
                                 },);
 
                             match ffprobe_moov_res {
@@ -227,14 +221,11 @@ impl ContentDataLocation {
                                     exif_field.set_err(e.error_message);
                                 }
                             }
-                            let _ = remove_file(&moov_path);
                         }
                     }
                 }
             }
         }
-
-        let _ = remove_file(&head_path);
 
         Ok(ProbeResponse {
             probed_url: self.url.clone(),
@@ -244,17 +235,12 @@ impl ContentDataLocation {
     }
 }
 
-pub async fn save_to_temp_file(bytes: &[u8]) -> Result<std::path::PathBuf, ApiError> {
+pub fn save_to_temp_file(bytes: &[u8]) -> Result<NamedTempFile, ApiError> {
     let mut file = NamedTempFile::new()
         .map_err(|e| ApiError::InternalServerError(format!("Failed to create temp file: {e}")))?;
 
     file.write_all(bytes)
         .map_err(|e| ApiError::InternalServerError(format!("Failed to write temp file: {e}")))?;
 
-    let path = file.path().to_path_buf();
-
-    file.keep()
-        .map_err(|e| ApiError::InternalServerError(format!("Failed to persist temp file: {e}")))?;
-
-    Ok(path)
+    Ok(file)
 }

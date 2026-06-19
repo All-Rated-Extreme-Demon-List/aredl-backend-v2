@@ -303,14 +303,15 @@ pub fn oauth_token_aad(provider: OAuthProvider, field: &str) -> Vec<u8> {
 
 fn token_cipher() -> Result<&'static XChaCha20Poly1305, ApiError> {
     let cipher_result = TOKEN_CIPHER.get_or_init(|| {
-        let secret = get_secret("OAUTH_TOKEN_ENCRYPTION_KEY");
+        let secret = get_secret("OAUTH_TOKEN_ENCRYPTION_KEY").map_err(|error| error.to_string())?;
 
         let key = STANDARD
             .decode(secret)
-            .map_err(|_| "OAUTH_TOKEN_ENCRYPTION_KEY must be base64-encoded 32 random bytes")?;
+            .map_err(|_err| "OAUTH_TOKEN_ENCRYPTION_KEY must be base64-encoded 32 random bytes")?;
 
-        XChaCha20Poly1305::new_from_slice(&key)
-            .map_err(|_| "OAUTH_TOKEN_ENCRYPTION_KEY must decode to exactly 32 bytes".to_string())
+        XChaCha20Poly1305::new_from_slice(&key).map_err(|_err| {
+            "OAUTH_TOKEN_ENCRYPTION_KEY must decode to exactly 32 bytes".to_string()
+        })
     });
 
     cipher_result.as_ref().map_err(|message| {
@@ -332,7 +333,7 @@ fn encrypt_db_token_value(value: &str, aad: &[u8]) -> Result<String, ApiError> {
                 aad,
             },
         )
-        .map_err(|_| ApiError::InternalServerError("Failed to encrypt backend OAuth token"))?;
+        .map_err(|_err| ApiError::InternalServerError("Failed to encrypt backend OAuth token"))?;
 
     Ok(format!(
         "{ENCRYPTED_TOKEN_PREFIX}{}:{}",
@@ -350,15 +351,15 @@ pub(crate) fn decrypt_db_token_value(value: &str, aad: &[u8]) -> Result<String, 
         ApiError::InternalServerError("Invalid encrypted backend OAuth token format")
     })?;
 
-    let nonce_bytes = URL_SAFE_NO_PAD.decode(nonce_b64).map_err(|_| {
+    let nonce_bytes = URL_SAFE_NO_PAD.decode(nonce_b64).map_err(|_err| {
         ApiError::InternalServerError("Invalid encrypted backend OAuth token nonce encoding")
     })?;
 
-    let nonce_array: [u8; 24] = nonce_bytes.try_into().map_err(|_| {
+    let nonce_array: [u8; 24] = nonce_bytes.try_into().map_err(|_err| {
         ApiError::InternalServerError("Invalid encrypted backend OAuth token nonce")
     })?;
 
-    let ciphertext = URL_SAFE_NO_PAD.decode(ciphertext_b64).map_err(|_| {
+    let ciphertext = URL_SAFE_NO_PAD.decode(ciphertext_b64).map_err(|_err| {
         ApiError::InternalServerError("Invalid encrypted backend OAuth token encoding")
     })?;
 
@@ -373,8 +374,8 @@ pub(crate) fn decrypt_db_token_value(value: &str, aad: &[u8]) -> Result<String, 
                 aad,
             },
         )
-        .map_err(|_| ApiError::InternalServerError("Failed to decrypt backend OAuth token"))?;
+        .map_err(|_err| ApiError::InternalServerError("Failed to decrypt backend OAuth token"))?;
 
     String::from_utf8(plaintext)
-        .map_err(|_| ApiError::InternalServerError("Decrypted backend OAuth token is not UTF-8"))
+        .map_err(|_err| ApiError::InternalServerError("Decrypted backend OAuth token is not UTF-8"))
 }

@@ -57,13 +57,21 @@ impl User {
             }
         }
 
-        if user.global_name.is_some() && user.global_name.as_ref().unwrap().len() > 35 {
+        if user
+            .global_name
+            .as_deref()
+            .is_some_and(|global_name| global_name.len() > 35)
+        {
             return Err(ApiError::BadRequest(
                 "The display name can at most be 35 characters long.",
             ));
         }
 
-        if user.description.is_some() && user.description.as_ref().unwrap().len() > 300 {
+        if user
+            .description
+            .as_deref()
+            .is_some_and(|description| description.len() > 300)
+        {
             return Err(ApiError::BadRequest(
                 "The description can at most be 300 characters long.",
             ));

@@ -5,9 +5,93 @@ use diesel::result::DatabaseErrorKind;
 use diesel::result::Error as DieselError;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::error::Error as StdError;
 use std::fmt;
-use std::fmt::Formatter;
+use std::fmt::{Display, Formatter};
 use url::ParseError;
+
+#[derive(Debug)]
+pub enum ConfigError {
+    MissingSecret {
+        name: String,
+    },
+    SecretFileRead {
+        name: String,
+        path: String,
+        source: std::io::Error,
+    },
+    InvalidValue {
+        name: String,
+        message: String,
+    },
+}
+
+impl Display for ConfigError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            ConfigError::MissingSecret { name } => {
+                write!(f, "Missing required config secret: {name}")
+            }
+            ConfigError::SecretFileRead { name, path, source } => {
+                write!(
+                    f,
+                    "Failed to read config secret {name} from {path}: {source}"
+                )
+            }
+            ConfigError::InvalidValue { name, message } => {
+                write!(f, "Invalid config value {name}: {message}")
+            }
+        }
+    }
+}
+
+impl StdError for ConfigError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        match self {
+            ConfigError::SecretFileRead { source, .. } => Some(source),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum StartupError {
+    Config(ConfigError),
+    Init(String),
+    Io(std::io::Error),
+}
+
+impl Display for StartupError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            StartupError::Config(error) => Display::fmt(error, f),
+            StartupError::Init(message) => f.write_str(message),
+            StartupError::Io(error) => Display::fmt(error, f),
+        }
+    }
+}
+
+impl StdError for StartupError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        match self {
+            StartupError::Config(error) => Some(error),
+            StartupError::Io(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+
+impl From<std::io::Error> for StartupError {
+    fn from(error: std::io::Error) -> Self {
+        StartupError::Io(error)
+    }
+}
+
+impl From<ConfigError> for StartupError {
+    fn from(error: ConfigError) -> Self {
+        StartupError::Config(error)
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ApiError {
@@ -21,6 +105,12 @@ impl ApiError {
             error_status_code,
             error_message: error_message.to_string(),
         }
+    }
+}
+
+impl From<ApiError> for StartupError {
+    fn from(error: ApiError) -> Self {
+        StartupError::Init(error.to_string())
     }
 }
 
@@ -124,6 +214,12 @@ impl From<BlockingError> for ApiError {
 impl From<ParseError> for ApiError {
     fn from(error: ParseError) -> Self {
         ApiError::InternalServerError(format!("Failed to parse URL: {}", error))
+    }
+}
+
+impl From<ConfigError> for ApiError {
+    fn from(error: ConfigError) -> Self {
+        ApiError::InternalServerError(format!("Configuration error: {}", error))
     }
 }
 

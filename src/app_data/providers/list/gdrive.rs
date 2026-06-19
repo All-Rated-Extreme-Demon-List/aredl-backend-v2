@@ -1,8 +1,8 @@
 use async_trait::async_trait;
-use regex::Regex;
-use reqwest::header::HeaderMap;
+use reqwest::header::{HeaderMap, HeaderValue};
 use url::Url;
 
+use super::super::parse::is_ascii_id;
 use super::super::{
     context::ProviderContext,
     model::{ContentDataLocation, NormalizedProviderMatch, Provider, ProviderId, ProviderUsage},
@@ -64,10 +64,7 @@ impl Provider for GoogleDriveProvider {
             }
         };
 
-        if !Regex::new(r"^[A-Za-z0-9_-]+$")
-            .unwrap()
-            .is_match(&content_id)
-        {
+        if !is_ascii_id(&content_id, 1, usize::MAX) {
             return None;
         }
 
@@ -122,7 +119,8 @@ impl Provider for GoogleDriveProvider {
         let mut headers = HeaderMap::new();
         headers.insert(
             "Authorization",
-            reqwest::header::HeaderValue::from_str(&format!("Bearer {}", token)).unwrap(),
+            HeaderValue::from_str(&format!("Bearer {}", token))
+                .map_err(|_| ApiError::InternalServerError("Invalid Google Drive access token"))?,
         );
 
         Ok(Some(ContentDataLocation { url, headers }))

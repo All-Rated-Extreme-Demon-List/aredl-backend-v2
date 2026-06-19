@@ -104,7 +104,7 @@ impl Authenticated {
             .optional()?;
 
         let has_permission = self.has_permission(conn, Permission::ClanModify)?;
-        if (member.is_none() || member.unwrap().role < clan_role_level) && !has_permission {
+        if member.is_none_or(|member| member.role < clan_role_level) && !has_permission {
             return Err(ApiError::Forbidden(
                 "You do not have the required permission to perform this action",
             ));

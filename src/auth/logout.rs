@@ -36,18 +36,15 @@ pub async fn logout_all(
         .and_then(|h| h.to_str().ok())
         .map(|h| h.strip_prefix("Bearer ").unwrap_or("").to_string());
 
-    if token.is_none() {
+    let Some(token) = token else {
         return Err(ApiError::Unauthorized("No token provided"));
-    }
+    };
 
     web::block(move || {
         let conn = &mut db.connection()?;
 
-        let decoded_token_claims = token::decode_token(
-            token.unwrap(),
-            &data.jwt_decoding_key,
-            &["access", "refresh"],
-        )?;
+        let decoded_token_claims =
+            token::decode_token(token, &data.jwt_decoding_key, &["access", "refresh"])?;
 
         let decoded_user_claims = token::decode_user_claims(&decoded_token_claims)?;
 

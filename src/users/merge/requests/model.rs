@@ -229,13 +229,13 @@ impl MergeRequest {
             .first::<Uuid>(conn)
             .optional()?;
 
-        if next_id.is_none() {
+        let Some(next_id) = next_id else {
             return Ok(None);
-        }
+        };
 
         let result = diesel::update(merge_requests::table)
             .set(merge_requests::is_claimed.eq(true))
-            .filter(merge_requests::id.eq(next_id.unwrap()))
+            .filter(merge_requests::id.eq(next_id))
             .returning(Self::as_select())
             .get_result::<Self>(conn)
             .optional()?;

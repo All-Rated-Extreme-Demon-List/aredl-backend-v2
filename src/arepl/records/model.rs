@@ -446,10 +446,18 @@ impl Record {
         providers: web::Data<Arc<ProvidersAppState>>,
     ) {
         tokio::spawn(async move {
-            let record = match Record::find_from_submission(
-                &mut db.connection().unwrap(),
-                submission.id,
-            ) {
+            let mut conn = match db.connection() {
+                Ok(conn) => conn,
+                Err(error) => {
+                    tracing::warn!(
+                        error = %error.error_message,
+                        ?submission.id,
+                        "Failed to process post submission accept actions: failed to get database connection"
+                    );
+                    return;
+                }
+            };
+            let record = match Record::find_from_submission(&mut conn, submission.id) {
                 Ok(record) => record,
                 Err(e) => {
                     tracing::warn!(
@@ -476,7 +484,7 @@ impl Record {
                 }
             };
 
-            if let Err(error) = record.complete_bounty_if_exists(&mut db.connection().unwrap()) {
+            if let Err(error) = record.complete_bounty_if_exists(&mut conn) {
                 tracing::warn!(
                     error = %error.error_message,
                     ?record.id,
@@ -485,10 +493,7 @@ impl Record {
                 );
             }
 
-            if let Err(error) = UserBadge::update_user_badges(
-                &mut db.connection().unwrap(),
-                submission.submitted_by,
-            ) {
+            if let Err(error) = UserBadge::update_user_badges(&mut conn, submission.submitted_by) {
                 tracing::warn!(
                     error = %error.error_message,
                     user_id = ?submission.submitted_by,

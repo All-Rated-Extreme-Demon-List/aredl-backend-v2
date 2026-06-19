@@ -32,13 +32,13 @@ mod utils;
 use crate::app_data::{auth as auth_data, db};
 use crate::cache_control::CacheController;
 use crate::docs::ApiDoc;
+use crate::error_handler::{ConfigError, StartupError};
 use crate::scheduled::{
     data_cleaner::start_data_cleaner, refresh_discord_avatars::start_discord_avatars_refresher,
     refresh_level_data::start_level_data_refresher, refresh_matviews::start_matviews_refresher,
     shifts_creator::start_recurrent_shift_creator, sync_patreon_plus::start_patreon_plus_sync,
 };
 use actix_cors::Cors;
-use actix_governor::GovernorConfigBuilder;
 use actix_http::StatusCode;
 use actix_web::body::MessageBody;
 use actix_web::dev::{ServiceRequest, ServiceResponse};
@@ -61,7 +61,7 @@ use utoipa::OpenApi;
 use utoipa_rapidoc::RapiDoc;
 
 #[actix_rt::main]
-async fn main() -> std::io::Result<()> {
+async fn main() -> Result<(), StartupError> {
     dotenv().ok();
 
     if cfg!(debug_assertions) {
@@ -94,27 +94,27 @@ async fn main() -> std::io::Result<()> {
         .exclude_status(StatusCode::NOT_FOUND)
         .mask_unmatched_patterns("/unmatched")
         .build()
-        .unwrap();
+        .map_err(|error| StartupError::Init(format!("Failed to start Prometheus: {error}")))?;
 
-    let db_app_state = db::init_app_state();
+    let db_app_state = db::init_app_state()?;
 
-    let auth_app_state = auth_data::init_app_state().await;
+    let auth_app_state = auth_data::init_app_state().await?;
 
     let providers_app_state = providers::init_app_state(db_app_state.clone()).await;
 
-    db_app_state.run_pending_migrations();
+    db_app_state.run_pending_migrations()?;
 
-    start_matviews_refresher(db_app_state.clone()).await;
+    start_matviews_refresher(db_app_state.clone()).await?;
 
-    start_data_cleaner(db_app_state.clone(), notify_tx.clone()).await;
+    start_data_cleaner(db_app_state.clone(), notify_tx.clone()).await?;
 
-    start_level_data_refresher(db_app_state.clone(), providers_app_state.clone()).await;
+    start_level_data_refresher(db_app_state.clone(), providers_app_state.clone()).await?;
 
-    start_recurrent_shift_creator(db_app_state.clone(), notify_tx.clone()).await;
+    start_recurrent_shift_creator(db_app_state.clone(), notify_tx.clone()).await?;
 
-    start_discord_avatars_refresher(db_app_state.clone(), providers_app_state.clone()).await;
+    start_discord_avatars_refresher(db_app_state.clone(), providers_app_state.clone()).await?;
 
-    start_patreon_plus_sync(db_app_state.clone(), providers_app_state.clone()).await;
+    start_patreon_plus_sync(db_app_state.clone(), providers_app_state.clone()).await?;
 
     let mut listenfd = ListenFd::from_env();
     let mut server = HttpServer::new(move || {
@@ -145,13 +145,6 @@ async fn main() -> std::io::Result<()> {
                 <header style=\"color:white; font-weight: lighter; font-size: 1.5rem;\" slot=\"header\">All Rated Extreme Demons List | API v2 Documentation</header>\
                 <img style=\"padding: 0.5rem; height: 3rem;\" slot=\"logo\"  src=\"https://aredl.net/assets/logo.webp\"/>
             </rapi-doc></body></html>";
-
-        let _governor_conf = GovernorConfigBuilder::default()
-            .requests_per_minute(100)
-            .burst_size(20)
-            .use_headers()
-            .finish()
-            .expect("invalid governor config");
 
         App::new()
             .wrap(prometheus.clone())
@@ -186,13 +179,15 @@ async fn main() -> std::io::Result<()> {
     server = match listenfd.take_tcp_listener(0)? {
         Some(listener) => server.listen(listener)?,
         None => {
-            let host = get_secret("HOST");
-            let port = get_secret("PORT");
+            let host = get_secret("HOST")?;
+            let port = get_secret("PORT")?;
             server.bind(format!("{}:{}", host, port))?
         }
     };
 
-    server.run().await
+    server.run().await?;
+
+    Ok(())
 }
 
 pub struct AppRootSpanBuilder;
@@ -211,15 +206,22 @@ impl RootSpanBuilder for AppRootSpanBuilder {
     }
 }
 
-pub fn get_secret(var_name: &str) -> String {
-    let value = env::var(var_name).unwrap_or_else(|_| panic!("Please set {} in .env", var_name));
+pub fn get_secret(var_name: &str) -> Result<String, ConfigError> {
+    let value = env::var(var_name).map_err(|_| ConfigError::MissingSecret {
+        name: var_name.to_string(),
+    })?;
+
     if value.starts_with("/run/secrets/") {
-        fs::read_to_string(value.trim())
-            .expect("Failed to read secret file")
+        Ok(fs::read_to_string(value.trim())
+            .map_err(|source| ConfigError::SecretFileRead {
+                name: var_name.to_string(),
+                path: value.trim().to_string(),
+                source,
+            })?
             .trim()
-            .to_string()
+            .to_string())
     } else {
-        value
+        Ok(value)
     }
 }
 

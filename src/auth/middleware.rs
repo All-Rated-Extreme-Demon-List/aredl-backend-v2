@@ -92,9 +92,12 @@ where
         let token = http_req
             .headers()
             .get(header::AUTHORIZATION)
-            .map(|h| h.to_str().unwrap().split_at(7).1.to_string());
+            .and_then(|header| header.to_str().ok())
+            .and_then(|value| value.strip_prefix("Bearer "))
+            .filter(|token| !token.is_empty())
+            .map(str::to_owned);
 
-        if token.is_none() {
+        let Some(token) = token else {
             return if require_auth {
                 Self::error_future(
                     http_req,
@@ -110,28 +113,32 @@ where
                     Ok(res)
                 })
             };
-        }
-
-        let app_state = http_req.app_data::<web::Data<Arc<AuthAppState>>>().unwrap();
-
-        let db_state = http_req
-            .app_data::<web::Data<Arc<DbAppState>>>()
-            .unwrap()
-            .clone();
-
-        let token_claims = match decode_token(
-            token.unwrap(),
-            &app_state.jwt_decoding_key,
-            &["initial", "access"],
-        ) {
-            Ok(claims) => claims,
-            Err(_) => {
-                return Self::error_future(
-                    http_req,
-                    ApiError::Unauthorized("Failed to decode token"),
-                )
-            }
         };
+
+        let Some(app_state) = http_req.app_data::<web::Data<Arc<AuthAppState>>>().cloned() else {
+            return Self::error_future(
+                http_req,
+                ApiError::InternalServerError("Authentication unavailable"),
+            );
+        };
+
+        let Some(db_state) = http_req.app_data::<web::Data<Arc<DbAppState>>>().cloned() else {
+            return Self::error_future(
+                http_req,
+                ApiError::InternalServerError("Database unavailable"),
+            );
+        };
+
+        let token_claims =
+            match decode_token(token, &app_state.jwt_decoding_key, &["initial", "access"]) {
+                Ok(claims) => claims,
+                Err(_) => {
+                    return Self::error_future(
+                        http_req,
+                        ApiError::Unauthorized("Failed to decode token"),
+                    )
+                }
+            };
 
         let user_claims = match decode_user_claims(&token_claims) {
             Ok(claims) => claims,
@@ -143,9 +150,12 @@ where
             }
         };
 
-        let conn = &mut db_state.connection().unwrap();
+        let mut conn = match db_state.connection() {
+            Ok(conn) => conn,
+            Err(error) => return Self::error_future(http_req, error),
+        };
 
-        if check_token_valid(&token_claims, &user_claims, conn).is_err() {
+        if check_token_valid(&token_claims, &user_claims, &mut conn).is_err() {
             return Self::error_future(
                 http_req,
                 ApiError::Unauthorized("Token has been invalidated"),
@@ -158,7 +168,7 @@ where
 
         if let Some(required_perm) = self.required_perm.clone() {
             let has_permission =
-                permission::check_user_permission(conn, user_id, required_perm.clone());
+                permission::check_user_permission(&mut conn, user_id, required_perm.clone());
             match has_permission {
                 Ok(permission) => {
                     if !permission {

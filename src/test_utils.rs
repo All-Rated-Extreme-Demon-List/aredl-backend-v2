@@ -80,7 +80,9 @@ pub async fn init_test_app() -> (
 ) {
     dotenv::dotenv().ok();
 
-    let auth_app_state = auth_init_app_state().await;
+    let auth_app_state = auth_init_app_state()
+        .await
+        .expect("Failed to initialize auth test state");
 
     let (notify_tx, _notify_rx) = broadcast::channel::<WebsocketNotification>(100);
 
@@ -123,7 +125,9 @@ pub async fn init_test_app_with_providers(
 ) {
     dotenv::dotenv().ok();
 
-    let auth_app_state = auth_init_app_state().await;
+    let auth_app_state = auth_init_app_state()
+        .await
+        .expect("Failed to initialize auth test state");
 
     let (notify_tx, _notify_rx) = broadcast::channel::<WebsocketNotification>(100);
 

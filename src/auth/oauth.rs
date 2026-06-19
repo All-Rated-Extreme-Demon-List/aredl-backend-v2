@@ -208,7 +208,7 @@ impl OAuthOptions {
                 return Ok(());
             }
 
-            let allowed_domains = get_secret("AUTH_CALLBACK_ALLOWED_DOMAINS");
+            let allowed_domains = get_secret("AUTH_CALLBACK_ALLOWED_DOMAINS")?;
             if allowed_domains
                 .split(',')
                 .map(str::trim)
