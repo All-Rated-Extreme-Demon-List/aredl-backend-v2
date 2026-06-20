@@ -12,14 +12,11 @@ use crate::{app_data::db::DbAppState, arepl::records::test_utils::create_test_re
 #[cfg(test)]
 use diesel::{sql_query, ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
 #[cfg(test)]
-use rand::Rng;
-#[cfg(test)]
 use uuid::Uuid;
 
 #[cfg(test)]
 pub async fn create_test_level(db: &Arc<DbAppState>) -> Uuid {
-    let mut rng = rand::rng();
-    let level_id = rng.random_range(1..=100000000);
+    let level_id = rand::random_range(1..=100000000);
     let level_uuid = Uuid::new_v4();
     let publisher = create_test_user(db, None).await.0;
 

@@ -24,6 +24,7 @@ use {
     serde_json::Value,
     uuid::Uuid,
 };
+use {actix_http::StatusCode};
 
 #[actix_web::test]
 async fn submission_stats_filter_moderator() {
@@ -195,7 +196,7 @@ async fn submission_stats_endpoints_require_full_review_permission() {
     let resp = test::call_service(&app, req).await;
     assert_error_response(
         resp,
-        403,
+        StatusCode::FORBIDDEN,
         Some("You do not have the required permission (submission_review_full) to access this endpoint"),
     )
     .await;
@@ -207,7 +208,7 @@ async fn submission_stats_endpoints_require_full_review_permission() {
     let resp = test::call_service(&app, req).await;
     assert_error_response(
         resp,
-        403,
+        StatusCode::FORBIDDEN,
         Some("You do not have the required permission (submission_review_full) to access this endpoint"),
     )
     .await;

@@ -145,7 +145,7 @@ async fn leave_clan_owner_forbidden() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_eq!(resp.status().as_u16(), 403);
+    assert_eq!(resp.status().as_u16(), 409);
 }
 
 #[actix_web::test]

@@ -9,6 +9,7 @@ use {
         test_utils::{assert_error_response, init_test_app},
         users::test_utils::{create_test_user, get_permission_privilege_level},
     },
+    actix_http::StatusCode,
     actix_web::test::{self, read_body_json},
     serde_json::json,
 };
@@ -120,7 +121,7 @@ async fn create_role_fails_when_new_role_has_same_privilege_as_user() {
     let resp = test::call_service(&app, req).await;
     assert_error_response(
         resp,
-        403,
+        StatusCode::FORBIDDEN,
         Some("You can not create a role with higher permissions than yourself."),
     )
     .await;
@@ -145,7 +146,7 @@ async fn create_role_fails_when_new_role_has_higher_privilege_than_user() {
     let resp = test::call_service(&app, req).await;
     assert_error_response(
         resp,
-        403,
+        StatusCode::FORBIDDEN,
         Some("You can not create a role with higher permissions than yourself."),
     )
     .await;
@@ -170,7 +171,7 @@ async fn update_role_fails_when_target_role_has_same_privilege_as_user() {
     let resp = test::call_service(&app, req).await;
     assert_error_response(
         resp,
-        403,
+        StatusCode::FORBIDDEN,
         Some("You do not have sufficient permissions to edit this role."),
     )
     .await;
@@ -194,7 +195,7 @@ async fn delete_role_fails_when_target_role_has_same_privilege_as_user() {
     let resp = test::call_service(&app, req).await;
     assert_error_response(
         resp,
-        403,
+        StatusCode::FORBIDDEN,
         Some("You do not have sufficient permissions to edit this role."),
     )
     .await;

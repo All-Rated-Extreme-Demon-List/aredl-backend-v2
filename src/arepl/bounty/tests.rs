@@ -1,3 +1,4 @@
+use actix_http::StatusCode;
 #[cfg(test)]
 use {
     crate::{
@@ -68,7 +69,7 @@ async fn bounty_board_permissions_and_validation() {
     .await;
     assert_error_response(
         forbidden_create,
-        403,
+        StatusCode::FORBIDDEN,
         Some("You do not have the required permission (bounty_manage) to access this endpoint"),
     )
     .await;
@@ -92,7 +93,7 @@ async fn bounty_board_permissions_and_validation() {
     .await;
     assert_error_response(
         invalid_target,
-        400,
+        StatusCode::BAD_REQUEST,
         Some("Target submissions must be a positive integer."),
     )
     .await;
@@ -116,7 +117,7 @@ async fn bounty_board_permissions_and_validation() {
     .await;
     assert_error_response(
         invalid_dates,
-        400,
+        StatusCode::BAD_REQUEST,
         Some("End date must be after start date."),
     )
     .await;
@@ -151,7 +152,7 @@ async fn bounty_board_permissions_and_validation() {
     .await;
     assert_error_response(
         invalid_update,
-        400,
+        StatusCode::BAD_REQUEST,
         Some("End date must be after start date."),
     )
     .await;
@@ -166,7 +167,7 @@ async fn bounty_board_permissions_and_validation() {
     .await;
     assert_error_response(
         forbidden_delete,
-        403,
+        StatusCode::FORBIDDEN,
         Some("You do not have the required permission (bounty_manage) to access this endpoint"),
     )
     .await;

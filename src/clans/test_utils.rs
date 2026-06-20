@@ -12,18 +12,13 @@ use crate::{
 use diesel::result::{DatabaseErrorKind, Error};
 #[cfg(test)]
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
-use rand::rngs::OsRng;
-use rand::TryRngCore;
 #[cfg(test)]
 use uuid::Uuid;
 
 #[cfg(test)]
 fn generate_random_tag() -> String {
-    let mut buffer = [0u8; 5];
-    OsRng.try_fill_bytes(&mut buffer).unwrap();
-    buffer
-        .iter()
-        .map(|&byte| ((byte % 26) + b'A') as char)
+    (0..5)
+        .map(|_| rand::random_range(b'A'..=b'Z') as char)
         .collect()
 }
 

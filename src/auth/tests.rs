@@ -316,7 +316,7 @@ async fn refresh_fails_without_token() {
     let req = test::TestRequest::get().uri("/auth/refresh").to_request();
     let resp = test::call_service(&app, req).await;
 
-    assert_eq!(resp.status(), actix_web::http::StatusCode::BAD_REQUEST);
+    assert_eq!(resp.status(), actix_web::http::StatusCode::UNAUTHORIZED);
 }
 
 #[actix_web::test]

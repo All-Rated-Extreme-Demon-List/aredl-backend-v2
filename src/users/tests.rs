@@ -1,3 +1,5 @@
+use actix_http::StatusCode;
+
 use crate::users::test_utils::create_test_placeholder_user;
 #[cfg(test)]
 use {
@@ -354,7 +356,7 @@ async fn user_character_limit() {
     let resp = test::call_service(&app, req).await;
     assert_error_response(
         resp,
-        400,
+        StatusCode::BAD_REQUEST,
         Some("The display name can at most be 35 characters long."),
     )
     .await;

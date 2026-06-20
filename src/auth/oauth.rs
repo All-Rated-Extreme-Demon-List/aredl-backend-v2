@@ -5,10 +5,10 @@ use crate::{get_optional_secret, get_secret};
 use chrono::{DateTime, Utc};
 use diesel::{Connection, ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
 use diesel_derive_enum::DbEnum;
-use openidconnect::core::{CoreAuthenticationFlow, CoreClient, CoreJsonWebKeySet};
-use openidconnect::{
-    AuthType, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, IssuerUrl, Nonce,
-    OAuth2TokenResponse, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, TokenUrl,
+use oauth2::basic::BasicClient;
+use oauth2::{
+    AuthType, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, EndpointNotSet,
+    EndpointSet, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, TokenResponse, TokenUrl,
 };
 use serde::{Deserialize, Serialize};
 use strum_macros::Display;
@@ -16,14 +16,8 @@ use url::Url;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-pub type OAuthClient = CoreClient<
-    openidconnect::EndpointSet,
-    openidconnect::EndpointNotSet,
-    openidconnect::EndpointNotSet,
-    openidconnect::EndpointNotSet,
-    openidconnect::EndpointSet,
-    openidconnect::EndpointNotSet,
->;
+pub type OAuthClient =
+    BasicClient<EndpointSet, EndpointNotSet, EndpointNotSet, EndpointNotSet, EndpointSet>;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema, DbEnum, PartialEq, Eq)]
 #[ExistingTypePath = "crate::schema::sql_types::OauthProvider"]
@@ -76,7 +70,6 @@ impl From<OAuthAuthTypeConfig> for AuthType {
 pub struct OAuthClientConfig {
     pub client_id: String,
     pub client_secret: String,
-    pub issuer_uri: Option<String>,
     pub authorize_uri: Option<String>,
     pub token_uri: String,
     pub api_base_uri: Option<String>,
@@ -85,7 +78,6 @@ pub struct OAuthClientConfig {
     #[serde(default)]
     pub scopes: Vec<String>,
     pub use_pkce: Option<bool>,
-    pub use_openid_scope: Option<bool>,
     pub auth_type: Option<OAuthAuthTypeConfig>,
 }
 
@@ -110,15 +102,6 @@ impl OAuthClientConfig {
                 )
             }),
         }
-    }
-
-    pub fn issuer_uri(&self) -> Result<String, ApiError> {
-        self.issuer_uri
-            .clone()
-            .or_else(|| self.authorize_uri.clone())
-            .ok_or_else(|| {
-                ApiError::InternalServerError("OAuth provider config missing issuer_uri")
-            })
     }
 
     pub fn auth_type(&self) -> OAuthAuthTypeConfig {
@@ -155,27 +138,17 @@ impl OAuthProviderState {
     pub fn new(config: OAuthClientConfig) -> Result<Self, ApiError> {
         let authorize_uri = config.authorize_uri()?;
         let redirect_uri = config.redirect_uri()?;
-        let issuer_uri = config.issuer_uri()?;
-
-        let mut client = CoreClient::new(
-            ClientId::new(config.client_id),
-            IssuerUrl::new(issuer_uri)?,
-            CoreJsonWebKeySet::default(),
-        )
-        .set_client_secret(ClientSecret::new(config.client_secret))
-        .set_auth_uri(AuthUrl::new(authorize_uri)?)
-        .set_token_uri(TokenUrl::new(config.token_uri)?)
-        .set_redirect_uri(RedirectUrl::new(redirect_uri)?)
-        .set_auth_type(
-            config
-                .auth_type
-                .unwrap_or(OAuthAuthTypeConfig::RequestBody)
-                .into(),
-        );
-
-        if !config.use_openid_scope.unwrap_or(false) {
-            client = client.disable_openid_scope();
-        }
+        let client = BasicClient::new(ClientId::new(config.client_id))
+            .set_client_secret(ClientSecret::new(config.client_secret))
+            .set_auth_uri(AuthUrl::new(authorize_uri)?)
+            .set_token_uri(TokenUrl::new(config.token_uri)?)
+            .set_redirect_uri(RedirectUrl::new(redirect_uri)?)
+            .set_auth_type(
+                config
+                    .auth_type
+                    .unwrap_or(OAuthAuthTypeConfig::RequestBody)
+                    .into(),
+            );
 
         Ok(Self {
             client,
@@ -244,11 +217,7 @@ impl OAuthRequestData {
         callback: Option<String>,
         user_id: Option<Uuid>,
     ) -> Result<String, ApiError> {
-        let mut authorization = state.client.authorize_url(
-            CoreAuthenticationFlow::AuthorizationCode,
-            CsrfToken::new_random,
-            Nonce::new_random,
-        );
+        let mut authorization = state.client.authorize_url(CsrfToken::new_random);
 
         for scope in &state.scopes {
             authorization = authorization.add_scope(Scope::new(scope.clone()));
@@ -262,7 +231,7 @@ impl OAuthRequestData {
             None
         };
 
-        let (authorize_url, csrf_state, _) = authorization.url();
+        let (authorize_url, csrf_state) = authorization.url();
 
         diesel::insert_into(oauth_requests::table)
             .values((

@@ -11,6 +11,7 @@ use {
     actix_web::test::{self, read_body_json},
     serde_json::json,
 };
+use {actix_http::StatusCode};
 
 #[actix_web::test]
 async fn create_note() {
@@ -148,7 +149,7 @@ async fn notes_auth() {
     let resp = test::call_service(&app, req).await;
     assert_error_response(
         resp,
-        403,
+        StatusCode::FORBIDDEN,
         Some("You do not have the required permission (level_modify) to access this endpoint"),
     )
     .await;

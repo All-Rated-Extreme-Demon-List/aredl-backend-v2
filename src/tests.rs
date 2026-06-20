@@ -141,21 +141,21 @@ async fn cache_control_auth_public_uses_private_cache_with_authorization() {
 #[test]
 async fn error_handler_api_error_new_and_display() {
     let err = ApiError::NotFound("Not found");
-    assert_eq!(err.error_status_code, 404);
+    assert_eq!(err.error_status_code, StatusCode::NOT_FOUND.as_u16());
     assert_eq!(err.to_string(), "Not found");
 }
 
 #[test]
 async fn error_handler_api_error_named_status_and_display() {
     let err = ApiError::Forbidden("Forbidden");
-    assert_eq!(err.error_status_code, 403);
+    assert_eq!(err.error_status_code, StatusCode::FORBIDDEN.as_u16());
     assert_eq!(err.to_string(), "Forbidden");
 }
 
 #[test]
 async fn error_handler_converts_actix_error_helpers() {
     let err = ApiError::from(ErrorForbidden("Forbidden"));
-    assert_eq!(err.error_status_code, 403);
+    assert_eq!(err.error_status_code, StatusCode::FORBIDDEN.as_u16());
     assert_eq!(err.to_string(), "Forbidden");
 }
 
@@ -171,7 +171,7 @@ async fn error_handler_client_error_response_preserves_message() {
         .await;
 
     let resp = test::call_service(&app, test::TestRequest::get().uri("/").to_request()).await;
-    assert_error_response(resp, 400, Some("bad request")).await;
+    assert_error_response(resp, StatusCode::BAD_REQUEST, Some("bad request")).await;
 }
 
 #[actix_web::test]
@@ -183,7 +183,7 @@ async fn error_handler_named_status_response_preserves_client_message() {
     .await;
 
     let resp = test::call_service(&app, test::TestRequest::get().uri("/").to_request()).await;
-    assert_error_response(resp, 403, Some("forbidden")).await;
+    assert_error_response(resp, StatusCode::FORBIDDEN, Some("forbidden")).await;
 }
 
 #[actix_web::test]
@@ -197,5 +197,10 @@ async fn error_handler_server_error_response_masks_message() {
     .await;
 
     let resp = test::call_service(&app, test::TestRequest::get().uri("/").to_request()).await;
-    assert_error_response(resp, 500, Some("Internal server error")).await;
+    assert_error_response(
+        resp,
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Some("Internal server error"),
+    )
+    .await;
 }

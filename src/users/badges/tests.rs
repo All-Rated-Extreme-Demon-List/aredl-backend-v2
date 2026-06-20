@@ -5,6 +5,7 @@ use {
         test_utils::{assert_error_response, init_test_app},
         users::test_utils::create_test_user,
     },
+    actix_http::StatusCode,
     actix_web::test::{self, read_body_json},
     serde_json::json,
 };
@@ -151,5 +152,10 @@ async fn grant_user_badge_rejects_invalid_code() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_error_response(resp, 400, Some("Unknown badge code: global.invalid_badge")).await;
+    assert_error_response(
+        resp,
+        StatusCode::BAD_REQUEST,
+        Some("Unknown badge code: global.invalid_badge"),
+    )
+    .await;
 }

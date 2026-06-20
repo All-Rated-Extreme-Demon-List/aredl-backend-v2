@@ -47,7 +47,7 @@ use actix_web::Error;
 use actix_web::{web, App, HttpServer};
 use actix_web_prom::PrometheusMetricsBuilder;
 
-use dotenv::dotenv;
+use dotenvy::dotenv;
 use listenfd::ListenFd;
 use notifications::WebsocketNotification;
 use std::env;

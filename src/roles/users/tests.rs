@@ -10,6 +10,7 @@ use {
     actix_web::test::{self, read_body_json},
     uuid::Uuid,
 };
+use {actix_http::StatusCode};
 
 #[actix_web::test]
 async fn add_role_users() {
@@ -98,7 +99,7 @@ async fn add_role_users_fails_when_target_role_has_same_privilege_as_user() {
     let resp = test::call_service(&app, req).await;
     assert_error_response(
         resp,
-        403,
+        StatusCode::FORBIDDEN,
         Some("You do not have sufficient permissions to edit this role."),
     )
     .await;
@@ -125,7 +126,7 @@ async fn set_role_users_fails_when_target_role_has_same_privilege_as_user() {
     let resp = test::call_service(&app, req).await;
     assert_error_response(
         resp,
-        403,
+        StatusCode::FORBIDDEN,
         Some("You do not have sufficient permissions to edit this role."),
     )
     .await;
@@ -152,7 +153,7 @@ async fn delete_role_users_fails_when_target_role_has_same_privilege_as_user() {
     let resp = test::call_service(&app, req).await;
     assert_error_response(
         resp,
-        403,
+        StatusCode::FORBIDDEN,
         Some("You do not have sufficient permissions to edit this role."),
     )
     .await;

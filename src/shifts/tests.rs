@@ -1,3 +1,4 @@
+use actix_http::StatusCode;
 #[cfg(test)]
 use {
     crate::{
@@ -68,7 +69,7 @@ async fn get_my_shifts_requires_submission_review_base() {
 
     assert_error_response(
             resp,
-            403,
+            StatusCode::FORBIDDEN,
             Some("You do not have the required permission (submission_review_base) to access this endpoint"),
         )
         .await;
@@ -249,7 +250,7 @@ async fn list_recurring_shifts_requires_submission_review_full() {
 
     assert_error_response(
             resp,
-            403,
+            StatusCode::FORBIDDEN,
             Some("You do not have the required permission (submission_review_full) to access this endpoint"),
         )
         .await;
@@ -472,5 +473,10 @@ async fn create_shift_instantly() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_error_response(resp, 403, Some("You can only create shifts for yourself.")).await;
+    assert_error_response(
+        resp,
+        StatusCode::FORBIDDEN,
+        Some("You can only create shifts for yourself."),
+    )
+    .await;
 }

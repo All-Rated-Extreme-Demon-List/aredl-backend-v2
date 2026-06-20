@@ -1,3 +1,4 @@
+use actix_http::StatusCode;
 #[cfg(test)]
 use {
     crate::{
@@ -142,7 +143,7 @@ async fn ldm_auth() {
     let resp = test::call_service(&app, req).await;
     assert_error_response(
         resp,
-        403,
+        StatusCode::FORBIDDEN,
         Some("You do not have the required permission (level_modify) to access this endpoint"),
     )
     .await;

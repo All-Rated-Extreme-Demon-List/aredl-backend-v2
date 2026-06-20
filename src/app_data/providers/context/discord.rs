@@ -21,7 +21,6 @@ pub async fn new_discord_context() -> Option<OAuthProviderContext> {
         .return_path
         .get_or_insert("/auth/discord".to_string());
     config.use_pkce.get_or_insert(true);
-    config.use_openid_scope.get_or_insert(true);
 
     match OAuthProviderContext::new(
         OAuthProvider::Discord,

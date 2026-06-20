@@ -5,7 +5,7 @@ use crate::app_data::{
 };
 #[cfg(test)]
 use crate::providers::ProvidersAppState;
-use actix_http::Request;
+use actix_http::{Request, StatusCode};
 
 use actix_web::{
     body::BoxBody,
@@ -80,7 +80,7 @@ pub async fn init_test_app() -> (
     Arc<AuthAppState>,
     Sender<WebsocketNotification>,
 ) {
-    drop(dotenv::dotenv());
+    drop(dotenvy::dotenv());
 
     let auth_app_state = auth_init_app_state()
         .await
@@ -125,7 +125,7 @@ pub async fn init_test_app_with_providers(
     Arc<AuthAppState>,
     Sender<WebsocketNotification>,
 ) {
-    drop(dotenv::dotenv());
+    drop(dotenvy::dotenv());
 
     let auth_app_state = auth_init_app_state()
         .await
@@ -168,7 +168,7 @@ pub async fn init_test_app_with_providers(
 
 pub async fn assert_error_response(
     resp: ServiceResponse<BoxBody>,
-    expected_status: u16,
+    expected_status: StatusCode,
     expected_message: Option<&str>,
 ) {
     let actual_status = resp.status().as_u16();
@@ -184,7 +184,8 @@ pub async fn assert_error_response(
     let actual_message = message_from_json.unwrap_or(body_text.as_str());
 
     assert_eq!(
-        actual_status, expected_status,
+        actual_status,
+        expected_status.as_u16(),
         "Unexpected status. message={}",
         actual_message
     );
