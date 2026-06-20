@@ -53,7 +53,6 @@ services:
 
       AUTH_CALLBACK_ALLOWED_DOMAINS: /run/secrets/auth_callback_allowed_domains
       AUTH_CALLBACK_ALLOW_LOCALHOST: ${AUTH_CALLBACK_ALLOW_LOCALHOST}
-      OAUTH_RETURN_URI_BASE: ${OAUTH_RETURN_URI_BASE}
 
       MATVIEWS_REFRESH_SCHEDULE: /run/secrets/matviews_refresh_schedule
       LEVEL_DATA_REFRESH_SCHEDULE: /run/secrets/level_data_refresh_schedule
