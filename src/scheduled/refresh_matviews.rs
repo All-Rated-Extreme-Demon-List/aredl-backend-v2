@@ -1,5 +1,5 @@
 use crate::app_data::db::DbAppState;
-use crate::error_handler::StartupError;
+use crate::error_handler::{ApiError, StartupError};
 use crate::scheduled::{sleep_until_next, startup_schedule};
 use crate::schema::matview_refresh_log;
 use chrono::Utc;
@@ -37,19 +37,15 @@ pub async fn start_matviews_refresher(db: Arc<DbAppState>) -> Result<(), Startup
 
             tracing::info!("Refreshing materialized views");
 
-            let conn = &mut match db.connection() {
-                Ok(c) => c,
-                Err(e) => {
-                    tracing::error!("DB connection failed: {e}");
-                    continue;
-                }
-            };
-
             for &schema in &schemas {
                 for &view in &views {
                     let full_name = format!("{}.{}", schema, view);
                     let sql = format!("REFRESH MATERIALIZED VIEW {}", full_name);
-                    match diesel::sql_query(&sql).execute(conn) {
+                    match db.connection().and_then(|mut conn| {
+                        diesel::sql_query(&sql)
+                            .execute(&mut conn)
+                            .map_err(ApiError::from)
+                    }) {
                         Ok(_) => {
                             tracing::info!("Refreshed {}", full_name)
                         }
@@ -62,16 +58,18 @@ pub async fn start_matviews_refresher(db: Arc<DbAppState>) -> Result<(), Startup
                         view_name: full_name.clone(),
                         last_refresh: Utc::now(),
                     };
-                    if let Err(e) = diesel::insert_into(matview_refresh_log::table)
-                        .values(&new_timestamp)
-                        .on_conflict(matview_refresh_log::view_name)
-                        .do_update()
-                        .set(
-                            matview_refresh_log::last_refresh
-                                .eq(excluded(matview_refresh_log::last_refresh)),
-                        )
-                        .execute(conn)
-                    {
+                    if let Err(e) = db.connection().and_then(|mut conn| {
+                        diesel::insert_into(matview_refresh_log::table)
+                            .values(&new_timestamp)
+                            .on_conflict(matview_refresh_log::view_name)
+                            .do_update()
+                            .set(
+                                matview_refresh_log::last_refresh
+                                    .eq(excluded(matview_refresh_log::last_refresh)),
+                            )
+                            .execute(&mut conn)
+                            .map_err(ApiError::from)
+                    }) {
                         tracing::error!("Couldn't log refresh for {}: {}", full_name, e);
                     }
                 }

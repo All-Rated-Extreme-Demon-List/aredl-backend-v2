@@ -123,7 +123,7 @@ pub fn init_test_db_state() -> Arc<DbAppState> {
     let test_db_url = std::env::var("TEST_DATABASE_URL")
         .expect("TEST_DATABASE_URL must be set for running tests");
 
-    let manager = ConnectionManager::<PgConnection>::new(test_db_url.clone());
+    let manager = ConnectionManager::<PgConnection>::new(test_db_url);
     let pool = r2d2::Pool::builder()
         .test_on_check_out(true)
         .max_size(1)

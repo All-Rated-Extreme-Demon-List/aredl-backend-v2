@@ -20,16 +20,11 @@ pub async fn start_recurrent_shift_creator(
             tokio::time::sleep(Duration::from_secs(5)).await;
             tracing::info!("Creating today’s recurring shifts");
 
-            let conn = &mut match db.connection() {
-                Ok(c) => c,
-                Err(e) => {
-                    tracing::error!("DB connection failed: {e}");
-                    continue;
-                }
-            };
-
             let today: NaiveDate = Utc::now().date_naive();
-            match RecurringShift::create_shifts(conn, today) {
+            match db
+                .connection()
+                .and_then(|mut conn| RecurringShift::create_shifts(&mut conn, today))
+            {
                 Ok(new_shifts) => {
                     WebsocketNotification::send(&notify_tx, "SHIFTS_CREATED", &new_shifts);
                 }

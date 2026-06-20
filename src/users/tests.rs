@@ -1,3 +1,4 @@
+use crate::users::test_utils::create_test_placeholder_user;
 #[cfg(test)]
 use {
     crate::{
@@ -363,7 +364,7 @@ async fn user_character_limit() {
 async fn list_users_with_filters() {
     let (app, db, _, _) = init_test_app().await;
     let (_, name) = create_test_user(&db, None).await;
-    let (placeholder_id, _) = crate::users::test_utils::create_test_placeholder_user(&db).await;
+    let (placeholder_id, _) = create_test_placeholder_user(&db).await;
 
     let req = test::TestRequest::get()
         .uri("/users?placeholder=true")

@@ -102,7 +102,7 @@ async fn discord_auth(
     .await??;
 
     Ok(HttpResponse::Found()
-        .append_header((header::LOCATION, authorize_url.to_string()))
+        .append_header((header::LOCATION, authorize_url))
         .finish())
 }
 
@@ -149,10 +149,10 @@ async fn discord_callback(
         .bearer_auth(access_token)
         .send()
         .await
-        .map_err(|_| ApiError::BadGateway("Failed to request discord data"))?
+        .map_err(|_err| ApiError::BadGateway("Failed to request discord data"))?
         .json::<DiscordUser>()
         .await
-        .map_err(|_| ApiError::BadGateway("Failed to load discord data"))?;
+        .map_err(|_err| ApiError::BadGateway("Failed to load discord data"))?;
 
     let (user, roles, scopes) = web::block(move || {
         let conn = &mut db2.connection()?;

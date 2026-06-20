@@ -12,7 +12,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Queryable, Selectable, Identifiable, Serialize, Deserialize, ToSchema)]
-#[diesel(table_name = crate::schema::oauth_connected_accounts)]
+#[diesel(table_name = oauth_connected_accounts)]
 pub struct OAuthConnectedAccount {
     pub id: Uuid,
     pub user_id: Uuid,

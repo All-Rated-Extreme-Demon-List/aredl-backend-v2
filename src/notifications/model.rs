@@ -25,9 +25,16 @@ impl WebsocketNotification {
             }
         };
 
-        let _ = notify_tx.send(WebsocketNotification {
-            notification_type,
+        match notify_tx.send(WebsocketNotification {
+            notification_type: notification_type.clone(),
             data,
-        });
+        }) {
+            Ok(_) => {}
+            Err(error) => {
+                tracing::error!(
+                    "Failed to send {notification_type} websocket notification: {error}"
+                );
+            }
+        }
     }
 }

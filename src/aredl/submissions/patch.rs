@@ -201,7 +201,7 @@ impl SubmissionPatchUser {
                     "This submission is currently being reviewed and cannot be edited.",
                 ));
             }
-            _ => {}
+            SubmissionStatus::Pending | SubmissionStatus::Denied | SubmissionStatus::Accepted => {}
         }
 
         if !SubmissionsEnabled::is_enabled(conn)?
@@ -226,14 +226,14 @@ impl SubmissionPatchUser {
             LevelStatus::Removed => {
                 return Err(ApiError::Gone("This level has been removed from the list."));
             }
-            _ => {}
+            LevelStatus::MainList | LevelStatus::Pending => {}
         }
 
         let result = diesel::update(submissions::table)
             .filter(submissions::id.eq(id))
             .filter(submissions::submitted_by.eq(user))
             .set((
-                patch.clone(),
+                patch,
                 submissions::status.eq(SubmissionStatus::Pending),
                 submissions::reviewer_id.eq::<Option<Uuid>>(None),
                 submissions::reviewer_notes.eq::<Option<String>>(None),
@@ -341,13 +341,17 @@ impl SubmissionPatchMod {
                             NotificationType::Failure,
                             format!("Your submission for {:?} has been denied.", level_name),
                         ),
-                        _ => (
+                        SubmissionStatus::UnderConsideration => (
                             NotificationType::Info,
-                            format!(
-                                "Your submission for {:?} has been put under consideration.",
-                                level_name
-                            ),
+                            format!("Your submission for {level_name:?} has been put under consideration."),
                         ),
+                        SubmissionStatus::Pending
+                        | SubmissionStatus::Claimed
+                        | SubmissionStatus::UnderReview => {
+                            return Err(ApiError::InternalServerError(
+                                "Unexpected submission status while creating notification",
+                            ));
+                        }
                     };
 
                     Notification::create(connection, updated.submitted_by, message, notif_type)?;
@@ -361,7 +365,7 @@ impl SubmissionPatchMod {
                             Some("SUBMISSION_UNDER_CONSIDERATION")
                         }
                         SubmissionStatus::UnderReview => Some("SUBMISSION_UNDER_REVIEW"),
-                        _ => None,
+                        SubmissionStatus::Claimed | SubmissionStatus::Pending => None,
                     }
                 } else {
                     None

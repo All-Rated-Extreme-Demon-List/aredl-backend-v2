@@ -42,6 +42,5 @@ pub async fn sleep_until_next(schedule: &Schedule) {
         return;
     };
 
-    let duration = next - now;
-    tokio::time::sleep(Duration::from_secs(duration.num_seconds().max(0) as u64)).await;
+    tokio::time::sleep((next - now).to_std().unwrap_or_default()).await;
 }

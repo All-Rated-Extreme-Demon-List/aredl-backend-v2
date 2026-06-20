@@ -1,6 +1,6 @@
 use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
-use crate::schema::oauth_requests;
+use crate::schema::{oauth_requests, oauth_tokens};
 use crate::{get_optional_secret, get_secret};
 use chrono::{DateTime, Utc};
 use diesel::{Connection, ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
@@ -36,7 +36,7 @@ pub enum OAuthProvider {
 }
 
 #[derive(Debug, Clone, Queryable, Selectable, Serialize, Deserialize, ToSchema)]
-#[diesel(table_name = crate::schema::oauth_tokens)]
+#[diesel(table_name = oauth_tokens)]
 pub struct OAuthToken {
     pub provider: OAuthProvider,
     pub access_token: Option<String>,
@@ -316,7 +316,7 @@ pub async fn exchange_oauth_code(
     let token_response = request
         .request_async(&http_client)
         .await
-        .map_err(|_| ApiError::BadGateway("Failed to request token!"))?;
+        .map_err(|_err| ApiError::BadGateway("Failed to request token!"))?;
 
     Ok(token_response.access_token().secret().clone())
 }

@@ -7,6 +7,7 @@ use crate::{
     shifts::{ShiftInsert, Weekday},
     users::BaseUser,
 };
+use chrono::Weekday as ChronoWeekday;
 use chrono::{DateTime, Datelike, NaiveDate, TimeZone, Utc};
 use diesel::{
     AsChangeset, ExpressionMethods, Identifiable, Insertable, JoinOnDsl, QueryDsl, Queryable,
@@ -158,15 +159,14 @@ impl RecurringShift {
         conn: &mut DbConnection,
         date: NaiveDate,
     ) -> Result<Vec<ShiftInsert>, ApiError> {
-        let today = match date.weekday().number_from_monday() {
-            1 => Weekday::Monday,
-            2 => Weekday::Tuesday,
-            3 => Weekday::Wednesday,
-            4 => Weekday::Thursday,
-            5 => Weekday::Friday,
-            6 => Weekday::Saturday,
-            7 => Weekday::Sunday,
-            _ => unreachable!(),
+        let today = match date.weekday() {
+            ChronoWeekday::Mon => Weekday::Monday,
+            ChronoWeekday::Tue => Weekday::Tuesday,
+            ChronoWeekday::Wed => Weekday::Wednesday,
+            ChronoWeekday::Thu => Weekday::Thursday,
+            ChronoWeekday::Fri => Weekday::Friday,
+            ChronoWeekday::Sat => Weekday::Saturday,
+            ChronoWeekday::Sun => Weekday::Sunday,
         };
 
         let templates: Vec<RecurringShift> = recurrent_shifts::table
@@ -176,9 +176,11 @@ impl RecurringShift {
         let mut new_shifts = Vec::new();
 
         for template in templates {
-            let naive_dt = date
-                .and_hms_opt(template.start_hour as u32, 0, 0)
-                .ok_or_else(|| ApiError::BadRequest("Invalid start_hour"))?;
+            let naive_dt = u32::try_from(template.start_hour)
+                .ok()
+                .and_then(|hour| date.and_hms_opt(hour, 0, 0))
+                .ok_or_else(|| ApiError::InternalServerError("Invalid start hour"))?;
+
             let start_at: DateTime<Utc> = Utc.from_utc_datetime(&naive_dt);
 
             let end_at = start_at + chrono::Duration::hours(template.duration as i64);

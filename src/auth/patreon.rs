@@ -170,7 +170,7 @@ async fn patreon_callback(
 
     if let Some(callback) = request_data.callback {
         let mut callback_url = Url::parse(&callback)
-            .map_err(|_| ApiError::InternalServerError("Invalid callback URL"))?;
+            .map_err(|_err| ApiError::InternalServerError("Invalid callback URL"))?;
         callback_url
             .query_pairs_mut()
             .append_pair("patreon", "linked");

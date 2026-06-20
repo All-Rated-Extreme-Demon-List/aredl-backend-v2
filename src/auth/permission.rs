@@ -32,14 +32,14 @@ pub enum Permission {
     BountyManage,
 }
 
-pub fn get_privilege_level(conn: &mut DbConnection, user_id: Uuid) -> Result<i32, ApiError> {
+pub fn get_privilege_level(conn: &mut DbConnection, user_id: Uuid) -> i32 {
     let privilege_level: Option<i32> = user_roles::table
         .inner_join(roles::table.on(roles::id.eq(user_roles::role_id)))
         .filter(user_roles::user_id.eq(user_id))
         .select(max(roles::privilege_level))
         .first(conn)
         .unwrap_or(None);
-    Ok(privilege_level.unwrap_or(0))
+    privilege_level.unwrap_or(0)
 }
 
 pub fn check_user_permission(
@@ -47,7 +47,7 @@ pub fn check_user_permission(
     user_id: Uuid,
     permission: Permission,
 ) -> Result<bool, ApiError> {
-    let max_privilege = get_privilege_level(conn, user_id)?;
+    let max_privilege = get_privilege_level(conn, user_id);
     if max_privilege >= 100 {
         return Ok(true);
     }

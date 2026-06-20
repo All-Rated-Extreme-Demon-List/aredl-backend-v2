@@ -30,7 +30,10 @@ pub type ResolvedSubmissionRow = (
     Option<ExtendedBaseUser>,
 );
 
-#[allow(clippy::enum_variant_names)]
+#[expect(
+    clippy::enum_variant_names,
+    reason = "Should be kept consistent with platformer which doesn't only have stuff ending with 'At'"
+)]
 #[derive(Serialize, Deserialize, ToSchema)]
 pub enum SubmissionsSortField {
     OldestCreatedAt,

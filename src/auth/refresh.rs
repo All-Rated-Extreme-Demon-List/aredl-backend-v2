@@ -17,8 +17,10 @@ struct AuthRefreshResponse {
     /// Timestamp of when the access token expires.
     pub access_expires: DateTime<Utc>,
     /// The new refresh token to use for getting a new access token. Expires after 2 weeks.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub refresh_token: Option<String>,
     /// Timestamp of when the refresh token expires.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub refresh_expires: Option<DateTime<Utc>>,
 }
 
@@ -44,7 +46,8 @@ async fn refresh_auth(
         .headers()
         .get(header::AUTHORIZATION)
         .and_then(|h| h.to_str().ok())
-        .map(|h| h.strip_prefix("Bearer ").unwrap_or("").to_string());
+        .and_then(|header| header.strip_prefix("Bearer "))
+        .map(str::to_owned);
 
     let Some(refresh_token) = refresh_token else {
         return Err(ApiError::Unauthorized("No token provided"));
@@ -73,10 +76,12 @@ async fn refresh_auth(
         "access",
     )?;
 
-    let mut response = serde_json::json!({
-        "access_token": access_token,
-        "access_expires": access_expires,
-    });
+    let mut response = AuthRefreshResponse {
+        access_token,
+        access_expires,
+        refresh_token: None,
+        refresh_expires: None,
+    };
 
     let now = Utc::now();
     let refresh_exp = Utc
@@ -85,7 +90,7 @@ async fn refresh_auth(
         .ok_or_else(|| ApiError::InternalServerError("Failed to parse expiration timestamp"))?;
 
     if refresh_exp - now < Duration::days(2) {
-        let (new_refresh_token, refresh_expires) = token::create_token(
+        let (refresh_token, refresh_expires) = token::create_token(
             UserClaims {
                 user_id,
                 is_api_key: false,
@@ -95,8 +100,8 @@ async fn refresh_auth(
             "refresh",
         )?;
 
-        response["refresh_token"] = serde_json::Value::String(new_refresh_token);
-        response["refresh_expires"] = serde_json::Value::String(refresh_expires.to_rfc3339());
+        response.refresh_token = Some(refresh_token);
+        response.refresh_expires = Some(refresh_expires);
     }
 
     Ok(HttpResponse::Ok().json(response))

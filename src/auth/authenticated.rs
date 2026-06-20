@@ -61,8 +61,8 @@ impl Authenticated {
         conn: &mut DbConnection,
         target_user_id: Uuid,
     ) -> Result<(), ApiError> {
-        let acting_user_privilege = permission::get_privilege_level(conn, self.user_id)?;
-        let target_user_privilege = permission::get_privilege_level(conn, target_user_id)?;
+        let acting_user_privilege = permission::get_privilege_level(conn, self.user_id);
+        let target_user_privilege = permission::get_privilege_level(conn, target_user_id);
 
         if acting_user_privilege <= target_user_privilege {
             return Err(ApiError::Forbidden(
@@ -77,9 +77,9 @@ impl Authenticated {
         &self,
         conn: &mut DbConnection,
         required_privilege: i32,
-    ) -> Result<bool, ApiError> {
-        let user_privilege = permission::get_privilege_level(conn, self.user_id)?;
-        Ok(user_privilege > required_privilege)
+    ) -> bool {
+        let user_privilege = permission::get_privilege_level(conn, self.user_id);
+        user_privilege > required_privilege
     }
 
     pub fn has_permission(

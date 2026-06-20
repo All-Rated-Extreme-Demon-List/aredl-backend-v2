@@ -223,43 +223,13 @@ async fn submission_leaderboard_counts_and_ordering() {
     let lvl = create_test_level(&db).await;
 
     let sub1 = create_test_submission(lvl, Uuid::new_v4(), &db).await;
-    insert_history_entry(
-        sub1,
-        Some(mod1),
-        crate::arepl::submissions::SubmissionStatus::Accepted,
-        &db,
-    )
-    .await;
-    insert_history_entry(
-        sub1,
-        Some(mod1),
-        crate::arepl::submissions::SubmissionStatus::Accepted,
-        &db,
-    )
-    .await;
-    insert_history_entry(
-        sub1,
-        Some(mod1),
-        crate::arepl::submissions::SubmissionStatus::Denied,
-        &db,
-    )
-    .await;
+    insert_history_entry(sub1, Some(mod1), SubmissionStatus::Accepted, &db).await;
+    insert_history_entry(sub1, Some(mod1), SubmissionStatus::Accepted, &db).await;
+    insert_history_entry(sub1, Some(mod1), SubmissionStatus::Denied, &db).await;
 
     let sub2 = create_test_submission(lvl, Uuid::new_v4(), &db).await;
-    insert_history_entry(
-        sub2,
-        Some(mod2),
-        crate::arepl::submissions::SubmissionStatus::Accepted,
-        &db,
-    )
-    .await;
-    insert_history_entry(
-        sub2,
-        Some(mod2),
-        crate::arepl::submissions::SubmissionStatus::UnderConsideration,
-        &db,
-    )
-    .await;
+    insert_history_entry(sub2, Some(mod2), SubmissionStatus::Accepted, &db).await;
+    insert_history_entry(sub2, Some(mod2), SubmissionStatus::UnderConsideration, &db).await;
 
     refresh_test_submission_stats(&db).await;
 

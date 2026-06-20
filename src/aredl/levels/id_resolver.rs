@@ -5,14 +5,15 @@ use diesel::pg::Pg;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 use uuid::Uuid;
 
-fn parse_gd_id(s: &str) -> Result<(i32, bool), ApiError> {
-    let (parsed_id, two_player) = if let Some(stripped) = s.strip_suffix("_2p") {
+fn parse_gd_id(string: &str) -> Result<(i32, bool), ApiError> {
+    let (parsed_id, two_player) = if let Some(stripped) = string.strip_suffix("_2p") {
         (stripped.parse::<i32>(), true)
     } else {
-        (s.parse::<i32>(), false)
+        (string.parse::<i32>(), false)
     };
 
-    let id = parsed_id.map_err(|_| ApiError::BadRequest(format!("Failed to parse {}", s)))?;
+    let id = parsed_id
+        .map_err(|error| ApiError::BadRequest(format!("Failed to parse {}: {}", string, error)))?;
 
     Ok((id, two_player))
 }
@@ -35,14 +36,14 @@ pub fn level_filter(input: &str) -> Result<levels::BoxedQuery<'static, Pg>, ApiE
     Ok(query)
 }
 
-fn resolve_gd_id(conn: &mut DbConnection, s: &str) -> Result<Uuid, ApiError> {
-    let (id, two_player) = parse_gd_id(s)?;
+fn resolve_gd_id(conn: &mut DbConnection, string: &str) -> Result<Uuid, ApiError> {
+    let (id, two_player) = parse_gd_id(string)?;
     let resolved_id = levels::table
         .filter(levels::level_id.eq(id))
         .filter(levels::two_player.eq(two_player))
         .select(levels::id)
         .first::<Uuid>(conn)
-        .map_err(|_| ApiError::NotFound(format!("Failed to resolve {}", s)))?;
+        .map_err(|error| ApiError::NotFound(format!("Failed to resolve {}: {}", string, error)))?;
     Ok(resolved_id)
 }
 

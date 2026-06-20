@@ -191,24 +191,24 @@ impl UserStatistics {
 
         match (*scope, kind) {
             (_, ["level_completion", threshold]) => {
-                threshold.parse::<i64>().ok().is_some_and(|threshold| {
+                threshold.parse::<usize>().ok().is_some_and(|threshold| {
                     scope_statistics
                         .levels_records
                         .iter()
                         .map(|level| (level.scope, level.id, level.publisher_id))
                         .collect::<HashSet<_>>()
-                        .len() as i64
+                        .len()
                         >= threshold
                 })
             }
             (_, ["pack_completion", threshold]) => {
-                threshold.parse::<i64>().ok().is_some_and(|threshold| {
+                threshold.parse::<usize>().ok().is_some_and(|threshold| {
                     scope_statistics
                         .packs
                         .iter()
                         .map(|pack| (pack.scope, pack.id, pack.name.as_str()))
                         .collect::<HashSet<_>>()
-                        .len() as i64
+                        .len()
                         >= threshold
                 })
             }

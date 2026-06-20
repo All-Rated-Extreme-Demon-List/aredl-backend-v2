@@ -235,7 +235,13 @@ impl Level {
         let cutoff = position_history::table
             .filter(position_history::created_at.le(at))
             .count()
-            .get_result::<i64>(conn)? as i32;
+            .get_result::<i64>(conn)?;
+
+        let cutoff = i32::try_from(cutoff).map_err(|error| {
+            ApiError::InternalServerError(format!(
+                "Position history exceeds supported range: {error}"
+            ))
+        })?;
 
         if cutoff == 0 {
             return Ok(Vec::new());

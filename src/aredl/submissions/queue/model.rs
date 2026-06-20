@@ -13,11 +13,11 @@ use uuid::Uuid;
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct SubmissionQueue {
     /// The amount of pending submissions that are not marked as priority.
-    pub regular_submissions_in_queue: i32,
+    pub regular_submissions_in_queue: i64,
     /// The amount of pending submissions that are marked as priority.
-    pub priority_submissions_in_queue: i32,
+    pub priority_submissions_in_queue: i64,
     /// The amount of submissions currently under consideration.
-    pub uc_submissions: i32,
+    pub uc_submissions: i64,
     /// The timestamp of the oldest pending submission in the queue, if any.
     pub oldest_submission: Option<DateTime<Utc>>,
 }
@@ -64,18 +64,18 @@ impl SubmissionQueue {
             .filter(submissions::status.eq(SubmissionStatus::Pending))
             .filter(submissions::priority.eq(false))
             .count()
-            .get_result::<i64>(conn)? as i32;
+            .get_result::<i64>(conn)?;
 
         let priority_submissions_in_queue = submissions::table
             .filter(submissions::status.eq(SubmissionStatus::Pending))
             .filter(submissions::priority.eq(true))
             .count()
-            .get_result::<i64>(conn)? as i32;
+            .get_result::<i64>(conn)?;
 
         let uc_submissions = submissions::table
             .filter(submissions::status.eq(SubmissionStatus::UnderConsideration))
             .count()
-            .get_result::<i64>(conn)? as i32;
+            .get_result::<i64>(conn)?;
 
         let oldest_submission = submissions::table
             .filter(submissions::status.eq(SubmissionStatus::Pending))

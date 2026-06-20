@@ -18,8 +18,9 @@ use diesel::pg::Pg;
 use diesel::{
     ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
 };
+use indexmap::map::Entry;
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -238,18 +239,21 @@ impl ClanProfileResolved {
                 ))
                 .load(conn)?;
 
-        let mut created_by_level = HashMap::<Uuid, usize>::new();
-        let mut created = Vec::<ResolvedClanProfileCreatedLevel>::new();
+        let mut created_by_level: IndexMap<Uuid, ResolvedClanProfileCreatedLevel> = IndexMap::new();
         for (_, level, user) in created_rows {
-            let index = *created_by_level.entry(level.id).or_insert_with(|| {
-                created.push(ResolvedClanProfileCreatedLevel {
-                    level,
-                    creators: Vec::new(),
-                });
-                created.len() - 1
-            });
-            created[index].creators.push(user);
+            match created_by_level.entry(level.id) {
+                Entry::Occupied(entry) => {
+                    entry.into_mut().creators.push(user);
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert(ResolvedClanProfileCreatedLevel {
+                        level,
+                        creators: vec![user],
+                    });
+                }
+            }
         }
+        let created = created_by_level.into_values().collect();
 
         let published = levels::table
             .inner_join(users::table.on(users::id.eq(levels::publisher_id)))

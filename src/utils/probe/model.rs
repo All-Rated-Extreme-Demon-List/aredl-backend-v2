@@ -49,11 +49,13 @@ struct ExifInfo<'a> {
 }
 
 impl<'a> ExifInfo<'a> {
-    fn from_value(v: &'a JsonValue) -> Option<Self> {
-        let object = match v {
-            JsonValue::Array(array) if !array.is_empty() => array[0].as_object()?,
+    fn from_value(value: &'a JsonValue) -> Option<Self> {
+        let object = match value {
+            JsonValue::Array(array) => array.first()?.as_object()?,
             JsonValue::Object(object) => object,
-            _ => return None,
+            JsonValue::Null | JsonValue::Bool(_) | JsonValue::Number(_) | JsonValue::String(_) => {
+                return None
+            }
         };
 
         Some(ExifInfo { root: object })

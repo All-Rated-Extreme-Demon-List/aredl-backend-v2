@@ -17,11 +17,14 @@ use rand::TryRngCore;
 #[cfg(test)]
 use uuid::Uuid;
 
+#[cfg(test)]
 fn generate_random_tag() -> String {
-    let mut rng = OsRng;
-    let mut buf = [0u8; 5];
-    let _ = rng.try_fill_bytes(&mut buf);
-    buf.iter().map(|&b| ((b % 26) + b'A') as char).collect()
+    let mut buffer = [0u8; 5];
+    OsRng.try_fill_bytes(&mut buffer).unwrap();
+    buffer
+        .iter()
+        .map(|&byte| ((byte % 26) + b'A') as char)
+        .collect()
 }
 
 #[cfg(test)]

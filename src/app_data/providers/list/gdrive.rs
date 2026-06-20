@@ -119,8 +119,9 @@ impl Provider for GoogleDriveProvider {
         let mut headers = HeaderMap::new();
         headers.insert(
             "Authorization",
-            HeaderValue::from_str(&format!("Bearer {}", token))
-                .map_err(|_| ApiError::InternalServerError("Invalid Google Drive access token"))?,
+            HeaderValue::from_str(&format!("Bearer {}", token)).map_err(|_err| {
+                ApiError::InternalServerError("Invalid Google Drive access token")
+            })?,
         );
 
         Ok(Some(ContentDataLocation { url, headers }))

@@ -132,7 +132,7 @@ impl Provider for YouTubeProvider {
         headers.insert(
             "Authorization",
             HeaderValue::from_str(&format!("Bearer {}", token))
-                .map_err(|_| ApiError::InternalServerError("Invalid Youtube access token"))?,
+                .map_err(|_err| ApiError::InternalServerError("Invalid Youtube access token"))?,
         );
 
         let response = context

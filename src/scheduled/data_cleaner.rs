@@ -25,81 +25,82 @@ pub async fn start_data_cleaner(
             tokio::time::sleep(Duration::from_secs(10)).await;
 
             tracing::info!("Running data cleaner");
+            {
+                let conn = &mut match db.connection() {
+                    Ok(c) => c,
+                    Err(e) => {
+                        tracing::error!("DB connection failed: {e}");
+                        continue;
+                    }
+                };
 
-            let conn = &mut match db.connection() {
-                Ok(c) => c,
-                Err(e) => {
-                    tracing::error!("DB connection failed: {e}");
-                    continue;
+                tracing::info!("Cleaning old notifications");
+
+                if let Err(error) = diesel::sql_query(
+                    "DELETE FROM notifications WHERE created_at < NOW() - INTERVAL '1 month'",
+                )
+                .execute(conn)
+                {
+                    tracing::error!("Failed to clean notifications {error}");
                 }
-            };
 
-            tracing::info!("Cleaning old notifications");
+                tracing::info!("Cleaning stale submissions claims");
 
-            if let Err(error) = diesel::sql_query(
-                "DELETE FROM notifications WHERE created_at < NOW() - INTERVAL '1 month'",
-            )
-            .execute(conn)
-            {
-                tracing::error!("Failed to clean notifications {error}");
-            }
-
-            tracing::info!("Cleaning stale submissions claims");
-
-            if let Err(error) = diesel::sql_query(
-                "UPDATE aredl.submissions \
+                if let Err(error) = diesel::sql_query(
+                    "UPDATE aredl.submissions \
                  SET status = 'Pending', reviewer_id = NULL \
                  WHERE status = 'Claimed' \
                    AND updated_at < NOW() - INTERVAL '120 minutes';",
-            )
-            .execute(conn)
-            {
-                tracing::error!("Failed to clean stale submissions claims for AREDL: {error}");
-            }
+                )
+                .execute(conn)
+                {
+                    tracing::error!("Failed to clean stale submissions claims for AREDL: {error}");
+                }
 
-            if let Err(error) = diesel::sql_query(
-                "UPDATE arepl.submissions \
+                if let Err(error) = diesel::sql_query(
+                    "UPDATE arepl.submissions \
                  SET status = 'Pending', reviewer_id = NULL \
                  WHERE status = 'Claimed' \
                    AND updated_at < NOW() - INTERVAL '120 minutes';",
-            )
-            .execute(conn)
-            {
-                tracing::error!("Failed to clean stale submissions claims for AREPL: {error}");
-            }
+                )
+                .execute(conn)
+                {
+                    tracing::error!("Failed to clean stale submissions claims for AREPL: {error}");
+                }
 
-            tracing::info!("Expiring overdue shifts");
+                tracing::info!("Expiring overdue shifts");
 
-            let aredl_expired_shifts: Vec<Shift> = shifts::table
-                .filter(shifts::status.eq(ShiftStatus::Running))
-                .filter(shifts::end_at.lt(Utc::now()))
-                .load(conn)
-                .unwrap_or_else(|e| {
-                    tracing::error!("Failed to load expired shifts: {}", e);
-                    vec![]
+                let aredl_expired_shifts: Vec<Shift> = shifts::table
+                    .filter(shifts::status.eq(ShiftStatus::Running))
+                    .filter(shifts::end_at.lt(Utc::now()))
+                    .load(conn)
+                    .unwrap_or_else(|e| {
+                        tracing::error!("Failed to load expired shifts: {}", e);
+                        vec![]
+                    });
+
+                if let Err(e) = diesel::update(
+                    shifts::table
+                        .filter(shifts::status.eq(ShiftStatus::Running))
+                        .filter(shifts::end_at.lt(Utc::now())),
+                )
+                .set((
+                    shifts::status.eq(ShiftStatus::Expired),
+                    shifts::updated_at.eq(Utc::now()),
+                ))
+                .execute(conn)
+                {
+                    tracing::error!("Failed to expire shifts: {}", e);
+                }
+
+                let missed_shifts_payload = serde_json::json!({
+                    "aredl": aredl_expired_shifts,
                 });
 
-            if let Err(e) = diesel::update(
-                shifts::table
-                    .filter(shifts::status.eq(ShiftStatus::Running))
-                    .filter(shifts::end_at.lt(Utc::now())),
-            )
-            .set((
-                shifts::status.eq(ShiftStatus::Expired),
-                shifts::updated_at.eq(Utc::now()),
-            ))
-            .execute(conn)
-            {
-                tracing::error!("Failed to expire shifts: {}", e);
+                WebsocketNotification::send(&notify_tx, "SHIFTS_MISSED", &missed_shifts_payload);
+
+                tracing::info!("Cleaned data successfully");
             }
-
-            let missed_shifts_payload = serde_json::json!({
-                "aredl": aredl_expired_shifts,
-            });
-
-            WebsocketNotification::send(&notify_tx, "SHIFTS_MISSED", &missed_shifts_payload);
-
-            tracing::info!("Cleaned data successfully");
 
             sleep_until_next(&schedule).await;
         }

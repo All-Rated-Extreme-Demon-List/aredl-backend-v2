@@ -121,12 +121,12 @@ impl Provider for TwitchProvider {
         headers.insert(
             "Authorization",
             HeaderValue::from_str(&format!("Bearer {}", access_token))
-                .map_err(|_| ApiError::InternalServerError("Invalid Twitch access token"))?,
+                .map_err(|_err| ApiError::InternalServerError("Invalid Twitch access token"))?,
         );
         headers.insert(
             "Client-Id",
             HeaderValue::from_str(&twitch_auth.config.client_id)
-                .map_err(|_| ApiError::InternalServerError("Invalid Twitch client id"))?,
+                .map_err(|_err| ApiError::InternalServerError("Invalid Twitch client id"))?,
         );
 
         let response = context

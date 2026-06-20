@@ -1,4 +1,4 @@
-use crate::app_data::db::{DbAppState, DbConnection};
+use crate::app_data::db::DbAppState;
 use crate::error_handler::{ApiError, StartupError};
 use crate::get_secret;
 use crate::providers::ProvidersAppState;
@@ -37,7 +37,7 @@ pub async fn start_level_data_refresher(
 
             tracing::info!("Refreshing level data");
 
-            let google_access_token = match google_auth.get_access_token(&db).await {
+            let google_access_token = match google_auth.get_access_token(&db_clone).await {
                 Ok(token) => token,
                 Err(e) => {
                     tracing::error!("Failed to get Google access token: {e}");
@@ -45,19 +45,15 @@ pub async fn start_level_data_refresher(
                 }
             };
 
-            let conn = &mut match db.connection() {
-                Ok(c) => c,
-                Err(e) => {
-                    tracing::error!("DB connection failed: {e}");
-                    continue;
-                }
-            };
-
-            if let Err(error) = update_edel_data(conn, &google_access_token, &edel_sheet_id).await {
+            if let Err(error) =
+                update_edel_data(&db_clone, &google_access_token, &edel_sheet_id).await
+            {
                 tracing::error!("Failed to refresh edel {error}");
             }
 
-            if let Err(error) = update_nlw_data(conn, &google_access_token, &nlw_sheet_id).await {
+            if let Err(error) =
+                update_nlw_data(&db_clone, &google_access_token, &nlw_sheet_id).await
+            {
                 tracing::error!("Failed to refresh nlw {error}");
             }
 
@@ -73,36 +69,30 @@ pub async fn start_level_data_refresher(
 
             tracing::info!("Running gddl updater");
 
-            let conn = &mut match db_clone.connection() {
-                Ok(c) => c,
-                Err(e) => {
-                    tracing::error!("DB connection failed: {e}");
-                    continue;
-                }
-            };
-
             let one_day_ago = Utc::now() - chrono::Duration::days(1);
 
-            if let Ok(list) = aredl::levels::table
-                .left_join(
-                    aredl::last_gddl_update::table
-                        .on(aredl::last_gddl_update::id.eq(aredl::levels::id)),
-                )
-                .filter(
-                    aredl::last_gddl_update::updated_at
-                        .is_null()
-                        .or(aredl::last_gddl_update::updated_at.lt(one_day_ago)),
-                )
-                .select((
-                    aredl::levels::id,
-                    aredl::levels::level_id,
-                    aredl::levels::two_player,
-                ))
-                .load::<(Uuid, i32, bool)>(conn)
-            {
+            if let Ok(list) = db.connection().and_then(|mut conn| {
+                aredl::levels::table
+                    .left_join(
+                        aredl::last_gddl_update::table
+                            .on(aredl::last_gddl_update::id.eq(aredl::levels::id)),
+                    )
+                    .filter(
+                        aredl::last_gddl_update::updated_at
+                            .is_null()
+                            .or(aredl::last_gddl_update::updated_at.lt(one_day_ago)),
+                    )
+                    .select((
+                        aredl::levels::id,
+                        aredl::levels::level_id,
+                        aredl::levels::two_player,
+                    ))
+                    .load::<(Uuid, i32, bool)>(&mut conn)
+                    .map_err(ApiError::from)
+            }) {
                 for (id, level_id, two_p) in list {
                     tokio::time::sleep(Duration::from_secs(5)).await;
-                    if let Err(e) = aredl_update_gddl_data(conn, id, level_id, two_p).await {
+                    if let Err(e) = aredl_update_gddl_data(&db, id, level_id, two_p).await {
                         tracing::error!("AREDL GDDL {} failed: {}", level_id, e);
                     }
                 }
@@ -126,7 +116,7 @@ struct GDDLResponse {
 }
 
 async fn aredl_update_gddl_data(
-    conn: &mut DbConnection,
+    db: &DbAppState,
     id: Uuid,
     level_id: i32,
     two_player: bool,
@@ -160,6 +150,8 @@ async fn aredl_update_gddl_data(
         (false, _, None) => data.default_rating,
     };
 
+    let conn = &mut db.connection()?;
+
     diesel::update(aredl::levels::table)
         .filter(aredl::levels::id.eq(id))
         .set(aredl::levels::gddl_tier.eq(rating))
@@ -179,25 +171,28 @@ async fn aredl_update_gddl_data(
 }
 
 async fn update_edel_data(
-    conn: &mut DbConnection,
+    db: &DbAppState,
     access_token: &str,
-    spreadsheet_id: &String,
+    spreadsheet_id: &str,
 ) -> Result<(), ApiError> {
     let ids_result = read_spreadsheet(access_token, spreadsheet_id, "'IDS'!B:D").await?;
 
     let data: Vec<(i32, f64, bool)> = ids_result
         .values
         .into_iter()
-        .filter_map(|v| -> Option<(i32, f64, bool)> {
-            if v.len() < 3 {
+        .filter_map(|values| -> Option<(i32, f64, bool)> {
+            let [id, enjoyment, pending, ..] = values.as_slice() else {
                 return None;
-            }
-            let id = v[0].parse::<i32>().ok()?;
-            let enjoyment = v[1].parse::<f64>().ok()?;
-            let pending = v[2].parse::<bool>().unwrap_or(false);
-            Some((id, enjoyment, pending))
+            };
+            Some((
+                id.parse().ok()?,
+                enjoyment.parse().ok()?,
+                pending.parse().unwrap_or(false),
+            ))
         })
         .collect();
+
+    let conn = &mut db.connection()?;
 
     conn.transaction(|conn| {
         for (level_id, enjoyment, pending) in &data {
@@ -236,24 +231,25 @@ async fn update_edel_data(
 }
 
 async fn update_nlw_data(
-    conn: &mut DbConnection,
+    db: &DbAppState,
     access_token: &str,
-    spreadsheet_id: &String,
+    spreadsheet_id: &str,
 ) -> Result<(), ApiError> {
     let ids_result = read_spreadsheet(access_token, spreadsheet_id, "'IDS'!C:D").await?;
 
     let data: Vec<(i32, String)> = ids_result
         .values
         .into_iter()
-        .filter_map(|v| -> Option<(i32, String)> {
-            if v.len() < 2 {
+        .filter_map(|values| -> Option<(i32, String)> {
+            let [id, tier, ..] = values.as_slice() else {
                 return None;
-            }
-            let id = v[0].parse::<i32>().ok()?;
-            let tier = v[1].to_string();
-            Some((id, tier))
+            };
+
+            Some((id.parse().ok()?, tier.clone()))
         })
         .collect();
+
+    let conn = &mut db.connection()?;
 
     conn.transaction(|conn| {
         for (level_id, tier) in &data {
@@ -292,7 +288,7 @@ struct SheetValues {
 
 async fn read_spreadsheet(
     access_token: &str,
-    spreadsheet_id: &String,
+    spreadsheet_id: &str,
     range: &str,
 ) -> Result<SheetValues, ApiError> {
     let url = format!(

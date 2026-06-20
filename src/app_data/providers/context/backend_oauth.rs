@@ -91,7 +91,7 @@ impl OAuthProviderContext {
         Ok(Self {
             provider,
             config: config.clone(),
-            api_base_uri: config.api_base_uri.clone().unwrap_or(default_api_base_uri),
+            api_base_uri: config.api_base_uri.unwrap_or(default_api_base_uri),
             user_oauth: None,
             backend_token: Some(backend_token),
         })
@@ -198,8 +198,10 @@ impl OAuthProviderContext {
 
         let response = self.request_token(&grant_request).await?;
 
-        let expires_in = response.expires_in.unwrap_or(3600);
-        let expires_at = Utc::now() + ChronoDuration::seconds(expires_in as i64);
+        let expires_in = i64::try_from(response.expires_in.unwrap_or(3600)).map_err(|error| {
+            ApiError::BadGateway(format!("Invalid OAuth expiration duration: {error}"))
+        })?;
+        let expires_at = Utc::now() + ChronoDuration::seconds(expires_in);
 
         let refresh_token = response.refresh_token.or(current_refresh_token);
 
@@ -215,26 +217,28 @@ impl OAuthProviderContext {
             })
             .transpose()?;
 
-        let mut conn = db.connection()?;
+        let updated_token = {
+            let mut conn = db.connection()?;
 
-        let updated_token = diesel::insert_into(oauth_tokens::table)
-            .values((
-                oauth_tokens::provider.eq(self.provider),
-                oauth_tokens::access_token.eq(Some(encrypted_access_token.clone())),
-                oauth_tokens::refresh_token.eq(encrypted_refresh_token.clone()),
-                oauth_tokens::expires_at.eq(Some(expires_at)),
-                oauth_tokens::updated_at.eq(Utc::now()),
-            ))
-            .on_conflict(oauth_tokens::provider)
-            .do_update()
-            .set((
-                oauth_tokens::access_token.eq(Some(encrypted_access_token)),
-                oauth_tokens::refresh_token.eq(encrypted_refresh_token),
-                oauth_tokens::expires_at.eq(Some(expires_at)),
-                oauth_tokens::updated_at.eq(Utc::now()),
-            ))
-            .returning(OAuthToken::as_returning())
-            .get_result::<OAuthToken>(&mut conn)?;
+            diesel::insert_into(oauth_tokens::table)
+                .values((
+                    oauth_tokens::provider.eq(self.provider),
+                    oauth_tokens::access_token.eq(Some(encrypted_access_token.clone())),
+                    oauth_tokens::refresh_token.eq(encrypted_refresh_token.clone()),
+                    oauth_tokens::expires_at.eq(Some(expires_at)),
+                    oauth_tokens::updated_at.eq(Utc::now()),
+                ))
+                .on_conflict(oauth_tokens::provider)
+                .do_update()
+                .set((
+                    oauth_tokens::access_token.eq(Some(encrypted_access_token)),
+                    oauth_tokens::refresh_token.eq(encrypted_refresh_token),
+                    oauth_tokens::expires_at.eq(Some(expires_at)),
+                    oauth_tokens::updated_at.eq(Utc::now()),
+                ))
+                .returning(OAuthToken::as_returning())
+                .get_result::<OAuthToken>(&mut conn)?
+        };
 
         *backend_token_state.token.lock().await = Some(decrypt_oauth_token(updated_token)?);
 

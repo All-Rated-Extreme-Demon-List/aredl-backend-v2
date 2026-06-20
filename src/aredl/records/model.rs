@@ -134,7 +134,10 @@ pub struct RecordUpdate {
     pub achieved_at: Option<DateTime<Utc>>,
 }
 
-#[allow(clippy::enum_variant_names)]
+#[expect(
+    clippy::enum_variant_names,
+    reason = "Should be kept consistent with platformer which doesn't only have stuff ending with 'At'"
+)]
 #[derive(Serialize, Deserialize, ToSchema)]
 pub enum RecordSortField {
     OldestCreatedAt,
@@ -437,19 +440,10 @@ impl Record {
         providers: web::Data<Arc<ProvidersAppState>>,
     ) {
         tokio::spawn(async move {
-            let mut conn = match db.connection() {
-                Ok(conn) => conn,
-                Err(error) => {
-                    tracing::warn!(
-                        error = %error.error_message,
-                        ?submission.id,
-                        "Failed to process post submission accept actions: failed to get database connection"
-                    );
-                    return;
-                }
-            };
-
-            let record = match Record::find_from_submission(&mut conn, submission.id) {
+            let record = match db
+                .connection()
+                .and_then(|mut conn| Record::find_from_submission(&mut conn, submission.id))
+            {
                 Ok(record) => record,
                 Err(error) => {
                     tracing::warn!(
@@ -476,7 +470,10 @@ impl Record {
                 }
             };
 
-            if let Err(error) = record.complete_bounty_if_exists(&mut conn) {
+            if let Err(error) = db
+                .connection()
+                .and_then(|mut conn| record.complete_bounty_if_exists(&mut conn))
+            {
                 tracing::warn!(
                     error = %error.error_message,
                     ?record.id,
@@ -485,7 +482,9 @@ impl Record {
                 );
             }
 
-            if let Err(error) = UserBadge::update_user_badges(&mut conn, submission.submitted_by) {
+            if let Err(error) = db.connection().and_then(|mut conn| {
+                UserBadge::update_user_badges(&mut conn, submission.submitted_by)
+            }) {
                 tracing::warn!(
                     error = %error.error_message,
                     user_id = ?submission.submitted_by,

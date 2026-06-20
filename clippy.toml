@@ -2,5 +2,11 @@ too-many-arguments-threshold = 8
 allow-expect-in-tests = true
 allow-panic-in-tests = true
 allow-unwrap-in-tests = true
+allow-print-in-tests = true
 allow-dbg-in-tests = true
 allow-indexing-slicing-in-tests = true
+absolute-paths-max-segments = 3
+await-holding-invalid-types = [
+    { path = "r2d2::PooledConnection", reason = "Holding a synchronous pooled database connection across await can exhaust the pool." },
+]
+

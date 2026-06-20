@@ -49,7 +49,7 @@ impl StdError for ConfigError {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match self {
             ConfigError::SecretFileRead { source, .. } => Some(source),
-            _ => None,
+            ConfigError::MissingSecret { .. } | ConfigError::InvalidValue { .. } => None,
         }
     }
 }
@@ -116,7 +116,7 @@ impl From<ApiError> for StartupError {
 
 macro_rules! api_error_status_constructors {
     ($($name:ident => $status:ident),+ $(,)?) => {
-        #[allow(non_snake_case)]
+        #[expect(non_snake_case, reason = "HTTP status codes conventions")]
         impl ApiError {
             $(
                 pub fn $name(error_message: impl ToString) -> ApiError {
@@ -182,25 +182,34 @@ impl From<DieselError> for ApiError {
     fn from(error: DieselError) -> Self {
         match error {
             DieselError::DatabaseError(kind, err) => match kind {
-                DatabaseErrorKind::UniqueViolation => ApiError::Conflict(err.message()),
-                DatabaseErrorKind::SerializationFailure => ApiError::Conflict(err.message()),
-                DatabaseErrorKind::RestrictViolation => ApiError::Conflict(err.message()),
-                DatabaseErrorKind::ExclusionViolation => ApiError::Conflict(err.message()),
-                DatabaseErrorKind::ForeignKeyViolation => {
-                    ApiError::UnprocessableEntity(err.message())
-                }
-                DatabaseErrorKind::NotNullViolation => ApiError::UnprocessableEntity(err.message()),
-                DatabaseErrorKind::CheckViolation => ApiError::UnprocessableEntity(err.message()),
+                DatabaseErrorKind::UniqueViolation
+                | DatabaseErrorKind::SerializationFailure
+                | DatabaseErrorKind::RestrictViolation
+                | DatabaseErrorKind::ExclusionViolation => ApiError::Conflict(err.message()),
+                DatabaseErrorKind::ForeignKeyViolation
+                | DatabaseErrorKind::NotNullViolation
+                | DatabaseErrorKind::CheckViolation => ApiError::UnprocessableEntity(err.message()),
                 DatabaseErrorKind::ClosedConnection => {
                     ApiError::ServiceUnavailable("Database unavailable, please try again later")
                 }
-                _ => ApiError::InternalServerError(format!(
+                DatabaseErrorKind::UnableToSendCommand
+                | DatabaseErrorKind::ReadOnlyTransaction
+                | _ => ApiError::InternalServerError(format!(
                     "Internal Database error: {}",
                     err.message()
                 )),
             },
             DieselError::NotFound => ApiError::NotFound("Not found"),
-            err => ApiError::InternalServerError(format!("Unexpected Internal error: {}", err)),
+            err @ DieselError::InvalidCString(_)
+            | err @ DieselError::QueryBuilderError(_)
+            | err @ DieselError::DeserializationError(_)
+            | err @ DieselError::SerializationError(_)
+            | err @ DieselError::RollbackErrorOnCommit { .. }
+            | err @ DieselError::RollbackTransaction
+            | err @ DieselError::AlreadyInTransaction
+            | err @ DieselError::NotInTransaction
+            | err @ DieselError::BrokenTransactionManager
+            | err => ApiError::InternalServerError(format!("Unexpected Internal error: {}", err)),
         }
     }
 }

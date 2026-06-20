@@ -427,6 +427,7 @@ dependencies = [
  "dotenv",
  "futures-util",
  "httpmock",
+ "indexmap 2.13.0",
  "itertools 0.14.0",
  "jsonwebtoken",
  "listenfd",

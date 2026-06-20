@@ -19,6 +19,8 @@ use futures_util::future::{ready, LocalBoxFuture, Ready};
 use serde_json::{from_slice, Value};
 use std::sync::Arc;
 use tokio::sync::broadcast;
+#[cfg(test)]
+use tokio::sync::broadcast::Sender;
 use tracing_actix_web::TracingLogger;
 
 use crate::{
@@ -76,9 +78,9 @@ pub async fn init_test_app() -> (
     impl Service<Request, Response = ServiceResponse<BoxBody>, Error = Error>,
     Arc<DbAppState>,
     Arc<AuthAppState>,
-    tokio::sync::broadcast::Sender<crate::notifications::WebsocketNotification>,
+    Sender<WebsocketNotification>,
 ) {
-    dotenv::dotenv().ok();
+    drop(dotenv::dotenv());
 
     let auth_app_state = auth_init_app_state()
         .await
@@ -121,9 +123,9 @@ pub async fn init_test_app_with_providers(
     impl Service<Request, Response = ServiceResponse<BoxBody>, Error = Error>,
     Arc<DbAppState>,
     Arc<AuthAppState>,
-    tokio::sync::broadcast::Sender<crate::notifications::WebsocketNotification>,
+    Sender<WebsocketNotification>,
 ) {
-    dotenv::dotenv().ok();
+    drop(dotenv::dotenv());
 
     let auth_app_state = auth_init_app_state()
         .await

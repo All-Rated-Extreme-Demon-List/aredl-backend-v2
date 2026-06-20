@@ -62,7 +62,7 @@ use utoipa_rapidoc::RapiDoc;
 
 #[actix_rt::main]
 async fn main() -> Result<(), StartupError> {
-    dotenv().ok();
+    drop(dotenv());
 
     if cfg!(debug_assertions) {
         tracing_subscriber::fmt()
@@ -207,7 +207,7 @@ impl RootSpanBuilder for AppRootSpanBuilder {
 }
 
 pub fn get_secret(var_name: &str) -> Result<String, ConfigError> {
-    let value = env::var(var_name).map_err(|_| ConfigError::MissingSecret {
+    let value = env::var(var_name).map_err(|_err| ConfigError::MissingSecret {
         name: var_name.to_string(),
     })?;
 

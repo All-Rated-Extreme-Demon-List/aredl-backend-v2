@@ -254,7 +254,7 @@ impl Submission {
                     let raw_is_required = match status {
                         LevelStatus::Pending => requires_raw_footage,
                         LevelStatus::MainList => position.is_some_and(|position| position <= 400),
-                        _ => false,
+                        LevelStatus::Legacy | LevelStatus::Removed => false,
                     };
 
                     if raw_is_required && inserted_submission.raw_url.is_none() {

@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Utc};
 use serde_json::Value;
 use url::Url;
 
@@ -102,14 +102,11 @@ impl Provider for MedalProvider {
         let created_ms = json.get("created").and_then(|v| v.as_i64()).or_else(|| {
             json.get("created")
                 .and_then(|v| v.as_u64())
-                .map(|u| u as i64)
+                .and_then(|value| i64::try_from(value).ok())
         });
 
-        let published_at: Option<DateTime<Utc>> = created_ms.and_then(|ms| {
-            let secs = ms / 1000;
-            let nsec = ((ms % 1000) * 1_000_000) as u32;
-            Utc.timestamp_opt(secs, nsec).single()
-        });
+        let published_at: Option<DateTime<Utc>> =
+            created_ms.and_then(DateTime::<Utc>::from_timestamp_millis);
 
         if published_at.is_none() {
             return Ok(None);

@@ -527,7 +527,7 @@ async fn submission_edit_no_perms() {
 
     // edit own submission
     let edit_req_own = test::TestRequest::patch()
-        .uri(&format!("/aredl/submissions/{}", submission_id).to_string())
+        .uri(&format!("/aredl/submissions/{}", submission_id))
         .insert_header(("Authorization", format!("Bearer {}", token_1)))
         .set_json(&submission_edit_json)
         .to_request();
@@ -541,7 +541,7 @@ async fn submission_edit_no_perms() {
 
     // edit other submission
     let edit_req_other = test::TestRequest::patch()
-        .uri(&format!("/aredl/submissions/{}", submission_id).to_string())
+        .uri(&format!("/aredl/submissions/{}", submission_id))
         .insert_header(("Authorization", format!("Bearer {}", token_2)))
         .set_json(&submission_edit_json)
         .to_request();
@@ -556,7 +556,7 @@ async fn submission_edit_no_perms() {
 
     // edit other submission as mod
     let edit_req_mod = test::TestRequest::patch()
-        .uri(&format!("/aredl/submissions/{}", submission_id).to_string())
+        .uri(&format!("/aredl/submissions/{}", submission_id))
         .insert_header(("Authorization", format!("Bearer {}", token_mod)))
         .set_json(&submission_edit_json)
         .to_request();

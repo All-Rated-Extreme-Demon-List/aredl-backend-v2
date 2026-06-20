@@ -19,8 +19,8 @@ pub struct UserClaims {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TokenClaims {
     pub sub: String,
-    pub iat: usize,
-    pub exp: usize,
+    pub iat: i64,
+    pub exp: i64,
     pub token_type: String,
 }
 
@@ -31,11 +31,11 @@ pub fn create_token(
     token_type: &str,
 ) -> Result<(String, DateTime<Utc>), ApiError> {
     let now = Utc::now();
-    let iat = now.timestamp() as usize;
+    let iat = now.timestamp();
     let expire_datetime = now + expires_in;
-    let exp = expire_datetime.timestamp() as usize;
+    let exp = expire_datetime.timestamp();
     let user_claims_serialized = serde_json::to_string(&user_claims)
-        .map_err(|_| ApiError::InternalServerError("Failed to serialize user claims!"))?;
+        .map_err(|_err| ApiError::InternalServerError("Failed to serialize user claims!"))?;
 
     let claims = TokenClaims {
         sub: user_claims_serialized,
@@ -45,7 +45,7 @@ pub fn create_token(
     };
 
     let token = encode(&Header::default(), &claims, encoding_key)
-        .map_err(|_| ApiError::InternalServerError("Failed to create token!"))?;
+        .map_err(|_err| ApiError::InternalServerError("Failed to create token!"))?;
 
     Ok((token, expire_datetime))
 }
@@ -85,12 +85,24 @@ pub fn check_token_valid(
         .first::<User>(conn)
         .map_err(|e| match e {
             DieselError::NotFound => ApiError::Unauthorized("User not found"),
-            _ => ApiError::InternalServerError("Failed to validate token"),
+            DieselError::InvalidCString(_)
+            | DieselError::DatabaseError(..)
+            | DieselError::QueryBuilderError(_)
+            | DieselError::DeserializationError(_)
+            | DieselError::SerializationError(_)
+            | DieselError::RollbackErrorOnCommit { .. }
+            | DieselError::RollbackTransaction
+            | DieselError::AlreadyInTransaction
+            | DieselError::NotInTransaction
+            | DieselError::BrokenTransactionManager
+            | _ => ApiError::InternalServerError("Failed to validate token"),
         })?;
 
-    let token_issue_time = match Utc.timestamp_opt(token_claims.iat as i64, 0) {
+    let token_issue_time = match Utc.timestamp_opt(token_claims.iat, 0) {
         chrono::LocalResult::Single(dt) => dt,
-        _ => return Err(ApiError::Unauthorized("Invalid token issue time")),
+        chrono::LocalResult::Ambiguous(..) | chrono::LocalResult::None => {
+            return Err(ApiError::Unauthorized("Invalid token issue time"))
+        }
     };
 
     if token_issue_time < user_record.access_valid_after {

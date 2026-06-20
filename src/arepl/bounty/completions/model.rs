@@ -57,10 +57,16 @@ impl Bounty {
             .select(bounty_completed::user_id)
             .load::<Uuid>(conn)?;
 
+        let existing_count = i64::try_from(existing_completions.len()).map_err(|error| {
+            ApiError::InternalServerError(format!(
+                "Completion count exceeds supported range: {error}"
+            ))
+        })?;
+
         // make sure to stay below the target number if there is one
         let max_missing_completions = self
             .target_submissions
-            .map(|target| target as i64 - existing_completions.len() as i64)
+            .map(|target| i64::from(target).saturating_sub(existing_count))
             .unwrap_or(i64::MAX);
 
         let records = records::table
