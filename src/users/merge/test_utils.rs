@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::{app_data::db::DbAppState, schema::merge_logs};
 use chrono::Utc;
 #[cfg(test)]
-use diesel::{ExpressionMethods, RunQueryDsl};
+use diesel::{ExpressionMethods as _, RunQueryDsl as _};
 #[cfg(test)]
 use uuid::Uuid;
 

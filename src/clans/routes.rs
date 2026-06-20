@@ -6,7 +6,7 @@ use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::clan_members;
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use diesel::dsl::count_star;
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
+use diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
@@ -35,7 +35,7 @@ async fn list(
     let result = web::block(move || {
         Clan::find(
             &mut db.connection()?,
-            options.into_inner(),
+            &options.into_inner(),
             page_query.into_inner(),
         )
     })
@@ -66,7 +66,7 @@ async fn create_and_join(
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&clan));
     let result = web::block(move || {
-        Clan::create_and_join(&mut db.connection()?, clan.into_inner(), authenticated)
+        Clan::create_and_join(&mut db.connection()?, &clan.into_inner(), &authenticated)
     })
     .await??;
     Ok(HttpResponse::Ok().json(result))
@@ -94,7 +94,7 @@ async fn create_empty(
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&clan));
     let result =
-        web::block(move || Clan::create_empty(&mut db.connection()?, clan.into_inner())).await??;
+        web::block(move || Clan::create_empty(&mut db.connection()?, &clan.into_inner())).await??;
     Ok(HttpResponse::Ok().json(result))
 }
 
@@ -130,7 +130,7 @@ async fn update(
     let result = web::block(move || {
         let conn = &mut db.connection()?;
         authenticated.ensure_has_clan_permission(conn, clan_id, 2)?;
-        Clan::update(conn, clan_id, clan.into_inner())
+        Clan::update(conn, clan_id, &clan.into_inner())
     })
     .await??;
 

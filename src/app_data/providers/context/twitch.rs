@@ -17,7 +17,7 @@ pub async fn new_twitch_context() -> Option<OAuthProviderContext> {
     match OAuthProviderContext::new_backend_only(
         OAuthProvider::Twitch,
         config,
-        "https://api.twitch.tv/helix".to_string(),
+        "https://api.twitch.tv/helix".to_owned(),
         BackendTokenState::new(BackendGrantType::ClientCredentials),
     ) {
         Ok(context) => Some(context),

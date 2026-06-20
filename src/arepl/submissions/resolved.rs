@@ -1,6 +1,6 @@
 use crate::{
     app_data::db::DbConnection,
-    arepl::{levels::ExtendedBaseLevel, submissions::*},
+    arepl::{levels::ExtendedBaseLevel, submissions::{Submission, SubmissionStatus, SubmissionResolved}},
     auth::{Authenticated, Permission},
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
@@ -13,11 +13,11 @@ use crate::{
 };
 use diesel::{
     dsl::{auto_type, AliasedFields, AsSelect, Nullable},
-    expression_methods::NullableExpressionMethods,
-    BoolExpressionMethods, PgTextExpressionMethods,
+    expression_methods::NullableExpressionMethods as _,
+    BoolExpressionMethods as _, PgTextExpressionMethods as _,
 };
 use diesel::{
-    pg::Pg, ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl, Selectable, SelectableHelper,
+    pg::Pg, ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _, Selectable, SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 
@@ -120,7 +120,7 @@ impl SubmissionResolved {
     pub fn find_one(
         conn: &mut DbConnection,
         id: Uuid,
-        authenticated: Authenticated,
+        authenticated: &Authenticated,
     ) -> Result<SubmissionResolved, ApiError> {
         let mut query = submissions::table
             .filter(submissions::id.eq(id))
@@ -145,7 +145,7 @@ impl SubmissionResolved {
         // hide base reviewer
         let base_reviewers = RoleResolved::find_all_base_reviewers(conn)?.base_reviewers;
         if !authenticated.has_permission(conn, Permission::ReviewersAudit)? {
-            if let Some(ref reviewer) = resolved.reviewer {
+            if let Some(reviewer) = &resolved.reviewer {
                 if base_reviewers.contains(&reviewer.id) {
                     resolved.reviewer = None;
                 }
@@ -161,7 +161,7 @@ impl ResolvedSubmissionPage {
         conn: &mut DbConnection,
         page_query: PageQuery<D>,
         options: SubmissionQueryOptions,
-        authenticated: Authenticated,
+        authenticated: &Authenticated,
     ) -> Result<Paginated<Self>, ApiError> {
         let base_reviewers = RoleResolved::find_all_base_reviewers(conn)?.base_reviewers;
 
@@ -184,7 +184,7 @@ impl ResolvedSubmissionPage {
                 query = query.filter(submissions::level_id.eq(level));
             }
 
-            if let Some(ref submitter) = options.submitter_filter {
+            if let Some(submitter) = &options.submitter_filter {
                 query = query.filter(
                     submissions::submitted_by.eq_any(user_filter(submitter).select(users::id)),
                 );
@@ -194,7 +194,7 @@ impl ResolvedSubmissionPage {
                 query = query.filter(submissions::priority.eq(priority));
             }
 
-            if let Some(ref reviewer) = options.reviewer_filter {
+            if let Some(reviewer) = &options.reviewer_filter {
                 let mut reviewer_query = user_filter(reviewer);
                 if !can_audit_reviewers {
                     reviewer_query =
@@ -230,24 +230,24 @@ impl ResolvedSubmissionPage {
         if let Some(sort_field) = options.sort {
             match sort_field {
                 SubmissionsSortField::OldestCreatedAt => {
-                    submissions_query = submissions_query.order_by(submissions::created_at.asc())
+                    submissions_query = submissions_query.order_by(submissions::created_at.asc());
                 }
                 SubmissionsSortField::NewestCreatedAt => {
-                    submissions_query = submissions_query.order_by(submissions::created_at.desc())
+                    submissions_query = submissions_query.order_by(submissions::created_at.desc());
                 }
                 SubmissionsSortField::OldestUpdatedAt => {
-                    submissions_query = submissions_query.order_by(submissions::updated_at.asc())
+                    submissions_query = submissions_query.order_by(submissions::updated_at.asc());
                 }
                 SubmissionsSortField::NewestUpdatedAt => {
-                    submissions_query = submissions_query.order_by(submissions::updated_at.desc())
+                    submissions_query = submissions_query.order_by(submissions::updated_at.desc());
                 }
                 SubmissionsSortField::ShortestCompletionTime => {
                     submissions_query =
-                        submissions_query.order_by(submissions::completion_time.asc())
+                        submissions_query.order_by(submissions::completion_time.asc());
                 }
                 SubmissionsSortField::LongestCompletionTime => {
                     submissions_query =
-                        submissions_query.order_by(submissions::completion_time.desc())
+                        submissions_query.order_by(submissions::completion_time.desc());
                 }
             }
         } else {
@@ -269,22 +269,20 @@ impl ResolvedSubmissionPage {
         let total_count: i64 = build_filtered().count().get_result(conn)?;
 
         if !can_full_review {
-            submissions
-                .iter_mut()
-                .for_each(|s: &mut SubmissionResolved| {
-                    s.reviewer = None;
-                    s.private_reviewer_notes = None;
-                });
+            for submission in &mut submissions {
+                submission.reviewer = None;
+                submission.private_reviewer_notes = None;
+            }
         }
 
         if !can_audit_reviewers {
-            submissions.iter_mut().for_each(|s| {
-                if let Some(ref reviewer) = s.reviewer {
+            for submission in &mut submissions {
+                if let Some(reviewer) = &submission.reviewer {
                     if base_reviewers.contains(&reviewer.id) {
-                        s.reviewer = Some(ExtendedBaseUser::hidden())
+                        submission.reviewer = Some(ExtendedBaseUser::hidden());
                     }
                 }
-            });
+            }
         }
 
         Ok(Paginated::<Self>::from_data(
@@ -298,7 +296,7 @@ impl ResolvedSubmissionPage {
         conn: &mut DbConnection,
         page_query: PageQuery<D>,
         mut options: SubmissionQueryOptions,
-        authenticated: Authenticated,
+        authenticated: &Authenticated,
     ) -> Result<Paginated<Self>, ApiError> {
         options.submitter_filter = Some(authenticated.user_id.to_string());
         options.reviewer_filter = None;

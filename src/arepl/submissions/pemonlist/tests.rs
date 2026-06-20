@@ -11,7 +11,7 @@ use {
     },
     actix_web::test::{self, read_body_json},
     httpmock::prelude::*,
-    serde_json::json,
+    serde_json::{json, Value},
     serial_test::serial,
 };
 
@@ -57,7 +57,7 @@ async fn sync_pemonlist() {
 
     let req = test::TestRequest::post()
         .uri("/arepl/submissions/pemonlist/sync")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -68,7 +68,7 @@ async fn sync_pemonlist() {
     let submission = &arr[0];
 
     assert_eq!(
-        submission.get("completion_time").and_then(|v| v.as_i64()),
+        submission.get("completion_time").and_then(Value::as_i64),
         Some(104_405_100),
         "unexpected completion_time: {}",
         submission
@@ -77,15 +77,15 @@ async fn sync_pemonlist() {
     );
 
     assert_eq!(
-        submission.get("mobile").and_then(|v| v.as_bool()),
+        submission.get("mobile").and_then(Value::as_bool),
         Some(false)
     );
     assert_eq!(
-        submission.get("video_url").and_then(|v| v.as_str()),
+        submission.get("video_url").and_then(Value::as_str),
         Some("https://www.youtube.com/watch?v=abcdefghijk")
     );
     assert_eq!(
-        submission.get("status").and_then(|v| v.as_str()),
+        submission.get("status").and_then(Value::as_str),
         Some("Accepted")
     );
 }
@@ -135,7 +135,7 @@ async fn sync_pemonlist_preserves_verification_flag() {
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::post()
         .uri("/arepl/submissions/pemonlist/sync")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());

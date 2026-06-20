@@ -8,13 +8,13 @@ use crate::app_data::db::DbAppState;
 #[cfg(test)]
 use crate::schema::arepl::level_ldms;
 #[cfg(test)]
-use diesel::{ExpressionMethods, RunQueryDsl};
+use diesel::{ExpressionMethods as _, RunQueryDsl as _};
 #[cfg(test)]
 use uuid::Uuid;
 
 #[cfg(test)]
 pub async fn create_test_ldm(db: &Arc<DbAppState>, level_id: Uuid, user: Uuid) -> Uuid {
-    let ldm_id = rand::random_range(1..=100000000);
+    let ldm_id = rand::random_range(1..=100_000_000);
     let level_uuid = Uuid::new_v4();
 
     diesel::insert_into(level_ldms::table)

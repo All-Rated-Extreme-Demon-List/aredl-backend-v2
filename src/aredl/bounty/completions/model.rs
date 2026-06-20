@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::{ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _};
 use serde::Serialize;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -64,10 +64,9 @@ impl Bounty {
         })?;
 
         // make sure to stay below the target number if there is one
-        let max_missing_completions = self
-            .target_submissions
-            .map(|target| i64::from(target).saturating_sub(existing_count))
-            .unwrap_or(i64::MAX);
+        let max_missing_completions = self.target_submissions.map_or(i64::MAX, |target| {
+            i64::from(target).saturating_sub(existing_count)
+        });
 
         let records = records::table
             .filter(records::level_id.eq(self.level_id))

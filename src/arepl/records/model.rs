@@ -15,10 +15,10 @@ use crate::users::{user_filter, ExtendedBaseUser};
 use actix_web::web;
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
-use diesel::query_dsl::JoinOnDsl;
+use diesel::query_dsl::JoinOnDsl as _;
 use diesel::{
-    Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl,
-    Selectable, SelectableHelper,
+    Connection as _, ExpressionMethods as _, Insertable, OptionalExtension as _, QueryDsl as _,
+    RunQueryDsl as _, Selectable, SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -175,7 +175,7 @@ impl SubmissionPostMod {
             mobile: record.mobile,
             video_url: record.video_url,
             status: Some(SubmissionStatus::Accepted),
-            reviewer_notes: Some("Added by a moderator".to_string()),
+            reviewer_notes: Some("Added by a moderator".to_owned()),
             ..Default::default()
         }
     }
@@ -187,7 +187,7 @@ impl SubmissionPatchMod {
             mobile: Some(record.mobile),
             video_url: Some(record.video_url),
             status: Some(SubmissionStatus::Accepted),
-            reviewer_notes: Some("Added by a moderator".to_string()),
+            reviewer_notes: Some("Added by a moderator".to_owned()),
             ..Default::default()
         }
     }
@@ -196,7 +196,7 @@ impl SubmissionPatchMod {
         Self {
             mobile: record.mobile,
             video_url: record.video_url,
-            reviewer_notes: Some("Updated by a moderator".to_string()),
+            reviewer_notes: Some("Updated by a moderator".to_owned()),
             status: Some(SubmissionStatus::Accepted),
             ..Default::default()
         }
@@ -204,7 +204,7 @@ impl SubmissionPatchMod {
 }
 
 impl RecordUpdate {
-    pub fn from_record_insert(record: RecordInsert) -> Self {
+    pub fn from_record_insert(record: &RecordInsert) -> Self {
         Self {
             hide_video: record.hide_video,
             is_verification: record.is_verification,
@@ -212,7 +212,7 @@ impl RecordUpdate {
         }
     }
 
-    pub fn from_record_patch(record: RecordPatch) -> Self {
+    pub fn from_record_patch(record: &RecordPatch) -> Self {
         Self {
             hide_video: record.hide_video,
             is_verification: record.is_verification,
@@ -225,7 +225,7 @@ impl Submission {
     pub fn upsert_from_record_insert(
         conn: &mut DbConnection,
         record: RecordInsert,
-        authenticated: Authenticated,
+        authenticated: &Authenticated,
     ) -> Result<Self, ApiError> {
         let existing_submission_id = submissions::table
             .filter(submissions::submitted_by.eq(record.submitted_by))
@@ -234,29 +234,26 @@ impl Submission {
             .first::<Uuid>(conn)
             .optional()?;
 
-        match existing_submission_id {
-            Some(submission_id) => {
-                let submission_update = (
-                    SubmissionPatchMod::from_record_insert(record),
-                    submissions::reviewer_id.eq(Some(authenticated.user_id)),
-                );
-                Ok(
-                    diesel::update(submissions::table.filter(submissions::id.eq(submission_id)))
-                        .set(submission_update)
-                        .returning(Submission::as_select())
-                        .get_result::<Self>(conn)?,
-                )
-            }
-            None => {
-                let submission_insert = (
-                    SubmissionPostMod::from_record_insert(record),
-                    submissions::reviewer_id.eq(Some(authenticated.user_id)),
-                );
-                Ok(diesel::insert_into(submissions::table)
-                    .values(submission_insert)
+        if let Some(submission_id) = existing_submission_id {
+            let submission_update = (
+                SubmissionPatchMod::from_record_insert(record),
+                submissions::reviewer_id.eq(Some(authenticated.user_id)),
+            );
+            Ok(
+                diesel::update(submissions::table.filter(submissions::id.eq(submission_id)))
+                    .set(submission_update)
                     .returning(Submission::as_select())
-                    .get_result::<Self>(conn)?)
-            }
+                    .get_result::<Self>(conn)?,
+            )
+        } else {
+            let submission_insert = (
+                SubmissionPostMod::from_record_insert(record),
+                submissions::reviewer_id.eq(Some(authenticated.user_id)),
+            );
+            Ok(diesel::insert_into(submissions::table)
+                .values(submission_insert)
+                .returning(Submission::as_select())
+                .get_result::<Self>(conn)?)
         }
     }
 }
@@ -264,8 +261,8 @@ impl Submission {
 impl Record {
     pub fn create(
         conn: &mut DbConnection,
-        record: RecordInsert,
-        authenticated: Authenticated,
+        record: &RecordInsert,
+        authenticated: &Authenticated,
     ) -> Result<Self, ApiError> {
         conn.transaction(|conn| -> Result<Self, ApiError> {
             if authenticated.user_id == record.submitted_by {
@@ -278,7 +275,7 @@ impl Record {
                 Submission::upsert_from_record_insert(conn, record.clone(), authenticated)?;
 
             // Then update the record-specific fields
-            let record_patch = RecordUpdate::from_record_insert(record.clone());
+            let record_patch = RecordUpdate::from_record_insert(record);
 
             let result = diesel::update(records::table)
                 .filter(records::submission_id.eq(submission.id))
@@ -295,8 +292,8 @@ impl Record {
     pub fn update(
         conn: &mut DbConnection,
         record_id: Uuid,
-        record: RecordPatch,
-        authenticated: Authenticated,
+        record: &RecordPatch,
+        authenticated: &Authenticated,
     ) -> Result<Self, ApiError> {
         conn.transaction(|conn| -> Result<Self, ApiError> {
             // Update the corresponding submission first and let triggers update the record
@@ -322,17 +319,18 @@ impl Record {
                 .execute(conn)?;
 
             // Then update the record-specific fields
-            let record_update = RecordUpdate::from_record_patch(record.clone());
+            let record_update = RecordUpdate::from_record_patch(record);
 
-            let result = match record_update == RecordUpdate::default() {
-                true => records::table
+            let result = if record_update == RecordUpdate::default() {
+                records::table
                     .filter(records::id.eq(record_id))
                     .select(Record::as_select())
-                    .first::<Self>(conn)?,
-                false => diesel::update(records::table.filter(records::id.eq(record_id)))
+                    .first::<Self>(conn)?
+            } else {
+                diesel::update(records::table.filter(records::id.eq(record_id)))
                     .set(&record_update)
                     .returning(Record::as_select())
-                    .get_result::<Self>(conn)?,
+                    .get_result::<Self>(conn)?
             };
 
             UserBadge::update_user_badges(conn, submitted_by)?;
@@ -344,7 +342,7 @@ impl Record {
     pub fn delete(
         conn: &mut DbConnection,
         record_id: Uuid,
-        authenticated: Authenticated,
+        authenticated: &Authenticated,
     ) -> Result<(), ApiError> {
         conn.transaction(|conn| -> Result<(), ApiError> {
             let record = diesel::delete(records::table.filter(records::id.eq(record_id)))
@@ -358,7 +356,7 @@ impl Record {
                     submissions::status.eq(SubmissionStatus::Denied),
                     submissions::reviewer_id.eq(Some(authenticated.user_id)),
                     submissions::reviewer_notes
-                        .eq(Some("Record removed by a moderator".to_string())),
+                        .eq(Some("Record removed by a moderator".to_owned())),
                 ))
                 .execute(conn)?;
             Ok(())
@@ -440,21 +438,24 @@ impl Record {
         Ok(result)
     }
 
-    pub async fn post_accept_actions(
+    pub fn post_accept_actions(
         db: web::Data<Arc<DbAppState>>,
-        submission: Submission,
+        submission: &Submission,
         providers: web::Data<Arc<ProvidersAppState>>,
     ) {
+        let submission_id = submission.id;
+        let submitted_by = submission.submitted_by;
+
         tokio::spawn(async move {
             let record = match db
                 .connection()
-                .and_then(|mut conn| Record::find_from_submission(&mut conn, submission.id))
+                .and_then(|mut conn| Record::find_from_submission(&mut conn, submission_id))
             {
                 Ok(record) => record,
                 Err(e) => {
                     tracing::warn!(
                         error = %e.error_message,
-                        ?submission.id,
+                        ?submission_id,
                         "Failed to process post submission accept actions: no record found for this submission"
                     );
                     return;
@@ -469,7 +470,7 @@ impl Record {
                     tracing::warn!(
                         error = %error.error_message,
                         ?record.id,
-                        ?submission.id,
+                        ?submission_id,
                         "Failed to process post submission accept actions: failed to update record's achieved_at timestamp"
                     );
                     record
@@ -488,12 +489,13 @@ impl Record {
                 );
             }
 
-            if let Err(error) = db.connection().and_then(|mut conn| {
-                UserBadge::update_user_badges(&mut conn, submission.submitted_by)
-            }) {
+            if let Err(error) = db
+                .connection()
+                .and_then(|mut conn| UserBadge::update_user_badges(&mut conn, submitted_by))
+            {
                 tracing::warn!(
                     error = %error.error_message,
-                    user_id = ?submission.submitted_by,
+                    user_id = ?submitted_by,
                     level_id = ?record.level_id,
                     "Failed to process post submission accept actions: failed to update user badges"
                 );
@@ -536,7 +538,7 @@ impl ResolvedRecord {
     pub fn find_all<const D: i64>(
         conn: &mut DbConnection,
         page_query: PageQuery<D>,
-        options: RecordsQueryOptions,
+        options: &RecordsQueryOptions,
     ) -> Result<Paginated<ResolvedRecordPage>, ApiError> {
         let build_filtered = || {
             let mut q = records::table.into_boxed::<Pg>();
@@ -549,7 +551,7 @@ impl ResolvedRecord {
             if let Some(level) = options.level_filter {
                 q = q.filter(records::level_id.eq(level));
             }
-            if let Some(ref submitter) = options.submitter_filter {
+            if let Some(submitter) = &options.submitter_filter {
                 q = q
                     .filter(records::submitted_by.eq_any(user_filter(submitter).select(users::id)));
             }

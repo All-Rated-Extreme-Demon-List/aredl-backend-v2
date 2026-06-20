@@ -60,7 +60,7 @@ async fn find_all(
             &mut db.connection()?,
             page_query.into_inner(),
             options.into_inner(),
-            authenticated,
+            &authenticated,
         )
     })
     .await??;
@@ -90,7 +90,7 @@ async fn find_one(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let submission = web::block(move || {
-        SubmissionResolved::find_one(&mut db.connection()?, id.into_inner(), authenticated)
+        SubmissionResolved::find_one(&mut db.connection()?, id.into_inner(), &authenticated)
     })
     .await??;
     Ok(HttpResponse::Ok().json(submission))
@@ -127,7 +127,7 @@ async fn find_me(
             &mut db.connection()?,
             page_query.into_inner(),
             options.into_inner(),
-            authenticated,
+            &authenticated,
         )
     })
     .await??;
@@ -160,7 +160,7 @@ async fn create(
     let created = web::block(move || {
         let conn = &mut db.connection()?;
         authenticated.ensure_not_banned(conn)?;
-        Submission::create(conn, body.into_inner(), authenticated, providers.as_ref())
+        Submission::create(conn, body.into_inner(), &authenticated, providers.as_ref())
     })
     .await??;
     Ok(HttpResponse::Created().json(created))
@@ -198,32 +198,31 @@ async fn patch(
     let providers_clone = providers.clone();
     let patched = web::block(move || {
         let conn = &mut db.connection()?;
-        match authenticated.has_permission(conn, Permission::SubmissionReviewBase)? {
-            true => SubmissionPatchMod::patch(
+        if authenticated.has_permission(conn, Permission::SubmissionReviewBase)? {
+            SubmissionPatchMod::patch(
                 body.into_inner(),
                 id.into_inner(),
                 conn,
-                authenticated,
-                notify_tx.get_ref().clone(),
-                providers.as_ref(),
-            ),
-            false => {
-                let user_patch = SubmissionPatchMod::downgrade(body.into_inner());
-                SubmissionPatchUser::patch(
-                    user_patch,
-                    id.into_inner(),
-                    conn,
-                    authenticated,
-                    providers.as_ref(),
-                )
-            }
+                &authenticated,
+                &notify_tx,
+                &providers,
+            )
+        } else {
+            let user_patch = SubmissionPatchMod::downgrade(body.into_inner());
+            SubmissionPatchUser::patch(
+                user_patch,
+                id.into_inner(),
+                conn,
+                &authenticated,
+                &providers,
+            )
         }
     })
     .await??;
 
     // if the status submission is changed to accepted, trigger other actions (timestamp update, badges, bounties, etc)
     if patched.status == SubmissionStatus::Accepted {
-        let _ = Record::post_accept_actions(db_clone, patched.clone(), providers_clone).await;
+        Record::post_accept_actions(db_clone, &patched, providers_clone);
     }
     Ok(HttpResponse::Ok().json(patched))
 }
@@ -247,7 +246,7 @@ async fn claim(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let patched = web::block(move || {
-        Submission::claim_highest_priority(&mut db.connection()?, authenticated)
+        Submission::claim_highest_priority(&mut db.connection()?, &authenticated)
     })
     .await??;
 
@@ -276,7 +275,7 @@ async fn delete(
     id: web::Path<Uuid>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    web::block(move || Submission::delete(&mut db.connection()?, id.into_inner(), authenticated))
+    web::block(move || Submission::delete(&mut db.connection()?, id.into_inner(), &authenticated))
         .await??;
     Ok(HttpResponse::NoContent().finish())
 }

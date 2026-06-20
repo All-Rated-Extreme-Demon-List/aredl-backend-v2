@@ -44,8 +44,8 @@ impl Provider for GoogleDriveProvider {
         }
 
         let (content_id, is_folder) = match (parts.next(), parts.next(), parts.next()) {
-            (Some("file"), Some("d"), Some(id)) => (id.to_string(), false),
-            (Some("folders"), Some(id), _) => (id.to_string(), true),
+            (Some("file"), Some("d"), Some(id)) => (id.to_owned(), false),
+            (Some("folders"), Some(id), _) => (id.to_owned(), true),
             _ => {
                 // open / uc
                 match url.path() {
@@ -72,11 +72,7 @@ impl Provider for GoogleDriveProvider {
             provider: ProviderId::GoogleDrive,
             content_id,
             timestamp: None,
-            other_id: if is_folder {
-                Some("folder".to_string())
-            } else {
-                None
-            },
+            other_id: is_folder.then(|| "folder".to_owned()),
         })
     }
 
@@ -119,7 +115,7 @@ impl Provider for GoogleDriveProvider {
         let mut headers = HeaderMap::new();
         headers.insert(
             "Authorization",
-            HeaderValue::from_str(&format!("Bearer {}", token)).map_err(|_err| {
+            HeaderValue::from_str(&format!("Bearer {token}")).map_err(|_err| {
                 ApiError::InternalServerError("Invalid Google Drive access token")
             })?,
         );

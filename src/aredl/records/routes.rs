@@ -57,7 +57,7 @@ async fn create(
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&record));
     let record = web::block(move || {
-        Record::create(&mut db.connection()?, record.into_inner(), authenticated)
+        Record::create(&mut db.connection()?, &record.into_inner(), &authenticated)
     })
     .await??;
     Ok(HttpResponse::Ok().json(record))
@@ -93,8 +93,8 @@ async fn update(
         Record::update(
             &mut db.connection()?,
             id.into_inner(),
-            record.into_inner(),
-            authenticated,
+            &record.into_inner(),
+            &authenticated,
         )
     })
     .await??;
@@ -152,7 +152,7 @@ async fn delete(
     id: web::Path<Uuid>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    web::block(move || Record::delete(&mut db.connection()?, id.into_inner(), authenticated))
+    web::block(move || Record::delete(&mut db.connection()?, id.into_inner(), &authenticated))
         .await??;
     Ok(HttpResponse::Ok().json(()))
 }
@@ -187,7 +187,7 @@ async fn find_all(
         ResolvedRecord::find_all(
             &mut db.connection()?,
             page_query.into_inner(),
-            options.into_inner(),
+            &options.into_inner(),
         )
     })
     .await??;
@@ -221,7 +221,7 @@ async fn find_me(
         ResolvedRecord::find_all(
             &mut db.connection()?,
             page_query.into_inner(),
-            RecordsQueryOptions {
+            &RecordsQueryOptions {
                 level_filter: None,
                 mobile_filter: None,
                 verification_filter: None,

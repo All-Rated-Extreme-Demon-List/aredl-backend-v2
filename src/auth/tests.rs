@@ -31,15 +31,14 @@ async fn mock_patreon_code_exchange<'a>(
             when.method(POST)
                 .path("/api/oauth2/token")
                 .body_includes("grant_type=authorization_code")
-                .body_includes(format!("code={}", code))
+                .body_includes(format!("code={code}"))
                 .body_includes("client_id=test_patreon_client_id")
                 .body_includes("client_secret=test_patreon_client_secret");
 
             then.status(200)
                 .header("content-type", "application/json")
                 .body(format!(
-                    r#"{{ "access_token": "{}", "token_type": "Bearer", "expires_in": 3600 }}"#,
-                    access_token
+                    r#"{{ "access_token": "{access_token}", "token_type": "Bearer", "expires_in": 3600 }}"#
                 ));
         })
         .await
@@ -72,7 +71,7 @@ async fn mock_patreon_identity<'a>(
         .mock_async(move |when, then| {
             when.method(GET)
                 .path("/oauth2/v2/identity")
-                .header("authorization", format!("Bearer {}", access_token));
+                .header("authorization", format!("Bearer {access_token}"));
 
             then.status(200)
                 .header("content-type", "application/json")
@@ -110,7 +109,7 @@ async fn discord_auth_redirects_to_discord() {
         .to_str()
         .unwrap();
 
-    assert!(location_header.starts_with(&format!("{}/oauth2/authorize", discord_base_url)));
+    assert!(location_header.starts_with(&format!("{discord_base_url}/oauth2/authorize")));
     assert!(location_header.contains("response_type=code"));
     assert!(location_header.contains("client_id="));
     assert!(location_header.contains("state="));
@@ -196,7 +195,7 @@ async fn patreon_link_rejects_untrusted_callback() {
 
     let req = test::TestRequest::post()
         .uri("/auth/patreon/link")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(serde_json::json!({"callback": "https://unauthorized.com"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -220,7 +219,7 @@ async fn patreon_link_returns_authorize_url() {
 
     let req = test::TestRequest::post()
         .uri("/auth/patreon/link")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(serde_json::json!({"callback": "https://example.com/patreon/linked"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -244,7 +243,7 @@ async fn refresh_returns_new_token() {
     let (user_id, _) = create_test_user(&db, None).await;
 
     let (refresh, _) = token::create_token(
-        token::UserClaims {
+        &token::UserClaims {
             user_id,
             is_api_key: false,
         },
@@ -256,7 +255,7 @@ async fn refresh_returns_new_token() {
 
     let req = test::TestRequest::get()
         .uri("/auth/refresh")
-        .insert_header(("Authorization", format!("Bearer {}", refresh)))
+        .insert_header(("Authorization", format!("Bearer {refresh}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -271,7 +270,7 @@ async fn refresh_returns_both_tokens_when_about_to_expire() {
     let (user_id, _) = create_test_user(&db, None).await;
 
     let (refresh, _) = token::create_token(
-        token::UserClaims {
+        &token::UserClaims {
             user_id,
             is_api_key: false,
         },
@@ -283,7 +282,7 @@ async fn refresh_returns_both_tokens_when_about_to_expire() {
 
     let req = test::TestRequest::get()
         .uri("/auth/refresh")
-        .insert_header(("Authorization", format!("Bearer {}", refresh)))
+        .insert_header(("Authorization", format!("Bearer {refresh}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -338,7 +337,7 @@ async fn refresh_fails_with_access_token() {
     let (user_id, _) = create_test_user(&db, None).await;
 
     let (access_token, _) = token::create_token(
-        token::UserClaims {
+        &token::UserClaims {
             user_id,
             is_api_key: false,
         },
@@ -350,7 +349,7 @@ async fn refresh_fails_with_access_token() {
 
     let req = test::TestRequest::get()
         .uri("/auth/refresh")
-        .insert_header(("Authorization", format!("Bearer {}", access_token)))
+        .insert_header(("Authorization", format!("Bearer {access_token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
 
@@ -363,7 +362,7 @@ async fn refresh_fails_with_expired_token() {
     let (user_id, _) = create_test_user(&db, None).await;
 
     let (expired_token, _) = token::create_token(
-        token::UserClaims {
+        &token::UserClaims {
             user_id,
             is_api_key: false,
         },
@@ -375,7 +374,7 @@ async fn refresh_fails_with_expired_token() {
 
     let req = test::TestRequest::get()
         .uri("/auth/refresh")
-        .insert_header(("Authorization", format!("Bearer {}", expired_token)))
+        .insert_header(("Authorization", format!("Bearer {expired_token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
 
@@ -391,7 +390,7 @@ async fn create_api_key_generates_token() {
 
     let req = test::TestRequest::post()
         .uri("/auth/api-key?lifetime_minutes=10")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -414,7 +413,7 @@ async fn logout_all_updates_timestamp() {
 
     let req = test::TestRequest::post()
         .uri("/auth/logout-all")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());

@@ -9,11 +9,11 @@ use base64::{
     engine::general_purpose::STANDARD, engine::general_purpose::URL_SAFE_NO_PAD, Engine as _,
 };
 use chacha20poly1305::{
-    aead::{Aead, AeadCore, KeyInit, OsRng, Payload},
+    aead::{Aead as _, AeadCore as _, KeyInit as _, OsRng, Payload},
     XChaCha20Poly1305, XNonce,
 };
 use chrono::{Duration as ChronoDuration, Utc};
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::{ExpressionMethods as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _};
 use serde::Deserialize;
 use std::sync::OnceLock;
 use tokio::sync::Mutex;
@@ -186,7 +186,7 @@ impl OAuthProviderContext {
             ("client_secret", self.config.client_secret.clone()),
             (
                 "grant_type",
-                backend_token_state.grant_type.as_form_value().to_string(),
+                backend_token_state.grant_type.as_form_value().to_owned(),
             ),
         ];
 
@@ -314,7 +314,7 @@ fn token_cipher() -> Result<&'static XChaCha20Poly1305, ApiError> {
             .map_err(|_err| "OAUTH_TOKEN_ENCRYPTION_KEY must be base64-encoded 32 random bytes")?;
 
         XChaCha20Poly1305::new_from_slice(&key).map_err(|_err| {
-            "OAUTH_TOKEN_ENCRYPTION_KEY must decode to exactly 32 bytes".to_string()
+            "OAUTH_TOKEN_ENCRYPTION_KEY must decode to exactly 32 bytes".to_owned()
         })
     });
 
@@ -348,7 +348,7 @@ fn encrypt_db_token_value(value: &str, aad: &[u8]) -> Result<String, ApiError> {
 
 pub(crate) fn decrypt_db_token_value(value: &str, aad: &[u8]) -> Result<String, ApiError> {
     let Some(encrypted_value) = value.strip_prefix(ENCRYPTED_TOKEN_PREFIX) else {
-        return Ok(value.to_string());
+        return Ok(value.to_owned());
     };
 
     let (nonce_b64, ciphertext_b64) = encrypted_value.split_once(':').ok_or_else(|| {

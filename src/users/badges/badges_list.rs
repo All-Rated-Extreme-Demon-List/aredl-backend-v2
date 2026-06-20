@@ -206,7 +206,7 @@ impl AvailableBadges {
     pub fn get_all() -> Vec<String> {
         let mut badges = SINGLE_BADGES
             .iter()
-            .map(|badge| (*badge).to_string())
+            .map(|badge| (*badge).to_owned())
             .collect::<Vec<_>>();
 
         badges.extend(TIERED_BADGES.iter().flat_map(|(prefix, values)| {

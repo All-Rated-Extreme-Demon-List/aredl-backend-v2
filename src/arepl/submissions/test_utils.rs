@@ -9,7 +9,7 @@ use {
         schema::arepl::{submission_history, submissions},
     },
     chrono::{DateTime, Utc},
-    diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper},
+    diesel::{ExpressionMethods as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _},
     std::sync::Arc,
     uuid::Uuid,
 };
@@ -25,7 +25,7 @@ pub async fn create_test_submission(level_id: Uuid, user_id: Uuid, db: &Arc<DbAp
             submissions::raw_url.eq("https://raw.com"),
             submissions::priority.eq(false),
             submissions::user_notes.eq("Test submission"),
-            submissions::completion_time.eq(1000000),
+            submissions::completion_time.eq(1_000_000),
             submissions::mod_menu.eq("Mega hack"),
         ))
         .returning(submissions::id)
@@ -45,12 +45,12 @@ pub async fn insert_history_entry(
         submission_id,
         reviewer_notes: None,
         status,
-        completion_time: Some(1000000),
-        video_url: Some("https://video.com".to_string()),
-        raw_url: Some("https://raw.com".to_string()),
+        completion_time: Some(1_000_000),
+        video_url: Some("https://video.com".to_owned()),
+        raw_url: Some("https://raw.com".to_owned()),
         mobile: Some(false),
         ldm_id: None,
-        mod_menu: Some("Mega Hack v8".to_string()),
+        mod_menu: Some("Mega Hack v8".to_owned()),
         timestamp: Utc::now(),
         user_notes: None,
         private_reviewer_notes: None,
@@ -95,7 +95,7 @@ pub fn set_test_submission_reviewer_with_private_notes(
     diesel::update(submissions::table.filter(submissions::id.eq(submission_id)))
         .set((
             submissions::reviewer_id.eq(reviewer_id),
-            submissions::private_reviewer_notes.eq(private_reviewer_notes.map(str::to_string)),
+            submissions::private_reviewer_notes.eq(private_reviewer_notes.map(str::to_owned)),
         ))
         .execute(&mut db.connection().unwrap())
         .expect("Failed to set test arepl submission reviewer metadata");
@@ -137,7 +137,7 @@ pub fn set_test_submission_raw_url_status_and_reviewer(
 ) {
     diesel::update(submissions::table.filter(submissions::id.eq(submission_id)))
         .set((
-            submissions::raw_url.eq(raw_url.map(str::to_string)),
+            submissions::raw_url.eq(raw_url.map(str::to_owned)),
             submissions::status.eq(status),
             submissions::reviewer_id.eq(reviewer_id),
         ))
@@ -152,7 +152,7 @@ pub fn set_test_submission_raw_url(
     raw_url: Option<&str>,
 ) {
     diesel::update(submissions::table.filter(submissions::id.eq(submission_id)))
-        .set(submissions::raw_url.eq(raw_url.map(str::to_string)))
+        .set(submissions::raw_url.eq(raw_url.map(str::to_owned)))
         .execute(&mut db.connection().unwrap())
         .expect("Failed to set test arepl submission raw URL");
 }
@@ -164,7 +164,7 @@ pub fn set_test_submissions_raw_url(
     raw_url: Option<&str>,
 ) {
     diesel::update(submissions::table.filter(submissions::id.eq_any(submission_ids)))
-        .set(submissions::raw_url.eq(raw_url.map(str::to_string)))
+        .set(submissions::raw_url.eq(raw_url.map(str::to_owned)))
         .execute(&mut db.connection().unwrap())
         .expect("Failed to set test arepl submissions raw URL");
 }

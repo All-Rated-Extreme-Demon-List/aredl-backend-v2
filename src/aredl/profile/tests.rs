@@ -97,7 +97,7 @@ async fn get_profile_hides_hidden_roles_except_for_role_manage() {
 
     let normal_req = test::TestRequest::get()
         .uri(format!("/aredl/profile/{target_user}").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", normal_token)))
+        .insert_header(("Authorization", format!("Bearer {normal_token}")))
         .to_request();
     let normal_resp = test::call_service(&app, normal_req).await;
     assert!(normal_resp.status().is_success());
@@ -107,7 +107,7 @@ async fn get_profile_hides_hidden_roles_except_for_role_manage() {
 
     let manager_req = test::TestRequest::get()
         .uri(format!("/aredl/profile/{target_user}").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", manager_token)))
+        .insert_header(("Authorization", format!("Bearer {manager_token}")))
         .to_request();
     let manager_resp = test::call_service(&app, manager_req).await;
     assert!(manager_resp.status().is_success());
@@ -129,7 +129,7 @@ async fn get_profile_includes_badges_and_featured_badge() {
 
     let sync_req = test::TestRequest::post()
         .uri("/users/@me/sync")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let sync_resp = test::call_service(&app, sync_req).await;
     assert!(sync_resp.status().is_success());
@@ -137,7 +137,7 @@ async fn get_profile_includes_badges_and_featured_badge() {
     let badge_code = "global.level_completion.5";
     let feature_req = test::TestRequest::patch()
         .uri("/users/@me")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(serde_json::json!({ "featured_badge_code": badge_code }))
         .to_request();
     let feature_resp = test::call_service(&app, feature_req).await;

@@ -2,11 +2,11 @@ use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::{permissions, roles, user_roles};
 use diesel::dsl::max;
-use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl};
+use diesel::{ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _};
 use strum_macros::{Display, EnumString};
 use uuid::Uuid;
 
-#[derive(Clone, EnumString, Display)]
+#[derive(Clone, EnumString, Display, Copy)]
 #[strum(serialize_all = "snake_case")]
 pub enum Permission {
     LevelModify,

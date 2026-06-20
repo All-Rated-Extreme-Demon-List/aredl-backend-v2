@@ -96,7 +96,7 @@ async fn get_profile_hides_hidden_roles_except_for_role_manage() {
 
     let normal_req = test::TestRequest::get()
         .uri(format!("/arepl/profile/{target_user}").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", normal_token)))
+        .insert_header(("Authorization", format!("Bearer {normal_token}")))
         .to_request();
     let normal_resp = test::call_service(&app, normal_req).await;
     assert!(normal_resp.status().is_success());
@@ -106,7 +106,7 @@ async fn get_profile_hides_hidden_roles_except_for_role_manage() {
 
     let manager_req = test::TestRequest::get()
         .uri(format!("/arepl/profile/{target_user}").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", manager_token)))
+        .insert_header(("Authorization", format!("Bearer {manager_token}")))
         .to_request();
     let manager_resp = test::call_service(&app, manager_req).await;
     assert!(manager_resp.status().is_success());

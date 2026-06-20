@@ -8,7 +8,7 @@ use crate::users::User;
 use chrono::{DateTime, Utc};
 use diesel::dsl::now;
 use diesel::{
-    ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
+    ExpressionMethods as _, JoinOnDsl as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -35,7 +35,7 @@ impl User {
     pub fn update_me(
         conn: &mut DbConnection,
         id: Uuid,
-        user: UserMeUpdate,
+        user: &UserMeUpdate,
     ) -> Result<User, ApiError> {
         let (current_ban_level, last_country_update): (i32, DateTime<Utc>) = users::table
             .filter(users::id.eq(id))
@@ -117,7 +117,7 @@ impl User {
 
         let result = diesel::update(users::table.filter(users::id.eq(id)))
             .set((
-                &user,
+                user,
                 user.country.map(|_| users::last_country_update.eq(now)),
             ))
             .returning(User::as_select())

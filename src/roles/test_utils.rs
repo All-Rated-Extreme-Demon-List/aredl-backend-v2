@@ -9,13 +9,13 @@ use crate::{
     schema::{roles, user_roles},
 };
 #[cfg(test)]
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
+use diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _};
 #[cfg(test)]
 use uuid::Uuid;
 
 #[cfg(test)]
 pub async fn create_test_role(db: &Arc<DbAppState>, privilege_level: i32) -> i32 {
-    let role_name = format!("Test Role {}", privilege_level);
+    let role_name = format!("Test Role {privilege_level}");
     create_test_role_with_desc(db, privilege_level, &role_name).await
 }
 

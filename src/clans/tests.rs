@@ -1,3 +1,4 @@
+use actix_http::StatusCode;
 #[cfg(test)]
 use {
     crate::{
@@ -10,7 +11,6 @@ use {
     serde_json::json,
     uuid::Uuid,
 };
-use {actix_http::StatusCode};
 
 #[actix_web::test]
 async fn create_and_join() {
@@ -21,7 +21,7 @@ async fn create_and_join() {
     let payload = json!({"global_name": "Test Clan", "tag": "TC"});
     let req = test::TestRequest::post()
         .uri("/clans")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&payload)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -41,7 +41,7 @@ async fn list_clans() {
     let payload = json!({"global_name": "List Clan", "tag": "LC"});
     let req = test::TestRequest::post()
         .uri("/clans")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&payload)
         .to_request();
     let _resp = test::call_service(&app, req).await;
@@ -62,7 +62,7 @@ async fn create_empty_clan() {
     let payload = json!({"global_name": "Empty Clan", "tag": "EC"});
     let req = test::TestRequest::post()
         .uri("/clans/placeholder")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&payload)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -79,8 +79,8 @@ async fn update_clan() {
 
     let payload = json!({"global_name": "Updated"});
     let req = test::TestRequest::patch()
-        .uri(&format!("/clans/{}", clan_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/clans/{clan_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&payload)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -98,8 +98,8 @@ async fn delete_clan() {
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
 
     let req = test::TestRequest::delete()
-        .uri(&format!("/clans/{}", clan_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/clans/{clan_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -116,8 +116,8 @@ async fn delete_clan_with_multiple_members_forbidden() {
     let token = create_test_token(owner_id, &auth.jwt_encoding_key).unwrap();
 
     let req = test::TestRequest::delete()
-        .uri(&format!("/clans/{}", clan_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/clans/{clan_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_error_response(
@@ -138,7 +138,7 @@ async fn create_clan_name_too_long() {
     let payload = json!({"global_name": name, "tag": "TL"});
     let req = test::TestRequest::post()
         .uri("/clans")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&payload)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -160,7 +160,7 @@ async fn create_empty_clan_name_too_long() {
     let payload = json!({"global_name": name, "tag": "TL"});
     let req = test::TestRequest::post()
         .uri("/clans/placeholder")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&payload)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -181,7 +181,7 @@ async fn create_clan_tag_too_long() {
     let payload = json!({"global_name": "TagLong", "tag": "TOOLONG"});
     let req = test::TestRequest::post()
         .uri("/clans")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&payload)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -202,7 +202,7 @@ async fn create_empty_clan_tag_too_long() {
     let payload = json!({"global_name": "TagLong", "tag": "TOOLONG"});
     let req = test::TestRequest::post()
         .uri("/clans/placeholder")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&payload)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -224,7 +224,7 @@ async fn create_clan_description_too_long() {
     let payload = json!({"global_name": "DescLong", "tag": "DL", "description": desc});
     let req = test::TestRequest::post()
         .uri("/clans")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&payload)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -246,7 +246,7 @@ async fn create_empty_clan_description_too_long() {
     let payload = json!({"global_name": "DescLong", "tag": "DL", "description": desc});
     let req = test::TestRequest::post()
         .uri("/clans/placeholder")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&payload)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -269,7 +269,7 @@ async fn create_clan_already_in_clan() {
     let payload = json!({"global_name": "NewClan", "tag": "NC"});
     let req = test::TestRequest::post()
         .uri("/clans")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&payload)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -292,8 +292,8 @@ async fn update_clan_name_too_long() {
     let name = "n".repeat(101);
     let payload = json!({"global_name": name});
     let req = test::TestRequest::patch()
-        .uri(&format!("/clans/{}", clan_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/clans/{clan_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&payload)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -315,8 +315,8 @@ async fn update_clan_tag_too_long() {
 
     let payload = json!({"tag": "LONGER"});
     let req = test::TestRequest::patch()
-        .uri(&format!("/clans/{}", clan_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/clans/{clan_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&payload)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -339,8 +339,8 @@ async fn update_clan_description_too_long() {
     let desc = "x".repeat(301);
     let payload = json!({"description": desc});
     let req = test::TestRequest::patch()
-        .uri(&format!("/clans/{}", clan_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/clans/{clan_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&payload)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -361,7 +361,7 @@ async fn find_clan_with_filter() {
     let payload = json!({"global_name": "Alpha Clan", "tag": "ALC"});
     let req = test::TestRequest::post()
         .uri("/clans/placeholder")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&payload)
         .to_request();
     let _ = test::call_service(&app, req).await;
@@ -369,7 +369,7 @@ async fn find_clan_with_filter() {
     let payload = json!({"global_name": "Beta Clan", "tag": "BET"});
     let req = test::TestRequest::post()
         .uri("/clans/placeholder")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&payload)
         .to_request();
     let _ = test::call_service(&app, req).await;

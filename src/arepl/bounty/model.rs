@@ -8,8 +8,8 @@ use chrono::{DateTime, Utc};
 use diesel::dsl::{count, exists};
 use diesel::pg::Pg;
 use diesel::{
-    BoolExpressionMethods, Connection, ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl,
-    Selectable, SelectableHelper,
+    BoolExpressionMethods as _, Connection as _, ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _,
+    Selectable, SelectableHelper as _,
 };
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
@@ -146,7 +146,7 @@ impl BountyResolved {
             .map(|(bounty, level, current_completions, user_completed)| {
                 let hide_target = !has_bounty_manage && !bounty.is_target_public;
                 Self::from_data(
-                    bounty,
+                    &bounty,
                     level,
                     current_completions,
                     user_completed,
@@ -157,7 +157,7 @@ impl BountyResolved {
     }
 
     pub fn from_data(
-        bounty: Bounty,
+        bounty: &Bounty,
         level: ExtendedBaseLevel,
         current_completions: i64,
         user_completed: Option<bool>,
@@ -327,7 +327,7 @@ impl Record {
                 let current_completions = bounty.count_completions(conn)?;
 
                 if let Some(target) = bounty.target_submissions {
-                    if current_completions >= target as i64 {
+                    if current_completions >= i64::from(target) {
                         return Ok(());
                     }
                 }
@@ -343,7 +343,7 @@ impl Record {
                     .execute(conn)?;
 
                 if let Some(target) = bounty.target_submissions {
-                    if bounty.count_completions(conn)? >= target as i64 {
+                    if bounty.count_completions(conn)? >= i64::from(target) {
                         diesel::update(bounties::table.filter(bounties::id.eq(bounty.id)))
                             .set(bounties::end_date.eq(Utc::now()))
                             .execute(conn)?;

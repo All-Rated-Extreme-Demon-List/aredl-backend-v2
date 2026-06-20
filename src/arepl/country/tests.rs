@@ -100,7 +100,7 @@ async fn get_country_includes_created_levels_and_matching_creators() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|creator| creator["id"].as_str().unwrap().to_string())
+        .map(|creator| creator["id"].as_str().unwrap().to_owned())
         .collect::<Vec<_>>();
     let mut expected_creator_ids = vec![creator_a.to_string(), creator_b.to_string()];
     let mut actual_creator_ids = shared_creator_ids;

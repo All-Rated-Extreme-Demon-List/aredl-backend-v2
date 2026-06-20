@@ -12,8 +12,8 @@ use crate::schema::{
 use chrono::Utc;
 use diesel::pg::Pg;
 use diesel::{
-    ExpressionMethods, JoinOnDsl, NullableExpressionMethods, PgTextExpressionMethods, QueryDsl,
-    RunQueryDsl, SelectableHelper,
+    ExpressionMethods as _, JoinOnDsl as _, NullableExpressionMethods as _, PgTextExpressionMethods as _, QueryDsl as _,
+    RunQueryDsl as _, SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -75,7 +75,7 @@ impl ClansLeaderboardPage {
                 .left_join(levels::table.on(clans_leaderboard::hardest.eq(levels::id.nullable())))
                 .into_boxed::<Pg>();
 
-            if let Some(ref filter) = options.name_filter {
+            if let Some(filter) = &options.name_filter {
                 q = q
                     .filter(clans::global_name.ilike(filter))
                     .or_filter(clans::tag.ilike(filter));
@@ -89,14 +89,11 @@ impl ClansLeaderboardPage {
         let mut query = build_filtered_query();
 
         match options.order.unwrap_or(LeaderboardOrder::TotalPoints) {
-            LeaderboardOrder::TotalPoints => {
+            LeaderboardOrder::TotalPoints | LeaderboardOrder::RawPoints => {
                 query = query.order(clans_leaderboard::rank.asc());
             }
             LeaderboardOrder::ExtremeCount => {
                 query = query.order(clans_leaderboard::extremes_rank.asc());
-            }
-            LeaderboardOrder::RawPoints => {
-                query = query.order(clans_leaderboard::rank.asc());
             }
         }
 

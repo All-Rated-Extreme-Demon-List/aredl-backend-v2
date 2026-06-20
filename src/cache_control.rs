@@ -1,7 +1,7 @@
 use actix_web::{
     body::MessageBody,
     dev::{Service, ServiceRequest, ServiceResponse, Transform},
-    http::header::{self, CacheControl, CacheDirective, HeaderValue, TryIntoHeaderValue},
+    http::header::{self, CacheControl, CacheDirective, HeaderValue, TryIntoHeaderValue as _},
     Error,
 };
 use futures_util::future::{ready, LocalBoxFuture, Ready};

@@ -43,7 +43,7 @@ async fn total_submissions_counts_ordering_and_percent_unique_pairs() {
 
     let req = TestRequest::get()
         .uri("/aredl/statistics/submissions")
-        .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
+        .insert_header((header::AUTHORIZATION, format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -86,7 +86,7 @@ async fn total_submissions_ignores_non_pending_unique_pairs() {
 
     let req = TestRequest::get()
         .uri("/aredl/statistics/submissions")
-        .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
+        .insert_header((header::AUTHORIZATION, format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;

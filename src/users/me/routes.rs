@@ -31,7 +31,7 @@ async fn find(
         UserResolved::from_uuid(
             &mut db.connection()?,
             authenticated.user_id,
-            Some(authenticated),
+            Some(&authenticated),
         )
     })
     .await??;
@@ -64,7 +64,7 @@ async fn update(
         User::update_me(
             &mut db.connection()?,
             authenticated.user_id,
-            user.into_inner(),
+            &user.into_inner(),
         )
     })
     .await??;

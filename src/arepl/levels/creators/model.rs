@@ -4,8 +4,8 @@ use crate::schema::arepl::levels_created;
 use crate::schema::users;
 use crate::users::{BaseUser, BaseUserWithBanLevel};
 use diesel::{
-    delete, insert_into, Connection, ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl,
-    SelectableHelper,
+    delete, insert_into, Connection as _, ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _,
+    SelectableHelper as _,
 };
 use uuid::Uuid;
 
@@ -29,10 +29,10 @@ impl BaseUser {
     pub fn arepl_add_all_creators(
         conn: &mut DbConnection,
         level_id: Uuid,
-        creators: Vec<Uuid>,
+        creators: &[Uuid],
     ) -> Result<Vec<Uuid>, ApiError> {
         let result = conn.transaction(|connection| -> Result<Vec<Uuid>, ApiError> {
-            Self::arepl_add_creators(level_id, creators.as_ref(), connection)?;
+            Self::arepl_add_creators(level_id, creators, connection)?;
 
             let creators = levels_created::table
                 .filter(levels_created::level_id.eq(level_id))
@@ -48,12 +48,12 @@ impl BaseUser {
     pub fn arepl_delete_all_creators(
         conn: &mut DbConnection,
         level_id: Uuid,
-        creators: Vec<Uuid>,
+        creators: &[Uuid],
     ) -> Result<Vec<Uuid>, ApiError> {
         let result = conn.transaction(|connection| -> Result<Vec<Uuid>, ApiError> {
             delete(levels_created::table)
                 .filter(levels_created::level_id.eq(level_id))
-                .filter(levels_created::user_id.eq_any(&creators))
+                .filter(levels_created::user_id.eq_any(creators))
                 .execute(connection)?;
 
             let creators = levels_created::table
@@ -70,16 +70,16 @@ impl BaseUser {
     pub fn arepl_set_all_creators(
         conn: &mut DbConnection,
         level_id: Uuid,
-        creators: Vec<Uuid>,
+        creators: &[Uuid],
     ) -> Result<Vec<Uuid>, ApiError> {
         let result = conn.transaction(|connection| -> Result<Vec<Uuid>, ApiError> {
             delete(levels_created::table)
                 .filter(levels_created::level_id.eq(level_id))
                 .execute(connection)?;
 
-            Self::arepl_add_creators(level_id, creators.as_ref(), connection)?;
+            Self::arepl_add_creators(level_id, creators, connection)?;
 
-            Ok(creators)
+            Ok(creators.to_vec())
         })?;
 
         Ok(result)

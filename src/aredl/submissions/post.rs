@@ -3,14 +3,15 @@ use crate::notifications::WebsocketNotification;
 use crate::{
     app_data::db::DbConnection,
     aredl::levels::LevelStatus,
-    aredl::submissions::{status::SubmissionsEnabled, *},
+    aredl::submissions::{status::SubmissionsEnabled, Submission, SubmissionStatus},
     auth::{Authenticated, Permission},
     error_handler::ApiError,
     providers::ProvidersAppState,
     schema::aredl::{levels, submissions},
 };
 use diesel::{
-    Connection, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
+    Connection as _, ExpressionMethods as _, OptionalExtension as _, QueryDsl as _,
+    RunQueryDsl as _, SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
@@ -183,9 +184,9 @@ impl Submission {
     pub fn create(
         conn: &mut DbConnection,
         mut submission_body: SubmissionPostMod,
-        authenticated: Authenticated,
+        authenticated: &Authenticated,
         providers: &ProvidersAppState,
-        notify_tx: broadcast::Sender<WebsocketNotification>,
+        notify_tx: &broadcast::Sender<WebsocketNotification>,
     ) -> Result<Self, ApiError> {
         submission_body.video_url = providers
             .validate_completion_video_url(&submission_body.video_url)
@@ -205,7 +206,7 @@ impl Submission {
 
         let submission = conn.transaction(|connection| -> Result<Self, ApiError> {
             let inserted_submission =
-                SubmissionInsert::from_mod(connection, submission_body, &authenticated)?;
+                SubmissionInsert::from_mod(connection, submission_body, authenticated)?;
 
             if authenticated.user_id == inserted_submission.submitted_by
                 && !(SubmissionsEnabled::is_enabled(connection)?)
@@ -273,7 +274,7 @@ impl Submission {
             Ok(submission)
         })?;
 
-        WebsocketNotification::send(&notify_tx, "SUBMISSION_CREATED", &submission);
+        WebsocketNotification::send(notify_tx, "SUBMISSION_CREATED", &submission);
 
         Ok(submission)
     }

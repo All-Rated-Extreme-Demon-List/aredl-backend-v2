@@ -3,12 +3,12 @@ use crate::error_handler::ApiError;
 use crate::schema::{oauth_requests, oauth_tokens};
 use crate::{get_optional_secret, get_secret};
 use chrono::{DateTime, Utc};
-use diesel::{Connection, ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::{Connection as _, ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _};
 use diesel_derive_enum::DbEnum;
 use oauth2::basic::BasicClient;
 use oauth2::{
     AuthType, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, EndpointNotSet,
-    EndpointSet, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, TokenResponse, TokenUrl,
+    EndpointSet, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, TokenResponse as _, TokenUrl,
 };
 use serde::{Deserialize, Serialize};
 use strum_macros::Display;
@@ -112,7 +112,7 @@ impl OAuthClientConfig {
 pub(super) fn build_oauth_return_uri(base: &str, return_path: &str) -> String {
     let base = base.trim().trim_end_matches('/');
     let base = if base.starts_with("http://") || base.starts_with("https://") {
-        base.to_string()
+        base.to_owned()
     } else if base.starts_with("127.0.0.1") || base.starts_with("localhost") {
         format!("http://{base}")
     } else {
@@ -165,13 +165,12 @@ impl OAuthOptions {
                 return Err(ApiError::BadRequest("Invalid callback URL"));
             }
 
-            let Some(host) = url.host_str().map(|host| host.to_ascii_lowercase()) else {
+            let Some(host) = url.host_str().map(str::to_ascii_lowercase) else {
                 return Err(ApiError::BadRequest("Invalid callback URL"));
             };
 
             let allow_localhost = get_optional_secret("AUTH_CALLBACK_ALLOW_LOCALHOST")
-                .map(|value| value != "0" && !value.eq_ignore_ascii_case("false"))
-                .unwrap_or(true);
+                .is_none_or(|value| value != "0" && !value.eq_ignore_ascii_case("false"));
 
             if allow_localhost && matches!(host.as_str(), "localhost" | "127.0.0.1" | "::1") {
                 return Ok(());
@@ -182,8 +181,8 @@ impl OAuthOptions {
                 .split(',')
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
-                .map(|value| value.to_ascii_lowercase())
-                .any(|domain| host == *domain || host.ends_with(&format!(".{}", domain)))
+                .map(str::to_ascii_lowercase)
+                .any(|domain| host == *domain || host.ends_with(&format!(".{domain}")))
             {
                 return Ok(());
             }
@@ -219,10 +218,14 @@ impl OAuthRequestData {
             authorization = authorization.add_scope(Scope::new(scope.clone()));
         }
 
+        #[expect(
+            clippy::if_then_some_else_none,
+            reason = "using .then would move ownership"
+        )]
         let pkce_verifier = if state.use_pkce {
             let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
             authorization = authorization.set_pkce_challenge(pkce_challenge);
-            Some(pkce_verifier.secret().to_string())
+            Some(pkce_verifier.secret().clone())
         } else {
             None
         };
@@ -271,7 +274,7 @@ pub async fn exchange_oauth_code(
     code: &str,
     pkce_verifier: Option<String>,
 ) -> Result<String, ApiError> {
-    let mut request = client.exchange_code(AuthorizationCode::new(code.to_string()));
+    let mut request = client.exchange_code(AuthorizationCode::new(code.to_owned()));
 
     if let Some(pkce_verifier) = pkce_verifier {
         request = request.set_pkce_verifier(PkceCodeVerifier::new(pkce_verifier));

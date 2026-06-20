@@ -24,7 +24,7 @@ async fn list_roles() {
 
     let req = test::TestRequest::get()
         .uri("/roles")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -44,7 +44,7 @@ async fn create_role() {
     let create_data = json!({"privilege_level": 30, "role_desc": "Tester"});
     let req = test::TestRequest::post()
         .uri("/roles")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&create_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -62,8 +62,8 @@ async fn update_role() {
 
     let update_data = json!({"role_desc": "Updated"});
     let req = test::TestRequest::patch()
-        .uri(&format!("/roles/{}", role_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/roles/{role_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&update_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -83,22 +83,21 @@ async fn delete_role() {
     let role_id: i32 = create_test_role(&db, 30).await;
 
     let req = test::TestRequest::delete()
-        .uri(&format!("/roles/{}", role_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/roles/{role_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
     let req = test::TestRequest::get()
         .uri("/roles")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     let roles: Vec<RoleResolved> = read_body_json(resp).await;
     assert!(
         !roles.iter().any(|r| r.role.id == role_id),
-        "Role {} should be deleted",
-        role_id
+        "Role {role_id} should be deleted"
     );
 }
 
@@ -114,7 +113,7 @@ async fn create_role_fails_when_new_role_has_same_privilege_as_user() {
 
     let req = test::TestRequest::post()
         .uri("/roles")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&create_data)
         .to_request();
 
@@ -139,7 +138,7 @@ async fn create_role_fails_when_new_role_has_higher_privilege_than_user() {
 
     let req = test::TestRequest::post()
         .uri("/roles")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&create_data)
         .to_request();
 
@@ -163,8 +162,8 @@ async fn update_role_fails_when_target_role_has_same_privilege_as_user() {
     let role_id = create_test_role(&db, lvl).await;
 
     let req = test::TestRequest::patch()
-        .uri(&format!("/roles/{}", role_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/roles/{role_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(json!({"role_desc": "Should Not Work"}))
         .to_request();
 
@@ -188,8 +187,8 @@ async fn delete_role_fails_when_target_role_has_same_privilege_as_user() {
     let role_id = create_test_role(&db, lvl).await;
 
     let req = test::TestRequest::delete()
-        .uri(&format!("/roles/{}", role_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/roles/{role_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;

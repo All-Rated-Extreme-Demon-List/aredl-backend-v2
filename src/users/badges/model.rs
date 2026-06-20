@@ -8,8 +8,8 @@ use crate::users::badges::statistics::UserStatistics;
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::{
-    delete, insert_into, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, Selectable,
-    SelectableHelper,
+    delete, insert_into, ExpressionMethods as _, OptionalExtension as _, QueryDsl as _,
+    RunQueryDsl as _, Selectable, SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -21,7 +21,7 @@ use uuid::Uuid;
 pub struct UserBadge {
     #[serde(skip_serializing, skip_deserializing)]
     pub user_id: Uuid,
-    /// The code identifying the badge, e.g. "global.level_completion.10".
+    /// The code identifying the badge, e.g. `global.level_completion.10`.
     pub badge_code: String,
     /// Additional user-specific badge information.
     pub description: Option<String>,
@@ -31,7 +31,7 @@ pub struct UserBadge {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct UserBadgeGrant {
-    /// The code identifying the badge, e.g. "global.level_completion.10".
+    /// The code identifying the badge, e.g. `global.level_completion.10`.
     pub badge_code: String,
     /// Additional user-specific badge information.
     pub description: Option<String>,
@@ -92,7 +92,7 @@ impl UserBadge {
 impl UserBadge {
     pub fn update_user_badges(conn: &mut DbConnection, user_id: Uuid) -> Result<(), ApiError> {
         let badge_data = UserStatistics::load(conn, user_id)?.get_unlocked_badges();
-        Self::insert_missing(conn, user_id, badge_data)
+        Self::insert_missing(conn, user_id, &badge_data)
     }
 
     pub fn has_code(
@@ -113,7 +113,7 @@ impl UserBadge {
     fn insert_missing(
         conn: &mut DbConnection,
         user_id: Uuid,
-        badges: HashMap<String, Option<String>>,
+        badges: &HashMap<String, Option<String>>,
     ) -> Result<(), ApiError> {
         let existing_codes = user_badges::table
             .filter(user_badges::user_id.eq(user_id))
@@ -171,7 +171,7 @@ impl UserStatistics {
         AvailableBadges::get_all()
             .iter()
             .filter(|badge_code| self.is_badge_unlocked(badge_code))
-            .map(|badge_code| (badge_code.to_string(), self.badge_description(badge_code)))
+            .map(|badge_code| (badge_code.clone(), self.badge_description(badge_code)))
             .collect()
     }
 
@@ -228,7 +228,7 @@ impl UserStatistics {
                         .iter()
                         .find(|(level_tag_alias, _, _)| *level_tag_alias == *alias),
                 )
-                .map(|(threshold, (_, level_tags, mode))| match mode {
+                .is_some_and(|(threshold, (_, level_tags, mode))| match mode {
                     TagBadgeMode::And => level_tags.iter().all(|tag_name| {
                         scope_statistics
                             .level_tag_counts
@@ -242,8 +242,7 @@ impl UserStatistics {
                             .sum::<i64>()
                             >= threshold
                     }
-                })
-                .unwrap_or(false),
+                }),
             (_, ["hardest_level", threshold]) => {
                 threshold.parse::<i32>().ok().is_some_and(|threshold| {
                     scope_statistics
@@ -299,7 +298,7 @@ impl UserStatistics {
                         level
                             .name
                             .chars()
-                            .find(|character| character.is_ascii_alphabetic())
+                            .find(char::is_ascii_alphabetic)
                             .map(|character| character.to_ascii_uppercase())
                     })
                     .collect::<HashSet<_>>();

@@ -90,9 +90,8 @@ impl ProviderRegistry {
 
     pub fn match_url(&self, url: &Url) -> Result<NormalizedProviderMatch, ApiError> {
         for provider in self.providers.values() {
-            match provider.parse_url(url)? {
-                Some(matched) => return Ok(matched),
-                None => continue,
+            if let Some(matched) = provider.parse_url(url)? {
+                return Ok(matched);
             }
         }
         Err(ApiError::UnprocessableEntity(
@@ -113,9 +112,8 @@ pub trait Provider: Send + Sync {
     fn match_url(&self, url: &Url) -> Option<ProviderMatch>;
 
     fn parse_url(&self, url: &Url) -> Result<Option<NormalizedProviderMatch>, ApiError> {
-        let host = match url.host_str() {
-            Some(h) => h,
-            None => return Ok(None),
+        let Some(host) = url.host_str() else {
+            return Ok(None);
         };
 
         if !self.hosts().is_empty() && !self.hosts().contains(&host) {
@@ -164,7 +162,7 @@ impl ContentDataLocation {
             .and_then(|v| v.checked_sub(1))
             .ok_or_else(|| ApiError::InternalServerError("Invalid range parameters"))?;
 
-        let range = format!("bytes={}-{}", start, end);
+        let range = format!("bytes={start}-{end}");
 
         let response = client
             .get(&self.url)

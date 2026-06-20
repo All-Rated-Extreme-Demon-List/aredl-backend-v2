@@ -33,7 +33,7 @@ async fn find(
         UserResolved::from_str(
             &mut db.connection()?,
             id.into_inner().as_str(),
-            authenticated,
+            authenticated.as_ref(),
         )
     })
     .await??;
@@ -65,7 +65,7 @@ async fn list(
         User::find_all(
             &mut db.connection()?,
             page_query.into_inner(),
-            options.into_inner(),
+            &options.into_inner(),
         )
     })
     .await??;
@@ -131,7 +131,7 @@ async fn update(
         let conn = &mut db.connection()?;
         let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
         authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
-        User::update(conn, user_id, user.into_inner())
+        User::update(conn, user_id, &user.into_inner())
     })
     .await??;
 
@@ -179,7 +179,7 @@ async fn ban(
         if user.ban_level == 3 {
             authenticated.ensure_has_permission(conn, Permission::UserRedact)?;
         }
-        User::ban(conn, authenticated, user_id, user.into_inner().ban_level)
+        User::ban(conn, &authenticated, user_id, user.into_inner().ban_level)
     })
     .await??;
 

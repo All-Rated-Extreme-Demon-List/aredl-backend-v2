@@ -7,11 +7,10 @@ use crate::{
     shifts::{ShiftInsert, Weekday},
     users::BaseUser,
 };
-use chrono::Weekday as ChronoWeekday;
-use chrono::{DateTime, Datelike, NaiveDate, TimeZone, Utc};
+use chrono::{DateTime, NaiveDate, TimeZone as _, Utc};
 use diesel::{
-    AsChangeset, ExpressionMethods, Identifiable, Insertable, JoinOnDsl, QueryDsl, Queryable,
-    RunQueryDsl, SelectableHelper,
+    AsChangeset, ExpressionMethods as _, Identifiable, Insertable, JoinOnDsl as _, QueryDsl as _, Queryable,
+    RunQueryDsl as _, SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -130,10 +129,10 @@ impl ResolvedRecurringShift {
 impl RecurringShift {
     pub fn create(
         conn: &mut DbConnection,
-        new_shift: RecurringShiftInsert,
+        new_shift: &RecurringShiftInsert,
     ) -> Result<Self, ApiError> {
         let inserted = diesel::insert_into(recurrent_shifts::table)
-            .values(&new_shift)
+            .values(new_shift)
             .get_result(conn)?;
         Ok(inserted)
     }
@@ -141,10 +140,10 @@ impl RecurringShift {
     pub fn patch(
         conn: &mut DbConnection,
         id: Uuid,
-        patch: RecurringShiftPatch,
+        patch: &RecurringShiftPatch,
     ) -> Result<Self, ApiError> {
         let updated = diesel::update(recurrent_shifts::table.filter(recurrent_shifts::id.eq(id)))
-            .set(&patch)
+            .set(patch)
             .get_result::<RecurringShift>(conn)?;
         Ok(updated)
     }
@@ -159,15 +158,7 @@ impl RecurringShift {
         conn: &mut DbConnection,
         date: NaiveDate,
     ) -> Result<Vec<ShiftInsert>, ApiError> {
-        let today = match date.weekday() {
-            ChronoWeekday::Mon => Weekday::Monday,
-            ChronoWeekday::Tue => Weekday::Tuesday,
-            ChronoWeekday::Wed => Weekday::Wednesday,
-            ChronoWeekday::Thu => Weekday::Thursday,
-            ChronoWeekday::Fri => Weekday::Friday,
-            ChronoWeekday::Sat => Weekday::Saturday,
-            ChronoWeekday::Sun => Weekday::Sunday,
-        };
+        let today = Weekday::from(date);
 
         let templates: Vec<RecurringShift> = recurrent_shifts::table
             .filter(recurrent_shifts::weekday.eq(today))
@@ -183,7 +174,7 @@ impl RecurringShift {
 
             let start_at: DateTime<Utc> = Utc.from_utc_datetime(&naive_dt);
 
-            let end_at = start_at + chrono::Duration::hours(template.duration as i64);
+            let end_at = start_at + chrono::Duration::hours(i64::from(template.duration));
 
             let exists: i64 = shifts::table
                 .filter(shifts::user_id.eq(template.user_id))

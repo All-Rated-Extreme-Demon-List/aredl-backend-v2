@@ -62,7 +62,7 @@ async fn bounty_board_permissions_and_validation() {
         &app,
         test::TestRequest::post()
             .uri("/arepl/bounty-board")
-            .insert_header(("Authorization", format!("Bearer {}", regular_token)))
+            .insert_header(("Authorization", format!("Bearer {regular_token}")))
             .set_json(&valid_body)
             .to_request(),
     )
@@ -78,7 +78,7 @@ async fn bounty_board_permissions_and_validation() {
         &app,
         test::TestRequest::post()
             .uri("/arepl/bounty-board")
-            .insert_header(("Authorization", format!("Bearer {}", manager_token)))
+            .insert_header(("Authorization", format!("Bearer {manager_token}")))
             .set_json(json!({
                 "level_id": level_id,
                 "bounty_type": "Bounty",
@@ -102,7 +102,7 @@ async fn bounty_board_permissions_and_validation() {
         &app,
         test::TestRequest::post()
             .uri("/arepl/bounty-board")
-            .insert_header(("Authorization", format!("Bearer {}", manager_token)))
+            .insert_header(("Authorization", format!("Bearer {manager_token}")))
             .set_json(json!({
                 "level_id": level_id,
                 "bounty_type": "Bounty",
@@ -126,7 +126,7 @@ async fn bounty_board_permissions_and_validation() {
         &app,
         test::TestRequest::post()
             .uri("/arepl/bounty-board")
-            .insert_header(("Authorization", format!("Bearer {}", manager_token)))
+            .insert_header(("Authorization", format!("Bearer {manager_token}")))
             .set_json(&valid_body)
             .to_request(),
     )
@@ -142,8 +142,8 @@ async fn bounty_board_permissions_and_validation() {
     let invalid_update = test::call_service(
         &app,
         test::TestRequest::patch()
-            .uri(&format!("/arepl/bounty-board/{}", bounty_id))
-            .insert_header(("Authorization", format!("Bearer {}", manager_token)))
+            .uri(&format!("/arepl/bounty-board/{bounty_id}"))
+            .insert_header(("Authorization", format!("Bearer {manager_token}")))
             .set_json(
                 json!({ "start_date": "2026-03-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap() }),
             )
@@ -160,8 +160,8 @@ async fn bounty_board_permissions_and_validation() {
     let forbidden_delete = test::call_service(
         &app,
         test::TestRequest::delete()
-            .uri(&format!("/arepl/bounty-board/{}", bounty_id))
-            .insert_header(("Authorization", format!("Bearer {}", regular_token)))
+            .uri(&format!("/arepl/bounty-board/{bounty_id}"))
+            .insert_header(("Authorization", format!("Bearer {regular_token}")))
             .to_request(),
     )
     .await;
@@ -175,8 +175,8 @@ async fn bounty_board_permissions_and_validation() {
     let delete_resp = test::call_service(
         &app,
         test::TestRequest::delete()
-            .uri(&format!("/arepl/bounty-board/{}", bounty_id))
-            .insert_header(("Authorization", format!("Bearer {}", manager_token)))
+            .uri(&format!("/arepl/bounty-board/{bounty_id}"))
+            .insert_header(("Authorization", format!("Bearer {manager_token}")))
             .to_request(),
     )
     .await;
@@ -198,8 +198,8 @@ async fn bounty_board_visibility_and_completed_by_user() {
     let start = Utc::now() - ChronoDuration::days(1);
     let end = Some(Utc::now() + ChronoDuration::days(1));
 
-    let hidden_bounty = create_test_bounty(&db, level_id, start, end, Some(3), false).await;
-    let public_bounty = create_test_bounty(&db, level_id, start, end, Some(5), true).await;
+    let hidden_bounty = create_test_bounty(&db, level_id, start, end, Some(3), false);
+    let public_bounty = create_test_bounty(&db, level_id, start, end, Some(5), true);
     create_test_bounty_completion(&db, hidden_bounty.id, user_id).await;
 
     let anon_resp = test::call_service(
@@ -223,7 +223,7 @@ async fn bounty_board_visibility_and_completed_by_user() {
         &app,
         test::TestRequest::get()
             .uri("/arepl/bounty-board")
-            .insert_header(("Authorization", format!("Bearer {}", user_token)))
+            .insert_header(("Authorization", format!("Bearer {user_token}")))
             .to_request(),
     )
     .await;
@@ -242,7 +242,7 @@ async fn bounty_board_visibility_and_completed_by_user() {
         &app,
         test::TestRequest::get()
             .uri("/arepl/bounty-board")
-            .insert_header(("Authorization", format!("Bearer {}", manager_token)))
+            .insert_header(("Authorization", format!("Bearer {manager_token}")))
             .to_request(),
     )
     .await;
@@ -264,8 +264,7 @@ async fn bounty_completions_endpoint_and_delete_cascade() {
         Some(Utc::now() + ChronoDuration::days(1)),
         None,
         true,
-    )
-    .await;
+    );
 
     let empty_resp = test::call_service(
         &app,
@@ -316,7 +315,7 @@ async fn bounty_sync_completions_endpoint_adds_matching_records() {
     let end = "2026-02-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
     let inside = "2026-01-10T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
 
-    let bounty = create_test_bounty(&db, level_id, start, Some(end), None, true).await;
+    let bounty = create_test_bounty(&db, level_id, start, Some(end), None, true);
 
     for user_id in [user_1, user_2, user_3] {
         let record_id = create_test_record(&db, user_id, level_id).await;
@@ -349,7 +348,7 @@ async fn bounty_sync_completions_endpoint_adds_matching_records() {
                 "/arepl/bounty-board/{}/completions/sync",
                 bounty.id
             ))
-            .insert_header(("Authorization", format!("Bearer {}", manager_token)))
+            .insert_header(("Authorization", format!("Bearer {manager_token}")))
             .to_request(),
     )
     .await;
@@ -378,8 +377,7 @@ async fn bounty_completion_windows_and_overlaps() {
         Some("2026-01-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap()),
         None,
         true,
-    )
-    .await;
+    );
     let starts_after = create_test_bounty(
         &db,
         level_id,
@@ -387,8 +385,7 @@ async fn bounty_completion_windows_and_overlaps() {
         None,
         None,
         true,
-    )
-    .await;
+    );
     let active = create_test_bounty(
         &db,
         level_id,
@@ -396,8 +393,7 @@ async fn bounty_completion_windows_and_overlaps() {
         Some("2026-02-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap()),
         None,
         true,
-    )
-    .await;
+    );
     let open_ended = create_test_bounty(
         &db,
         level_id,
@@ -405,8 +401,7 @@ async fn bounty_completion_windows_and_overlaps() {
         None,
         None,
         true,
-    )
-    .await;
+    );
     let overlapping = create_test_bounty(
         &db,
         level_id,
@@ -414,8 +409,7 @@ async fn bounty_completion_windows_and_overlaps() {
         Some("2026-01-15T00:00:00Z".parse::<DateTime<Utc>>().unwrap()),
         None,
         true,
-    )
-    .await;
+    );
 
     get_test_record(&db, record_id)
         .complete_bounty_if_exists(&mut db.connection().unwrap())
@@ -444,8 +438,7 @@ async fn bounty_target_count_closes_and_stays_strict() {
         Some(original_end),
         Some(2),
         true,
-    )
-    .await;
+    );
 
     let record_1 = create_test_record(&db, user_1, level_id).await;
     set_test_record_achieved_at(&db, record_1, achieved_at).await;
@@ -524,8 +517,7 @@ async fn bounty_completion_uses_fetched_video_timestamp() {
         Some("2010-01-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap()),
         None,
         true,
-    )
-    .await;
+    );
     let outside_bounty = create_test_bounty(
         &db,
         outside_level,
@@ -533,13 +525,12 @@ async fn bounty_completion_uses_fetched_video_timestamp() {
         None,
         None,
         true,
-    )
-    .await;
+    );
 
     let create_submission = |level_id: Uuid, token: &str| {
         test::TestRequest::post()
             .uri("/arepl/submissions")
-            .insert_header(("Authorization", format!("Bearer {}", token)))
+            .insert_header(("Authorization", format!("Bearer {token}")))
             .set_json(json!({
                 "level_id": level_id,
                 "video_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
@@ -564,8 +555,8 @@ async fn bounty_completion_uses_fetched_video_timestamp() {
         let accept_resp = test::call_service(
             &app,
             test::TestRequest::patch()
-                .uri(&format!("/arepl/submissions/{}", submission_id))
-                .insert_header(("Authorization", format!("Bearer {}", moderator_token)))
+                .uri(&format!("/arepl/submissions/{submission_id}"))
+                .insert_header(("Authorization", format!("Bearer {moderator_token}")))
                 .set_json(json!({ "status": "Accepted", "reviewer_notes": "ok" }))
                 .to_request(),
         )

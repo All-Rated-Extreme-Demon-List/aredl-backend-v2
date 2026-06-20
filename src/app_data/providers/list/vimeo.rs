@@ -44,7 +44,7 @@ impl Provider for VimeoProvider {
 
         Some(ProviderMatch {
             provider: ProviderId::Vimeo,
-            content_id: content_id.to_string(),
+            content_id: content_id.to_owned(),
             timestamp: None,
             other_id: None,
         })

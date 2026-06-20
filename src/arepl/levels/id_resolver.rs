@@ -2,7 +2,7 @@ use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::arepl::levels;
 use diesel::pg::Pg;
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
+use diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _};
 use uuid::Uuid;
 
 fn parse_gd_id(string: &str) -> Result<(i32, bool), ApiError> {
@@ -13,7 +13,7 @@ fn parse_gd_id(string: &str) -> Result<(i32, bool), ApiError> {
     };
 
     let id = parsed_id.map_err(|error| {
-        ApiError::BadRequest(format!("Failed to parse {}: {}", string, error).as_str())
+        ApiError::BadRequest(format!("Failed to parse {string}: {error}").as_str())
     })?;
 
     Ok((id, two_player))
@@ -22,16 +22,13 @@ fn parse_gd_id(string: &str) -> Result<(i32, bool), ApiError> {
 pub fn level_filter(input: &str) -> Result<levels::BoxedQuery<'static, Pg>, ApiError> {
     let mut query = levels::table.into_boxed::<Pg>();
 
-    match Uuid::parse_str(input) {
-        Ok(uuid) => {
-            query = query.filter(levels::id.eq(uuid));
-        }
-        Err(_) => {
-            let (id, two_player) = parse_gd_id(input)?;
-            query = query
-                .filter(levels::level_id.eq(id))
-                .filter(levels::two_player.eq(two_player));
-        }
+    if let Ok(uuid) = Uuid::parse_str(input) {
+        query = query.filter(levels::id.eq(uuid));
+    } else {
+        let (id, two_player) = parse_gd_id(input)?;
+        query = query
+            .filter(levels::level_id.eq(id))
+            .filter(levels::two_player.eq(two_player));
     }
 
     Ok(query)
@@ -45,7 +42,7 @@ fn resolve_gd_id(conn: &mut DbConnection, string: &str) -> Result<Uuid, ApiError
         .select(levels::id)
         .first::<Uuid>(conn)
         .map_err(|error| {
-            ApiError::NotFound(format!("Failed to resolve {}: {}", string, error).as_str())
+            ApiError::NotFound(format!("Failed to resolve {string}: {error}").as_str())
         })?;
 
     Ok(resolved_id)

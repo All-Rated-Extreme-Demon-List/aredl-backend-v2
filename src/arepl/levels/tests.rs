@@ -27,14 +27,14 @@ async fn create_level() {
     let level_data = json!({
         "name": "Test Level",
         "position": 1,
-        "level_id": 123456,
+        "level_id": 123_456,
         "publisher_id": user_id.to_string(),
         "status": "MainList",
         "two_player": false
     });
     let req = test::TestRequest::post()
         .uri("/arepl/levels")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&level_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -45,7 +45,7 @@ async fn create_level() {
         level_data["level_id"].as_i64().unwrap(),
         body["level_id"].as_i64().unwrap(),
         "Level IDs do not match!"
-    )
+    );
 }
 
 #[actix_web::test]
@@ -90,7 +90,7 @@ async fn list_levels_with_completion_status_when_authenticated() {
 
     let req = test::TestRequest::get()
         .uri("/arepl/levels")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -176,15 +176,15 @@ async fn update_level() {
         "name": "Updated Level Name"
     });
     let req = test::TestRequest::patch()
-        .uri(&format!("/arepl/levels/{}", level_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/arepl/levels/{level_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&update_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
 
     let body: serde_json::Value = read_body_json(resp).await;
-    assert_eq!(body["name"].to_string(), update_data["name"].to_string())
+    assert_eq!(body["name"].to_string(), update_data["name"].to_string());
 }
 
 #[actix_web::test]
@@ -192,7 +192,7 @@ async fn find_level() {
     let (app, db, _, _) = init_test_app().await;
     let level_id = create_test_level(&db).await;
     let req = test::TestRequest::get()
-        .uri(&format!("/arepl/levels/{}", level_id))
+        .uri(&format!("/arepl/levels/{level_id}"))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -200,9 +200,9 @@ async fn find_level() {
     let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(
         level_id.to_string(),
-        body["id"].as_str().unwrap().to_string(),
+        body["id"].as_str().unwrap().to_owned(),
         "IDs do not match!"
-    )
+    );
 }
 
 #[actix_web::test]
@@ -214,7 +214,7 @@ async fn list_creators() {
     add_test_level_creators(&db, level_id, &[creator_id]).await;
 
     let req = test::TestRequest::get()
-        .uri(&format!("/arepl/levels/{}/creators", level_id))
+        .uri(&format!("/arepl/levels/{level_id}/creators"))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -223,10 +223,10 @@ async fn list_creators() {
         body.as_array().unwrap()[0].as_object().unwrap()["id"]
             .as_str()
             .unwrap()
-            .to_string(),
+            .to_owned(),
         creator_id.to_string(),
         "Creators do not match!"
-    )
+    );
 }
 
 #[actix_web::test]
@@ -238,8 +238,8 @@ async fn set_creators() {
     let level_id = create_test_level(&db).await;
     let new_creator_id = user_id;
     let req = test::TestRequest::post()
-        .uri(&format!("/arepl/levels/{}/creators", level_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/arepl/levels/{level_id}/creators"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(vec![new_creator_id])
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -258,8 +258,8 @@ async fn add_and_remove_creators() {
     let level_id = create_test_level(&db).await;
     // Add creator
     let req = test::TestRequest::patch()
-        .uri(&format!("/arepl/levels/{}/creators", level_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/arepl/levels/{level_id}/creators"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(vec![user_id])
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -273,8 +273,8 @@ async fn add_and_remove_creators() {
         .any(|u| u.as_str().unwrap() == user_id.to_string()));
     // Remove creator
     let req = test::TestRequest::delete()
-        .uri(&format!("/arepl/levels/{}/creators", level_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/arepl/levels/{level_id}/creators"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(vec![user_id])
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -299,7 +299,7 @@ async fn get_level_history() {
     let other_level = create_test_level(&db).await;
 
     let req = test::TestRequest::get()
-        .uri(&format!("/arepl/levels/{}/history", level_id))
+        .uri(&format!("/arepl/levels/{level_id}/history"))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -311,7 +311,7 @@ async fn get_level_history() {
         move_entry["cause"].as_object().unwrap()["id"]
             .as_str()
             .unwrap()
-            .to_string(),
+            .to_owned(),
         other_level.to_string()
     );
     assert_eq!(move_entry["position_diff"].as_i64().unwrap(), 1);
@@ -327,7 +327,7 @@ async fn get_level_pack() {
     add_test_level_to_pack(&db, level, pack);
 
     let req = test::TestRequest::get()
-        .uri(&format!("/arepl/levels/{}/packs", level))
+        .uri(&format!("/arepl/levels/{level}/packs"))
         .to_request();
 
     let res = test::call_service(&app, req).await;
@@ -339,10 +339,10 @@ async fn get_level_pack() {
         arr[0].as_object().unwrap()["id"]
             .as_str()
             .unwrap()
-            .to_string(),
+            .to_owned(),
         pack.to_string(),
         "Pack IDs do not match!"
-    )
+    );
 }
 
 #[actix_web::test]
@@ -352,7 +352,7 @@ async fn get_level_records() {
     let (level_id, record_id) = create_test_level_with_record(&db, submitter).await;
 
     let req = test::TestRequest::get()
-        .uri(&format!("/arepl/levels/{}/records", level_id))
+        .uri(&format!("/arepl/levels/{level_id}/records"))
         .to_request();
 
     let res = test::call_service(&app, req).await;
@@ -364,8 +364,8 @@ async fn get_level_records() {
         arr[0].as_object().unwrap()["id"]
             .as_str()
             .unwrap()
-            .to_string(),
+            .to_owned(),
         record_id.to_string(),
         "Record IDs do not match!"
-    )
+    );
 }

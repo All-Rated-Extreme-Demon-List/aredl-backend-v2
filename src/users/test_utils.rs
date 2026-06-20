@@ -9,7 +9,7 @@ use crate::schema::{roles, user_roles, users};
 use crate::users::User;
 use chrono::{DateTime, Utc};
 
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _};
 
 use uuid::Uuid;
 
@@ -20,7 +20,7 @@ pub async fn create_test_user(
 ) -> (Uuid, String) {
     let conn = &mut db.connection().unwrap();
     let user_id = Uuid::new_v4();
-    let username = format!("test_user_{}", user_id);
+    let username = format!("test_user_{user_id}");
 
     diesel::insert_into(users::table)
         .values((
@@ -47,7 +47,7 @@ pub async fn create_test_user(
         let role_id: i32 = diesel::insert_into(roles::table)
             .values((
                 roles::privilege_level.eq(privilege_level),
-                roles::role_desc.eq(format!("Test Role - {}", privilege_level)),
+                roles::role_desc.eq(format!("Test Role - {privilege_level}")),
             ))
             .returning(roles::id)
             .get_result(conn)
@@ -70,7 +70,7 @@ pub async fn create_test_placeholder_user(db: &Arc<DbAppState>) -> (Uuid, String
     let conn = &mut db.connection().unwrap();
 
     let user_id = Uuid::new_v4();
-    let username = format!("test_user_{}", user_id);
+    let username = format!("test_user_{user_id}");
 
     diesel::insert_into(users::table)
         .values((
@@ -148,7 +148,7 @@ pub async fn set_test_user_background_level(
 pub async fn set_test_user_discord_id(db: &Arc<DbAppState>, user_id: Uuid, discord_id: &str) {
     diesel::update(users::table)
         .filter(users::id.eq(user_id))
-        .set(users::discord_id.eq(Some(discord_id.to_string())))
+        .set(users::discord_id.eq(Some(discord_id.to_owned())))
         .execute(&mut db.connection().unwrap())
         .expect("Failed to set user discord ID");
 }

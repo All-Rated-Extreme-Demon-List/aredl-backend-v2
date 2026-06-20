@@ -38,8 +38,7 @@ impl Provider for TwitchProvider {
         let mut timestamp: Option<String> = None;
         for (key, value) in url.query_pairs() {
             match key.as_ref() {
-                "t" if timestamp.is_none() => timestamp = Some(value.into_owned()),
-                "time" if timestamp.is_none() => timestamp = Some(value.into_owned()),
+                "t" | "time" if timestamp.is_none() => timestamp = Some(value.into_owned()),
                 _ => {}
             }
         }
@@ -50,7 +49,7 @@ impl Provider for TwitchProvider {
             for (key, value) in url.query_pairs() {
                 if key.as_ref() == "video" {
                     if let Some(stripped) = value.strip_prefix('v') {
-                        player_video_id = Some(stripped.to_string());
+                        player_video_id = Some(stripped.to_owned());
                     }
                     break;
                 }
@@ -62,9 +61,9 @@ impl Provider for TwitchProvider {
             // /<channel>/v/<id>
             let mut path_parts = path.split('/');
             match (path_parts.next(), path_parts.next(), path_parts.next()) {
-                (Some("videos"), Some(id), _) => id.to_string(),
-                (Some(_channel), Some("video"), Some(id)) => id.to_string(),
-                (Some(_channel), Some("v"), Some(id)) => id.to_string(),
+                (Some("videos"), Some(id), _) => id.to_owned(),
+                (Some(_channel), Some("video"), Some(id)) => id.to_owned(),
+                (Some(_channel), Some("v"), Some(id)) => id.to_owned(),
                 _ => return None,
             }
         };
@@ -74,7 +73,7 @@ impl Provider for TwitchProvider {
         }
 
         let timestamp = timestamp
-            .map(|value| value.trim().to_string())
+            .map(|value| value.trim().to_owned())
             .filter(|value| is_twitch_timestamp(value));
 
         Some(ProviderMatch {
@@ -120,7 +119,7 @@ impl Provider for TwitchProvider {
         let mut headers = HeaderMap::new();
         headers.insert(
             "Authorization",
-            HeaderValue::from_str(&format!("Bearer {}", access_token))
+            HeaderValue::from_str(&format!("Bearer {access_token}"))
                 .map_err(|_err| ApiError::InternalServerError("Invalid Twitch access token"))?,
         );
         headers.insert(

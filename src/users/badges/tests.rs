@@ -20,7 +20,7 @@ async fn get_user_badges() {
 
     let grant_req = test::TestRequest::patch()
         .uri(&format!("/users/{user_id}/badges"))
-        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .insert_header(("Authorization", format!("Bearer {staff_token}")))
         .set_json(json!({
             "badge_code": "global.level_completion.5",
             "description": "Test level",
@@ -53,7 +53,7 @@ async fn grant_user_badge() {
 
     let req = test::TestRequest::patch()
         .uri(&format!("/users/{user_id}/badges"))
-        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .insert_header(("Authorization", format!("Bearer {staff_token}")))
         .set_json(json!({
             "badge_code": "global.level_completion.5",
             "description": "Manual grant",
@@ -79,7 +79,7 @@ async fn remove_user_badge() {
 
     let grant_req = test::TestRequest::patch()
         .uri(&format!("/users/{user_id}/badges"))
-        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .insert_header(("Authorization", format!("Bearer {staff_token}")))
         .set_json(json!({
             "badge_code": "global.level_completion.5",
             "description": "Manual grant",
@@ -91,7 +91,7 @@ async fn remove_user_badge() {
 
     let remove_req = test::TestRequest::delete()
         .uri(&format!("/users/{user_id}/badges"))
-        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .insert_header(("Authorization", format!("Bearer {staff_token}")))
         .set_json(json!(["global.level_completion.5"]))
         .to_request();
 
@@ -120,7 +120,7 @@ async fn sync_user_badges() {
 
     let req = test::TestRequest::post()
         .uri(&format!("/users/{user_id}/badges/sync"))
-        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .insert_header(("Authorization", format!("Bearer {staff_token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -144,7 +144,7 @@ async fn grant_user_badge_rejects_invalid_code() {
 
     let req = test::TestRequest::patch()
         .uri(&format!("/users/{user_id}/badges"))
-        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .insert_header(("Authorization", format!("Bearer {staff_token}")))
         .set_json(json!({
             "badge_code": "global.invalid_badge",
             "description": "Nope",

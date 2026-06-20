@@ -30,7 +30,7 @@ async fn get_authenticated_user() {
 
     let req = test::TestRequest::get()
         .uri("/users/@me")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -56,7 +56,7 @@ async fn update_authenticated_user() {
 
     let req = test::TestRequest::patch()
         .uri("/users/@me")
-        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .insert_header(("Authorization", format!("Bearer {user_token}")))
         .set_json(&update_payload)
         .to_request();
 
@@ -72,7 +72,7 @@ async fn update_authenticated_user() {
 
     let req = test::TestRequest::get()
         .uri("/users/@me")
-        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .insert_header(("Authorization", format!("Bearer {user_token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -98,7 +98,7 @@ async fn update_authenticated_user_global_name_too_long() {
 
     let req = test::TestRequest::patch()
         .uri("/users/@me")
-        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .insert_header(("Authorization", format!("Bearer {user_token}")))
         .set_json(&update_payload)
         .to_request();
 
@@ -119,7 +119,7 @@ async fn update_authenticated_user_description_too_long() {
 
     let req = test::TestRequest::patch()
         .uri("/users/@me")
-        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .insert_header(("Authorization", format!("Bearer {user_token}")))
         .set_json(&update_payload)
         .to_request();
 
@@ -142,7 +142,7 @@ async fn update_authenticated_user_banned() {
 
     let req = test::TestRequest::patch()
         .uri("/users/@me")
-        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .insert_header(("Authorization", format!("Bearer {user_token}")))
         .set_json(&update_payload)
         .to_request();
 
@@ -165,7 +165,7 @@ async fn update_authenticated_user_country_cooldown() {
 
     let req = test::TestRequest::patch()
         .uri("/users/@me")
-        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .insert_header(("Authorization", format!("Bearer {user_token}")))
         .set_json(&update_payload)
         .to_request();
 
@@ -186,7 +186,7 @@ async fn update_background_level_aredl() {
 
     let req = test::TestRequest::patch()
         .uri("/users/@me")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(json!({ "background_level": level_id }))
         .to_request();
 
@@ -210,7 +210,7 @@ async fn update_background_level_arepl() {
 
     let req = test::TestRequest::patch()
         .uri("/users/@me")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(json!({ "background_level": level_id }))
         .to_request();
 
@@ -234,7 +234,7 @@ async fn update_background_level_not_beaten() {
 
     let req = test::TestRequest::patch()
         .uri("/users/@me")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(json!({ "background_level": level_id }))
         .to_request();
 
@@ -257,7 +257,7 @@ async fn reset_background_level_to_zero() {
 
     let req = test::TestRequest::patch()
         .uri("/users/@me")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(json!({ "background_level": 0 }))
         .to_request();
 
@@ -266,7 +266,7 @@ async fn reset_background_level_to_zero() {
 
     let req = test::TestRequest::get()
         .uri("/users/@me")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     let updated: serde_json::Value = read_body_json(resp).await;
@@ -286,7 +286,7 @@ async fn sync_badges_and_feature_badge() {
 
     let sync_req = test::TestRequest::post()
         .uri("/users/@me/sync")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let sync_resp = test::call_service(&app, sync_req).await;
@@ -302,7 +302,7 @@ async fn sync_badges_and_feature_badge() {
 
     let patch_req = test::TestRequest::patch()
         .uri("/users/@me")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(json!({ "featured_badge_code": badge_code }))
         .to_request();
 
@@ -311,7 +311,7 @@ async fn sync_badges_and_feature_badge() {
 
     let me_req = test::TestRequest::get()
         .uri("/users/@me")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let me_resp = test::call_service(&app, me_req).await;
@@ -335,7 +335,7 @@ async fn cannot_feature_locked_badge() {
 
     let req = test::TestRequest::patch()
         .uri("/users/@me")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(json!({ "featured_badge_code": "global.level_completion.5" }))
         .to_request();
 

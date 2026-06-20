@@ -9,7 +9,7 @@ use crate::error_handler::{ConfigError, StartupError};
 use crate::get_secret;
 use chrono::Utc;
 use cron::Schedule;
-use std::str::FromStr;
+use std::str::FromStr as _;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -27,7 +27,7 @@ pub fn parse_startup_schedule(
 ) -> Result<Arc<Schedule>, StartupError> {
     Schedule::from_str(value).map(Arc::new).map_err(|error| {
         ConfigError::InvalidValue {
-            name: name.to_string(),
+            name: name.to_owned(),
             message: error.to_string(),
         }
         .into()
@@ -38,7 +38,7 @@ pub async fn sleep_until_next(schedule: &Schedule) {
     let now = Utc::now();
     let Some(next) = schedule.upcoming(Utc).next() else {
         tracing::error!("Schedule has no upcoming execution time");
-        tokio::time::sleep(Duration::from_secs(60)).await;
+        tokio::time::sleep(Duration::from_mins(1)).await;
         return;
     };
 

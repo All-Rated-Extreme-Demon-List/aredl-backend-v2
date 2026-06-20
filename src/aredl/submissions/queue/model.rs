@@ -5,7 +5,7 @@ use crate::{
     schema::aredl::submissions,
 };
 use chrono::{DateTime, Utc};
-use diesel::{BoolExpressionMethods, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
+use diesel::{BoolExpressionMethods as _, ExpressionMethods as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;

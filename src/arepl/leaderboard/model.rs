@@ -12,8 +12,8 @@ use crate::users::ExtendedBaseUser;
 use chrono::Utc;
 use diesel::pg::Pg;
 use diesel::{
-    ExpressionMethods, JoinOnDsl, NullableExpressionMethods, PgTextExpressionMethods, QueryDsl,
-    RunQueryDsl, SelectableHelper,
+    ExpressionMethods as _, JoinOnDsl as _, NullableExpressionMethods as _, PgTextExpressionMethods as _, QueryDsl as _,
+    RunQueryDsl as _, SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -129,24 +129,24 @@ impl LeaderboardPage {
             options.order.unwrap_or(LeaderboardOrder::TotalPoints),
         ) {
             (false, LeaderboardOrder::TotalPoints) => {
-                query = query.order(user_leaderboard::rank.asc())
+                query = query.order(user_leaderboard::rank.asc());
             }
             (false, LeaderboardOrder::ExtremeCount) => {
-                query = query.order(user_leaderboard::extremes_rank.asc())
+                query = query.order(user_leaderboard::extremes_rank.asc());
             }
             (false, LeaderboardOrder::RawPoints) => {
-                query = query.order(user_leaderboard::raw_rank.asc())
+                query = query.order(user_leaderboard::raw_rank.asc());
             }
             (true, LeaderboardOrder::TotalPoints) => {
-                query = query.order(user_leaderboard::country_rank.asc())
+                query = query.order(user_leaderboard::country_rank.asc());
             }
             (true, LeaderboardOrder::ExtremeCount) => {
-                query = query.order(user_leaderboard::country_extremes_rank.asc())
+                query = query.order(user_leaderboard::country_extremes_rank.asc());
             }
             (true, LeaderboardOrder::RawPoints) => {
-                query = query.order(user_leaderboard::country_raw_rank.asc())
+                query = query.order(user_leaderboard::country_raw_rank.asc());
             }
-        };
+        }
 
         let query = query.then_order_by(user_leaderboard::user_id.asc());
 

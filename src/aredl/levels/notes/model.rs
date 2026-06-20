@@ -12,7 +12,7 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use diesel::{
-    pg::Pg, ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl, Selectable, SelectableHelper,
+    pg::Pg, ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _, Selectable, SelectableHelper as _,
 };
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
@@ -98,7 +98,7 @@ pub struct LevelNotesQueryOptions {
 impl LevelNotes {
     pub fn find_all<const D: i64>(
         conn: &mut DbConnection,
-        filters: LevelNotesQueryOptions,
+        filters: &LevelNotesQueryOptions,
         page_query: PageQuery<D>,
         authenticated: Option<Authenticated>,
     ) -> Result<Paginated<LevelNotesResolvedPage>, ApiError> {
@@ -161,7 +161,7 @@ impl LevelNotes {
         conn: &mut DbConnection,
         body: LevelNotePost,
         level_id: Uuid,
-        auth: Authenticated,
+        auth: &Authenticated,
     ) -> Result<LevelNotes, ApiError> {
         let data = LevelNoteInsert {
             level_id,

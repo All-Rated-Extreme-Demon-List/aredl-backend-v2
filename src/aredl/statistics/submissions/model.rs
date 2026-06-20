@@ -6,8 +6,8 @@ use crate::{
 };
 use diesel::pg::Pg;
 use diesel::{
-    ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl,
-    SelectableHelper,
+    ExpressionMethods as _, JoinOnDsl as _, NullableExpressionMethods as _, QueryDsl as _, RunQueryDsl as _,
+    SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;

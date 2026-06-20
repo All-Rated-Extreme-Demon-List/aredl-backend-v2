@@ -9,7 +9,7 @@ use {
         schema::arepl::{records, submissions},
     },
     chrono::{DateTime, Utc},
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper},
+    diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _},
     std::sync::Arc,
     uuid::Uuid,
 };

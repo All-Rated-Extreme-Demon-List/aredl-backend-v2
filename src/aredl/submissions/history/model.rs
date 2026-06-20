@@ -9,8 +9,8 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use diesel::{
-    pg::Pg, ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl,
-    Selectable, SelectableHelper,
+    pg::Pg, ExpressionMethods as _, JoinOnDsl as _, NullableExpressionMethods as _, QueryDsl as _, RunQueryDsl as _,
+    Selectable, SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -84,7 +84,7 @@ impl SubmissionHistoryResolved {
     pub fn by_submission_id(
         conn: &mut DbConnection,
         id: Uuid,
-        authenticated: Authenticated,
+        authenticated: &Authenticated,
     ) -> Result<Vec<SubmissionHistoryResolved>, ApiError> {
         let history_row = submission_history::table
             .left_join(users::table.on(submission_history::reviewer_id.eq(users::id.nullable())))
@@ -105,21 +105,21 @@ impl SubmissionHistoryResolved {
         let base_reviewers = RoleResolved::find_all_base_reviewers(conn)?.base_reviewers;
 
         if !authenticated.has_permission(conn, Permission::SubmissionReviewFull)? {
-            resolved_history.iter_mut().for_each(|h| {
-                h.private_reviewer_notes = None;
-                h.reviewer = None;
-            });
+            for history in &mut resolved_history {
+                history.private_reviewer_notes = None;
+                history.reviewer = None;
+            }
         }
 
         // hide base reviewers
         if !authenticated.has_permission(conn, Permission::ReviewersAudit)? {
-            resolved_history.iter_mut().for_each(|h| {
-                if let Some(ref reviewer) = h.reviewer {
+            for history in &mut resolved_history {
+                if let Some(reviewer) = &history.reviewer {
                     if base_reviewers.contains(&reviewer.id) {
-                        h.reviewer = Some(BaseUser::hidden());
+                        history.reviewer = Some(BaseUser::hidden());
                     }
                 }
-            });
+            }
         }
 
         Ok(resolved_history)

@@ -8,7 +8,7 @@ use crate::aredl::levels::{Level, LevelStatus};
 #[cfg(test)]
 use crate::schema::aredl::{levels, levels_created, pack_levels, position_history};
 #[cfg(test)]
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _};
 #[cfg(test)]
 use uuid::Uuid;
 
@@ -19,7 +19,7 @@ use diesel::sql_query;
 
 #[cfg(test)]
 pub async fn create_test_level(db: &Arc<DbAppState>) -> Uuid {
-    let level_id = rand::random_range(1..=100000000);
+    let level_id = rand::random_range(1..=100_000_000);
     let level_uuid = Uuid::new_v4();
     let publisher = create_test_user(db, None).await.0;
 
@@ -27,7 +27,7 @@ pub async fn create_test_level(db: &Arc<DbAppState>) -> Uuid {
         .values((
             levels::id.eq(level_uuid),
             levels::position.eq(1),
-            levels::name.eq(format!("Test Level {}", level_id)),
+            levels::name.eq(format!("Test Level {level_id}")),
             levels::publisher_id.eq(publisher),
             levels::status.eq(LevelStatus::MainList),
             levels::requires_raw_footage.eq(false),

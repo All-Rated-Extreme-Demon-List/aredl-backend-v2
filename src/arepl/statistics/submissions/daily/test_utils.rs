@@ -1,7 +1,7 @@
 #[cfg(test)]
 use {
     crate::app_data::db::DbAppState,
-    diesel::{sql_query, RunQueryDsl},
+    diesel::{sql_query, RunQueryDsl as _},
     std::sync::Arc,
 };
 

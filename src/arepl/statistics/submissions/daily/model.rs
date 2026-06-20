@@ -11,8 +11,8 @@ use crate::{
 use chrono::NaiveDate;
 use diesel::pg::Pg;
 use diesel::{
-    ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl,
-    SelectableHelper,
+    ExpressionMethods as _, JoinOnDsl as _, NullableExpressionMethods as _, QueryDsl as _,
+    RunQueryDsl as _, SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -55,7 +55,7 @@ pub struct DailyStatsPage {
 }
 
 impl ResolvedDailyStats {
-    pub fn from_stats_and_user(stats: DailyStats, user: Option<BaseUser>) -> Self {
+    pub fn from_stats_and_user(stats: &DailyStats, user: Option<BaseUser>) -> Self {
         Self {
             date: stats.day,
             moderator: user,
@@ -91,7 +91,7 @@ impl DailyStatsPage {
                 .left_join(users::table.on(users::id.nullable().eq(submission_stats::reviewer_id)))
                 .into_boxed::<Pg>();
 
-            if let Some(ref filter) = reviewer_id {
+            if let Some(filter) = &reviewer_id {
                 q = q.filter(submission_stats::reviewer_id.eq(filter));
             } else {
                 q = q.filter(submission_stats::reviewer_id.is_null());
@@ -114,7 +114,7 @@ impl DailyStatsPage {
             Self {
                 data: data
                     .into_iter()
-                    .map(|(stats, user)| ResolvedDailyStats::from_stats_and_user(stats, user))
+                    .map(|(stats, user)| ResolvedDailyStats::from_stats_and_user(&stats, user))
                     .collect(),
             },
         ))
@@ -123,8 +123,8 @@ impl DailyStatsPage {
 
 pub fn stats_mod_leaderboard(
     conn: &mut DbConnection,
-    options: LeaderboardQuery,
-    authenticated: Authenticated,
+    options: &LeaderboardQuery,
+    authenticated: &Authenticated,
 ) -> Result<Vec<ResolvedLeaderboardRow>, ApiError> {
     let mut query = submission_stats::table
         .inner_join(users::table.on(users::id.nullable().eq(submission_stats::reviewer_id)))
@@ -179,7 +179,7 @@ pub fn stats_mod_leaderboard(
             });
 
     let mut leaderboard = acc.into_values().collect::<Vec<_>>();
-    leaderboard.sort_unstable_by(|a, b| b.total.cmp(&a.total));
+    leaderboard.sort_unstable_by_key(|b| std::cmp::Reverse(b.total));
 
     Ok(leaderboard)
 }

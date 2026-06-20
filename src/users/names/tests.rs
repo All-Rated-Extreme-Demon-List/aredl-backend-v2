@@ -30,10 +30,7 @@ async fn list_names() {
     assert_eq!(
         returned_role_ids,
         vec![role_id_1, role_id_2],
-        "Expected role IDs [{}, {}], got {:?}",
-        role_id_1,
-        role_id_2,
-        returned_role_ids
+        "Expected role IDs [{role_id_1}, {role_id_2}], got {returned_role_ids:?}"
     );
 
     for (idx, expected_user_id) in [user_id_1, user_id_2].iter().enumerate() {

@@ -43,8 +43,7 @@ impl Provider for YouTubeProvider {
         for (key, value) in url.query_pairs() {
             match key.as_ref() {
                 "v" if video_id.is_none() => video_id = Some(value.into_owned()),
-                "t" if timestamp.is_none() => timestamp = Some(value.into_owned()),
-                "start" if timestamp.is_none() => timestamp = Some(value.into_owned()),
+                "t" | "start" if timestamp.is_none() => timestamp = Some(value.into_owned()),
                 "list" if list_id.is_none() => list_id = Some(value.into_owned()),
                 _ => {}
             }
@@ -55,15 +54,14 @@ impl Provider for YouTubeProvider {
                 .trim_matches('/')
                 .split('/')
                 .next()
-                .map(|s| s.to_string())
+                .map(str::to_owned)
         } else if path == "/watch" {
             video_id
         } else {
             let p = path.trim_matches('/');
             let mut it = p.split('/');
             match (it.next(), it.next()) {
-                (Some("shorts"), Some(id)) => Some(id.to_string()),
-                (Some("live"), Some(id)) => Some(id.to_string()),
+                (Some("shorts" | "live"), Some(id)) => Some(id.to_owned()),
                 _ => None,
             }
         };
@@ -74,11 +72,11 @@ impl Provider for YouTubeProvider {
         }
 
         let timestamp = timestamp
-            .map(|s| s.trim().to_string())
+            .map(|s| s.trim().to_owned())
             .filter(|s| is_youtube_timestamp(s));
 
         let other_id = list_id
-            .map(|s| s.trim().to_string())
+            .map(|s| s.trim().to_owned())
             .filter(|s| is_ascii_id(s, 1, 256));
 
         Some(ProviderMatch {
@@ -131,7 +129,7 @@ impl Provider for YouTubeProvider {
         let mut headers = HeaderMap::new();
         headers.insert(
             "Authorization",
-            HeaderValue::from_str(&format!("Bearer {}", token))
+            HeaderValue::from_str(&format!("Bearer {token}"))
                 .map_err(|_err| ApiError::InternalServerError("Invalid Youtube access token"))?,
         );
 
@@ -152,15 +150,13 @@ impl Provider for YouTubeProvider {
             .await
             .map_err(|e| ApiError::BadGateway(format!("Failed to parse YouTube response: {e}")))?;
 
-        let items = json
+        let items: &[JsonValue] = json
             .get("items")
             .and_then(|v| v.as_array())
-            .map(|v| v.as_slice())
-            .unwrap_or(&[]);
+            .map_or(&[], Vec::as_slice);
 
-        let first = match items.first() {
-            Some(v) => v,
-            None => return Ok(None),
+        let Some(first) = items.first() else {
+            return Ok(None);
         };
 
         let snippet = first.get("snippet").and_then(|v| v.as_object()).cloned();

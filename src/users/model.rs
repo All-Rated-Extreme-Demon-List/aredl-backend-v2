@@ -16,8 +16,8 @@ use crate::{
 use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::pg::Pg;
 use diesel::{
-    BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension,
-    PgTextExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper,
+    BoolExpressionMethods as _, ExpressionMethods as _, JoinOnDsl as _, OptionalExtension as _,
+    PgTextExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -195,8 +195,8 @@ impl BaseUser {
             id: "00000000-0000-0000-0000-000000000000"
                 .parse()
                 .expect("Constant should not fail"),
-            username: "Hidden user".to_string(),
-            global_name: "Hidden user".to_string(),
+            username: "Hidden user".to_owned(),
+            global_name: "Hidden user".to_owned(),
         }
     }
 
@@ -204,8 +204,8 @@ impl BaseUser {
         if user.ban_level == 3 {
             BaseUser {
                 id: user.id,
-                username: "-".to_string(),
-                global_name: "-".to_string(),
+                username: "-".to_owned(),
+                global_name: "-".to_owned(),
             }
         } else {
             BaseUser {
@@ -223,8 +223,8 @@ impl ExtendedBaseUser {
             id: "00000000-0000-0000-0000-000000000000"
                 .parse()
                 .expect("Constant should not fail"),
-            username: "Hidden user".to_string(),
-            global_name: "Hidden user".to_string(),
+            username: "Hidden user".to_owned(),
+            global_name: "Hidden user".to_owned(),
             country: None,
             discord_id: None,
             discord_avatar: None,
@@ -275,39 +275,36 @@ impl User {
             .first::<Self>(conn)
             .optional()?;
 
-        match existing_user {
-            Some(user) => {
-                let updated_user = diesel::update(users::table.filter(users::id.eq(user.id)))
-                    .set(UserUpdateOnLogin {
-                        username: user_upsert.username.clone(),
-                        discord_id: user_upsert.discord_id.clone(),
-                        discord_avatar: user_upsert.discord_avatar,
-                        discord_banner: user_upsert.discord_banner,
-                        discord_accent_color: user_upsert.discord_accent_color,
-                        last_discord_avatar_update: Some(Utc::now().naive_utc()),
-                    })
-                    .returning(Self::as_select())
-                    .get_result::<Self>(conn)?;
-                Ok(updated_user)
-            }
-            None => {
-                let user = diesel::insert_into(users::table)
-                    .values(&user_upsert)
-                    .returning(Self::as_select())
-                    .get_result::<Self>(conn)?;
-                Ok(user)
-            }
+        if let Some(user) = existing_user {
+            let updated_user = diesel::update(users::table.filter(users::id.eq(user.id)))
+                .set(UserUpdateOnLogin {
+                    username: user_upsert.username.clone(),
+                    discord_id: user_upsert.discord_id.clone(),
+                    discord_avatar: user_upsert.discord_avatar,
+                    discord_banner: user_upsert.discord_banner,
+                    discord_accent_color: user_upsert.discord_accent_color,
+                    last_discord_avatar_update: Some(Utc::now().naive_utc()),
+                })
+                .returning(Self::as_select())
+                .get_result::<Self>(conn)?;
+            Ok(updated_user)
+        } else {
+            let user = diesel::insert_into(users::table)
+                .values(&user_upsert)
+                .returning(Self::as_select())
+                .get_result::<Self>(conn)?;
+            Ok(user)
         }
     }
 
     pub fn find_all<const D: i64>(
         conn: &mut DbConnection,
         page_query: PageQuery<D>,
-        options: UserListQueryOptions,
+        options: &UserListQueryOptions,
     ) -> Result<Paginated<UserPage>, ApiError> {
         let build_query = || {
             let mut q = users::table.into_boxed::<Pg>();
-            if let Some(ref name_like) = options.name_filter {
+            if let Some(name_like) = &options.name_filter {
                 q = q.filter(
                     users::global_name.ilike(name_like).or(users::username
                         .ilike(name_like)
@@ -323,7 +320,7 @@ impl User {
         let total_count: i64 = build_query().count().get_result(conn)?;
         let mut q = build_query();
 
-        if let Some(ref name_like) = options.name_filter {
+        if let Some(name_like) = &options.name_filter {
             q = q.order((
                 users::username.eq(name_like).desc(),
                 users::global_name.eq(name_like).desc(),
@@ -363,10 +360,10 @@ impl User {
     pub fn update(
         conn: &mut DbConnection,
         user_id: Uuid,
-        user: UserUpdate,
+        user: &UserUpdate,
     ) -> Result<Self, ApiError> {
         let updated_user = diesel::update(users::table.filter(users::id.eq(user_id)))
-            .set(&user)
+            .set(user)
             .returning(Self::as_select())
             .get_result::<Self>(conn)?;
         Ok(updated_user)
@@ -374,7 +371,7 @@ impl User {
 
     pub fn ban(
         conn: &mut DbConnection,
-        authenticated: Authenticated,
+        authenticated: &Authenticated,
         user_id: Uuid,
         ban_level: i32,
     ) -> Result<User, ApiError> {
@@ -428,7 +425,7 @@ impl UserResolved {
     pub fn from_uuid(
         conn: &mut DbConnection,
         uuid: Uuid,
-        authenticated: Option<Authenticated>,
+        authenticated: Option<&Authenticated>,
     ) -> Result<Self, ApiError> {
         let user = User::from_uuid(conn, uuid)?;
         Self::from_user(conn, user, authenticated)
@@ -437,7 +434,7 @@ impl UserResolved {
     pub fn from_str(
         conn: &mut DbConnection,
         user_id: &str,
-        authenticated: Option<Authenticated>,
+        authenticated: Option<&Authenticated>,
     ) -> Result<Self, ApiError> {
         let user = User::from_str(conn, user_id)?;
         Self::from_user(conn, user, authenticated)
@@ -446,7 +443,7 @@ impl UserResolved {
     pub fn from_user(
         conn: &mut DbConnection,
         user: User,
-        authenticated: Option<Authenticated>,
+        authenticated: Option<&Authenticated>,
     ) -> Result<Self, ApiError> {
         let clan = clans::table
             .inner_join(clan_members::table.on(clans::id.eq(clan_members::clan_id)))
@@ -468,7 +465,7 @@ impl UserResolved {
         };
 
         if !can_view_hidden_roles {
-            roles.retain(|role| !role.hide)
+            roles.retain(|role| !role.hide);
         }
 
         let user_privilege_level: i32 = roles
@@ -484,11 +481,7 @@ impl UserResolved {
         let scopes = all_permissions
             .into_iter()
             .filter_map(|(permission, privilege_level)| {
-                if user_privilege_level >= privilege_level {
-                    Some(permission)
-                } else {
-                    None
-                }
+                (user_privilege_level >= privilege_level).then_some(permission)
             })
             .collect::<Vec<String>>();
 

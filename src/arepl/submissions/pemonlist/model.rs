@@ -49,7 +49,7 @@ enum PemonlistResponse {
 impl PemonlistPlayer {
     pub fn sync_with_pemonlist(
         conn: &mut DbConnection,
-        authenticated: Authenticated,
+        authenticated: &Authenticated,
     ) -> Result<Vec<Submission>, ApiError> {
         let player_discord_id = users::table
             .filter(users::id.eq(authenticated.user_id))
@@ -64,7 +64,7 @@ impl PemonlistPlayer {
 
         let client = reqwest::blocking::Client::new();
         let base_url = std::env::var("PEMONLIST_API_URL")
-            .unwrap_or_else(|_| "https://pemonlist.com/api/player".to_string());
+            .unwrap_or_else(|_| "https://pemonlist.com/api/player".to_owned());
         let url = format!("{}/{}", base_url.trim_end_matches('/'), player_discord_id);
         let resp = client
             .get(&url)
@@ -73,16 +73,14 @@ impl PemonlistPlayer {
 
         let pemonlist_response: PemonlistResponse = resp.json().map_err(|e| {
             ApiError::BadGateway(format!(
-                "Failed to parse data received from pemonlist: {}",
-                e
+                "Failed to parse data received from pemonlist: {e}"
             ))
         })?;
 
         let pemonlist_data = match pemonlist_response {
             PemonlistResponse::Err(err) if err.error && err.code == "bad_user" => {
                 return Err(ApiError::NotFound(format!(
-                    "Player {} not found on pemonlist",
-                    player_discord_id
+                    "Player {player_discord_id} not found on pemonlist"
                 )));
             }
             PemonlistResponse::Err(err) => {
@@ -214,7 +212,7 @@ impl PemonlistPlayer {
 
         // normalize fraction to milliseconds
         let milliseconds = {
-            let mut millis = millis.to_string();
+            let mut millis = millis.to_owned();
             if millis.len() > 3 {
                 millis.truncate(3);
             } else {
@@ -224,7 +222,7 @@ impl PemonlistPlayer {
             }
             millis
                 .parse::<i64>()
-                .map_err(|e| ApiError::BadGateway(format!("Failed to parse milliseconds: {}", e)))?
+                .map_err(|e| ApiError::BadGateway(format!("Failed to parse milliseconds: {e}")))?
         };
 
         Ok(hours * 3_600_000 + minutes * 60_000 + seconds * 1_000 + milliseconds)

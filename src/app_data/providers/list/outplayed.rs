@@ -36,7 +36,7 @@ impl Provider for OutplayedProvider {
 
         Some(ProviderMatch {
             provider: ProviderId::Outplayed,
-            content_id: content_id.to_string(),
+            content_id: content_id.to_owned(),
             timestamp: None,
             other_id: None,
         })

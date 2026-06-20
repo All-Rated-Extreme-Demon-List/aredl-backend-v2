@@ -10,7 +10,7 @@ use crate::{
 #[cfg(test)]
 use chrono::Utc;
 #[cfg(test)]
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
+use diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _};
 #[cfg(test)]
 use uuid::Uuid;
 
@@ -20,9 +20,10 @@ pub async fn create_test_shift(
     user_id: Uuid,
     should_start_immediately: bool,
 ) -> Uuid {
-    let start_time = match should_start_immediately {
-        true => Utc::now(),
-        false => Utc::now() + chrono::Duration::hours(1),
+    let start_time = if should_start_immediately {
+        Utc::now()
+    } else {
+        Utc::now() + chrono::Duration::hours(1)
     };
 
     diesel::insert_into(shifts::table)

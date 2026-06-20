@@ -9,7 +9,7 @@ use {
         schema::aredl::{submission_history, submissions},
     },
     chrono::{DateTime, Utc},
-    diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper},
+    diesel::{ExpressionMethods as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _},
     std::sync::Arc,
     uuid::Uuid,
 };
@@ -42,11 +42,11 @@ pub async fn insert_history_entry(
         id: Uuid::new_v4(),
         submission_id,
         reviewer_notes: None,
-        video_url: Some("https://video.com".to_string()),
-        raw_url: Some("https://raw.com".to_string()),
+        video_url: Some("https://video.com".to_owned()),
+        raw_url: Some("https://raw.com".to_owned()),
         mobile: Some(false),
         ldm_id: None,
-        mod_menu: Some("Mega Hack v8".to_string()),
+        mod_menu: Some("Mega Hack v8".to_owned()),
         status,
         timestamp: Utc::now(),
         user_notes: None,
@@ -92,7 +92,7 @@ pub fn set_test_submission_reviewer_with_private_notes(
     diesel::update(submissions::table.filter(submissions::id.eq(submission_id)))
         .set((
             submissions::reviewer_id.eq(reviewer_id),
-            submissions::private_reviewer_notes.eq(private_reviewer_notes.map(str::to_string)),
+            submissions::private_reviewer_notes.eq(private_reviewer_notes.map(str::to_owned)),
         ))
         .execute(&mut db.connection().unwrap())
         .expect("Failed to set test aredl submission reviewer metadata");
@@ -134,7 +134,7 @@ pub fn set_test_submission_raw_url_status_and_reviewer(
 ) {
     diesel::update(submissions::table.filter(submissions::id.eq(submission_id)))
         .set((
-            submissions::raw_url.eq(raw_url.map(str::to_string)),
+            submissions::raw_url.eq(raw_url.map(str::to_owned)),
             submissions::status.eq(status),
             submissions::reviewer_id.eq(reviewer_id),
         ))
@@ -149,7 +149,7 @@ pub fn set_test_submission_raw_url(
     raw_url: Option<&str>,
 ) {
     diesel::update(submissions::table.filter(submissions::id.eq(submission_id)))
-        .set(submissions::raw_url.eq(raw_url.map(str::to_string)))
+        .set(submissions::raw_url.eq(raw_url.map(str::to_owned)))
         .execute(&mut db.connection().unwrap())
         .expect("Failed to set test aredl submission raw URL");
 }
@@ -169,7 +169,7 @@ pub fn set_test_submissions_raw_url(
     raw_url: Option<&str>,
 ) {
     diesel::update(submissions::table.filter(submissions::id.eq_any(submission_ids)))
-        .set(submissions::raw_url.eq(raw_url.map(str::to_string)))
+        .set(submissions::raw_url.eq(raw_url.map(str::to_owned)))
         .execute(&mut db.connection().unwrap())
         .expect("Failed to set test aredl submissions raw URL");
 }

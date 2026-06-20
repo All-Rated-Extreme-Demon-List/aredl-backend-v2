@@ -35,7 +35,7 @@ async fn create_merge_request() {
 
     let req = test::TestRequest::post()
         .uri("/users/merge/requests")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&req_data)
         .to_request();
 
@@ -45,12 +45,12 @@ async fn create_merge_request() {
     let body: serde_json::Value = read_body_json(resp).await;
 
     assert_eq!(
-        body["secondary_user"].as_str().unwrap().to_string(),
+        body["secondary_user"].as_str().unwrap().to_owned(),
         user_2_id.to_string(),
         "Secondary users do not match!"
     );
     assert_eq!(
-        body["primary_user"].as_str().unwrap().to_string(),
+        body["primary_user"].as_str().unwrap().to_owned(),
         user_1_id.to_string(),
         "Primary users do not match!"
     );
@@ -81,7 +81,7 @@ async fn accept_merge_request() {
 
     let req = test::TestRequest::post()
         .uri(format!("/users/merge/requests/{merge}/accept").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let res = test::call_service(&app, req).await;
@@ -101,7 +101,7 @@ async fn accept_merge_request() {
 
     let merge_exists = get_test_merge_request_optional(&db, merge).is_some();
 
-    assert!(!merge_exists, "Merge request exists!")
+    assert!(!merge_exists, "Merge request exists!");
 }
 
 #[actix_web::test]
@@ -121,7 +121,7 @@ async fn reject_merge_request() {
 
     let req = test::TestRequest::post()
         .uri(format!("/users/merge/requests/{merge}/reject").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let res = test::call_service(&app, req).await;
@@ -135,7 +135,7 @@ async fn reject_merge_request() {
     assert!(
         body["is_rejected"].as_bool().unwrap(),
         "Request is not marked as rejected!"
-    )
+    );
 }
 
 #[actix_web::test]
@@ -152,7 +152,7 @@ async fn create_merge_request_rejects_self_merge() {
 
     let req = test::TestRequest::post()
         .uri("/users/merge/requests")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&req_data)
         .to_request();
 
@@ -179,7 +179,7 @@ async fn create_merge_request_rejects_unknown_user() {
 
     let req = test::TestRequest::post()
         .uri("/users/merge/requests")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&req_data)
         .to_request();
 
@@ -207,7 +207,7 @@ async fn create_merge_request_rejects_non_placeholder_user() {
 
     let req = test::TestRequest::post()
         .uri("/users/merge/requests")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&req_data)
         .to_request();
 
@@ -237,7 +237,7 @@ async fn create_merge_request_rejects_duplicate_submission() {
 
     let req = test::TestRequest::post()
         .uri("/users/merge/requests")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&req_data)
         .to_request();
 
@@ -264,7 +264,7 @@ async fn list_merge_requests() {
 
     let req = test::TestRequest::get()
         .uri("/users/merge/requests")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -291,7 +291,7 @@ async fn find_merge_request() {
 
     let req = test::TestRequest::get()
         .uri(&format!("/users/merge/requests/{merge}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -318,7 +318,7 @@ async fn list_merge_requests_filter_is_claimed() {
 
     let req = test::TestRequest::get()
         .uri("/users/merge/requests?claimed_filter=true")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -329,7 +329,7 @@ async fn list_merge_requests_filter_is_claimed() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|row| row["id"].as_str().unwrap().to_string())
+        .map(|row| row["id"].as_str().unwrap().to_owned())
         .collect();
     assert!(ids.contains(&claimed_merge.to_string()));
     assert!(!ids.contains(&unclaimed_merge.to_string()));
@@ -353,7 +353,7 @@ async fn list_merge_requests_filter_is_rejected() {
 
     let req = test::TestRequest::get()
         .uri("/users/merge/requests?rejected_filter=true")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -364,7 +364,7 @@ async fn list_merge_requests_filter_is_rejected() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|row| row["id"].as_str().unwrap().to_string())
+        .map(|row| row["id"].as_str().unwrap().to_owned())
         .collect();
     assert!(ids.contains(&rejected_merge.to_string()));
     assert!(!ids.contains(&pending_merge.to_string()));
@@ -386,11 +386,8 @@ async fn list_merge_requests_filter_user() {
     let other_merge = create_test_merge_req(&db, user_3_id, user_4_id).await;
 
     let req = test::TestRequest::get()
-        .uri(&format!(
-            "/users/merge/requests?user_filter={}",
-            user_1_name
-        ))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/users/merge/requests?user_filter={user_1_name}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -401,7 +398,7 @@ async fn list_merge_requests_filter_user() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|row| row["id"].as_str().unwrap().to_string())
+        .map(|row| row["id"].as_str().unwrap().to_owned())
         .collect();
     assert!(ids.contains(&matching_merge.to_string()));
     assert!(!ids.contains(&other_merge.to_string()));
@@ -423,7 +420,7 @@ async fn claim_merge_request() {
 
     let req = test::TestRequest::get()
         .uri("/users/merge/requests/claim")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -438,15 +435,15 @@ async fn claim_merge_request() {
 
 #[actix_web::test]
 async fn claim_merge_request_when_none_exist() {
-    let (app, _db, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (mod_id, _) = create_test_user(&_db, Some(Permission::MergeReview)).await;
+    let (mod_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
     let token =
         create_test_token(mod_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
     let req = test::TestRequest::get()
         .uri("/users/merge/requests/claim")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -472,7 +469,7 @@ async fn unclaim_merge_request() {
 
     let req = test::TestRequest::post()
         .uri(&format!("/users/merge/requests/{merge}/unclaim"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;

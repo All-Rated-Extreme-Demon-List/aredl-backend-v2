@@ -35,7 +35,7 @@ impl Provider for BiliBiliProvider {
 
                 Some(ProviderMatch {
                     provider: ProviderId::BiliBili,
-                    content_id: id.to_string(),
+                    content_id: id.to_owned(),
                     timestamp: None,
                     other_id: None,
                 })

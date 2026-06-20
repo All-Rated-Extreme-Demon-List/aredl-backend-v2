@@ -48,7 +48,7 @@ async fn list_leaderboard() {
         .expect("User not found in leaderboard!");
 
     assert_eq!(
-        user_entry["hardest"]["id"].as_str().unwrap().to_string(),
+        user_entry["hardest"]["id"].as_str().unwrap().to_owned(),
         level_id.to_string(),
         "Hardest does not match this user's hardest (and only) record!"
     );
@@ -61,7 +61,7 @@ async fn list_leaderboard() {
         level_score,
         user_entry["total_points"].as_i64().unwrap(),
         "User's score does not match!"
-    )
+    );
 }
 
 #[actix_web::test]

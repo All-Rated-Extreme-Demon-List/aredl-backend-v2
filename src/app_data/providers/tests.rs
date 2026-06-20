@@ -1,7 +1,7 @@
 #[cfg(test)]
 use {
     crate::{
-        app_data::providers::model::{Provider, ProviderId},
+        app_data::providers::model::{Provider as _, ProviderId},
         auth::oauth::OAuthProvider,
         providers::{
             context::{
@@ -674,7 +674,7 @@ async fn youtube_fetch_metadata_returns_published_at() {
 async fn medal_fetch_metadata_returns_published_at_from_created_ms() {
     let server = MockServer::start_async().await;
 
-    let created_ms: i64 = 1256453853000;
+    let created_ms: i64 = 1_256_453_853_000;
 
     let medal_mock = mock_medal_content_endpoint(&server, "jyEnIYev353GxMXDV", created_ms).await;
 

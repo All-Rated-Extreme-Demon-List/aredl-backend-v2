@@ -43,7 +43,7 @@ async fn find_all_shifts(
         ShiftPage::find_all(
             &mut db.connection()?,
             page_query.into_inner(),
-            options.into_inner(),
+            &options.into_inner(),
         )
     })
     .await??;
@@ -117,7 +117,7 @@ async fn create_shift_now(
                 "You can only create shifts for yourself.",
             ));
         }
-        Shift::create(&mut conn, data, authenticated)
+        Shift::create(&mut conn, &data, &authenticated)
     })
     .await??;
 
@@ -146,9 +146,10 @@ async fn patch_shift(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&body));
-    let updated =
-        web::block(move || Shift::patch(&mut db.connection()?, id.into_inner(), body.into_inner()))
-            .await??;
+    let updated = web::block(move || {
+        Shift::patch(&mut db.connection()?, id.into_inner(), &body.into_inner())
+    })
+    .await??;
     Ok(HttpResponse::Created().json(updated))
 }
 

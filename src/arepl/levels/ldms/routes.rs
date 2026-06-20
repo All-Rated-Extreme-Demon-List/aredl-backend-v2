@@ -44,7 +44,7 @@ async fn find_all(
     let ldms = web::block(move || {
         LevelLDM::find_all(
             &mut db.connection()?,
-            query.into_inner(),
+            &query.into_inner(),
             page_query.into_inner(),
         )
     })
@@ -74,7 +74,7 @@ async fn create(
     let ldms = web::block(move || {
         let conn = &mut db.connection()?;
         let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
-        LevelLDM::create(conn, body.into_inner(), level_id, auth)
+        LevelLDM::create(conn, body.into_inner(), level_id, &auth)
     })
     .await??;
     Ok(HttpResponse::Ok().json(ldms))

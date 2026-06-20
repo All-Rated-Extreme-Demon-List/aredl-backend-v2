@@ -75,7 +75,7 @@ async fn list(
         MergeRequestPage::find_all(
             &mut db.connection()?,
             page_query.into_inner(),
-            options.into_inner(),
+            &options.into_inner(),
         )
     })
     .await??;
@@ -130,7 +130,7 @@ async fn create(
 
         MergeRequest::upsert(
             conn,
-            MergeRequestUpsert {
+            &MergeRequestUpsert {
                 primary_user: authenticated.user_id,
                 secondary_user: options.secondary_user,
             },

@@ -57,7 +57,7 @@ use tracing::Span;
 use tracing_actix_web::{root_span, DefaultRootSpanBuilder, RootSpanBuilder, TracingLogger};
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::EnvFilter;
-use utoipa::OpenApi;
+use utoipa::OpenApi as _;
 use utoipa_rapidoc::RapiDoc;
 
 #[actix_rt::main]
@@ -98,7 +98,7 @@ async fn main() -> Result<(), StartupError> {
 
     let db_app_state = db::init_app_state()?;
 
-    let auth_app_state = auth_data::init_app_state().await?;
+    let auth_app_state = auth_data::init_app_state()?;
 
     let providers_app_state = providers::init_app_state(db_app_state.clone()).await;
 
@@ -176,13 +176,12 @@ async fn main() -> Result<(), StartupError> {
             )
     });
 
-    server = match listenfd.take_tcp_listener(0)? {
-        Some(listener) => server.listen(listener)?,
-        None => {
-            let host = get_secret("HOST")?;
-            let port = get_secret("PORT")?;
-            server.bind(format!("{}:{}", host, port))?
-        }
+    server = if let Some(listener) = listenfd.take_tcp_listener(0)? {
+        server.listen(listener)?
+    } else {
+        let host = get_secret("HOST")?;
+        let port = get_secret("PORT")?;
+        server.bind(format!("{host}:{port}"))?
     };
 
     server.run().await?;
@@ -208,34 +207,31 @@ impl RootSpanBuilder for AppRootSpanBuilder {
 
 pub fn get_secret(var_name: &str) -> Result<String, ConfigError> {
     let value = env::var(var_name).map_err(|_err| ConfigError::MissingSecret {
-        name: var_name.to_string(),
+        name: var_name.to_owned(),
     })?;
 
     if value.starts_with("/run/secrets/") {
         Ok(fs::read_to_string(value.trim())
             .map_err(|source| ConfigError::SecretFileRead {
-                name: var_name.to_string(),
-                path: value.trim().to_string(),
+                name: var_name.to_owned(),
+                path: value.trim().to_owned(),
                 source,
             })?
             .trim()
-            .to_string())
+            .to_owned())
     } else {
         Ok(value)
     }
 }
 
 pub fn get_optional_secret(var_name: &str) -> Option<String> {
-    let value = match env::var(var_name) {
-        Ok(v) => v,
-        Err(_) => {
-            tracing::warn!("Optional .env {} not set", var_name);
-            return None;
-        }
+    let Ok(value) = env::var(var_name) else {
+        tracing::warn!("Optional .env {} not set", var_name);
+        return None;
     };
     if value.starts_with("/run/secrets/") {
         match fs::read_to_string(value.trim()) {
-            Ok(v) => Some(v.trim().to_string()),
+            Ok(v) => Some(v.trim().to_owned()),
             Err(e) => {
                 tracing::warn!("Failed to read secret file for {}: {}", var_name, e);
                 None

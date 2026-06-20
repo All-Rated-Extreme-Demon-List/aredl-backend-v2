@@ -2,7 +2,6 @@ use chrono::{DateTime, Utc};
 use diesel::dsl::now;
 use diesel::pg::Pg;
 use diesel::prelude::*;
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -105,7 +104,7 @@ impl MergeRequestPage {
     pub fn find_all<const D: i64>(
         conn: &mut DbConnection,
         page_query: PageQuery<D>,
-        options: MergeRequestQueryOptions,
+        options: &MergeRequestQueryOptions,
     ) -> Result<Paginated<Self>, ApiError> {
         let users2 = alias!(users as users2);
         let build_filtered = || {
@@ -126,7 +125,7 @@ impl MergeRequestPage {
                 q = q.filter(merge_requests::is_rejected.eq(rejected));
             }
 
-            if let Some(ref user) = options.user_filter {
+            if let Some(user) = &options.user_filter {
                 q = q.filter(
                     merge_requests::primary_user
                         .eq_any(user_filter(user).select(users::id))
@@ -165,7 +164,7 @@ impl MergeRequestPage {
 }
 
 impl MergeRequest {
-    pub fn upsert(conn: &mut DbConnection, request: MergeRequestUpsert) -> Result<Self, ApiError> {
+    pub fn upsert(conn: &mut DbConnection, request: &MergeRequestUpsert) -> Result<Self, ApiError> {
         if request.primary_user == request.secondary_user {
             return Err(ApiError::UnprocessableEntity(
                 "You cannot merge your account with itself.",
@@ -201,14 +200,14 @@ impl MergeRequest {
         }
 
         let changes = (
-            &request,
+            request,
             merge_requests::is_rejected.eq(false),
             merge_requests::is_claimed.eq(false),
             merge_requests::updated_at.eq(now),
         );
 
         let new_request = diesel::insert_into(merge_requests::table)
-            .values(&request)
+            .values(request)
             .on_conflict(merge_requests::primary_user)
             .do_update()
             .set(changes)
@@ -265,7 +264,7 @@ impl MergeRequest {
         Notification::create(
             conn,
             merge_request.primary_user,
-            "Your merge request has been accepted!".to_string(),
+            "Your merge request has been accepted!".to_owned(),
             NotificationType::Success,
         )?;
 
@@ -285,7 +284,7 @@ impl MergeRequest {
         Notification::create(
             conn,
             result.primary_user,
-            "Your merge request has been rejected.".to_string(),
+            "Your merge request has been rejected.".to_owned(),
             NotificationType::Failure,
         )?;
         Ok(result)

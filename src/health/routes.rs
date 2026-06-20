@@ -1,6 +1,6 @@
 use actix_web::web;
 use actix_web::{get, HttpResponse};
-use diesel::RunQueryDsl;
+use diesel::RunQueryDsl as _;
 use std::sync::Arc;
 use utoipa::OpenApi;
 
@@ -21,7 +21,7 @@ async fn healthz(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiErro
         diesel::sql_query("SELECT 1")
             .execute(&mut db.connection()?)
             .map_err(|error| {
-                ApiError::ServiceUnavailable(format!("DB healthcheck failed: {}", error))
+                ApiError::ServiceUnavailable(format!("DB healthcheck failed: {error}"))
             })
     })
     .await;

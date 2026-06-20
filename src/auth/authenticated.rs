@@ -7,9 +7,9 @@ use crate::roles::Role;
 use crate::schema::{clan_members, roles, user_roles};
 use crate::users::User;
 use actix_web::dev::Payload;
-use actix_web::{FromRequest, HttpMessage, HttpRequest};
+use actix_web::{FromRequest, HttpMessage as _, HttpRequest};
 use diesel::{
-    ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
+    ExpressionMethods as _, JoinOnDsl as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use std::future::{ready, Ready};
@@ -47,10 +47,9 @@ impl Authenticated {
         conn: &mut DbConnection,
         permission: Permission,
     ) -> Result<(), ApiError> {
-        if !self.has_permission(conn, permission.clone())? {
+        if !self.has_permission(conn, permission)? {
             return Err(ApiError::Forbidden(format!(
-                "You do not have the required permission ({}) to perform this action",
-                permission
+                "You do not have the required permission ({permission}) to perform this action"
             )));
         }
         Ok(())

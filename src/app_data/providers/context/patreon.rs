@@ -17,17 +17,17 @@ pub async fn new_patreon_context() -> Option<OAuthProviderContext> {
     };
 
     if config.scopes.is_empty() {
-        config.scopes.push("identity".to_string());
+        config.scopes.push("identity".to_owned());
     }
     config
         .return_path
-        .get_or_insert("/auth/patreon/callback".to_string());
+        .get_or_insert("/auth/patreon/callback".to_owned());
     config.use_pkce.get_or_insert(false);
 
     match OAuthProviderContext::new(
         OAuthProvider::Patreon,
         config,
-        "https://www.patreon.com/api".to_string(),
+        "https://www.patreon.com/api".to_owned(),
         Some(BackendTokenState::new(BackendGrantType::RefreshToken)),
     ) {
         Ok(context) => Some(context),

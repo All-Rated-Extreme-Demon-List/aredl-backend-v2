@@ -96,7 +96,7 @@ async fn get_clan_includes_created_levels_and_matching_creators() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|creator| creator["id"].as_str().unwrap().to_string())
+        .map(|creator| creator["id"].as_str().unwrap().to_owned())
         .collect::<Vec<_>>();
     let mut expected_creator_ids = vec![creator_a.to_string(), creator_b.to_string()];
     let mut actual_creator_ids = shared_creator_ids;
@@ -235,7 +235,7 @@ fn find_member_points(body: &serde_json::Value, user_id: Uuid) -> &serde_json::V
 
 fn assert_float_eq(actual: f64, expected: f64) {
     assert!(
-        (actual - expected).abs() < 0.000001,
+        (actual - expected).abs() < 0.000_001,
         "expected {expected}, got {actual}"
     );
 }

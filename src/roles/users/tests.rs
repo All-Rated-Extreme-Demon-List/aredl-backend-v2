@@ -1,3 +1,4 @@
+use actix_http::StatusCode;
 #[cfg(test)]
 use {
     crate::{
@@ -10,7 +11,6 @@ use {
     actix_web::test::{self, read_body_json},
     uuid::Uuid,
 };
-use {actix_http::StatusCode};
 
 #[actix_web::test]
 async fn add_role_users() {
@@ -22,8 +22,8 @@ async fn add_role_users() {
     let (u2, _) = create_test_user(&db, None).await;
 
     let req = test::TestRequest::patch()
-        .uri(&format!("/roles/{}/users", role_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/roles/{role_id}/users"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(vec![u1, u2])
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -44,8 +44,8 @@ async fn set_role_users() {
     let (u2, _) = create_test_user(&db, None).await;
 
     let req = test::TestRequest::post()
-        .uri(&format!("/roles/{}/users", role_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/roles/{role_id}/users"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(vec![u2])
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -67,8 +67,8 @@ async fn delete_role_users() {
     add_user_to_role(&db, role_id, u2).await;
 
     let req = test::TestRequest::delete()
-        .uri(&format!("/roles/{}/users", role_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/roles/{role_id}/users"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(vec![u1])
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -91,8 +91,8 @@ async fn add_role_users_fails_when_target_role_has_same_privilege_as_user() {
     let (u1, _) = create_test_user(&db, None).await;
 
     let req = test::TestRequest::patch()
-        .uri(&format!("/roles/{}/users", role_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/roles/{role_id}/users"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(vec![u1])
         .to_request();
 
@@ -118,8 +118,8 @@ async fn set_role_users_fails_when_target_role_has_same_privilege_as_user() {
     let (u1, _) = create_test_user(&db, None).await;
 
     let req = test::TestRequest::post()
-        .uri(&format!("/roles/{}/users", role_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/roles/{role_id}/users"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(vec![u1])
         .to_request();
 
@@ -145,8 +145,8 @@ async fn delete_role_users_fails_when_target_role_has_same_privilege_as_user() {
     let (u1, _) = create_test_user(&db, None).await;
 
     let req = test::TestRequest::delete()
-        .uri(&format!("/roles/{}/users", role_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/roles/{role_id}/users"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(vec![u1])
         .to_request();
 

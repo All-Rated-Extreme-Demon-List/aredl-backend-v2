@@ -7,8 +7,8 @@ use crate::shifts::Shift;
 use crate::shifts::ShiftStatus;
 
 use chrono::Utc;
-use diesel::query_dsl::methods::FilterDsl;
-use diesel::{ExpressionMethods, RunQueryDsl};
+use diesel::query_dsl::methods::FilterDsl as _;
+use diesel::{ExpressionMethods as _, RunQueryDsl as _};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast;

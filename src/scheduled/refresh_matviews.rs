@@ -4,7 +4,7 @@ use crate::scheduled::{sleep_until_next, startup_schedule};
 use crate::schema::matview_refresh_log;
 use chrono::Utc;
 use diesel::upsert::excluded;
-use diesel::{ExpressionMethods, RunQueryDsl};
+use diesel::{ExpressionMethods as _, RunQueryDsl as _};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::task;
@@ -39,18 +39,18 @@ pub async fn start_matviews_refresher(db: Arc<DbAppState>) -> Result<(), Startup
 
             for &schema in &schemas {
                 for &view in &views {
-                    let full_name = format!("{}.{}", schema, view);
-                    let sql = format!("REFRESH MATERIALIZED VIEW {}", full_name);
+                    let full_name = format!("{schema}.{view}");
+                    let sql = format!("REFRESH MATERIALIZED VIEW {full_name}");
                     match db.connection().and_then(|mut conn| {
                         diesel::sql_query(&sql)
                             .execute(&mut conn)
                             .map_err(ApiError::from)
                     }) {
                         Ok(_) => {
-                            tracing::info!("Refreshed {}", full_name)
+                            tracing::info!("Refreshed {}", full_name);
                         }
                         Err(e) => {
-                            tracing::error!("Failed to refresh {}: {}", full_name, e)
+                            tracing::error!("Failed to refresh {}: {}", full_name, e);
                         }
                     }
 

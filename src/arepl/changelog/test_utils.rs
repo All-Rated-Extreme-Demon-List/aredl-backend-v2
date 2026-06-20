@@ -6,7 +6,7 @@ use crate::app_data::db::DbAppState;
 use crate::arepl::levels::LevelStatus;
 use crate::schema::arepl::position_history;
 use chrono::Utc;
-use diesel::{ExpressionMethods, RunQueryDsl};
+use diesel::{ExpressionMethods as _, RunQueryDsl as _};
 use uuid::Uuid;
 
 #[cfg(test)]

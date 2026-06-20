@@ -24,7 +24,7 @@ async fn create_pack() {
     });
     let req = test::TestRequest::post()
         .uri("/aredl/packs")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&pack_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -35,7 +35,7 @@ async fn create_pack() {
         pack_data["name"].as_str().unwrap(),
         body["name"].as_str().unwrap(),
         "Names do not match!"
-    )
+    );
 }
 
 #[actix_web::test]
@@ -49,8 +49,8 @@ async fn update_pack() {
         "name": "Updated Pack Name"
     });
     let req = test::TestRequest::patch()
-        .uri(&format!("/aredl/packs/{}", pack_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/aredl/packs/{pack_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&update_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -61,7 +61,7 @@ async fn update_pack() {
         update_data["name"].as_str().unwrap(),
         body["name"].as_str().unwrap(),
         "Names do not match!"
-    )
+    );
 }
 
 #[actix_web::test]
@@ -72,8 +72,8 @@ async fn remove_pack() {
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let pack_id = create_test_pack(&db).await;
     let req = test::TestRequest::delete()
-        .uri(&format!("/aredl/packs/{}", pack_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/aredl/packs/{pack_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -91,8 +91,8 @@ async fn add_level_to_pack() {
     let level_data = json!([level]);
 
     let req = test::TestRequest::patch()
-        .uri(&format!("/aredl/packs/{}/levels", pack_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/aredl/packs/{pack_id}/levels"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&level_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -101,9 +101,8 @@ async fn add_level_to_pack() {
 
     let added_level = body[0].as_object().unwrap()["id"]
         .as_str()
-        .unwrap()
-        .to_string();
-    assert_eq!(added_level, level.to_string())
+        .unwrap().to_owned();
+    assert_eq!(added_level, level.to_string());
 }
 
 #[actix_web::test]
@@ -118,8 +117,8 @@ async fn set_pack_levels() {
     let level_data = json!([level]);
 
     let req = test::TestRequest::post()
-        .uri(&format!("/aredl/packs/{}/levels", pack_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/aredl/packs/{pack_id}/levels"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&level_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -128,9 +127,8 @@ async fn set_pack_levels() {
 
     let added_level = body[0].as_object().unwrap()["id"]
         .as_str()
-        .unwrap()
-        .to_string();
-    assert_eq!(added_level, level.to_string())
+        .unwrap().to_owned();
+    assert_eq!(added_level, level.to_string());
 }
 
 #[actix_web::test]
@@ -145,13 +143,13 @@ async fn remove_level_from_pack() {
     let level_data = json!([level]);
 
     let req = test::TestRequest::delete()
-        .uri(&format!("/aredl/packs/{}/levels", pack_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/aredl/packs/{pack_id}/levels"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&level_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let body: serde_json::Value = read_body_json(resp).await;
 
-    assert_eq!(body.as_array().unwrap().len(), 0)
+    assert_eq!(body.as_array().unwrap().len(), 0);
 }

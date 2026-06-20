@@ -1,10 +1,13 @@
 use crate::error_handler::{ApiError, StartupError};
 use crate::get_secret;
+#[cfg(test)]
+use crate::schema::permissions;
 use diesel::r2d2::ConnectionManager;
 use diesel::{r2d2, PgConnection};
-use diesel_migrations::{EmbeddedMigrations, MigrationHarness};
+#[cfg(test)]
+use diesel::{Connection as _, ExpressionMethods as _, RunQueryDsl as _};
+use diesel_migrations::{EmbeddedMigrations, MigrationHarness as _};
 use std::sync::Arc;
-
 #[cfg(test)]
 use std::sync::Once;
 
@@ -19,9 +22,9 @@ pub struct DbAppState {
 
 impl DbAppState {
     pub fn connection(&self) -> Result<DbConnection, ApiError> {
-        self.pool.get().map_err(|e| {
-            ApiError::InternalServerError(format!("Failed to get db connection: {}", e))
-        })
+        self.pool
+            .get()
+            .map_err(|e| ApiError::InternalServerError(format!("Failed to get db connection: {e}")))
     }
 
     pub fn run_pending_migrations(&self) -> Result<(), StartupError> {
@@ -56,10 +59,6 @@ static INIT_DB: Once = Once::new();
 #[cfg(test)]
 fn init_test_db_schema_and_seed() {
     INIT_DB.call_once(|| {
-        use diesel::{Connection, RunQueryDsl};
-
-        use crate::schema::permissions;
-
         let test_db_url =
             std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL must be set");
 
@@ -100,8 +99,6 @@ fn init_test_db_schema_and_seed() {
                 permissions_data
                     .iter()
                     .map(|(permission, privilege_level)| {
-                        use diesel::ExpressionMethods;
-
                         (
                             permissions::permission.eq(*permission),
                             permissions::privilege_level.eq(*privilege_level),

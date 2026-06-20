@@ -1,4 +1,6 @@
 #[cfg(test)]
+use std::iter::repeat_with;
+#[cfg(test)]
 use std::sync::Arc;
 
 #[cfg(test)]
@@ -11,14 +13,14 @@ use crate::{
 };
 use diesel::result::{DatabaseErrorKind, Error};
 #[cfg(test)]
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _};
 #[cfg(test)]
 use uuid::Uuid;
 
 #[cfg(test)]
 fn generate_random_tag() -> String {
-    (0..5)
-        .map(|_| rand::random_range(b'A'..=b'Z') as char)
+    repeat_with(|| rand::random_range(b'A'..=b'Z') as char)
+        .take(5)
         .collect()
 }
 
@@ -33,10 +35,8 @@ pub async fn create_test_clan(db: &Arc<DbAppState>) -> Uuid {
             .get_result(conn)
         {
             Ok(id) => return id,
-            Err(Error::DatabaseError(DatabaseErrorKind::UniqueViolation, _)) => {
-                continue;
-            }
-            Err(e) => panic!("Failed to create clan: {:?}", e),
+            Err(Error::DatabaseError(DatabaseErrorKind::UniqueViolation, _)) => {}
+            Err(e) => panic!("Failed to create clan: {e:?}"),
         }
     }
 }

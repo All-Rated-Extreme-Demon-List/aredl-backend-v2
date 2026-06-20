@@ -5,7 +5,7 @@ use {
         schema::notifications,
         users::me::notifications::{Notification, NotificationType},
     },
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
+    diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _},
     std::sync::Arc,
     uuid::Uuid,
 };
@@ -20,7 +20,7 @@ pub fn create_test_notification(
     Notification::create(
         &mut db.connection().unwrap(),
         user_id,
-        message.to_string(),
+        message.to_owned(),
         notification_type,
     )
     .expect("Failed to create test notification");

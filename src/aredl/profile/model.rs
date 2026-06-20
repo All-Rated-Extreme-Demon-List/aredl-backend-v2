@@ -17,7 +17,7 @@ use crate::users::badges::UserBadge;
 use crate::users::User;
 use chrono::{DateTime, Utc};
 use diesel::{
-    ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
+    ExpressionMethods as _, JoinOnDsl as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -133,10 +133,9 @@ impl ProfileResolved {
             .select(Role::as_select())
             .load::<Role>(conn)?;
 
-        if !authenticated
-            .map(|auth| auth.has_permission(conn, Permission::RoleManage))
-            .unwrap_or(Ok(false))?
-        {
+        if !authenticated.map_or(Ok(false), |auth| {
+            auth.has_permission(conn, Permission::RoleManage)
+        })? {
             roles.retain(|role| !role.hide);
         }
 

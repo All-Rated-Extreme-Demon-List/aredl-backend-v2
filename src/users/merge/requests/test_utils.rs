@@ -6,7 +6,10 @@ use crate::{
     app_data::db::DbAppState, schema::merge_requests, users::merge::requests::MergeRequest,
 };
 #[cfg(test)]
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::{
+    ExpressionMethods as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _,
+    SelectableHelper as _,
+};
 #[cfg(test)]
 use uuid::Uuid;
 

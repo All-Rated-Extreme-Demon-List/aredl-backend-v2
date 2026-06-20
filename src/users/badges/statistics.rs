@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use diesel::{
-    BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl,
+    BoolExpressionMethods as _, ExpressionMethods as _, JoinOnDsl as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _,
 };
 use uuid::Uuid;
 
@@ -503,7 +503,7 @@ impl UserListStatistics {
                 .filter(aredl::bounties::bounty_type.eq(bounty_type))
                 .count()
                 .get_result::<i64>(conn)?;
-            counts.insert(key.to_string(), count);
+            counts.insert(key.to_owned(), count);
         }
         Ok(counts)
     }
@@ -528,7 +528,7 @@ impl UserListStatistics {
                 .filter(arepl::bounties::bounty_type.eq(bounty_type))
                 .count()
                 .get_result::<i64>(conn)?;
-            counts.insert(key.to_string(), count);
+            counts.insert(key.to_owned(), count);
         }
         Ok(counts)
     }

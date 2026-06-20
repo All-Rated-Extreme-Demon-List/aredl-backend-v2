@@ -8,7 +8,7 @@ use crate::schema::arepl;
 use chrono::Utc;
 use diesel::dsl::exists;
 use diesel::{
-    select, BoolExpressionMethods, Connection, ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl,
+    select, BoolExpressionMethods as _, Connection as _, ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _,
 };
 use serde::Deserialize;
 use std::sync::Arc;
@@ -121,33 +121,32 @@ async fn aredl_update_gddl_data(
     level_id: i32,
     two_player: bool,
 ) -> Result<(), ApiError> {
-    let url = format!("https://gdladder.com/api/level/{}", level_id);
+    let url = format!("https://gdladder.com/api/level/{level_id}");
 
     let client = reqwest::Client::builder()
         .user_agent("AredlBackend/2.0 (+https://api.aredl.net)")
         .build()
         .map_err(|e| {
-            ApiError::InternalServerError(format!("Failed to build HTTP client: {:?}", e).as_str())
+            ApiError::InternalServerError(format!("Failed to build HTTP client: {e:?}").as_str())
         })?;
 
     let response = client
         .get(&url)
         .send()
         .await
-        .map_err(|e| ApiError::BadGateway(format!("Request failed: {:?}", e)))?
+        .map_err(|e| ApiError::BadGateway(format!("Request failed: {e:?}")))?
         .error_for_status()
-        .map_err(|e| ApiError::BadGateway(format!("HTTP error: {:?}", e)))?;
+        .map_err(|e| ApiError::BadGateway(format!("HTTP error: {e:?}")))?;
 
     let data: GDDLResponse = response
         .json()
         .await
-        .map_err(|e| ApiError::BadGateway(format!("Failed to request gddl: {:?}", e)))?;
+        .map_err(|e| ApiError::BadGateway(format!("Failed to request gddl: {e:?}")))?;
 
     let rating = match (two_player, data.two_player_rating, data.rating) {
         (true, Some(two_player_rating), _) => Some(two_player_rating),
-        (true, None, _) => data.default_rating,
         (false, _, Some(rating)) => Some(rating),
-        (false, _, None) => data.default_rating,
+        (_, _, _) => data.default_rating,
     };
 
     let conn = &mut db.connection()?;
@@ -292,8 +291,7 @@ async fn read_spreadsheet(
     range: &str,
 ) -> Result<SheetValues, ApiError> {
     let url = format!(
-        "https://sheets.googleapis.com/v4/spreadsheets/{}/values/{}",
-        spreadsheet_id, range
+        "https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}/values/{range}"
     );
     let response = reqwest::Client::new()
         .get(&url)
@@ -301,14 +299,14 @@ async fn read_spreadsheet(
         .send()
         .await
         .map_err(|e| {
-            ApiError::BadGateway(format!("Failed to request spreadsheet: {}", e).as_str())
+            ApiError::BadGateway(format!("Failed to request spreadsheet: {e}").as_str())
         })?;
     if !response.status().is_success() {
         return Err(ApiError::BadGateway("Failed to request spreadsheet"));
     }
 
     let sheet_values: SheetValues = response.json().await.map_err(|e| {
-        ApiError::BadGateway(format!("Failed to request spreadsheet: {}", e).as_str())
+        ApiError::BadGateway(format!("Failed to request spreadsheet: {e}").as_str())
     })?;
 
     Ok(sheet_values)

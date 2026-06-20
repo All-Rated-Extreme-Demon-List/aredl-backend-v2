@@ -45,7 +45,7 @@ async fn create(
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&role));
     let role =
-        web::block(move || Role::create(&mut db.connection()?, authenticated, role.into_inner()))
+        web::block(move || Role::create(&mut db.connection()?, &authenticated, role.into_inner()))
             .await??;
     Ok(HttpResponse::Ok().json(role))
 }
@@ -79,7 +79,7 @@ async fn update(
     let role = web::block(move || {
         Role::update(
             &mut db.connection()?,
-            authenticated,
+            &authenticated,
             id.into_inner(),
             role.into_inner(),
         )
@@ -111,7 +111,7 @@ async fn delete(
     id: web::Path<i32>,
 ) -> Result<HttpResponse, ApiError> {
     let role =
-        web::block(move || Role::delete(&mut db.connection()?, authenticated, id.into_inner()))
+        web::block(move || Role::delete(&mut db.connection()?, &authenticated, id.into_inner()))
             .await??;
     Ok(HttpResponse::Ok().json(role))
 }

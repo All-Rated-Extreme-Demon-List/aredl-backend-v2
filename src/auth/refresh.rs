@@ -5,7 +5,7 @@ use crate::auth::token::{self, check_token_valid};
 use crate::error_handler::ApiError;
 use actix_http::header;
 use actix_web::{get, web, HttpRequest, HttpResponse};
-use chrono::{DateTime, Duration, TimeZone, Utc};
+use chrono::{DateTime, Duration, TimeZone as _, Utc};
 use serde::Serialize;
 use std::sync::Arc;
 use utoipa::{OpenApi, ToSchema};
@@ -67,7 +67,7 @@ async fn refresh_auth(
     let user_id = decoded_user_claims.user_id;
 
     let (access_token, access_expires) = token::create_token(
-        UserClaims {
+        &UserClaims {
             user_id,
             is_api_key: false,
         },
@@ -85,13 +85,13 @@ async fn refresh_auth(
 
     let now = Utc::now();
     let refresh_exp = Utc
-        .timestamp_opt(decoded_token_claims.exp as i64, 0)
+        .timestamp_opt(decoded_token_claims.exp, 0)
         .single()
         .ok_or_else(|| ApiError::InternalServerError("Failed to parse expiration timestamp"))?;
 
     if refresh_exp - now < Duration::days(2) {
         let (refresh_token, refresh_expires) = token::create_token(
-            UserClaims {
+            &UserClaims {
                 user_id,
                 is_api_key: false,
             },

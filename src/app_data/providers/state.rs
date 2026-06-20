@@ -23,7 +23,7 @@ use crate::{
 use std::sync::Arc;
 
 pub struct ProvidersAppState {
-    registry: ProviderRegistry,
+    pub registry: ProviderRegistry,
     pub context: ProviderContext,
 }
 
@@ -39,11 +39,11 @@ impl ProvidersAppState {
 
     pub fn validate_is_url(&self, url: &str) -> Result<Url, ApiError> {
         let input = url.trim();
-        if input.chars().any(|char| char.is_whitespace()) {
+        if input.chars().any(char::is_whitespace) {
             return Err(ApiError::BadRequest("Malformed URL"));
         }
         let url = Url::parse(input)
-            .map_err(|error| ApiError::BadRequest(format!("Malformed URL: {}", error)))?;
+            .map_err(|error| ApiError::BadRequest(format!("Malformed URL: {error}")))?;
         Ok(url)
     }
 
@@ -70,7 +70,7 @@ impl ProvidersAppState {
 
         match self.parse_url(url) {
             Ok(matched) => Ok(matched.normalized_url),
-            Err(_) => Ok(url.to_string()),
+            Err(_) => Ok(url.to_owned()),
         }
     }
 

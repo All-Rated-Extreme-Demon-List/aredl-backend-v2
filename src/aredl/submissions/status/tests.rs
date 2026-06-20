@@ -24,7 +24,7 @@ async fn enable_submissions() {
 
     let req = test::TestRequest::post()
         .uri("/aredl/submissions/status/enable")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -33,7 +33,7 @@ async fn enable_submissions() {
     let status = SubmissionsEnabled::is_enabled(&mut db.connection().unwrap())
         .expect("Failed to get submission status");
 
-    assert!(status)
+    assert!(status);
 }
 
 #[actix_web::test]
@@ -45,7 +45,7 @@ async fn submission_status_routes_reject_base_reviewer_without_status_manage() {
 
     let req = test::TestRequest::post()
         .uri("/aredl/submissions/status/enable")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
 
@@ -67,7 +67,7 @@ async fn disable_submissions() {
 
     let req = test::TestRequest::post()
         .uri("/aredl/submissions/status/disable")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -90,7 +90,7 @@ async fn disable_submissions() {
     let req = test::TestRequest::post()
         .uri("/aredl/submissions/")
         .set_json(data)
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -115,7 +115,7 @@ async fn get_submission_status() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/submissions/status/")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -129,7 +129,7 @@ async fn get_submission_status() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/submissions/status/")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -152,7 +152,7 @@ async fn get_submission_status_full() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/submissions/status/full")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -178,7 +178,7 @@ async fn get_submission_status_history() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/submissions/status/history")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -191,5 +191,5 @@ async fn get_submission_status_history() {
         .as_array()
         .unwrap()
         .iter()
-        .all(|s| s["moderator"]["id"] == user_id.to_string()))
+        .all(|s| s["moderator"]["id"] == user_id.to_string()));
 }

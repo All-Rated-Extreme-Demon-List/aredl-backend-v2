@@ -59,7 +59,7 @@ async fn create_new_recurring_shift(
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&body));
     let shift =
-        web::block(move || RecurringShift::create(&mut db.connection()?, body.into_inner()))
+        web::block(move || RecurringShift::create(&mut db.connection()?, &body.into_inner()))
             .await??;
     Ok(HttpResponse::Ok().json(shift))
 }
@@ -87,7 +87,7 @@ async fn patch_recurring_shift(
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&body));
     let updated = web::block(move || {
-        RecurringShift::patch(&mut db.connection()?, id.into_inner(), body.into_inner())
+        RecurringShift::patch(&mut db.connection()?, id.into_inner(), &body.into_inner())
     })
     .await??;
     Ok(HttpResponse::Created().json(updated))

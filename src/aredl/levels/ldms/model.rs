@@ -12,8 +12,8 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use diesel::{
-    pg::Pg, ExpressionMethods, JoinOnDsl, PgTextExpressionMethods, QueryDsl, RunQueryDsl,
-    Selectable, SelectableHelper,
+    pg::Pg, ExpressionMethods as _, JoinOnDsl as _, PgTextExpressionMethods as _, QueryDsl as _, RunQueryDsl as _,
+    Selectable, SelectableHelper as _,
 };
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
@@ -120,7 +120,7 @@ pub struct LevelLDMQueryOptions {
 impl LevelLDM {
     pub fn find_all<const D: i64>(
         conn: &mut DbConnection,
-        filters: LevelLDMQueryOptions,
+        filters: &LevelLDMQueryOptions,
         page_query: PageQuery<D>,
     ) -> Result<Paginated<LevelLDMResolvedPage>, ApiError> {
         let build_filtered = || -> Result<_, ApiError> {
@@ -188,7 +188,7 @@ impl LevelLDM {
         conn: &mut DbConnection,
         body: LevelLDMBody,
         level_id: Uuid,
-        auth: Authenticated,
+        auth: &Authenticated,
     ) -> Result<LevelLDM, ApiError> {
         let data = LevelLDMInsert {
             level_id,

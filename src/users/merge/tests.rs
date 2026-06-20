@@ -42,7 +42,7 @@ async fn direct_merge() {
 
     let req = test::TestRequest::post()
         .uri("/users/merge/")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&merge_data)
         .to_request();
 
@@ -76,7 +76,7 @@ async fn list_merge_logs() {
 
     let req = test::TestRequest::get()
         .uri("/users/merge/logs")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -122,7 +122,7 @@ async fn direct_merge_secondary_accepted_beats_primary_pending_preserves_history
 
     let req = test::TestRequest::post()
         .uri("/users/merge/")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&merge_data)
         .to_request();
 
@@ -181,7 +181,7 @@ async fn direct_merge_both_accepted_primary_kept_history_preserved() {
 
     let req = test::TestRequest::post()
         .uri("/users/merge/")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&merge_data)
         .to_request();
 

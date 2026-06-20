@@ -2,9 +2,9 @@ use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::users;
 use crate::users::User;
-use chrono::{DateTime, Duration, TimeZone, Utc};
+use chrono::{DateTime, Duration, TimeZone as _, Utc};
 use diesel::{
-    result::Error as DieselError, ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper,
+    result::Error as DieselError, ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
 };
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
@@ -25,7 +25,7 @@ pub struct TokenClaims {
 }
 
 pub fn create_token(
-    user_claims: UserClaims,
+    user_claims: &UserClaims,
     encoding_key: &EncodingKey,
     expires_in: Duration,
     token_type: &str,
@@ -34,14 +34,14 @@ pub fn create_token(
     let iat = now.timestamp();
     let expire_datetime = now + expires_in;
     let exp = expire_datetime.timestamp();
-    let user_claims_serialized = serde_json::to_string(&user_claims)
+    let user_claims_serialized = serde_json::to_string(user_claims)
         .map_err(|_err| ApiError::InternalServerError("Failed to serialize user claims!"))?;
 
     let claims = TokenClaims {
         sub: user_claims_serialized,
         exp,
         iat,
-        token_type: token_type.to_string(),
+        token_type: token_type.to_owned(),
     };
 
     let token = encode(&Header::default(), &claims, encoding_key)
@@ -59,7 +59,7 @@ pub fn decode_token<T: Into<String>>(
 
     let decoded =
         decode::<TokenClaims>(&token_str, decoding_key, &Validation::new(Algorithm::HS256))
-            .map_err(|e| ApiError::Unauthorized(format!("Invalid token! {}", e).as_str()))?;
+            .map_err(|e| ApiError::Unauthorized(format!("Invalid token! {e}").as_str()))?;
 
     if !expected_types.is_empty() && !expected_types.contains(&decoded.claims.token_type.as_str()) {
         return Err(ApiError::Unauthorized("Invalid token type"));
@@ -70,7 +70,7 @@ pub fn decode_token<T: Into<String>>(
 
 pub fn decode_user_claims(token_claims: &TokenClaims) -> Result<UserClaims, ApiError> {
     serde_json::from_str(&token_claims.sub).map_err(|e| {
-        ApiError::Unauthorized(format!("Failed to decode user claims! {}", e).as_str())
+        ApiError::Unauthorized(format!("Failed to decode user claims! {e}").as_str())
     })
 }
 
@@ -118,7 +118,7 @@ pub fn create_test_token(
     jwt_encoding_key: &EncodingKey,
 ) -> Result<String, ApiError> {
     let (token, _expires) = create_token(
-        UserClaims {
+        &UserClaims {
             user_id,
             is_api_key: false,
         },

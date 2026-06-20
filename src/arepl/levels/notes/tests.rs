@@ -1,3 +1,4 @@
+use actix_http::StatusCode;
 #[cfg(test)]
 use {
     crate::{
@@ -11,7 +12,6 @@ use {
     actix_web::test::{self, read_body_json},
     serde_json::json,
 };
-use {actix_http::StatusCode};
 
 #[actix_web::test]
 async fn create_note() {
@@ -29,8 +29,8 @@ async fn create_note() {
         "timestamp": null,
     });
     let req = test::TestRequest::post()
-        .uri(format!("/arepl/levels/notes/{}", level_id).as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(format!("/arepl/levels/notes/{level_id}").as_str())
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&note_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -64,8 +64,8 @@ async fn update_note() {
         "note_type": "NerfDate"
     });
     let req = test::TestRequest::patch()
-        .uri(format!("/arepl/levels/notes/{}", note_id).as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(format!("/arepl/levels/notes/{note_id}").as_str())
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&note_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -89,8 +89,8 @@ async fn delete_note() {
     let note_id = create_test_note(&db, level_id, user_id).await;
 
     let req = test::TestRequest::delete()
-        .uri(format!("/arepl/levels/notes/{}", note_id).as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(format!("/arepl/levels/notes/{note_id}").as_str())
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -110,8 +110,8 @@ async fn list_notes() {
     create_test_note(&db, level_id, user_id).await;
 
     let req = test::TestRequest::get()
-        .uri(format!("/arepl/levels/notes?level_id={}", level_id).as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(format!("/arepl/levels/notes?level_id={level_id}").as_str())
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -142,8 +142,8 @@ async fn notes_auth() {
         "timestamp": null
     });
     let req = test::TestRequest::post()
-        .uri(format!("/arepl/levels/notes/{}", level_id).as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(format!("/arepl/levels/notes/{level_id}").as_str())
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&note_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -172,8 +172,8 @@ async fn reviewer_notes_are_private() {
         "timestamp": null
     });
     let create_req = test::TestRequest::post()
-        .uri(format!("/arepl/levels/notes/{}", level_id).as_str())
-        .insert_header(("Authorization", format!("Bearer {}", reviewer_token)))
+        .uri(format!("/arepl/levels/notes/{level_id}").as_str())
+        .insert_header(("Authorization", format!("Bearer {reviewer_token}")))
         .set_json(&reviewer_note_data)
         .to_request();
     let create_resp = test::call_service(&app, create_req).await;
@@ -189,8 +189,8 @@ async fn reviewer_notes_are_private() {
         .expect("Failed to generate token");
 
     let list_req = test::TestRequest::get()
-        .uri(format!("/arepl/levels/notes?level_id={}", level_id).as_str())
-        .insert_header(("Authorization", format!("Bearer {}", normal_token)))
+        .uri(format!("/arepl/levels/notes?level_id={level_id}").as_str())
+        .insert_header(("Authorization", format!("Bearer {normal_token}")))
         .to_request();
     let list_resp = test::call_service(&app, list_req).await;
     assert!(
@@ -204,7 +204,7 @@ async fn reviewer_notes_are_private() {
     assert!(data.iter().all(|x| x["note_type"] != "ReviewerNotes"));
 
     let list_req_unauth = test::TestRequest::get()
-        .uri(format!("/aredl/levels/notes?level_id={}", level_id).as_str())
+        .uri(format!("/aredl/levels/notes?level_id={level_id}").as_str())
         .to_request();
 
     let list_resp_unauth = test::call_service(&app, list_req_unauth).await;
@@ -221,8 +221,8 @@ async fn reviewer_notes_are_private() {
 
     // reviewer should see ReviewerNotes
     let reviewer_list_req = test::TestRequest::get()
-        .uri(format!("/arepl/levels/notes?level_id={}", level_id).as_str())
-        .insert_header(("Authorization", format!("Bearer {}", reviewer_token)))
+        .uri(format!("/arepl/levels/notes?level_id={level_id}").as_str())
+        .insert_header(("Authorization", format!("Bearer {reviewer_token}")))
         .to_request();
     let reviewer_list_resp = test::call_service(&app, reviewer_list_req).await;
     assert!(

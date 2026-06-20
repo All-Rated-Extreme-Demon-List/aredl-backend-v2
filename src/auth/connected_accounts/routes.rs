@@ -38,7 +38,7 @@ async fn get_connected_accounts(
         OAuthConnectedAccount::find_all_by_user_id(
             &mut db.connection()?,
             user_id.into_inner(),
-            auth,
+            &auth,
         )
     })
     .await??;

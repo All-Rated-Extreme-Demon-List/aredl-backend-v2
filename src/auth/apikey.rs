@@ -51,7 +51,7 @@ pub async fn create_api_key(
         .headers()
         .get(header::AUTHORIZATION)
         .and_then(|h| h.to_str().ok())
-        .map(|h| h.strip_prefix("Bearer ").unwrap_or("").to_string());
+        .map(|h| h.strip_prefix("Bearer ").unwrap_or("").to_owned());
 
     let Some(access_token) = access_token else {
         return Err(ApiError::Unauthorized("No token provided"));
@@ -82,7 +82,7 @@ pub async fn create_api_key(
         }
 
         let (api_key, expires) = token::create_token(
-            UserClaims {
+            &UserClaims {
                 user_id,
                 is_api_key: true,
             },

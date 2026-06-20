@@ -1,3 +1,4 @@
+use actix_http::StatusCode;
 #[cfg(test)]
 use {
     crate::{
@@ -30,7 +31,6 @@ use {
     serial_test::serial,
     std::sync::Arc,
 };
-use {actix_http::StatusCode};
 
 #[actix_web::test]
 async fn create_record() {
@@ -52,7 +52,7 @@ async fn create_record() {
 
     let req = test::TestRequest::post()
         .uri("/aredl/records")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&record_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -63,7 +63,7 @@ async fn create_record() {
         body["submitted_by"].as_str().unwrap(),
         user_id.to_string().as_str(),
         "Names do not match!"
-    )
+    );
 }
 
 #[actix_web::test]
@@ -85,11 +85,16 @@ async fn create_self_record_fails() {
 
     let req = test::TestRequest::post()
         .uri("/aredl/records")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&record_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(resp, StatusCode::FORBIDDEN, Some("You cannot create records for yourself")).await;
+    assert_error_response(
+        resp,
+        StatusCode::FORBIDDEN,
+        Some("You cannot create records for yourself"),
+    )
+    .await;
 }
 
 #[actix_web::test]
@@ -103,7 +108,7 @@ async fn get_record_list() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/records")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -127,8 +132,8 @@ async fn update_record() {
         "video_url": "https://updated.com"
     });
     let req = test::TestRequest::patch()
-        .uri(&format!("/aredl/records/{}", record_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/aredl/records/{record_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&update_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -138,7 +143,7 @@ async fn update_record() {
         body["video_url"].as_str().unwrap(),
         update_data["video_url"].as_str().unwrap(),
         "Videos do not match!"
-    )
+    );
 }
 
 #[actix_web::test]
@@ -153,12 +158,17 @@ async fn update_self_record_fails() {
         "video_url": "https://updated.com"
     });
     let req = test::TestRequest::patch()
-        .uri(&format!("/aredl/records/{}", record_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/aredl/records/{record_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&update_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(resp, StatusCode::FORBIDDEN, Some("You cannot update records for yourself")).await;
+    assert_error_response(
+        resp,
+        StatusCode::FORBIDDEN,
+        Some("You cannot update records for yourself"),
+    )
+    .await;
 }
 
 #[actix_web::test]
@@ -174,7 +184,7 @@ async fn get_own_records() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/records/@me")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -199,7 +209,7 @@ async fn get_own_records() {
         submitter_id,
         user_id.to_string().as_str(),
         "Submitters do not match!"
-    )
+    );
 }
 
 #[actix_web::test]
@@ -210,8 +220,8 @@ async fn delete_record() {
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let (_, record_id) = create_test_level_with_record(&db, user_id).await;
     let req = test::TestRequest::delete()
-        .uri(&format!("/aredl/records/{}", record_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/aredl/records/{record_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -225,17 +235,17 @@ async fn get_one_record() {
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let (_, record_id) = create_test_level_with_record(&db, user_id).await;
     let req = test::TestRequest::get()
-        .uri(&format!("/aredl/records/{}", record_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/aredl/records/{record_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(
-        body["id"].as_str().unwrap().to_string(),
+        body["id"].as_str().unwrap().to_owned(),
         record_id.to_string(),
         "Record IDs do not match!"
-    )
+    );
 }
 
 #[actix_web::test]
@@ -250,7 +260,7 @@ async fn get_records_mobile_filter() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/records?mobile_filter=true")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -271,7 +281,7 @@ async fn get_records_verification_filter() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/records?verification_filter=true")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -290,7 +300,7 @@ async fn get_records_level_filter() {
 
     let req = test::TestRequest::get()
         .uri(&format!("/aredl/records?level_filter={level_one}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -311,7 +321,7 @@ async fn get_records_submitter_filter() {
 
     let req = test::TestRequest::get()
         .uri(&format!("/aredl/records?submitter_filter={submitter_one}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -330,7 +340,7 @@ async fn get_records_sort_oldest_created_at() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/records?per_page=10&sort=OldestCreatedAt")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -341,7 +351,7 @@ async fn get_records_sort_oldest_created_at() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|v| v["id"].as_str().unwrap().to_string())
+        .map(|v| v["id"].as_str().unwrap().to_owned())
         .collect();
     assert!(got.len() >= 2);
     assert_eq!(got[0], older.to_string());
@@ -358,7 +368,7 @@ async fn get_records_sort_newest_created_at() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/records?per_page=10&sort=NewestCreatedAt")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -369,7 +379,7 @@ async fn get_records_sort_newest_created_at() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|v| v["id"].as_str().unwrap().to_string())
+        .map(|v| v["id"].as_str().unwrap().to_owned())
         .collect();
     assert!(got.len() >= 2);
     assert_eq!(got[0], newer.to_string());
@@ -386,7 +396,7 @@ async fn get_records_sort_oldest_achieved_at() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/records?per_page=10&sort=OldestAchievedAt")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -397,7 +407,7 @@ async fn get_records_sort_oldest_achieved_at() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|v| v["id"].as_str().unwrap().to_string())
+        .map(|v| v["id"].as_str().unwrap().to_owned())
         .collect();
     assert!(got.len() >= 2);
     assert_eq!(got[0], older.to_string());
@@ -414,7 +424,7 @@ async fn get_records_sort_newest_achieved_at() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/records?per_page=10&sort=NewestAchievedAt")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -425,7 +435,7 @@ async fn get_records_sort_newest_achieved_at() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|v| v["id"].as_str().unwrap().to_string())
+        .map(|v| v["id"].as_str().unwrap().to_owned())
         .collect();
     assert!(got.len() >= 2);
     assert_eq!(got[0], newer.to_string());
@@ -442,7 +452,7 @@ async fn get_records_sort_oldest_updated_at() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/records?per_page=10&sort=OldestUpdatedAt")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -453,7 +463,7 @@ async fn get_records_sort_oldest_updated_at() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|v| v["id"].as_str().unwrap().to_string())
+        .map(|v| v["id"].as_str().unwrap().to_owned())
         .collect();
     assert!(got.len() >= 2);
     assert_eq!(got[0], older.to_string());
@@ -470,7 +480,7 @@ async fn get_records_sort_newest_updated_at() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/records?per_page=10&sort=NewestUpdatedAt")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -481,7 +491,7 @@ async fn get_records_sort_newest_updated_at() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|v| v["id"].as_str().unwrap().to_string())
+        .map(|v| v["id"].as_str().unwrap().to_owned())
         .collect();
     assert!(got.len() >= 2);
     assert_eq!(got[0], newer.to_string());
@@ -534,7 +544,7 @@ async fn update_timestamp_endpoint_fetches_youtube_published_at() {
 
     let create_req = test::TestRequest::post()
         .uri("/aredl/records")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&record_data)
         .to_request();
 
@@ -550,8 +560,8 @@ async fn update_timestamp_endpoint_fetches_youtube_published_at() {
         .expect("created record must have id");
 
     let update_req = test::TestRequest::patch()
-        .uri(&format!("/aredl/records/{}/update-timestamp", record_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/aredl/records/{record_id}/update-timestamp"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let update_resp = test::call_service(&app, update_req).await;

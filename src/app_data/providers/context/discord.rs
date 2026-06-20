@@ -15,17 +15,17 @@ pub async fn new_discord_context() -> Option<OAuthProviderContext> {
     };
 
     if config.scopes.is_empty() {
-        config.scopes.push("identify".to_string());
+        config.scopes.push("identify".to_owned());
     }
     config
         .return_path
-        .get_or_insert("/auth/discord/callback".to_string());
+        .get_or_insert("/auth/discord/callback".to_owned());
     config.use_pkce.get_or_insert(true);
 
     match OAuthProviderContext::new(
         OAuthProvider::Discord,
         config,
-        "https://discord.com".to_string(),
+        "https://discord.com".to_owned(),
         None,
     ) {
         Ok(context) => Some(context),

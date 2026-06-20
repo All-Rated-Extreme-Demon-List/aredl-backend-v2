@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map as JsonMap, Value as JsonValue};
-use std::{io::Write, path::Path, process::Stdio};
+use std::{io::Write as _, path::Path, process::Stdio};
 use tempfile::NamedTempFile;
 use tokio::{join, process::Command};
 use utoipa::ToSchema;

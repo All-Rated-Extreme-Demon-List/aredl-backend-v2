@@ -6,14 +6,14 @@ use {
         schema::arepl::{bounties, bounty_completed},
     },
     chrono::{DateTime, Utc},
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
+    diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _},
     serde_json::Value,
     std::sync::Arc,
     uuid::Uuid,
 };
 
 #[cfg(test)]
-pub async fn create_test_bounty(
+pub fn create_test_bounty(
     db: &Arc<DbAppState>,
     level_id: Uuid,
     start_date: DateTime<Utc>,
@@ -30,11 +30,10 @@ pub async fn create_test_bounty(
         target_submissions,
         is_target_public,
     )
-    .await
 }
 
 #[cfg(test)]
-pub async fn create_test_bounty_with_type(
+pub fn create_test_bounty_with_type(
     db: &Arc<DbAppState>,
     level_id: Uuid,
     bounty_type: BountyType,

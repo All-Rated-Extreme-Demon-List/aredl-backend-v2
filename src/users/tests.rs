@@ -34,7 +34,7 @@ async fn create_placeholder_user() {
 
     let req = test::TestRequest::post()
         .uri("/users/placeholders")
-        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .insert_header(("Authorization", format!("Bearer {staff_token}")))
         .set_json(&placeholder_payload)
         .to_request();
 
@@ -59,8 +59,8 @@ async fn update_user_info() {
     });
 
     let req = test::TestRequest::patch()
-        .uri(&format!("/users/{}", user_id))
-        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .uri(&format!("/users/{user_id}"))
+        .insert_header(("Authorization", format!("Bearer {staff_token}")))
         .set_json(&update_payload)
         .to_request();
 
@@ -86,8 +86,8 @@ async fn update_user_info_less_privilege() {
     });
 
     let req = test::TestRequest::patch()
-        .uri(&format!("/users/{}", staff_user_id))
-        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .uri(&format!("/users/{staff_user_id}"))
+        .insert_header(("Authorization", format!("Bearer {user_token}")))
         .set_json(&update_payload)
         .to_request();
 
@@ -106,8 +106,8 @@ async fn ban_user() {
     let ban_payload = json!({ "ban_level": 2 });
 
     let req = test::TestRequest::patch()
-        .uri(&format!("/users/{}/ban", user_id))
-        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .uri(&format!("/users/{user_id}/ban"))
+        .insert_header(("Authorization", format!("Bearer {staff_token}")))
         .set_json(&ban_payload)
         .to_request();
 
@@ -118,7 +118,7 @@ async fn ban_user() {
     assert_eq!(banned_user["ban_level"], 2);
 
     let req = test::TestRequest::get()
-        .uri(&format!("/users?name_filter=%{}%", username))
+        .uri(&format!("/users?name_filter=%{username}%"))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -138,8 +138,8 @@ async fn redact_user_requires_redact_permission() {
     let redact_payload = json!({ "ban_level": 3 });
 
     let req = test::TestRequest::patch()
-        .uri(&format!("/users/{}/ban", user_id))
-        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .uri(&format!("/users/{user_id}/ban"))
+        .insert_header(("Authorization", format!("Bearer {staff_token}")))
         .set_json(&redact_payload)
         .to_request();
 
@@ -161,8 +161,8 @@ async fn redact_user_succeeds_with_redact_permission() {
     let redact_payload = json!({ "ban_level": 3 });
 
     let req = test::TestRequest::patch()
-        .uri(&format!("/users/{}/ban", user_id))
-        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .uri(&format!("/users/{user_id}/ban"))
+        .insert_header(("Authorization", format!("Bearer {staff_token}")))
         .set_json(&redact_payload)
         .to_request();
 
@@ -179,7 +179,7 @@ async fn find_user() {
     let (user_id, username) = create_test_user(&db, None).await;
 
     let req = test::TestRequest::get()
-        .uri(&format!("/users/{}", user_id))
+        .uri(&format!("/users/{user_id}"))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -198,7 +198,7 @@ async fn find_user_by_discord_id() {
     set_test_user_discord_id(&db, user_id, discord_id).await;
 
     let req = test::TestRequest::get()
-        .uri(&format!("/users/{}", discord_id))
+        .uri(&format!("/users/{discord_id}"))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -269,7 +269,7 @@ async fn find_user_hides_hidden_roles_and_hidden_scopes_except_for_role_manage()
     };
 
     let anon_req = test::TestRequest::get()
-        .uri(&format!("/users/{}", target_user))
+        .uri(&format!("/users/{target_user}"))
         .to_request();
     let anon_resp = test::call_service(&app, anon_req).await;
     assert!(anon_resp.status().is_success());
@@ -277,8 +277,8 @@ async fn find_user_hides_hidden_roles_and_hidden_scopes_except_for_role_manage()
     assert_hidden_data_is_not_exposed(&anon_body);
 
     let normal_req = test::TestRequest::get()
-        .uri(&format!("/users/{}", target_user))
-        .insert_header(("Authorization", format!("Bearer {}", normal_token)))
+        .uri(&format!("/users/{target_user}"))
+        .insert_header(("Authorization", format!("Bearer {normal_token}")))
         .to_request();
     let normal_resp = test::call_service(&app, normal_req).await;
     assert!(normal_resp.status().is_success());
@@ -286,8 +286,8 @@ async fn find_user_hides_hidden_roles_and_hidden_scopes_except_for_role_manage()
     assert_hidden_data_is_not_exposed(&normal_body);
 
     let manager_req = test::TestRequest::get()
-        .uri(&format!("/users/{}", target_user))
-        .insert_header(("Authorization", format!("Bearer {}", manager_token)))
+        .uri(&format!("/users/{target_user}"))
+        .insert_header(("Authorization", format!("Bearer {manager_token}")))
         .to_request();
     let manager_resp = test::call_service(&app, manager_req).await;
     assert!(manager_resp.status().is_success());
@@ -310,7 +310,7 @@ async fn list_users() {
     assert!(users["data"].as_array().unwrap().len() >= 2);
 
     let req = test::TestRequest::get()
-        .uri(&format!("/users?name_filter=%{}%", username))
+        .uri(&format!("/users?name_filter=%{username}%"))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -339,8 +339,8 @@ async fn user_character_limit() {
     });
 
     let req = test::TestRequest::patch()
-        .uri(&format!("/users/{}", user_id))
-        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .uri(&format!("/users/{user_id}"))
+        .insert_header(("Authorization", format!("Bearer {staff_token}")))
         .set_json(&update_payload)
         .to_request();
 
@@ -349,7 +349,7 @@ async fn user_character_limit() {
 
     let req = test::TestRequest::patch()
         .uri("/users/@me")
-        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .insert_header(("Authorization", format!("Bearer {user_token}")))
         .set_json(&update_payload)
         .to_request();
 
@@ -381,7 +381,7 @@ async fn list_users_with_filters() {
         .any(|u| u["id"] == placeholder_id.to_string()));
 
     let req = test::TestRequest::get()
-        .uri(&format!("/users?name_filter=%{}%&per_page=1&page=1", name))
+        .uri(&format!("/users?name_filter=%{name}%&per_page=1&page=1"))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -394,12 +394,12 @@ async fn upsert_creates_and_updates_user() {
     let (_, db, _, _) = init_test_app().await;
 
     let user_upsert = UserUpsert {
-        username: "new_user".to_string(),
-        global_name: "New User".to_string(),
-        discord_id: Some("123".to_string()),
+        username: "new_user".to_owned(),
+        global_name: "New User".to_owned(),
+        discord_id: Some("123".to_owned()),
         placeholder: false,
         country: Some(1),
-        discord_avatar: Some("avatar".to_string()),
+        discord_avatar: Some("avatar".to_owned()),
         discord_banner: None,
         discord_accent_color: None,
         last_discord_avatar_update: Some(Utc::now().naive_utc()),
@@ -413,13 +413,13 @@ async fn upsert_creates_and_updates_user() {
     assert_eq!(fetched.username, "new_user");
 
     let update_upsert = UserUpsert {
-        username: "updated".to_string(),
-        global_name: "Updated".to_string(),
-        discord_id: Some("123".to_string()),
+        username: "updated".to_owned(),
+        global_name: "Updated".to_owned(),
+        discord_id: Some("123".to_owned()),
         placeholder: false,
         country: Some(2),
-        discord_avatar: Some("newavatar".to_string()),
-        discord_banner: Some("banner".to_string()),
+        discord_avatar: Some("newavatar".to_owned()),
+        discord_banner: Some("banner".to_owned()),
         discord_accent_color: Some(5),
         last_discord_avatar_update: Some(Utc::now().naive_utc()),
     };
@@ -445,7 +445,7 @@ async fn placeholder_random_username() {
 
     let req = test::TestRequest::post()
         .uri("/users/placeholders")
-        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .insert_header(("Authorization", format!("Bearer {staff_token}")))
         .set_json(&placeholder_payload)
         .to_request();
 

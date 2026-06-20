@@ -7,8 +7,8 @@ use crate::schema::{clan_invites, clan_members, clans, users};
 use crate::users::me::notifications::{Notification, NotificationType};
 use crate::users::BaseUser;
 use diesel::{
-    delete, insert_into, Connection, ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl,
-    SelectableHelper,
+    delete, insert_into, Connection as _, ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _,
+    SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -39,7 +39,7 @@ impl ClanInvite {
     pub fn accept_invite(
         conn: &mut DbConnection,
         invite_id: Uuid,
-        authenticated: Authenticated,
+        authenticated: &Authenticated,
     ) -> Result<(), ApiError> {
         conn.transaction(|connection| -> Result<(), ApiError> {
             let invite = clan_invites::table
@@ -93,7 +93,7 @@ impl ClanInvite {
     pub fn reject_invite(
         conn: &mut DbConnection,
         invite_id: Uuid,
-        authenticated: Authenticated,
+        authenticated: &Authenticated,
     ) -> Result<(), ApiError> {
         let invite = clan_invites::table
             .filter(clan_invites::id.eq(invite_id))

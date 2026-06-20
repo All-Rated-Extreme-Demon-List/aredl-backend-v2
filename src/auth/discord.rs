@@ -177,11 +177,7 @@ async fn discord_callback(
         let scopes = all_permissions
             .into_iter()
             .filter_map(|(permission, privilege_level)| {
-                if user_privilege_level >= privilege_level {
-                    Some(permission)
-                } else {
-                    None
-                }
+                (user_privilege_level >= privilege_level).then_some(permission)
             })
             .collect::<Vec<String>>();
 
@@ -191,7 +187,7 @@ async fn discord_callback(
 
     if let Some(callback) = request_data.callback {
         let (token, _expires) = token::create_token(
-            UserClaims {
+            &UserClaims {
                 user_id: user.id,
                 is_api_key: false,
             },
@@ -200,14 +196,14 @@ async fn discord_callback(
             "initial",
         )?;
 
-        let redirect_url = format!("{}?token={}", callback, token);
+        let redirect_url = format!("{callback}?token={token}");
         return Ok(HttpResponse::Found()
             .append_header((header::LOCATION, redirect_url))
             .finish());
     }
 
     let (access_token, access_expires) = token::create_token(
-        UserClaims {
+        &UserClaims {
             user_id: user.id,
             is_api_key: false,
         },
@@ -217,7 +213,7 @@ async fn discord_callback(
     )?;
 
     let (refresh_token, refresh_expires) = token::create_token(
-        UserClaims {
+        &UserClaims {
             user_id: user.id,
             is_api_key: false,
         },
@@ -232,8 +228,8 @@ async fn discord_callback(
         refresh_token,
         refresh_expires,
         user,
-        roles,
         scopes,
+        roles,
     }))
 }
 

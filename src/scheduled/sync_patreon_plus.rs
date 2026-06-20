@@ -7,7 +7,7 @@ use crate::get_secret;
 use crate::providers::{context::backend_oauth::OAuthProviderContext, ProvidersAppState};
 use crate::scheduled::{sleep_until_next, startup_schedule};
 use crate::schema::{aredl, arepl, oauth_connected_accounts, roles, user_roles};
-use diesel::{Connection, ExpressionMethods, QueryDsl, RunQueryDsl};
+use diesel::{Connection as _, ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _};
 use serde::Deserialize;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -149,8 +149,7 @@ async fn fetch_active_patreon_user_ids(
 
     loop {
         let url = format!(
-            "{}/oauth2/v2/campaigns/{}/members",
-            patreon_base, campaign_id
+            "{patreon_base}/oauth2/v2/campaigns/{campaign_id}/members"
         );
         let mut request = client.get(url).bearer_auth(&access_token).query(&[
             ("include", "user"),

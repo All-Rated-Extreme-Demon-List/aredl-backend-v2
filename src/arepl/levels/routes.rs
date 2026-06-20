@@ -45,7 +45,7 @@ async fn list(
     let levels = web::block(move || {
         LevelWithUserCompletionStatus::find_all(
             &mut db.connection()?,
-            query.into_inner(),
+            &query.into_inner(),
             authenticated.map(|user| user.user_id),
         )
     })

@@ -5,7 +5,7 @@ use crate::schema::{aredl::records, users};
 use crate::users::{BaseUser, ExtendedBaseUser};
 use chrono::{DateTime, Utc};
 use diesel::dsl::count;
-use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::{ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -16,7 +16,7 @@ pub struct RecordQuery {
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
-/// A resolved record for a specific level (ommits the level field compared to ResolvedRecord).
+/// A resolved record for a specific level (ommits the level field compared to `ResolvedRecord`).
 pub struct LevelResolvedRecord {
     /// Internal UUID of the record.
     pub id: Uuid,
@@ -37,7 +37,7 @@ pub struct LevelResolvedRecord {
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
-/// A resolved record for a specific level (ommits the level field compared to ResolvedRecord), with an extended resolved user.
+/// A resolved record for a specific level (ommits the level field compared to `ResolvedRecord`), with an extended resolved user.
 pub struct LevelResolvedRecordExtended {
     /// Internal UUID of the record.
     pub id: Uuid,
@@ -76,7 +76,7 @@ impl LevelResolvedRecordExtended {
     pub fn find_all_by_level(
         conn: &mut DbConnection,
         level_id: Uuid,
-        opts: RecordQuery,
+        opts: &RecordQuery,
     ) -> Result<Vec<Self>, ApiError> {
         let users_high_extremes = if let Some(true) = opts.high_extremes {
             records::table

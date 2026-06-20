@@ -5,10 +5,10 @@ use crate::schema::{roles, user_roles, users};
 use crate::users::BaseUser;
 use crate::{app_data::db::DbConnection, auth::Authenticated};
 use diesel::{
-    ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl,
-    SelectableHelper,
+    ExpressionMethods as _, JoinOnDsl as _, NullableExpressionMethods as _, QueryDsl as _, RunQueryDsl as _,
+    SelectableHelper as _,
 };
-use itertools::Itertools;
+use itertools::Itertools as _;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use utoipa::ToSchema;
@@ -68,7 +68,7 @@ pub struct ReviewerSets {
 impl Role {
     pub fn user_can_edit(
         conn: &mut DbConnection,
-        authenticated: Authenticated,
+        authenticated: &Authenticated,
         target_role_id: i32,
     ) -> Result<(), ApiError> {
         let target_role = roles::table
@@ -87,7 +87,7 @@ impl Role {
 
     pub fn create(
         conn: &mut DbConnection,
-        authenticated: Authenticated,
+        authenticated: &Authenticated,
         role: RoleCreate,
     ) -> Result<Self, ApiError> {
         authenticated
@@ -106,7 +106,7 @@ impl Role {
 
     pub fn update(
         conn: &mut DbConnection,
-        authenticated: Authenticated,
+        authenticated: &Authenticated,
         id: i32,
         role: RoleUpdate,
     ) -> Result<Self, ApiError> {
@@ -120,7 +120,7 @@ impl Role {
 
     pub fn delete(
         conn: &mut DbConnection,
-        authenticated: Authenticated,
+        authenticated: &Authenticated,
         id: i32,
     ) -> Result<Self, ApiError> {
         Self::user_can_edit(conn, authenticated, id)?;

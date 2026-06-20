@@ -28,7 +28,7 @@ async fn find_all(
     let records = web::block(move || {
         let conn = &mut db.connection()?;
         let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
-        LevelResolvedRecordExtended::find_all_by_level(conn, level_id, opts.into_inner())
+        LevelResolvedRecordExtended::find_all_by_level(conn, level_id, &opts.into_inner())
     })
     .await??;
     Ok(HttpResponse::Ok().json(records))

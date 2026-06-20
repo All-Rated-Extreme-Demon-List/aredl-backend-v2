@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use actix_web::{get, web, Error, HttpRequest, HttpResponse};
 use actix_ws::{handle, Message};
-use futures_util::StreamExt;
+use futures_util::StreamExt as _;
 use tokio::{sync::broadcast, time::interval};
 use utoipa::OpenApi;
 
@@ -55,14 +55,13 @@ async fn notifications_websocket(
                             break;
                         }
                     }
-                    Some(Ok(Message::Pong(_))) => {}
                     Some(Ok(Message::Close(reason))) => {
                         if let Err(error) = session.close(reason).await {
                             tracing::debug!("Failed to close WebSocket session: {error}");
                         }
                         break;
                     }
-                    Some(Ok(_)) => {}
+                    Some(Ok(Message::Pong(_) | _))  => {}
                     Some(Err(error)) => {
                         tracing::debug!("WebSocket protocol error: {error}");
                         break;

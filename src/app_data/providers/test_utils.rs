@@ -12,7 +12,7 @@ use {
         schema::oauth_tokens,
     },
     chrono::{DateTime, Utc},
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
+    diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _},
 };
 
 #[cfg(test)]
@@ -36,17 +36,16 @@ pub fn set_oauth_env(provider: OAuthProvider, server_base: &str) {
                 r#"{{
                     "client_id": "test_discord_client_id",
                     "client_secret": "test_discord_client_secret",
-                    "issuer_uri": "{0}",
-                    "authorize_uri": "{0}/oauth2/authorize",
-                    "token_uri": "{0}/api/oauth2/token",
-                    "api_base_uri": "{0}",
+                    "issuer_uri": "{server_base}",
+                    "authorize_uri": "{server_base}/oauth2/authorize",
+                    "token_uri": "{server_base}/api/oauth2/token",
+                    "api_base_uri": "{server_base}",
                     "redirect_uri": "https://example.com/discord/callback",
                     "scopes": ["identify"],
                     "use_pkce": true,
                     "use_openid_scope": true,
                     "auth_type": "request_body"
-                }}"#,
-                server_base
+                }}"#
             ),
         ),
         OAuthProvider::Google => (
@@ -55,13 +54,12 @@ pub fn set_oauth_env(provider: OAuthProvider, server_base: &str) {
                 r#"{{
                     "client_id": "test_client_id",
                     "client_secret": "test_client_secret",
-                    "token_uri": "{0}/token",
-                    "api_base_uri": "{0}",
-                    "issuer_uri": "{0}",
-                    "authorize_uri": "{0}/oauth2/authorize",
+                    "token_uri": "{server_base}/token",
+                    "api_base_uri": "{server_base}",
+                    "issuer_uri": "{server_base}",
+                    "authorize_uri": "{server_base}/oauth2/authorize",
                     "redirect_uri": "https://example.com/google/callback"
-                }}"#,
-                server_base
+                }}"#
             ),
         ),
         OAuthProvider::Patreon => (
@@ -70,17 +68,16 @@ pub fn set_oauth_env(provider: OAuthProvider, server_base: &str) {
                 r#"{{
                     "client_id": "test_patreon_client_id",
                     "client_secret": "test_patreon_client_secret",
-                    "issuer_uri": "{0}/oauth2/authorize",
-                    "authorize_uri": "{0}/oauth2/authorize",
-                    "token_uri": "{0}/api/oauth2/token",
-                    "api_base_uri": "{0}",
+                    "issuer_uri": "{server_base}/oauth2/authorize",
+                    "authorize_uri": "{server_base}/oauth2/authorize",
+                    "token_uri": "{server_base}/api/oauth2/token",
+                    "api_base_uri": "{server_base}",
                     "redirect_uri": "https://example.com/patreon/callback",
                     "scopes": ["identity"],
                     "use_pkce": false,
                     "use_openid_scope": false,
                     "auth_type": "request_body"
-                }}"#,
-                server_base
+                }}"#
             ),
         ),
         OAuthProvider::Twitch => (
@@ -89,13 +86,12 @@ pub fn set_oauth_env(provider: OAuthProvider, server_base: &str) {
                 r#"{{
                     "client_id": "test_twitch_client_id",
                     "client_secret": "test_twitch_client_secret",
-                    "token_uri": "{0}/oauth2/token",
-                    "api_base_uri": "{0}",
-                    "issuer_uri": "{0}",
-                    "authorize_uri": "{0}/oauth2/authorize",
+                    "token_uri": "{server_base}/oauth2/token",
+                    "api_base_uri": "{server_base}",
+                    "issuer_uri": "{server_base}",
+                    "authorize_uri": "{server_base}/oauth2/authorize",
                     "redirect_uri": "https://example.com/twitch/callback"
-                }}"#,
-                server_base
+                }}"#
             ),
         ),
     };
@@ -125,7 +121,7 @@ pub async fn mock_google_token_endpoint<'a>(
     expires_in: u64,
     access_token: &str,
 ) -> Mock<'a> {
-    let access_token = access_token.to_string();
+    let access_token = access_token.to_owned();
 
     server
         .mock_async(move |when, then| {
@@ -138,8 +134,7 @@ pub async fn mock_google_token_endpoint<'a>(
             then.status(200)
                 .header("content-type", "application/json")
                 .body(format!(
-                    r#"{{"access_token":"{}","expires_in":{}}}"#,
-                    access_token, expires_in
+                    r#"{{"access_token":"{access_token}","expires_in":{expires_in}}}"#
                 ));
         })
         .await
@@ -153,29 +148,28 @@ pub async fn mock_google_token_refresh_endpoint<'a>(
     request_refresh_token: &str,
     response_refresh_token: Option<&str>,
 ) -> Mock<'a> {
-    let access_token = access_token.to_string();
-    let request_refresh_token = request_refresh_token.to_string();
-    let response_refresh_token = response_refresh_token.map(str::to_string);
+    let access_token = access_token.to_owned();
+    let request_refresh_token = request_refresh_token.to_owned();
+    let response_refresh_token = response_refresh_token.map(str::to_owned);
 
     server
         .mock_async(move |when, then| {
             when.method(POST)
                 .path("/token")
                 .body_includes("grant_type=refresh_token")
-                .body_includes(format!("refresh_token={}", request_refresh_token))
+                .body_includes(format!("refresh_token={request_refresh_token}"))
                 .body_includes("client_id=test_client_id")
                 .body_includes("client_secret=test_client_secret");
 
             let refresh_field = response_refresh_token
                 .as_ref()
-                .map(|refresh_token| format!(r#","refresh_token":"{}""#, refresh_token))
+                .map(|refresh_token| format!(r#","refresh_token":"{refresh_token}""#))
                 .unwrap_or_default();
 
             then.status(200)
                 .header("content-type", "application/json")
                 .body(format!(
-                    r#"{{"access_token":"{}","expires_in":{}{}}}"#,
-                    access_token, expires_in, refresh_field
+                    r#"{{"access_token":"{access_token}","expires_in":{expires_in}{refresh_field}}}"#
                 ));
         })
         .await
@@ -189,24 +183,23 @@ pub async fn mock_patreon_token_endpoint<'a>(
     request_refresh_token: &str,
     response_refresh_token: &str,
 ) -> Mock<'a> {
-    let access_token = access_token.to_string();
-    let request_refresh_token = request_refresh_token.to_string();
-    let response_refresh_token = response_refresh_token.to_string();
+    let access_token = access_token.to_owned();
+    let request_refresh_token = request_refresh_token.to_owned();
+    let response_refresh_token = response_refresh_token.to_owned();
 
     server
         .mock_async(move |when, then| {
             when.method(POST)
                 .path("/api/oauth2/token")
                 .body_includes("grant_type=refresh_token")
-                .body_includes(format!("refresh_token={}", request_refresh_token))
+                .body_includes(format!("refresh_token={request_refresh_token}"))
                 .body_includes("client_id=test_patreon_client_id")
                 .body_includes("client_secret=test_patreon_client_secret");
 
             then.status(200)
                 .header("content-type", "application/json")
                 .body(format!(
-                    r#"{{ "access_token": "{}", "refresh_token": "{}", "expires_in": {} }}"#,
-                    access_token, response_refresh_token, expires_in
+                    r#"{{ "access_token": "{access_token}", "refresh_token": "{response_refresh_token}", "expires_in": {expires_in} }}"#
                 ));
         })
         .await
@@ -218,14 +211,14 @@ pub fn seed_oauth_token(db: &DbAppState, provider: OAuthProvider, refresh_token:
         .values((
             oauth_tokens::provider.eq(provider),
             oauth_tokens::access_token.eq::<Option<String>>(None),
-            oauth_tokens::refresh_token.eq(refresh_token.map(str::to_string)),
+            oauth_tokens::refresh_token.eq(refresh_token.map(str::to_owned)),
             oauth_tokens::expires_at.eq::<Option<DateTime<Utc>>>(None),
         ))
         .on_conflict(oauth_tokens::provider)
         .do_update()
         .set((
             oauth_tokens::access_token.eq::<Option<String>>(None),
-            oauth_tokens::refresh_token.eq(refresh_token.map(str::to_string)),
+            oauth_tokens::refresh_token.eq(refresh_token.map(str::to_owned)),
             oauth_tokens::expires_at.eq::<Option<DateTime<Utc>>>(None),
         ))
         .execute(&mut db.connection().unwrap())
@@ -255,7 +248,7 @@ pub async fn mock_twitch_token_endpoint<'a>(
     expires_in: u64,
     access_token: &str,
 ) -> Mock<'a> {
-    let access_token = access_token.to_string();
+    let access_token = access_token.to_owned();
 
     server
         .mock_async(move |when, then| {
@@ -268,8 +261,7 @@ pub async fn mock_twitch_token_endpoint<'a>(
             then.status(200)
                 .header("content-type", "application/json")
                 .body(format!(
-                    r#"{{"access_token":"{}","expires_in":{},"token_type":"bearer"}}"#,
-                    access_token, expires_in
+                    r#"{{"access_token":"{access_token}","expires_in":{expires_in},"token_type":"bearer"}}"#
                 ));
         })
         .await
@@ -281,8 +273,8 @@ pub async fn mock_youtube_videos_endpoint<'a>(
     video_id: &str,
     published_at: &str,
 ) -> Mock<'a> {
-    let video_id = video_id.to_string();
-    let published_at = published_at.to_string();
+    let video_id = video_id.to_owned();
+    let published_at = published_at.to_owned();
 
     server
         .mock_async(move |when, then| {
@@ -295,8 +287,7 @@ pub async fn mock_youtube_videos_endpoint<'a>(
             then.status(200)
                 .header("content-type", "application/json")
                 .body(format!(
-                    r#"{{"items":[{{"snippet":{{"publishedAt":"{}"}}}}]}}"#,
-                    published_at
+                    r#"{{"items":[{{"snippet":{{"publishedAt":"{published_at}"}}}}]}}"#
                 ));
         })
         .await
@@ -308,15 +299,15 @@ pub async fn mock_medal_content_endpoint<'a>(
     clip_id: &str,
     created_ms: i64,
 ) -> Mock<'a> {
-    let clip_id = clip_id.to_string();
+    let clip_id = clip_id.to_owned();
 
     server
         .mock_async(move |when, then| {
-            when.method(GET).path(format!("/content/{}", clip_id));
+            when.method(GET).path(format!("/content/{clip_id}"));
 
             then.status(200)
                 .header("content-type", "application/json")
-                .body(format!(r#"{{"created":{}}}"#, created_ms));
+                .body(format!(r#"{{"created":{created_ms}}}"#));
         })
         .await
 }
@@ -327,8 +318,8 @@ pub async fn mock_twitch_videos_endpoint<'a>(
     video_id: &str,
     published_at: &str,
 ) -> Mock<'a> {
-    let video_id = video_id.to_string();
-    let published_at = published_at.to_string();
+    let video_id = video_id.to_owned();
+    let published_at = published_at.to_owned();
 
     server
         .mock_async(move |when, then| {
@@ -341,9 +332,7 @@ pub async fn mock_twitch_videos_endpoint<'a>(
             then.status(200)
                 .header("content-type", "application/json")
                 .body(format!(
-                    r#"{{"data":[{{"id":"{id}","published_at":"{pa}"}}]}}"#,
-                    id = video_id,
-                    pa = published_at
+                    r#"{{"data":[{{"id":"{video_id}","published_at":"{published_at}"}}]}}"#
                 ));
         })
         .await

@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -26,7 +26,7 @@ impl OAuthConnectedAccount {
     pub fn find_all_by_user_id(
         conn: &mut DbConnection,
         user_id: Uuid,
-        authenticated: Authenticated,
+        authenticated: &Authenticated,
     ) -> Result<Vec<Self>, ApiError> {
         if authenticated.user_id != user_id
             && !authenticated.has_permission(conn, Permission::ExternalConnectionsManage)?

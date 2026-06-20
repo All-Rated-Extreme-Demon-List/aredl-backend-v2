@@ -29,13 +29,13 @@ impl Provider for MegaProvider {
             // /file/<id>#<key>
             let id = path.strip_prefix("file/")?;
             let fragment = url.fragment()?;
-            (id.to_string(), Some(fragment.to_string()))
-        } else if path.starts_with("!") {
+            (id.to_owned(), Some(fragment.to_owned()))
+        } else if path.starts_with('!') {
             // /#!<id>!<key>
             let mut parts = path.trim_start_matches('!').split('!');
             let id = parts.next()?;
             let key = parts.next()?;
-            (id.to_string(), Some(key.to_string()))
+            (id.to_owned(), Some(key.to_owned()))
         } else {
             return None;
         };
@@ -44,7 +44,7 @@ impl Provider for MegaProvider {
             return None;
         }
 
-        if let Some(ref key) = key {
+        if let Some(key) = &key {
             if !is_ascii_id(key, 1, 256) {
                 return None;
             }

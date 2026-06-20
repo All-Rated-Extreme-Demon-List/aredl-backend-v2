@@ -19,7 +19,7 @@ async fn list_notifications() {
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::get()
         .uri("/users/@me/notifications")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -40,7 +40,7 @@ async fn clear_notifications() {
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::post()
         .uri("/users/@me/notifications/clear")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());

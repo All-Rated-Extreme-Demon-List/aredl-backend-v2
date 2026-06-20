@@ -2,14 +2,14 @@ use crate::{
     app_data::db::DbConnection,
     arepl::bounty::Bounty,
     arepl::levels::LevelStatus,
-    arepl::submissions::{status::SubmissionsEnabled, *},
+    arepl::submissions::{status::SubmissionsEnabled, SubmissionStatus, Submission},
     auth::{Authenticated, Permission},
     error_handler::ApiError,
     providers::ProvidersAppState,
     schema::arepl::{levels, submissions},
 };
 use diesel::{
-    Connection, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
+    Connection as _, ExpressionMethods as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -190,7 +190,7 @@ impl Submission {
     pub fn create(
         conn: &mut DbConnection,
         mut submission_body: SubmissionPostMod,
-        authenticated: Authenticated,
+        authenticated: &Authenticated,
         providers: &ProvidersAppState,
     ) -> Result<Self, ApiError> {
         submission_body.video_url = providers
@@ -211,7 +211,7 @@ impl Submission {
 
         conn.transaction(|connection| -> Result<Self, ApiError> {
             let inserted_submission =
-                SubmissionInsert::from_mod(connection, submission_body, &authenticated)?;
+                SubmissionInsert::from_mod(connection, submission_body, authenticated)?;
 
             if authenticated.user_id == inserted_submission.submitted_by
                 && !(SubmissionsEnabled::is_enabled(connection)?)

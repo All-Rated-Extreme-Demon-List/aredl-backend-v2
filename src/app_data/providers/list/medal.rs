@@ -63,7 +63,7 @@ impl Provider for MedalProvider {
 
         Some(ProviderMatch {
             provider: ProviderId::Medal,
-            content_id: content_id.to_string(),
+            content_id: content_id.to_owned(),
             timestamp: None,
             other_id: None,
         })
@@ -79,7 +79,7 @@ impl Provider for MedalProvider {
         context: &ProviderContext,
     ) -> Result<Option<ContentMetadata>, ApiError> {
         let medal_base = std::env::var("MEDAL_API_BASE_URL")
-            .unwrap_or_else(|_| "https://medal.tv/api".to_string());
+            .unwrap_or_else(|_| "https://medal.tv/api".to_owned());
 
         let url = format!("{}/content/{}", medal_base, matched.content_id);
 
@@ -99,10 +99,9 @@ impl Provider for MedalProvider {
             .await
             .map_err(|e| ApiError::BadGateway(format!("Failed to parse Medal response: {e}")))?;
 
-        let created_ms = json.get("created").and_then(|v| v.as_i64()).or_else(|| {
-            json.get("created")
-                .and_then(|v| v.as_u64())
-                .and_then(|value| i64::try_from(value).ok())
+        let created_ms = json.get("created").and_then(Value::as_i64).or_else(|| {
+            let value = json.get("created").and_then(Value::as_u64)?;
+            i64::try_from(value).ok()
         });
 
         let published_at: Option<DateTime<Utc>> =

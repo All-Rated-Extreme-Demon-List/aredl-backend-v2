@@ -54,7 +54,7 @@ async fn patreon_sync_sets_plus_role_to_active_linked_patrons() {
     add_user_to_role(&db, plus_role, inactive_user).await;
     add_user_to_role(&db, stale_user_role, unlinked_user).await;
 
-    let active_ids = HashSet::from(["patron_active".to_string(), "patron_unlinked".to_string()]);
+    let active_ids = HashSet::from(["patron_active".to_owned(), "patron_unlinked".to_owned()]);
 
     let synced = apply_patreon_plus_sync(&mut db.connection().unwrap(), &active_ids).unwrap();
     assert_eq!(synced.matched_user_ids, vec![active_user]);
@@ -144,7 +144,7 @@ async fn patreon_sync_prioritizes_pending_submissions_from_active_linked_patrons
         AreplSubmissionStatus::Claimed,
     );
 
-    let active_ids = HashSet::from(["patron_active".to_string()]);
+    let active_ids = HashSet::from(["patron_active".to_owned()]);
     let synced = apply_patreon_plus_sync(&mut db.connection().unwrap(), &active_ids).unwrap();
 
     assert_eq!(synced.matched_user_ids, vec![active_user]);

@@ -35,7 +35,7 @@ async fn websocket_success() {
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
 
     let req = ws_request("/notifications/websocket")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;

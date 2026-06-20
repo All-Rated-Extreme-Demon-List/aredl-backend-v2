@@ -34,7 +34,7 @@ async fn get_submission_history() {
 
     let req = test::TestRequest::patch()
         .uri(format!("/aredl/submissions/{submission}").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", moderator_token)))
+        .insert_header(("Authorization", format!("Bearer {moderator_token}")))
         .set_json(&under_consideration_data)
         .to_request();
 
@@ -47,7 +47,7 @@ async fn get_submission_history() {
 
     let req = test::TestRequest::get()
         .uri(format!("/aredl/submissions/{submission}/history").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .insert_header(("Authorization", format!("Bearer {user_token}")))
         .to_request();
 
     let res = test::call_service(&app, req).await;
@@ -93,7 +93,7 @@ async fn get_full_submission_history() {
 
     let req = test::TestRequest::patch()
         .uri(format!("/aredl/submissions/{submission}").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&under_consideration_data)
         .to_request();
 
@@ -108,7 +108,7 @@ async fn get_full_submission_history() {
 
     let req = test::TestRequest::patch()
         .uri(format!("/aredl/submissions/{submission}").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&deny_data)
         .to_request();
 
@@ -123,7 +123,7 @@ async fn get_full_submission_history() {
 
     let req = test::TestRequest::patch()
         .uri(format!("/aredl/submissions/{submission}").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&accept_data)
         .to_request();
 
@@ -135,11 +135,11 @@ async fn get_full_submission_history() {
     );
 
     let record_data: serde_json::Value = read_body_json(res).await;
-    let submission_id = record_data["id"].as_str().unwrap().to_string();
+    let submission_id = record_data["id"].as_str().unwrap().to_owned();
 
     let req = test::TestRequest::get()
         .uri(format!("/aredl/submissions/{submission_id}/history").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let res = test::call_service(&app, req).await;
@@ -186,7 +186,7 @@ async fn get_submission_history_hides_private_fields_for_base_reviewer() {
 
     let patch_req = test::TestRequest::patch()
         .uri(format!("/aredl/submissions/{submission}").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", full_token)))
+        .insert_header(("Authorization", format!("Bearer {full_token}")))
         .set_json(&patch_data)
         .to_request();
     let patch_resp = test::call_service(&app, patch_req).await;
@@ -198,7 +198,7 @@ async fn get_submission_history_hides_private_fields_for_base_reviewer() {
 
     let req = test::TestRequest::get()
         .uri(format!("/aredl/submissions/{submission}/history").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", base_token)))
+        .insert_header(("Authorization", format!("Bearer {base_token}")))
         .to_request();
 
     let res = test::call_service(&app, req).await;
@@ -245,7 +245,7 @@ async fn get_submission_history_redacts_base_reviewer_for_non_auditor_but_not_fo
 
     let patch_req = test::TestRequest::patch()
         .uri(format!("/aredl/submissions/{submission}").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", full_token)))
+        .insert_header(("Authorization", format!("Bearer {full_token}")))
         .set_json(&patch_data)
         .to_request();
     let patch_resp = test::call_service(&app, patch_req).await;
@@ -260,7 +260,7 @@ async fn get_submission_history_redacts_base_reviewer_for_non_auditor_but_not_fo
 
     let req = test::TestRequest::get()
         .uri(format!("/aredl/submissions/{submission}/history").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", full_token)))
+        .insert_header(("Authorization", format!("Bearer {full_token}")))
         .to_request();
     let res = test::call_service(&app, req).await;
     assert!(
@@ -277,7 +277,7 @@ async fn get_submission_history_redacts_base_reviewer_for_non_auditor_but_not_fo
 
     let req = test::TestRequest::get()
         .uri(format!("/aredl/submissions/{submission}/history").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", auditor_token)))
+        .insert_header(("Authorization", format!("Bearer {auditor_token}")))
         .to_request();
     let res = test::call_service(&app, req).await;
     assert!(

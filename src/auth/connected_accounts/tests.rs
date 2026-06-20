@@ -33,7 +33,7 @@ async fn connected_accounts_returns_current_users_accounts() {
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::get()
         .uri(&format!("/auth/connected-accounts/user/{user_id}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -76,7 +76,7 @@ async fn connected_accounts_hides_other_users_accounts_without_permission() {
     let token = create_test_token(viewer_id, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::get()
         .uri(&format!("/auth/connected-accounts/user/{target_id}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;

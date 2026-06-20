@@ -36,7 +36,7 @@ async fn total_records_counts_and_ordering() {
 
     let req = test::TestRequest::get()
         .uri("/arepl/statistics/records")
-        .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
+        .insert_header((header::AUTHORIZATION, format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;

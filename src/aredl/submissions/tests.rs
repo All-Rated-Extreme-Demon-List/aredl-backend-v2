@@ -60,7 +60,7 @@ async fn resolved_find_me_and_filters() {
     let submission = create_test_submission(level, user, &db).await;
     let req = test::TestRequest::get()
         .uri("/aredl/submissions/@me?status_filter=Pending")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -80,7 +80,7 @@ async fn resolved_find_one_unauthorized() {
 
     let req = test::TestRequest::get()
         .uri(&format!("/aredl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token2)))
+        .insert_header(("Authorization", format!("Bearer {token2}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_error_response(resp, StatusCode::NOT_FOUND, Some("Not found")).await;
@@ -93,7 +93,7 @@ async fn resolved_find_all_requires_auth() {
     let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::get()
         .uri("/aredl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_error_response(
@@ -114,7 +114,7 @@ async fn resolved_find_all() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -128,7 +128,7 @@ async fn resolved_find_all_base_reviewer_forbidden() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
 
@@ -155,8 +155,8 @@ async fn resolved_find_all_reviewer_filter_hides_base_reviewer_for_non_auditor()
     set_test_submission_reviewer(&db, submission, Some(base_reviewer));
 
     let req = test::TestRequest::get()
-        .uri(format!("/aredl/submissions?reviewer_filter={}", base_reviewer).as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(format!("/aredl/submissions?reviewer_filter={base_reviewer}").as_str())
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -184,7 +184,7 @@ async fn resolved_find_all_redacts_base_reviewer_but_auditor_can_filter_and_see(
     // Non-auditors should see a redacted reviewer in list results.
     let req = test::TestRequest::get()
         .uri("/aredl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", full_token)))
+        .insert_header(("Authorization", format!("Bearer {full_token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -204,8 +204,8 @@ async fn resolved_find_all_redacts_base_reviewer_but_auditor_can_filter_and_see(
 
     // Auditors can filter by base reviewer and see the real reviewer.
     let req = test::TestRequest::get()
-        .uri(format!("/aredl/submissions?reviewer_filter={}", base_reviewer).as_str())
-        .insert_header(("Authorization", format!("Bearer {}", auditor_token)))
+        .uri(format!("/aredl/submissions?reviewer_filter={base_reviewer}").as_str())
+        .insert_header(("Authorization", format!("Bearer {auditor_token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -230,7 +230,7 @@ async fn resolved_find_own() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/submissions/@me")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -265,7 +265,7 @@ async fn resolved_find_one_hides_base_reviewer_for_non_auditor_but_not_for_audit
 
     let req = test::TestRequest::get()
         .uri(&format!("/aredl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", full_token)))
+        .insert_header(("Authorization", format!("Bearer {full_token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -275,7 +275,7 @@ async fn resolved_find_one_hides_base_reviewer_for_non_auditor_but_not_for_audit
 
     let req = test::TestRequest::get()
         .uri(&format!("/aredl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", auditor_token)))
+        .insert_header(("Authorization", format!("Bearer {auditor_token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -292,7 +292,7 @@ async fn resolved_find_all_sort_oldest_created_at() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/submissions?per_page=10&sort=OldestCreatedAt")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -302,7 +302,7 @@ async fn resolved_find_all_sort_oldest_created_at() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|v| v["id"].as_str().unwrap().to_string())
+        .map(|v| v["id"].as_str().unwrap().to_owned())
         .collect();
 
     assert!(got.len() >= 2);
@@ -320,7 +320,7 @@ async fn resolved_find_all_sort_newest_created_at() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/submissions?per_page=10&sort=NewestCreatedAt")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -330,7 +330,7 @@ async fn resolved_find_all_sort_newest_created_at() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|v| v["id"].as_str().unwrap().to_string())
+        .map(|v| v["id"].as_str().unwrap().to_owned())
         .collect();
 
     assert!(got.len() >= 2);
@@ -348,7 +348,7 @@ async fn resolved_find_all_sort_oldest_updated_at() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/submissions?per_page=10&sort=OldestUpdatedAt")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -358,7 +358,7 @@ async fn resolved_find_all_sort_oldest_updated_at() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|v| v["id"].as_str().unwrap().to_string())
+        .map(|v| v["id"].as_str().unwrap().to_owned())
         .collect();
 
     assert!(got.len() >= 2);
@@ -376,7 +376,7 @@ async fn resolved_find_all_sort_newest_updated_at() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/submissions?per_page=10&sort=NewestUpdatedAt")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -386,7 +386,7 @@ async fn resolved_find_all_sort_newest_updated_at() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|v| v["id"].as_str().unwrap().to_string())
+        .map(|v| v["id"].as_str().unwrap().to_owned())
         .collect();
 
     assert!(got.len() >= 2);
@@ -412,7 +412,7 @@ async fn create_submission() {
 
     let req = test::TestRequest::post()
         .uri("/aredl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&submission_data)
         .to_request();
 
@@ -421,10 +421,10 @@ async fn create_submission() {
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(
-        body["submitted_by"].as_str().unwrap().to_string(),
+        body["submitted_by"].as_str().unwrap().to_owned(),
         user_id.to_string(),
         "Submitters do not match!"
-    )
+    );
 }
 
 #[actix_web::test]
@@ -444,7 +444,7 @@ async fn submission_without_raw() {
 
     let req = test::TestRequest::post()
         .uri("/aredl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&submission_data)
         .to_request();
 
@@ -476,7 +476,7 @@ async fn submission_malformed_url() {
 
     let req = test::TestRequest::post()
         .uri("/aredl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&submission_data)
         .to_request();
 
@@ -492,7 +492,7 @@ async fn submission_malformed_url() {
 
     let req = test::TestRequest::post()
         .uri("/aredl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&submission_data)
         .to_request();
 
@@ -538,8 +538,8 @@ async fn submission_edit_no_perms() {
 
     // edit own submission
     let edit_req_own = test::TestRequest::patch()
-        .uri(&format!("/aredl/submissions/{}", submission_id))
-        .insert_header(("Authorization", format!("Bearer {}", token_1)))
+        .uri(&format!("/aredl/submissions/{submission_id}"))
+        .insert_header(("Authorization", format!("Bearer {token_1}")))
         .set_json(&submission_edit_json)
         .to_request();
 
@@ -552,8 +552,8 @@ async fn submission_edit_no_perms() {
 
     // edit other submission
     let edit_req_other = test::TestRequest::patch()
-        .uri(&format!("/aredl/submissions/{}", submission_id))
-        .insert_header(("Authorization", format!("Bearer {}", token_2)))
+        .uri(&format!("/aredl/submissions/{submission_id}"))
+        .insert_header(("Authorization", format!("Bearer {token_2}")))
         .set_json(&submission_edit_json)
         .to_request();
 
@@ -567,8 +567,8 @@ async fn submission_edit_no_perms() {
 
     // edit other submission as mod
     let edit_req_mod = test::TestRequest::patch()
-        .uri(&format!("/aredl/submissions/{}", submission_id))
-        .insert_header(("Authorization", format!("Bearer {}", token_mod)))
+        .uri(&format!("/aredl/submissions/{submission_id}"))
+        .insert_header(("Authorization", format!("Bearer {token_mod}")))
         .set_json(&submission_edit_json)
         .to_request();
 
@@ -609,7 +609,7 @@ async fn submission_aredlplus_boost() {
 
     let req = test::TestRequest::post()
         .uri("/aredl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&submission_data)
         .to_request();
 
@@ -625,7 +625,7 @@ async fn submission_aredlplus_boost() {
 
     let req = test::TestRequest::post()
         .uri("/aredl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", token2)))
+        .insert_header(("Authorization", format!("Bearer {token2}")))
         .set_json(&submission_data)
         .to_request();
 
@@ -650,7 +650,7 @@ async fn submission_aredlplus_boost() {
 
     let claim_req = test::TestRequest::get()
         .uri("/aredl/submissions/claim")
-        .insert_header(("Authorization", format!("Bearer {}", token_mod)))
+        .insert_header(("Authorization", format!("Bearer {token_mod}")))
         .to_request();
 
     let claim_resp = test::call_service(&app, claim_req).await;
@@ -665,7 +665,7 @@ async fn submission_aredlplus_boost() {
     // next claim should alternate to a non-priority submission when available.
     let claim_req = test::TestRequest::get()
         .uri("/aredl/submissions/claim")
-        .insert_header(("Authorization", format!("Bearer {}", token_mod)))
+        .insert_header(("Authorization", format!("Bearer {token_mod}")))
         .to_request();
 
     let claim_resp = test::call_service(&app, claim_req).await;
@@ -675,7 +675,7 @@ async fn submission_aredlplus_boost() {
         claim_resp.status()
     );
     let body: serde_json::Value = read_body_json(claim_resp).await;
-    assert_eq!(body["id"], submission1["id"])
+    assert_eq!(body["id"], submission1["id"]);
 }
 
 #[actix_web::test]
@@ -691,8 +691,7 @@ async fn submission_for_active_bounty_is_priority_for_non_plus_user() {
         Some(Utc::now() + ChronoDuration::days(1)),
         None,
         true,
-    )
-    .await;
+    );
 
     let submission_data = json!({
         "level_id": level_id,
@@ -705,7 +704,7 @@ async fn submission_for_active_bounty_is_priority_for_non_plus_user() {
         &app,
         test::TestRequest::post()
             .uri("/aredl/submissions")
-            .insert_header(("Authorization", format!("Bearer {}", token)))
+            .insert_header(("Authorization", format!("Bearer {token}")))
             .set_json(&submission_data)
             .to_request(),
     )
@@ -744,7 +743,7 @@ async fn submission_banned_player() {
 
     let req_1 = test::TestRequest::post()
         .uri("/aredl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", not_banned_token)))
+        .insert_header(("Authorization", format!("Bearer {not_banned_token}")))
         .set_json(&submission_data)
         .to_request();
 
@@ -757,7 +756,7 @@ async fn submission_banned_player() {
 
     let req_2 = test::TestRequest::post()
         .uri("/aredl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", banned_token)))
+        .insert_header(("Authorization", format!("Bearer {banned_token}")))
         .set_json(&submission_data)
         .to_request();
 
@@ -783,7 +782,7 @@ async fn delete_submission() {
 
     let req = test::TestRequest::delete()
         .uri(format!("/aredl/submissions/{submission}").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -823,7 +822,7 @@ async fn get_submission_queue() {
 
     let req = test::TestRequest::get()
         .uri(&format!("/aredl/submissions/{submission}/queue"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -848,7 +847,7 @@ async fn claim_submission_base_reviewer_skips_raw_submissions() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/submissions/claim")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -869,7 +868,7 @@ async fn claim_submission_base_reviewer_no_claimable_submissions() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/submissions/claim")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
 
@@ -893,7 +892,7 @@ async fn claim_submission_full_reviewer_can_claim_raw_submission() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/submissions/claim")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -914,7 +913,7 @@ async fn patch_submission_base_reviewer_cannot_edit_other_raw_submission() {
 
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(json!({"reviewer_notes": "Cannot review raw as base"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -947,7 +946,7 @@ async fn patch_submission_base_reviewer_cannot_edit_other_under_consideration_su
 
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(json!({"reviewer_notes": "Cannot edit UC as base"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -980,7 +979,7 @@ async fn patch_submission_base_reviewer_can_edit_claimed_submission_without_raw(
 
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(json!({"reviewer_notes": "Reviewed by base"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -1014,7 +1013,7 @@ async fn patch_submission_base_reviewer_cannot_edit_claimed_submission_assigned_
 
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(json!({"reviewer_notes": "Cannot edit others' claimed submissions"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -1045,7 +1044,7 @@ async fn create_submission_base_reviewer_cannot_override_submitted_by() {
 
     let req = test::TestRequest::post()
         .uri("/aredl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&submission_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -1065,7 +1064,7 @@ async fn patch_submission_no_changes() {
 
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(json!({}))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -1087,7 +1086,7 @@ async fn patch_submission_invalid_urls() {
 
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(json!({"video_url":"not a url"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -1100,7 +1099,7 @@ async fn patch_submission_invalid_urls() {
 
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(json!({"raw_url":"not a url"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -1124,7 +1123,7 @@ async fn patch_submission_banned_submitter() {
 
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(json!({"video_url": "https://www.youtube.com/watch?v=banupdate11"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -1148,7 +1147,7 @@ async fn patch_submission_legacy_level_rejected() {
     let submission = create_test_submission(level, user, &db).await;
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(json!({"raw_url": "https://www.youtube.com/watch?v=rawupdate11"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -1172,7 +1171,7 @@ async fn patch_submission_under_review_rejected() {
 
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(json!({"video_url": "https://www.youtube.com/watch?v=reviewed111"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -1198,7 +1197,7 @@ async fn patch_resubmission_closed() {
 
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(json!({"video_url": "https://www.youtube.com/watch?v=closed11111"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -1221,7 +1220,7 @@ async fn patch_submission_mod_invalid_urls() {
 
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(json!({"video_url": "not a url"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -1234,7 +1233,7 @@ async fn patch_submission_mod_invalid_urls() {
 
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(json!({"raw_url": "not a url"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -1256,7 +1255,7 @@ async fn patch_submission_mod_downgrades_for_own_submission() {
 
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(json!({
             "video_url": "https://www.youtube.com/watch?v=selfupdate1",
             "status": "Accepted",
@@ -1283,7 +1282,7 @@ async fn patch_submission_mod_no_changes() {
     // no changes
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(json!({}))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -1311,7 +1310,7 @@ async fn post_submission_duplicate_level() {
 
     let req = test::TestRequest::post()
         .uri("/aredl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&submission_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -1319,7 +1318,7 @@ async fn post_submission_duplicate_level() {
 
     let req = test::TestRequest::post()
         .uri("/aredl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&submission_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -1349,7 +1348,7 @@ async fn post_submission_legacy_level_rejected() {
 
     let req = test::TestRequest::post()
         .uri("/aredl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&submission_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -1376,7 +1375,7 @@ async fn post_submission_level_missing() {
 
     let req = test::TestRequest::post()
         .uri("/aredl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&submission_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -1406,7 +1405,7 @@ async fn post_submission_closed() {
 
     let req = test::TestRequest::post()
         .uri("/aredl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&submission_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -1428,7 +1427,7 @@ async fn delete_submission_requires_ownership_without_review_permission() {
 
     let req = test::TestRequest::delete()
         .uri(&format!("/aredl/submissions/{owner_submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", other_token)))
+        .insert_header(("Authorization", format!("Bearer {other_token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -1453,7 +1452,7 @@ async fn accept_submission() {
 
     let req = test::TestRequest::patch()
         .uri(format!("/aredl/submissions/{submission}").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&accept_data)
         .to_request();
 
@@ -1511,7 +1510,7 @@ async fn deny_submission() {
 
     let req = test::TestRequest::patch()
         .uri(format!("/aredl/submissions/{submission}").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&deny_data)
         .to_request();
 
@@ -1566,7 +1565,7 @@ async fn submission_under_consideration() {
 
     let req = test::TestRequest::patch()
         .uri(format!("/aredl/submissions/{submission}").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&under_consideration_data)
         .to_request();
 
@@ -1620,7 +1619,7 @@ async fn submission_under_review_sends_websocket_notification() {
 
     let req = test::TestRequest::patch()
         .uri(format!("/aredl/submissions/{submission}").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(json!({"status": "UnderReview"}))
         .to_request();
 
@@ -1665,7 +1664,7 @@ async fn cannot_edit_after_submission_locked() {
 
     let lock_req = test::TestRequest::patch()
         .uri(format!("/aredl/submissions/{submission}").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", moderator_token)))
+        .insert_header(("Authorization", format!("Bearer {moderator_token}")))
         .set_json(&locked_data)
         .to_request();
 
@@ -1680,7 +1679,7 @@ async fn cannot_edit_after_submission_locked() {
 
     let edit_req = test::TestRequest::patch()
         .uri(format!("/aredl/submissions/{submission}").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .insert_header(("Authorization", format!("Bearer {user_token}")))
         .set_json(&edit_data)
         .to_request();
 
@@ -1705,17 +1704,17 @@ async fn increment_shift() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/submissions/claim")
-        .insert_header(("Authorization", format!("Bearer {}", token_mod)))
+        .insert_header(("Authorization", format!("Bearer {token_mod}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
     let body: serde_json::Value = read_body_json(resp).await;
-    let sub_id = body["id"].as_str().unwrap().to_string();
+    let sub_id = body["id"].as_str().unwrap().to_owned();
 
     let accept_data = json!({"status": "Accepted", "reviewer_notes":"ok"});
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{sub_id}"))
-        .insert_header(("Authorization", format!("Bearer {}", token_mod)))
+        .insert_header(("Authorization", format!("Bearer {token_mod}")))
         .set_json(&accept_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -1738,7 +1737,7 @@ async fn shift_completes() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/submissions/claim")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -1747,7 +1746,7 @@ async fn shift_completes() {
 
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{sub_id}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(json!({"status": "Accepted"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -1781,7 +1780,7 @@ async fn reviewer_submission_can_set_reviewer_fields_for_other_users() {
 
     let other_req = test::TestRequest::post()
         .uri("/aredl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", reviewer_token)))
+        .insert_header(("Authorization", format!("Bearer {reviewer_token}")))
         .set_json(&other_submission)
         .to_request();
 
@@ -1820,7 +1819,7 @@ async fn reviewer_submission_can_set_reviewer_fields_for_other_users() {
 
     let reviewer_req = test::TestRequest::post()
         .uri("/aredl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", reviewer_token)))
+        .insert_header(("Authorization", format!("Bearer {reviewer_token}")))
         .set_json(&reviewer_submission)
         .to_request();
 
@@ -1896,7 +1895,7 @@ async fn accept_submission_triggers_record_timestamp_fetch_from_youtube() {
 
     let create_req = actix_web::test::TestRequest::post()
         .uri("/aredl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", submitter_token)))
+        .insert_header(("Authorization", format!("Bearer {submitter_token}")))
         .set_json(&submission_data)
         .to_request();
 
@@ -1919,8 +1918,8 @@ async fn accept_submission_triggers_record_timestamp_fetch_from_youtube() {
     let accept_resp = actix_web::test::call_service(
         &app,
         actix_web::test::TestRequest::patch()
-            .uri(&format!("/aredl/submissions/{}", submission_id))
-            .insert_header(("Authorization", format!("Bearer {}", moderator_token)))
+            .uri(&format!("/aredl/submissions/{submission_id}"))
+            .insert_header(("Authorization", format!("Bearer {moderator_token}")))
             .set_json(&accept_data)
             .to_request(),
     )
@@ -1954,8 +1953,7 @@ async fn accept_submission_triggers_record_timestamp_fetch_from_youtube() {
 
     assert!(
         ok,
-        "achieved_at never updated to expected value; created_at={}, last_seen={:?}",
-        created_at, last_seen
+        "achieved_at never updated to expected value; created_at={created_at}, last_seen={last_seen:?}"
     );
 
     assert_eq!(yt_mock.calls_async().await, 1);
@@ -1990,8 +1988,8 @@ async fn patch_submission_mod_patch_non_claimed() {
 
     // Ensure the base reviewer cannot accept this submission while it is not claimed
     let req = test::TestRequest::patch()
-        .uri(&format!("/aredl/submissions/{}", submission_1))
-        .insert_header(("Authorization", format!("Bearer {}", mod_token)))
+        .uri(&format!("/aredl/submissions/{submission_1}"))
+        .insert_header(("Authorization", format!("Bearer {mod_token}")))
         .set_json(&patch_data)
         .to_request();
 
@@ -2015,8 +2013,8 @@ async fn patch_submission_mod_patch_non_claimed() {
 
     // Retry accepting
     let req = test::TestRequest::patch()
-        .uri(&format!("/aredl/submissions/{}", submission_1))
-        .insert_header(("Authorization", format!("Bearer {}", mod_token)))
+        .uri(&format!("/aredl/submissions/{submission_1}"))
+        .insert_header(("Authorization", format!("Bearer {mod_token}")))
         .set_json(&patch_data)
         .to_request();
 
@@ -2030,8 +2028,8 @@ async fn patch_submission_mod_patch_non_claimed() {
 
     // Ensure a user with the EditNonClaimedSubmissions permission can accept a submission that is not claimed
     let req = test::TestRequest::patch()
-        .uri(&format!("/aredl/submissions/{}", submission_2))
-        .insert_header(("Authorization", format!("Bearer {}", elevated_token)))
+        .uri(&format!("/aredl/submissions/{submission_2}"))
+        .insert_header(("Authorization", format!("Bearer {elevated_token}")))
         .set_json(&patch_data)
         .to_request();
 

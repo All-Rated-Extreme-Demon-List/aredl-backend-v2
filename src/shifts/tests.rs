@@ -25,12 +25,12 @@ async fn get_shifts_list() {
     create_test_shift(&db, user_id, false).await;
     let req = test::TestRequest::get()
         .uri("/shifts")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let body: serde_json::Value = read_body_json(resp).await;
-    assert_ne!(body["data"].as_array().unwrap().len(), 0)
+    assert_ne!(body["data"].as_array().unwrap().len(), 0);
 }
 
 #[actix_web::test]
@@ -42,7 +42,7 @@ async fn get_my_shifts() {
     create_test_shift(&db, user_id, false).await;
     let req = test::TestRequest::get()
         .uri("/shifts/@me")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -51,7 +51,7 @@ async fn get_my_shifts() {
         .as_array()
         .unwrap()
         .iter()
-        .all(|x| x["user"].as_object().unwrap()["id"].as_str().unwrap() == user_id.to_string()))
+        .all(|x| x["user"].as_object().unwrap()["id"].as_str().unwrap() == user_id.to_string()));
 }
 
 #[actix_web::test]
@@ -63,7 +63,7 @@ async fn get_my_shifts_requires_submission_review_base() {
 
     let req = test::TestRequest::get()
         .uri("/shifts/@me")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
 
@@ -85,7 +85,7 @@ async fn get_my_shifts_accepts_base_reviewer() {
 
     let req = test::TestRequest::get()
         .uri("/shifts/@me")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -102,8 +102,8 @@ async fn patch_shift() {
         "status": "Completed"
     });
     let req = test::TestRequest::patch()
-        .uri(&format!("/shifts/{}", shift_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/shifts/{shift_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&patch_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -113,7 +113,7 @@ async fn patch_shift() {
         patch_data["status"].as_str().unwrap(),
         body["status"].as_str().unwrap(),
         "Statuses do not match!"
-    )
+    );
 }
 
 #[actix_web::test]
@@ -124,8 +124,8 @@ async fn delete_shift() {
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let shift_id = create_test_shift(&db, user_id, false).await;
     let req = test::TestRequest::delete()
-        .uri(&format!("/shifts/{}", shift_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/shifts/{shift_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -146,7 +146,7 @@ async fn create_recurring_shift() {
     });
     let req = test::TestRequest::post()
         .uri("/shifts/recurring")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&insert_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -164,7 +164,7 @@ async fn list_recurring_shifts() {
     create_test_recurring_shift(&db, user_id).await;
     let req = test::TestRequest::get()
         .uri("/shifts/recurring")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -190,7 +190,7 @@ async fn list_recurring_shifts_hides_base_reviewers_for_non_auditor() {
 
     let req = test::TestRequest::get()
         .uri("/shifts/recurring")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -223,7 +223,7 @@ async fn list_recurring_shifts_keeps_base_reviewers_for_auditor() {
 
     let req = test::TestRequest::get()
         .uri("/shifts/recurring")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -244,7 +244,7 @@ async fn list_recurring_shifts_requires_submission_review_full() {
 
     let req = test::TestRequest::get()
         .uri("/shifts/recurring")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
 
@@ -267,8 +267,8 @@ async fn patch_recurring_shift() {
         "target_count": 42
     });
     let req = test::TestRequest::patch()
-        .uri(&format!("/shifts/recurring/{}", recurring_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/shifts/recurring/{recurring_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&patch_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -285,8 +285,8 @@ async fn delete_recurring_shift() {
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let recurring_id = create_test_recurring_shift(&db, user_id).await;
     let req = test::TestRequest::delete()
-        .uri(&format!("/shifts/recurring/{}", recurring_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/shifts/recurring/{recurring_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -404,7 +404,7 @@ async fn create_shift_instantly() {
 
     let req = test::TestRequest::post()
         .uri("/shifts")
-        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .insert_header(("Authorization", format!("Bearer {staff_token}")))
         .set_json(&insert_data)
         .to_request();
 
@@ -436,7 +436,7 @@ async fn create_shift_instantly() {
 
     let req = test::TestRequest::post()
         .uri("/shifts")
-        .insert_header(("Authorization", format!("Bearer {}", admin_token)))
+        .insert_header(("Authorization", format!("Bearer {admin_token}")))
         .set_json(&insert_data)
         .to_request();
 
@@ -468,7 +468,7 @@ async fn create_shift_instantly() {
 
     let req = test::TestRequest::post()
         .uri("/shifts")
-        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .insert_header(("Authorization", format!("Bearer {staff_token}")))
         .set_json(&insert_data)
         .to_request();
 

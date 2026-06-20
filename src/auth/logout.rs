@@ -34,7 +34,7 @@ pub async fn logout_all(
         .headers()
         .get(header::AUTHORIZATION)
         .and_then(|h| h.to_str().ok())
-        .map(|h| h.strip_prefix("Bearer ").unwrap_or("").to_string());
+        .map(|h| h.strip_prefix("Bearer ").unwrap_or("").to_owned());
 
     let Some(token) = token else {
         return Err(ApiError::Unauthorized("No token provided"));

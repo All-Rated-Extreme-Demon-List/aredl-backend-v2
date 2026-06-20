@@ -7,8 +7,6 @@ use crate::schema::users;
 use crate::users::{BaseUser, BaseUserWithBanLevel};
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
-use diesel::PgSortExpressionMethods;
-use diesel::{ExpressionMethods, RunQueryDsl};
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -204,7 +202,7 @@ pub struct LevelQueryOptions {
 impl Level {
     pub fn find_all(
         conn: &mut DbConnection,
-        query: LevelQueryOptions,
+        query: &LevelQueryOptions,
     ) -> Result<Vec<Self>, ApiError> {
         let mut levels = if let Some(at) = query.at {
             Self::get_all_levels_at_timestamp(conn, at)?
@@ -325,7 +323,7 @@ impl Level {
 impl LevelWithUserCompletionStatus {
     pub fn find_all(
         conn: &mut DbConnection,
-        query: LevelQueryOptions,
+        query: &LevelQueryOptions,
         user_id: Option<Uuid>,
     ) -> Result<Vec<Self>, ApiError> {
         let levels = Level::find_all(conn, query)?;

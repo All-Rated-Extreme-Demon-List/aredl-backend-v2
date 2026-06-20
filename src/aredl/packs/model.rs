@@ -3,7 +3,7 @@ use crate::aredl::packtiers::BasePackTier;
 use crate::error_handler::ApiError;
 use crate::schema::aredl::packs;
 use diesel::pg::Pg;
-use diesel::{ExpressionMethods, RunQueryDsl};
+use diesel::{ExpressionMethods as _, RunQueryDsl as _};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;

@@ -5,8 +5,8 @@ use crate::providers::ProvidersAppState;
 use crate::scheduled::{sleep_until_next, startup_schedule};
 use crate::schema::users;
 use chrono::Utc;
-use diesel::PgSortExpressionMethods;
-use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl, RunQueryDsl};
+use diesel::PgSortExpressionMethods as _;
+use diesel::{BoolExpressionMethods as _, ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _};
 use reqwest::header::{HeaderMap, AUTHORIZATION};
 use reqwest::StatusCode;
 use serde::Deserialize;
@@ -38,8 +38,7 @@ async fn sleep_for_ratelimit(headers: &HeaderMap, default_sleep_ms: u64) {
     ) {
         (Some(remaining), Some(reset_after)) if remaining <= 1 => {
             Duration::try_from_secs_f64(reset_after)
-                .map(|duration| duration.saturating_add(Duration::from_millis(50)))
-                .unwrap_or(default_sleep)
+                .map_or(default_sleep, |duration| duration.saturating_add(Duration::from_millis(50)))
         }
         _ => default_sleep,
     };
@@ -53,12 +52,10 @@ pub async fn start_discord_avatars_refresher(
 ) -> Result<(), StartupError> {
     let schedule = startup_schedule("DISCORD_AVATARS_REFRESH_SCHEDULE")?;
 
-    let discord_base = providers
-        .context
-        .discord_auth
-        .as_ref()
-        .map(|discord_auth| discord_auth.api_base_uri.clone())
-        .unwrap_or_else(|| "https://discord.com".to_string());
+    let discord_base = providers.context.discord_auth.as_ref().map_or_else(
+        || "https://discord.com".to_owned(),
+        |discord_auth| discord_auth.api_base_uri.clone(),
+    );
 
     let client = reqwest::Client::builder()
         .user_agent("AredlBackend/2.0 (+https://api.aredl.net)")
@@ -107,10 +104,10 @@ pub async fn start_discord_avatars_refresher(
                         continue;
                     };
 
-                    let url = format!("{}/api/v10/users/{}", discord_base, discord_id);
+                    let url = format!("{discord_base}/api/v10/users/{discord_id}");
                     let resp = match client
                         .get(&url)
-                        .header(AUTHORIZATION, format!("Bot {}", discord_bot_token))
+                        .header(AUTHORIZATION, format!("Bot {discord_bot_token}"))
                         .send()
                         .await
                     {

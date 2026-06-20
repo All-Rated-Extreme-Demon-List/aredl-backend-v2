@@ -9,7 +9,7 @@ pub struct AuthAppState {
     pub jwt_decoding_key: DecodingKey,
 }
 
-pub async fn init_app_state() -> Result<Arc<AuthAppState>, StartupError> {
+pub fn init_app_state() -> Result<Arc<AuthAppState>, StartupError> {
     let jwt_secret = get_secret("JWT_SECRET")?;
 
     Ok(Arc::new(AuthAppState {

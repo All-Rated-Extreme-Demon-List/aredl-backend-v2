@@ -1,5 +1,5 @@
 #[cfg(test)]
-use {crate::app_data::db::DbAppState, diesel::RunQueryDsl, std::sync::Arc};
+use {crate::app_data::db::DbAppState, diesel::RunQueryDsl as _, std::sync::Arc};
 
 #[cfg(test)]
 pub fn refresh_test_submission_totals(db: &Arc<DbAppState>) {

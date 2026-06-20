@@ -9,8 +9,8 @@ use crate::users::ExtendedBaseUser;
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::{
-    delete, insert_into, Connection, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl,
-    RunQueryDsl, SelectableHelper,
+    delete, insert_into, Connection as _, ExpressionMethods as _, JoinOnDsl as _, OptionalExtension as _, QueryDsl as _,
+    RunQueryDsl as _, SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -92,10 +92,10 @@ impl ClanMember {
     pub fn add_all(
         conn: &mut DbConnection,
         clan_id: Uuid,
-        members: Vec<Uuid>,
+        members: &[Uuid],
     ) -> Result<Vec<Uuid>, ApiError> {
         let result = conn.transaction(|connection| -> Result<Vec<Uuid>, ApiError> {
-            Self::add_members(clan_id, members.as_ref(), connection)?;
+            Self::add_members(clan_id, members, connection)?;
 
             let members = clan_members::table
                 .filter(clan_members::clan_id.eq(clan_id))
@@ -111,12 +111,12 @@ impl ClanMember {
     pub fn remove_all(
         conn: &mut DbConnection,
         clan_id: Uuid,
-        members: Vec<Uuid>,
+        members: &[Uuid],
     ) -> Result<Vec<Uuid>, ApiError> {
         let result = conn.transaction(|connection| -> Result<Vec<Uuid>, ApiError> {
             delete(clan_members::table)
                 .filter(clan_members::clan_id.eq(clan_id))
-                .filter(clan_members::user_id.eq_any(&members))
+                .filter(clan_members::user_id.eq_any(members))
                 .execute(connection)?;
 
             let members = clan_members::table
@@ -145,11 +145,11 @@ impl ClanMember {
                 .iter()
                 .map(|member| member.user_id)
                 .collect();
-            let requested_user_ids: HashSet<Uuid> = members.iter().cloned().collect();
+            let requested_user_ids: HashSet<Uuid> = members.iter().copied().collect();
 
             let users_to_remove: Vec<Uuid> = existing_user_ids
                 .difference(&requested_user_ids)
-                .cloned()
+                .copied()
                 .collect();
             if !users_to_remove.is_empty() {
                 delete(clan_members::table)
@@ -160,7 +160,7 @@ impl ClanMember {
 
             let users_to_add: Vec<Uuid> = requested_user_ids
                 .difference(&existing_user_ids)
-                .cloned()
+                .copied()
                 .collect();
             if !users_to_add.is_empty() {
                 Self::add_members(clan_id, &users_to_add, connection)?;
@@ -176,7 +176,7 @@ impl ClanMember {
         conn: &mut DbConnection,
         clan_id: Uuid,
         user_id: Uuid,
-        member: ClanMemberUpdate,
+        member: &ClanMemberUpdate,
     ) -> Result<Self, ApiError> {
         conn.transaction(|conn| {
             if member.role == 2 {

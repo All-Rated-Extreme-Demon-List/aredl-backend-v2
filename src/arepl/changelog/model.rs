@@ -6,8 +6,8 @@ use crate::schema::arepl::{levels, position_history};
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::{
-    ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl, Selectable,
-    SelectableHelper,
+    ExpressionMethods as _, JoinOnDsl as _, NullableExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, Selectable,
+    SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -164,7 +164,8 @@ impl ChangelogPage {
         let records_resolved = records
             .into_iter()
             .map(|(entry, affected, above, below)| {
-                let action = ChangelogAction::from_data(&entry, &affected, &above, &below);
+                let action =
+                    ChangelogAction::from_data(&entry, &affected, above.as_ref(), below.as_ref());
                 ChangelogEntry {
                     created_at: entry.created_at,
                     affected_level: affected,
@@ -191,8 +192,8 @@ impl ChangelogAction {
     pub fn from_data(
         entry: &ChangelogEntryData,
         level: &BaseLevel,
-        level_above: &Option<BaseLevel>,
-        level_below: &Option<BaseLevel>,
+        level_above: Option<&BaseLevel>,
+        level_below: Option<&BaseLevel>,
     ) -> Self {
         match (
             &entry.old_status,
@@ -223,7 +224,6 @@ impl ChangelogAction {
                     level_above,
                     level_below,
                 ) {
-                    (_, 0, _, _) => unknown,
                     (true, 1, _, Some(other_level)) => Self::Swapped {
                         upper_position: new_position,
                         upper_level: level.clone(),
@@ -234,7 +234,7 @@ impl ChangelogAction {
                         upper_level: other_level.clone(),
                         other_level: other_level.clone(),
                     },
-                    (_, 1, _, _) => unknown,
+                    (_, 1 | 0, _, _) => unknown,
                     (true, _, _, _) => Self::Raised {
                         new_position,
                         old_position,

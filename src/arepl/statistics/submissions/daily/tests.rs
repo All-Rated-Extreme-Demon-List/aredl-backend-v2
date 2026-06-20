@@ -1,3 +1,4 @@
+use actix_http::StatusCode;
 #[cfg(test)]
 use {
     crate::{
@@ -24,7 +25,6 @@ use {
     serde_json::Value,
     uuid::Uuid,
 };
-use {actix_http::StatusCode};
 
 #[actix_web::test]
 async fn submission_stats_filter_moderator() {
@@ -41,12 +41,11 @@ async fn submission_stats_filter_moderator() {
     refresh_test_submission_stats(&db).await;
 
     let uri = format!(
-        "/arepl/statistics/submissions/daily?reviewer_id={}&page=1&per_page=10",
-        mod_id
+        "/arepl/statistics/submissions/daily?reviewer_id={mod_id}&page=1&per_page=10"
     );
     let req = test::TestRequest::get()
         .uri(&uri)
-        .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
+        .insert_header((header::AUTHORIZATION, format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "Status: {}", resp.status());
@@ -87,15 +86,14 @@ async fn submission_stats_hides_base_reviewer_filter_for_non_auditor() {
     refresh_test_submission_stats(&db).await;
 
     let uri = format!(
-        "/arepl/statistics/submissions/daily?reviewer_id={}&page=1&per_page=10",
-        base_reviewer
+        "/arepl/statistics/submissions/daily?reviewer_id={base_reviewer}&page=1&per_page=10"
     );
 
     let req = test::TestRequest::get()
         .uri(&uri)
         .insert_header((
             header::AUTHORIZATION,
-            format!("Bearer {}", non_auditor_token),
+            format!("Bearer {non_auditor_token}"),
         ))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -106,7 +104,7 @@ async fn submission_stats_hides_base_reviewer_filter_for_non_auditor() {
 
     let req = test::TestRequest::get()
         .uri(&uri)
-        .insert_header((header::AUTHORIZATION, format!("Bearer {}", auditor_token)))
+        .insert_header((header::AUTHORIZATION, format!("Bearer {auditor_token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "Status: {}", resp.status());
@@ -162,7 +160,7 @@ async fn submission_leaderboard_include_base_reviewers_requires_audit() {
         .uri(uri)
         .insert_header((
             header::AUTHORIZATION,
-            format!("Bearer {}", non_auditor_token),
+            format!("Bearer {non_auditor_token}"),
         ))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -173,7 +171,7 @@ async fn submission_leaderboard_include_base_reviewers_requires_audit() {
 
     let req = test::TestRequest::get()
         .uri(uri)
-        .insert_header((header::AUTHORIZATION, format!("Bearer {}", auditor_token)))
+        .insert_header((header::AUTHORIZATION, format!("Bearer {auditor_token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -191,7 +189,7 @@ async fn submission_stats_endpoints_require_full_review_permission() {
 
     let req = test::TestRequest::get()
         .uri("/arepl/statistics/submissions/daily?page=1&per_page=10")
-        .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
+        .insert_header((header::AUTHORIZATION, format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_error_response(
@@ -203,7 +201,7 @@ async fn submission_stats_endpoints_require_full_review_permission() {
 
     let req = test::TestRequest::get()
         .uri("/arepl/statistics/submissions/daily/leaderboard")
-        .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
+        .insert_header((header::AUTHORIZATION, format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_error_response(
@@ -236,7 +234,7 @@ async fn submission_leaderboard_counts_and_ordering() {
 
     let req = test::TestRequest::get()
         .uri("/arepl/statistics/submissions/daily/leaderboard")
-        .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
+        .insert_header((header::AUTHORIZATION, format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -269,7 +267,7 @@ async fn submission_leaderboard_only_active_filters_out() {
     let uri = "/arepl/statistics/submissions/daily/leaderboard?only_active=true";
     let req = test::TestRequest::get()
         .uri(uri)
-        .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
+        .insert_header((header::AUTHORIZATION, format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -295,13 +293,12 @@ async fn submission_leaderboard_since_filters_out_future_date() {
 
     let tomorrow = chrono::Utc::now().date_naive() + chrono::Duration::days(1);
     let uri = format!(
-        "/arepl/statistics/submissions/daily/leaderboard?since={}",
-        tomorrow
+        "/arepl/statistics/submissions/daily/leaderboard?since={tomorrow}"
     );
 
     let req = test::TestRequest::get()
         .uri(&uri)
-        .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
+        .insert_header((header::AUTHORIZATION, format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -373,7 +370,7 @@ async fn submission_leaderboard_until_filters_out_later_dates() {
 
     let req = test::TestRequest::get()
         .uri("/arepl/statistics/submissions/daily/leaderboard?until=2024-01-10")
-        .insert_header((header::AUTHORIZATION, format!("Bearer {}", token)))
+        .insert_header((header::AUTHORIZATION, format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());

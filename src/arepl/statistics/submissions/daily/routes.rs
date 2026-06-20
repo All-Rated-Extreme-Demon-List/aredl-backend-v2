@@ -83,7 +83,7 @@ pub async fn leaderboard_route(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let data = web::block(move || {
-        stats_mod_leaderboard(&mut db.connection()?, query.into_inner(), authenticated)
+        stats_mod_leaderboard(&mut db.connection()?, &query.into_inner(), &authenticated)
     })
     .await??;
     Ok(HttpResponse::Ok().json(data))

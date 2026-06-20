@@ -22,13 +22,13 @@ async fn create_ldm() {
     let level_id = create_test_level(&db).await;
 
     let ldm_data = json!({
-        "ldm_id": 123456,
+        "ldm_id": 123_456,
         "id_type": "Bugfix",
         "status": "Allowed",
     });
     let req = test::TestRequest::post()
-        .uri(format!("/aredl/levels/ldms/{}", level_id).as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(format!("/aredl/levels/ldms/{level_id}").as_str())
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&ldm_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -66,8 +66,8 @@ async fn update_ldm() {
         "id_type": "Ldm"
     });
     let req = test::TestRequest::patch()
-        .uri(format!("/aredl/levels/ldms/{}", ldm).as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(format!("/aredl/levels/ldms/{ldm}").as_str())
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&ldm_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -91,8 +91,8 @@ async fn delete_ldm() {
     let ldm = create_test_ldm(&db, level_id, user_id).await;
 
     let req = test::TestRequest::delete()
-        .uri(format!("/aredl/levels/ldms/{}", ldm).as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(format!("/aredl/levels/ldms/{ldm}").as_str())
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -109,7 +109,7 @@ async fn list_ldms() {
     create_test_ldm(&db, level_id, user_id).await;
 
     let req = test::TestRequest::get()
-        .uri(format!("/aredl/levels/ldms?level_id={}&type_filter=Bugfix&status_filter=Allowed&description=%es%", level_id).as_str())
+        .uri(format!("/aredl/levels/ldms?level_id={level_id}&type_filter=Bugfix&status_filter=Allowed&description=%es%").as_str())
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -135,14 +135,14 @@ async fn ldm_auth() {
     let level_id = create_test_level(&db).await;
 
     let ldm_data = json!({
-        "ldm_id": 123456,
+        "ldm_id": 123_456,
         "description": "test description",
         "id_type": "Bugfix",
         "status": "Allowed"
     });
     let req = test::TestRequest::post()
-        .uri(format!("/aredl/levels/ldms/{}", level_id).as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(format!("/aredl/levels/ldms/{level_id}").as_str())
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&ldm_data)
         .to_request();
     let resp = test::call_service(&app, req).await;

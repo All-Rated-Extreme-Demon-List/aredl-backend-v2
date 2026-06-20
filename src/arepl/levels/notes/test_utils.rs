@@ -8,7 +8,7 @@ use crate::app_data::db::DbAppState;
 #[cfg(test)]
 use crate::schema::arepl::level_notes;
 #[cfg(test)]
-use diesel::{ExpressionMethods, RunQueryDsl};
+use diesel::{ExpressionMethods as _, RunQueryDsl as _};
 #[cfg(test)]
 use uuid::Uuid;
 
@@ -22,7 +22,7 @@ pub async fn create_test_note(db: &Arc<DbAppState>, level_id: Uuid, user: Uuid) 
             level_notes::added_by.eq(user),
             level_notes::level_id.eq(level_id),
             level_notes::note_type.eq(LevelNotesType::BuffDate),
-            level_notes::note.eq("This is a test note".to_string()),
+            level_notes::note.eq("This is a test note".to_owned()),
             level_notes::timestamp.eq(chrono::Utc::now()),
         ))
         .execute(&mut db.connection().unwrap())

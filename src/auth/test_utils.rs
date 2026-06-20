@@ -5,7 +5,7 @@ use crate::schema::{
     users::dsl::{access_valid_after, id as user_id_col, users},
 };
 use chrono::{DateTime, Utc};
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
+use diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -38,7 +38,7 @@ pub fn seed_connected_account(
             oauth_connected_accounts::user_id.eq(user_id),
             oauth_connected_accounts::provider.eq(provider),
             oauth_connected_accounts::provider_user_id.eq(provider_user_id),
-            oauth_connected_accounts::provider_user_name.eq(provider_user_name.map(str::to_string)),
+            oauth_connected_accounts::provider_user_name.eq(provider_user_name.map(str::to_owned)),
         ))
         .execute(&mut db.connection().unwrap())
         .unwrap();

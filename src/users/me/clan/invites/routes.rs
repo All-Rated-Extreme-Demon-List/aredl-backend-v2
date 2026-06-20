@@ -55,8 +55,10 @@ async fn accept(
     invite_id: web::Path<Uuid>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    web::block(move || ClanInvite::accept_invite(&mut db.connection()?, *invite_id, authenticated))
-        .await??;
+    web::block(move || {
+        ClanInvite::accept_invite(&mut db.connection()?, *invite_id, &authenticated)
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(()))
 }
 
@@ -82,8 +84,10 @@ async fn reject(
     invite_id: web::Path<Uuid>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    web::block(move || ClanInvite::reject_invite(&mut db.connection()?, *invite_id, authenticated))
-        .await??;
+    web::block(move || {
+        ClanInvite::reject_invite(&mut db.connection()?, *invite_id, &authenticated)
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(()))
 }
 

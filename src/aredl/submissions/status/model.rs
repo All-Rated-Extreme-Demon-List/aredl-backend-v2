@@ -6,8 +6,8 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use diesel::{
-    pg::Pg, result::Error as DieselError, ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl,
-    Selectable, SelectableHelper,
+    pg::Pg, result::Error as DieselError, ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _,
+    Selectable, SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;

@@ -6,10 +6,10 @@ use crate::{
     schema::{shifts, users},
     users::ExtendedBaseUser,
 };
-use chrono::{DateTime, Timelike, Utc};
+use chrono::{DateTime, Datelike as _, NaiveDate, Timelike as _, Utc, Weekday as ChronoWeekday};
 use diesel::{
-    pg::Pg, AsChangeset, ExpressionMethods, Identifiable, JoinOnDsl, QueryDsl, Queryable,
-    RunQueryDsl, SelectableHelper,
+    pg::Pg, AsChangeset, ExpressionMethods as _, Identifiable, JoinOnDsl as _, QueryDsl as _, Queryable,
+    RunQueryDsl as _, SelectableHelper as _,
 };
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
@@ -37,6 +37,20 @@ pub enum Weekday {
     Friday,
     Saturday,
     Sunday,
+}
+
+impl From<NaiveDate> for Weekday {
+    fn from(date: NaiveDate) -> Self {
+        match date.weekday() {
+            ChronoWeekday::Mon => Weekday::Monday,
+            ChronoWeekday::Tue => Weekday::Tuesday,
+            ChronoWeekday::Wed => Weekday::Wednesday,
+            ChronoWeekday::Thu => Weekday::Thursday,
+            ChronoWeekday::Fri => Weekday::Friday,
+            ChronoWeekday::Sat => Weekday::Saturday,
+            ChronoWeekday::Sun => Weekday::Sunday,
+        }
+    }
 }
 
 #[derive(
@@ -124,8 +138,8 @@ pub struct ShiftCreate {
 impl Shift {
     pub fn create(
         conn: &mut DbConnection,
-        new_shift: ShiftCreate,
-        authenticated: Authenticated,
+        new_shift: &ShiftCreate,
+        authenticated: &Authenticated,
     ) -> Result<Self, ApiError> {
         let mut end_at = Utc::now().with_second(0).expect("Constant should not fail")
             + chrono::Duration::hours(new_shift.length.into());
@@ -145,9 +159,9 @@ impl Shift {
         Ok(created)
     }
 
-    pub fn patch(conn: &mut DbConnection, id: Uuid, patch: ShiftPatch) -> Result<Self, ApiError> {
+    pub fn patch(conn: &mut DbConnection, id: Uuid, patch: &ShiftPatch) -> Result<Self, ApiError> {
         let updated = diesel::update(shifts::table.filter(shifts::id.eq(id)))
-            .set(&patch)
+            .set(patch)
             .get_result::<Shift>(conn)?;
         Ok(updated)
     }
@@ -213,7 +227,7 @@ impl ShiftPage {
     pub fn find_all<const D: i64>(
         conn: &mut DbConnection,
         page_query: PageQuery<D>,
-        options: ShiftFilterQuery,
+        options: &ShiftFilterQuery,
     ) -> Result<Paginated<ShiftPage>, ApiError> {
         let build_filtered = || {
             let mut q = shifts::table.into_boxed::<Pg>();

@@ -9,7 +9,7 @@ use crate::app_data::db::DbAppState;
 #[cfg(test)]
 use crate::schema::arepl::{pack_tiers, packs};
 #[cfg(test)]
-use diesel::{ExpressionMethods, RunQueryDsl};
+use diesel::{ExpressionMethods as _, RunQueryDsl as _};
 
 #[cfg(test)]
 pub async fn create_test_pack_tier(db: &Arc<DbAppState>) -> Uuid {

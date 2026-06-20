@@ -16,7 +16,7 @@ use crate::users::{BaseUser, ExtendedBaseUser};
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::{
-    ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
+    ExpressionMethods as _, JoinOnDsl as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
 };
 use indexmap::map::Entry;
 use indexmap::IndexMap;
@@ -165,7 +165,7 @@ impl ResolvedClanProfileRecord {
 }
 
 impl ResolvedClanMemberPoints {
-    pub fn from_data(entry: ClanMemberPointsEntry, member: ExtendedBaseUser) -> Self {
+    pub fn from_data(entry: &ClanMemberPointsEntry, member: ExtendedBaseUser) -> Self {
         Self {
             member,
             completed_levels: entry.completed_levels,
@@ -219,7 +219,7 @@ impl ClanProfileResolved {
             ))
             .load::<(ClanMemberPointsEntry, ExtendedBaseUser)>(conn)?
             .into_iter()
-            .map(|(entry, member)| ResolvedClanMemberPoints::from_data(entry, member))
+            .map(|(entry, member)| ResolvedClanMemberPoints::from_data(&entry, member))
             .collect();
 
         let created_rows: Vec<(ClanCreatedLevelEntry, ExtendedBaseLevel, BaseUser)> =

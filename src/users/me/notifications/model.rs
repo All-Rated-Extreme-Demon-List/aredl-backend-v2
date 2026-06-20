@@ -2,7 +2,7 @@ use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::notifications;
 use chrono::{DateTime, Utc};
-use diesel::{delete, Connection, ExpressionMethods, QueryDsl, RunQueryDsl};
+use diesel::{delete, Connection as _, ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _};
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;

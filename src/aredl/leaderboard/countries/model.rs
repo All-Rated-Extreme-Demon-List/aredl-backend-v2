@@ -11,8 +11,8 @@ use crate::schema::{
 use chrono::Utc;
 use diesel::pg::Pg;
 use diesel::{
-    ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl,
-    SelectableHelper,
+    ExpressionMethods as _, JoinOnDsl as _, NullableExpressionMethods as _, QueryDsl as _, RunQueryDsl as _,
+    SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -78,11 +78,12 @@ impl CountryLeaderboardPage {
         let mut query = build_query();
 
         match options.order.unwrap_or(LeaderboardOrder::TotalPoints) {
-            LeaderboardOrder::TotalPoints => query = query.order(country_leaderboard::rank.asc()),
-            LeaderboardOrder::ExtremeCount => {
-                query = query.order(country_leaderboard::extremes_rank.asc())
+            LeaderboardOrder::TotalPoints | LeaderboardOrder::RawPoints => {
+                query = query.order(country_leaderboard::rank.asc());
             }
-            LeaderboardOrder::RawPoints => query = query.order(country_leaderboard::rank.asc()),
+            LeaderboardOrder::ExtremeCount => {
+                query = query.order(country_leaderboard::extremes_rank.asc());
+            }
         }
 
         let raw_entries: Vec<(CountryLeaderboardEntry, Option<BaseLevel>)> = query

@@ -7,8 +7,9 @@ use crate::error_handler::ApiError;
 use crate::providers::ProvidersAppState;
 use crate::schema::oauth_connected_accounts;
 use actix_http::header;
+use actix_web::web::Json;
 use actix_web::{get, post, web, HttpResponse};
-use diesel::{BoolExpressionMethods, Connection, ExpressionMethods, QueryDsl, RunQueryDsl};
+use diesel::{BoolExpressionMethods as _, Connection as _, ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use url::Url;
@@ -59,9 +60,8 @@ async fn patreon_link(
     authenticated: Authenticated,
     options: Option<web::Json<OAuthOptions>>,
 ) -> Result<HttpResponse, ApiError> {
-    let options = options
-        .map(|options| options.into_inner())
-        .unwrap_or_default();
+    let options = options.map(Json::into_inner).unwrap_or_default();
+
     options.validate()?;
 
     let patreon_auth = providers
@@ -186,7 +186,7 @@ async fn fetch_patreon_identity(
     access_token: &str,
     patreon_base: &str,
 ) -> Result<PatreonIdentityResponse, ApiError> {
-    let url = format!("{}/oauth2/v2/identity", patreon_base);
+    let url = format!("{patreon_base}/oauth2/v2/identity");
 
     let response = reqwest::Client::new()
         .get(url)

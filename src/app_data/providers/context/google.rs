@@ -19,7 +19,7 @@ pub async fn new_google_context() -> Option<OAuthProviderContext> {
     match OAuthProviderContext::new_backend_only(
         OAuthProvider::Google,
         config,
-        "https://www.googleapis.com".to_string(),
+        "https://www.googleapis.com".to_owned(),
         BackendTokenState::new(BackendGrantType::RefreshToken),
     ) {
         Ok(context) => Some(context),

@@ -1,7 +1,7 @@
 use crate::{
     app_data::db::DbConnection,
     aredl::levels::LevelStatus,
-    aredl::submissions::{status::SubmissionsEnabled, *},
+    aredl::submissions::{status::SubmissionsEnabled, Submission, SubmissionStatus},
     auth::{Authenticated, Permission},
     error_handler::ApiError,
     notifications::WebsocketNotification,
@@ -14,8 +14,11 @@ use crate::{
     users::me::notifications::{Notification, NotificationType},
 };
 use chrono::Utc;
-use diesel::Connection;
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper};
+use diesel::Connection as _;
+use diesel::{
+    ExpressionMethods as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _,
+    SelectableHelper as _,
+};
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use utoipa::ToSchema;
@@ -83,8 +86,8 @@ impl Submission {
     pub fn update_user_shift(
         conn: &mut DbConnection,
         user_id: Uuid,
-        old_status: SubmissionStatus,
-        new_status: SubmissionStatus,
+        old_status: &SubmissionStatus,
+        new_status: &SubmissionStatus,
     ) -> Result<Option<Shift>, ApiError> {
         let from_ok = matches!(
             old_status,
@@ -138,7 +141,7 @@ impl SubmissionPatchUser {
         mut patch: Self,
         id: Uuid,
         conn: &mut DbConnection,
-        authenticated: Authenticated,
+        authenticated: &Authenticated,
         providers: &ProvidersAppState,
     ) -> Result<Submission, ApiError> {
         let user = authenticated.user_id;
@@ -250,8 +253,8 @@ impl SubmissionPatchMod {
         mut patch: Self,
         id: Uuid,
         conn: &mut DbConnection,
-        authenticated: Authenticated,
-        notify_tx: broadcast::Sender<WebsocketNotification>,
+        authenticated: &Authenticated,
+        notify_tx: &broadcast::Sender<WebsocketNotification>,
         providers: &ProvidersAppState,
     ) -> Result<Submission, ApiError> {
         if patch == Self::default() {
@@ -335,11 +338,11 @@ impl SubmissionPatchMod {
                     let (notif_type, message) = match new_status {
                         SubmissionStatus::Accepted => (
                             NotificationType::Success,
-                            format!("Your submission for {:?} has been accepted!", level_name),
+                            format!("Your submission for {level_name:?} has been accepted!"),
                         ),
                         SubmissionStatus::Denied => (
                             NotificationType::Failure,
-                            format!("Your submission for {:?} has been denied.", level_name),
+                            format!("Your submission for {level_name:?} has been denied."),
                         ),
                         SubmissionStatus::UnderConsideration => (
                             NotificationType::Info,
@@ -357,25 +360,15 @@ impl SubmissionPatchMod {
                     Notification::create(connection, updated.submitted_by, message, notif_type)?;
                 }
 
-                let websocket_type = if old_status != new_status {
-                    match new_status {
-                        SubmissionStatus::Accepted => Some("SUBMISSION_ACCEPTED"),
-                        SubmissionStatus::Denied => Some("SUBMISSION_DENIED"),
-                        SubmissionStatus::UnderConsideration => {
-                            Some("SUBMISSION_UNDER_CONSIDERATION")
-                        }
-                        SubmissionStatus::UnderReview => Some("SUBMISSION_UNDER_REVIEW"),
-                        SubmissionStatus::Claimed | SubmissionStatus::Pending => None,
-                    }
-                } else {
-                    None
-                };
+                let websocket_type = (old_status != new_status)
+                    .then_some(&new_status)
+                    .and_then(SubmissionStatus::websocket_type);
 
                 let completed_shift = Submission::update_user_shift(
                     connection,
                     authenticated.user_id,
-                    old_status,
-                    new_status,
+                    &old_status,
+                    &new_status,
                 )?;
 
                 Ok((updated, websocket_type, completed_shift))
@@ -383,10 +376,10 @@ impl SubmissionPatchMod {
         )?;
 
         if let Some(notification_type) = websocket_type {
-            WebsocketNotification::send(&notify_tx, notification_type, &result);
+            WebsocketNotification::send(notify_tx, notification_type, &result);
         }
         if let Some(completed_shift) = completed_shift {
-            WebsocketNotification::send(&notify_tx, "SHIFT_COMPLETED", &completed_shift);
+            WebsocketNotification::send(notify_tx, "SHIFT_COMPLETED", &completed_shift);
         }
 
         Ok(result)

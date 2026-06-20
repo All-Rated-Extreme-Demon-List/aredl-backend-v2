@@ -52,7 +52,7 @@ async fn find_all(
     let notes = web::block(move || {
         LevelNotes::find_all(
             &mut db.connection()?,
-            query.into_inner(),
+            &query.into_inner(),
             page_query.into_inner(),
             authenticated,
         )
@@ -84,7 +84,7 @@ async fn create(
     let notes = web::block(move || {
         let conn = &mut db.connection()?;
         let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
-        LevelNotes::create(conn, body.into_inner(), level_id, auth)
+        LevelNotes::create(conn, body.into_inner(), level_id, &auth)
     })
     .await??;
     Ok(HttpResponse::Ok().json(notes))

@@ -4,7 +4,6 @@ use crate::error_handler::ApiError;
 use crate::schema::aredl::{levels, position_history_full_view};
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
-use diesel::{ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;

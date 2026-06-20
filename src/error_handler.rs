@@ -76,7 +76,7 @@ impl StdError for StartupError {
         match self {
             StartupError::Config(error) => Some(error),
             StartupError::Io(error) => Some(error),
-            _ => None,
+            StartupError::Init(_) => None,
         }
     }
 }
@@ -103,7 +103,7 @@ impl ApiError {
     pub fn new(error_status_code: u16, error_message: &str) -> ApiError {
         ApiError {
             error_status_code,
-            error_message: error_message.to_string(),
+            error_message: error_message.to_owned(),
         }
     }
 }
@@ -200,16 +200,12 @@ impl From<DieselError> for ApiError {
                 )),
             },
             DieselError::NotFound => ApiError::NotFound("Not found"),
-            err @ DieselError::InvalidCString(_)
-            | err @ DieselError::QueryBuilderError(_)
-            | err @ DieselError::DeserializationError(_)
-            | err @ DieselError::SerializationError(_)
-            | err @ DieselError::RollbackErrorOnCommit { .. }
-            | err @ DieselError::RollbackTransaction
-            | err @ DieselError::AlreadyInTransaction
-            | err @ DieselError::NotInTransaction
-            | err @ DieselError::BrokenTransactionManager
-            | err => ApiError::InternalServerError(format!("Unexpected Internal error: {}", err)),
+            err @
+(DieselError::InvalidCString(_) | DieselError::QueryBuilderError(_) |
+DieselError::DeserializationError(_) | DieselError::SerializationError(_) |
+DieselError::RollbackErrorOnCommit { .. } | DieselError::RollbackTransaction |
+DieselError::AlreadyInTransaction | DieselError::NotInTransaction |
+DieselError::BrokenTransactionManager) | err => ApiError::InternalServerError(format!("Unexpected Internal error: {err}")),
         }
     }
 }
@@ -222,13 +218,13 @@ impl From<BlockingError> for ApiError {
 
 impl From<ParseError> for ApiError {
     fn from(error: ParseError) -> Self {
-        ApiError::InternalServerError(format!("Failed to parse URL: {}", error))
+        ApiError::InternalServerError(format!("Failed to parse URL: {error}"))
     }
 }
 
 impl From<ConfigError> for ApiError {
     fn from(error: ConfigError) -> Self {
-        ApiError::InternalServerError(format!("Configuration error: {}", error))
+        ApiError::InternalServerError(format!("Configuration error: {error}"))
     }
 }
 
@@ -250,9 +246,10 @@ impl ResponseError for ApiError {
     fn error_response(&self) -> HttpResponse {
         let status_code = self.status_code();
 
-        let error_message = match status_code.as_u16() < 500 {
-            true => self.error_message.clone(),
-            false => "Internal server error".to_string(),
+        let error_message = if status_code.as_u16() < 500 {
+            self.error_message.clone()
+        } else {
+            "Internal server error".to_owned()
         };
 
         HttpResponse::build(status_code).json(json!({"message": error_message}))

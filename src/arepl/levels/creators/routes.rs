@@ -63,7 +63,7 @@ async fn set(
     let creators = web::block(move || {
         let conn = &mut db.connection()?;
         let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
-        BaseUser::arepl_set_all_creators(conn, level_id, creators.into_inner())
+        BaseUser::arepl_set_all_creators(conn, level_id, &creators.into_inner())
     })
     .await??;
     Ok(HttpResponse::Ok().json(creators))
@@ -96,7 +96,7 @@ async fn add(
     let creators = web::block(move || {
         let conn = &mut db.connection()?;
         let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
-        BaseUser::arepl_add_all_creators(conn, level_id, creators.into_inner())
+        BaseUser::arepl_add_all_creators(conn, level_id, &creators.into_inner())
     })
     .await??;
     Ok(HttpResponse::Ok().json(creators))
@@ -129,7 +129,7 @@ async fn delete(
     let creators = web::block(move || {
         let conn = &mut db.connection()?;
         let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
-        BaseUser::arepl_delete_all_creators(conn, level_id, creators.into_inner())
+        BaseUser::arepl_delete_all_creators(conn, level_id, &creators.into_inner())
     })
     .await??;
     Ok(HttpResponse::Ok().json(creators))

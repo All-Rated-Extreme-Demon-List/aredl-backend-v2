@@ -82,9 +82,7 @@ pub async fn init_test_app() -> (
 ) {
     drop(dotenvy::dotenv());
 
-    let auth_app_state = auth_init_app_state()
-        .await
-        .expect("Failed to initialize auth test state");
+    let auth_app_state = auth_init_app_state().expect("Failed to initialize auth test state");
 
     let (notify_tx, _notify_rx) = broadcast::channel::<WebsocketNotification>(100);
 
@@ -127,9 +125,7 @@ pub async fn init_test_app_with_providers(
 ) {
     drop(dotenvy::dotenv());
 
-    let auth_app_state = auth_init_app_state()
-        .await
-        .expect("Failed to initialize auth test state");
+    let auth_app_state = auth_init_app_state().expect("Failed to initialize auth test state");
 
     let (notify_tx, _notify_rx) = broadcast::channel::<WebsocketNotification>(100);
 
@@ -186,8 +182,7 @@ pub async fn assert_error_response(
     assert_eq!(
         actual_status,
         expected_status.as_u16(),
-        "Unexpected status. message={}",
-        actual_message
+        "Unexpected status. message={actual_message}"
     );
 
     if let Some(expected_message) = expected_message {

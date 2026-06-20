@@ -8,8 +8,8 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use diesel::{
-    pg::Pg, BoolExpressionMethods, Connection, ExpressionMethods, OptionalExtension, QueryDsl,
-    RunQueryDsl, Selectable,
+    pg::Pg, BoolExpressionMethods as _, Connection as _, ExpressionMethods as _, OptionalExtension as _, QueryDsl as _,
+    RunQueryDsl as _, Selectable,
 };
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
@@ -27,6 +27,18 @@ pub enum SubmissionStatus {
     Denied,
     Accepted,
     UnderReview,
+}
+
+impl SubmissionStatus {
+    pub fn websocket_type(&self) -> Option<&'static str> {
+        match self {
+            SubmissionStatus::Accepted => Some("SUBMISSION_ACCEPTED"),
+            SubmissionStatus::Denied => Some("SUBMISSION_DENIED"),
+            SubmissionStatus::UnderConsideration => Some("SUBMISSION_UNDER_CONSIDERATION"),
+            SubmissionStatus::UnderReview => Some("SUBMISSION_UNDER_REVIEW"),
+            SubmissionStatus::Claimed | SubmissionStatus::Pending => None,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Queryable, Insertable, Selectable, Debug, ToSchema, Clone)]
@@ -174,7 +186,7 @@ impl Submission {
 
     pub fn claim_highest_priority(
         conn: &mut DbConnection,
-        authenticated: Authenticated,
+        authenticated: &Authenticated,
     ) -> Result<SubmissionResolved, ApiError> {
         conn.transaction(|conn| -> Result<SubmissionResolved, ApiError> {
             let is_full_reviewer =
@@ -212,7 +224,7 @@ impl Submission {
     pub fn delete(
         conn: &mut DbConnection,
         submission_id: Uuid,
-        authenticated: Authenticated,
+        authenticated: &Authenticated,
     ) -> Result<(), ApiError> {
         conn.transaction(|connection| -> Result<(), ApiError> {
             let mut query = diesel::delete(submissions::table)
