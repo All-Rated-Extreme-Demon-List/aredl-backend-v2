@@ -19,7 +19,7 @@ pub async fn new_discord_context() -> Option<OAuthProviderContext> {
     }
     config
         .return_path
-        .get_or_insert("/auth/discord".to_string());
+        .get_or_insert("/auth/discord/callback".to_string());
     config.use_pkce.get_or_insert(true);
 
     match OAuthProviderContext::new(

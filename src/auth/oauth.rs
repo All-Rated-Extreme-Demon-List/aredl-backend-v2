@@ -93,9 +93,7 @@ impl OAuthClientConfig {
             get_optional_secret("OAUTH_RETURN_URI_BASE"),
             self.return_path.as_deref(),
         ) {
-            (Some(base), Some(return_path)) => {
-                Ok(build_oauth_return_uri(&base, return_path, "callback"))
-            }
+            (Some(base), Some(return_path)) => Ok(build_oauth_return_uri(&base, return_path)),
             _ => self.redirect_uri.clone().ok_or_else(|| {
                 ApiError::InternalServerError(
                     "OAuth provider config missing return_path or redirect_uri",
@@ -111,7 +109,7 @@ impl OAuthClientConfig {
     }
 }
 
-pub(super) fn build_oauth_return_uri(base: &str, return_path: &str, callback_path: &str) -> String {
+pub(super) fn build_oauth_return_uri(base: &str, return_path: &str) -> String {
     let base = base.trim().trim_end_matches('/');
     let base = if base.starts_with("http://") || base.starts_with("https://") {
         base.to_string()
@@ -122,9 +120,7 @@ pub(super) fn build_oauth_return_uri(base: &str, return_path: &str, callback_pat
     };
 
     let return_path = return_path.trim().trim_matches('/');
-    let callback_path = callback_path.trim().trim_matches('/');
-
-    format!("{base}/{return_path}/{callback_path}")
+    format!("{base}/{return_path}")
 }
 
 #[derive(Clone)]

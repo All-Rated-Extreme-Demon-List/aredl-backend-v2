@@ -21,7 +21,7 @@ pub async fn new_patreon_context() -> Option<OAuthProviderContext> {
     }
     config
         .return_path
-        .get_or_insert("/auth/patreon".to_string());
+        .get_or_insert("/auth/patreon/callback".to_string());
     config.use_pkce.get_or_insert(false);
 
     match OAuthProviderContext::new(
