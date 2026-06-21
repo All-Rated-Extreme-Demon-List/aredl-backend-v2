@@ -174,9 +174,7 @@ async fn discord_auth_allows_configured_subdomain_callback() {
 async fn patreon_link_requires_authentication() {
     let (app, _, _, _) = init_test_app().await;
 
-    let req = test::TestRequest::get()
-        .uri("/auth/patreon/link")
-        .to_request();
+    let req = test::TestRequest::get().uri("/auth/patreon").to_request();
     let resp = test::call_service(&app, req).await;
 
     assert_eq!(resp.status(), actix_web::http::StatusCode::UNAUTHORIZED);
@@ -193,7 +191,7 @@ async fn patreon_link_rejects_untrusted_callback() {
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
 
     let req = test::TestRequest::get()
-        .uri("/auth/patreon/link?callback=https://unauthorized.com")
+        .uri("/auth/patreon?callback=https://unauthorized.com")
         .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -216,7 +214,7 @@ async fn patreon_link_returns_authorize_url() {
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
 
     let req = test::TestRequest::get()
-        .uri("/auth/patreon/link?callback=https://example.com/patreon/linked")
+        .uri("/auth/patreon?callback=https://example.com/patreon/linked")
         .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;

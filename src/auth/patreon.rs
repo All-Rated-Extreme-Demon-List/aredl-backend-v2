@@ -57,7 +57,7 @@ struct PatreonIdentityAttributes {
     ),
     security(("access_token" = []), ("api_key" = []))
 )]
-#[get("/link", wrap = "UserAuth::load()")]
+#[get("", wrap = "UserAuth::load()")]
 async fn patreon_link(
     db: web::Data<Arc<DbAppState>>,
     providers: web::Data<Arc<ProvidersAppState>>,
