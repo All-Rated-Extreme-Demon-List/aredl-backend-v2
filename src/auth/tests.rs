@@ -174,9 +174,8 @@ async fn discord_auth_allows_configured_subdomain_callback() {
 async fn patreon_link_requires_authentication() {
     let (app, _, _, _) = init_test_app().await;
 
-    let req = test::TestRequest::post()
+    let req = test::TestRequest::get()
         .uri("/auth/patreon/link")
-        .set_json(serde_json::json!({}))
         .to_request();
     let resp = test::call_service(&app, req).await;
 
@@ -193,10 +192,9 @@ async fn patreon_link_rejects_untrusted_callback() {
     let (user_id, _) = create_test_user(&db, None).await;
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
 
-    let req = test::TestRequest::post()
-        .uri("/auth/patreon/link")
+    let req = test::TestRequest::get()
+        .uri("/auth/patreon/link?callback=https://unauthorized.com")
         .insert_header(("Authorization", format!("Bearer {token}")))
-        .set_json(serde_json::json!({"callback": "https://unauthorized.com"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
 
@@ -217,10 +215,9 @@ async fn patreon_link_returns_authorize_url() {
     let (user_id, _) = create_test_user(&db, None).await;
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
 
-    let req = test::TestRequest::post()
-        .uri("/auth/patreon/link")
+    let req = test::TestRequest::get()
+        .uri("/auth/patreon/link?callback=https://example.com/patreon/linked")
         .insert_header(("Authorization", format!("Bearer {token}")))
-        .set_json(serde_json::json!({"callback": "https://example.com/patreon/linked"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
 

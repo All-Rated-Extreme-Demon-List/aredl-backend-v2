@@ -7,9 +7,11 @@ use crate::error_handler::ApiError;
 use crate::providers::ProvidersAppState;
 use crate::schema::oauth_connected_accounts;
 use actix_http::header;
-use actix_web::web::Json;
-use actix_web::{get, post, web, HttpResponse};
-use diesel::{BoolExpressionMethods as _, Connection as _, ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _};
+use actix_web::{get, web, HttpResponse};
+use diesel::{
+    BoolExpressionMethods as _, Connection as _, ExpressionMethods as _, QueryDsl as _,
+    RunQueryDsl as _,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use url::Url;
@@ -43,26 +45,28 @@ struct PatreonIdentityAttributes {
 }
 
 #[utoipa::path(
-    post,
+    get,
     summary = "[Auth]Link Patreon account",
     description = "Starts a Patreon OAuth flow to link the authenticated AREDL user to a Patreon account.",
     tag = "Authentication",
-    request_body = OAuthOptions,
+    params(
+        ("callback" = Option<String>, Query, description = "Optional URL to redirect to after Patreon linking")
+    ),
     responses(
         (status = 200, body = PatreonLinkResponse)
     ),
     security(("access_token" = []), ("api_key" = []))
 )]
-#[post("/link", wrap = "UserAuth::load()")]
+#[get("/link", wrap = "UserAuth::load()")]
 async fn patreon_link(
     db: web::Data<Arc<DbAppState>>,
     providers: web::Data<Arc<ProvidersAppState>>,
     authenticated: Authenticated,
-    options: Option<web::Json<OAuthOptions>>,
+    options: web::Query<OAuthOptions>,
 ) -> Result<HttpResponse, ApiError> {
-    let options = options.map(Json::into_inner).unwrap_or_default();
-
-    options.validate()?;
+    if options.callback.is_some() {
+        options.validate()?;
+    }
 
     let patreon_auth = providers
         .context
