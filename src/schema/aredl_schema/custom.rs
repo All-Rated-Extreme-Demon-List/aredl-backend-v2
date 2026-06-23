@@ -119,11 +119,14 @@ diesel::table! {
     aredl.completed_packs (user_id) {
         user_id -> Uuid,
         pack_id -> Uuid,
+        completed_at -> Timestamptz,
     }
 }
 
 diesel::joinable!(completed_packs -> users (user_id));
 diesel::joinable!(completed_packs -> packs (pack_id));
+
+diesel::allow_tables_to_appear_in_same_query!(completed_packs, users,);
 
 diesel::allow_tables_to_appear_in_same_query!(completed_packs, packs,);
 

@@ -1,8 +1,9 @@
 use crate::app_data::db::DbAppState;
-use crate::aredl::packs::{levels, Pack, PackCreate, PackUpdate};
+use crate::aredl::packs::{levels, CompletedPackVictor, Pack, PackCreate, PackUpdate};
 use crate::auth::{Permission, UserAuth};
+use crate::cache_control::CacheController;
 use crate::error_handler::ApiError;
-use actix_web::{delete, patch, post, web, HttpResponse};
+use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
@@ -89,6 +90,38 @@ async fn delete(
     Ok(HttpResponse::Ok().json(pack))
 }
 
+#[utoipa::path(
+    get,
+    summary = "Get Pack Victors",
+    description = "Fetch the list of all users who have completed this pack",
+    tag = "AREDL - Packs",
+    params(
+        ("pack_id" = Uuid, description = "Internal pack UUID")
+    ),
+    responses(
+        (status = 200, body = [CompletedPackVictor])
+    ),
+    security(
+        ("access_token" = ["PackModify"]),
+        ("api_key" = ["PackModify"]),
+    ),
+)]
+#[get(
+    "/{pack_id}/victors",
+    wrap = "CacheController::public_with_max_age(900)"
+)]
+async fn get_victors(
+    db: web::Data<Arc<DbAppState>>,
+    pack_id: web::Path<Uuid>,
+    root_span: RootSpan,
+) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", tracing::field::debug(&pack_id));
+    let victors =
+        web::block(move || Pack::find_victors(&mut db.connection()?, pack_id.into_inner()))
+            .await??;
+    Ok(HttpResponse::Ok().json(victors))
+}
+
 #[derive(OpenApi)]
 #[openapi(
     tags(
@@ -118,6 +151,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .service(create)
             .service(update)
             .service(delete)
+            .service(get_victors)
             .configure(levels::init_routes),
     );
 }
