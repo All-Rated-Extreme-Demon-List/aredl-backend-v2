@@ -20,6 +20,7 @@ use diesel::{
     PgTextExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
+use serde_with::rust::double_option;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -83,17 +84,13 @@ pub struct User {
     pub ban_level: i32,
     /// Discord avatar hash of the user. Updated on every login.
     pub discord_avatar: Option<String>,
-    /// Discord banner hash of the user. Updated on every login.
-    pub discord_banner: Option<String>,
-    /// Discord accent color of the user. Updated on every login.
-    pub discord_accent_color: Option<i32>,
     /// Timestamp of when the user was created.
     pub created_at: DateTime<Utc>,
     // Last time the user's tokens were invalidated.
     #[serde(skip_serializing)]
     pub access_valid_after: DateTime<Utc>,
     /// The level the user has beaten and chosen as their profile background.
-    pub background_level: i32,
+    pub background_level: Option<i32>,
     /// The badge the user has unlocked and chosen to feature on their profile.
     pub featured_badge_code: Option<String>,
 }
@@ -107,8 +104,6 @@ pub struct UserUpsert {
     pub placeholder: bool,
     pub country: Option<i32>,
     pub discord_avatar: Option<String>,
-    pub discord_banner: Option<String>,
-    pub discord_accent_color: Option<i32>,
     pub last_discord_avatar_update: Option<NaiveDateTime>,
 }
 
@@ -118,8 +113,6 @@ pub struct UserUpdateOnLogin {
     pub username: String,
     pub discord_id: Option<String>,
     pub discord_avatar: Option<String>,
-    pub discord_banner: Option<String>,
-    pub discord_accent_color: Option<i32>,
     pub last_discord_avatar_update: Option<NaiveDateTime>,
 }
 
@@ -143,9 +136,11 @@ pub struct UserUpdate {
     /// New global display name of the user.
     pub global_name: Option<String>,
     /// New description of the user.
-    pub description: Option<String>,
+    #[serde(default, with = "double_option")]
+    pub description: Option<Option<String>>,
     /// New country of the user. Uses the ISO 3166-1 numeric country code.
-    pub country: Option<i32>,
+    #[serde(default, with = "double_option")]
+    pub country: Option<Option<i32>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -281,8 +276,6 @@ impl User {
                     username: user_upsert.username.clone(),
                     discord_id: user_upsert.discord_id.clone(),
                     discord_avatar: user_upsert.discord_avatar,
-                    discord_banner: user_upsert.discord_banner,
-                    discord_accent_color: user_upsert.discord_accent_color,
                     last_discord_avatar_update: Some(Utc::now().naive_utc()),
                 })
                 .returning(Self::as_select())
@@ -390,7 +383,7 @@ impl User {
             .set((
                 submissions::status.eq(SubmissionStatus::Denied),
                 submissions::reviewer_id.eq(Some(authenticated.user_id)),
-                submissions::reviewer_notes.eq("This player has been list banned."),
+                submissions::reviewer_notes.eq("This submission has been automatically rejected because this player has been list banned."),
             ))
             .execute(conn)?;
 
@@ -403,7 +396,7 @@ impl User {
             .set((
                 plat_submissions::status.eq(PlatSubmissionStatus::Denied),
                 plat_submissions::reviewer_id.eq(Some(authenticated.user_id)),
-                plat_submissions::reviewer_notes.eq("This player has been list banned."),
+                plat_submissions::reviewer_notes.eq("This submission has been automatically rejected because this player has been list banned."),
             ))
             .execute(conn)?;
         }

@@ -6,10 +6,11 @@ use crate::schema::{clan_invites, clan_members, clans};
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::{
-    ExpressionMethods as _, OptionalExtension as _, PgTextExpressionMethods as _, QueryDsl as _, RunQueryDsl as _,
-    SelectableHelper as _,
+    ExpressionMethods as _, OptionalExtension as _, PgTextExpressionMethods as _, QueryDsl as _,
+    RunQueryDsl as _, SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
+use serde_with::rust::double_option;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -85,7 +86,8 @@ pub struct ClanUpdate {
     /// New short tag of the clan.
     pub tag: Option<String>,
     /// New description of the clan.
-    pub description: Option<String>,
+    #[serde(default, with = "double_option")]
+    pub description: Option<Option<String>>,
 }
 
 #[derive(Serialize, Debug, ToSchema)]
@@ -241,7 +243,8 @@ impl Clan {
 
         if clan
             .description
-            .as_deref()
+            .as_ref()
+            .and_then(|description| description.as_deref())
             .is_some_and(|description| description.len() > 300)
         {
             return Err(ApiError::UnprocessableEntity(

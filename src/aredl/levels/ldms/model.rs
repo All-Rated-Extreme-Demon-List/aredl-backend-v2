@@ -12,11 +12,12 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use diesel::{
-    pg::Pg, ExpressionMethods as _, JoinOnDsl as _, PgTextExpressionMethods as _, QueryDsl as _, RunQueryDsl as _,
-    Selectable, SelectableHelper as _,
+    pg::Pg, ExpressionMethods as _, JoinOnDsl as _, PgTextExpressionMethods as _, QueryDsl as _,
+    RunQueryDsl as _, Selectable, SelectableHelper as _,
 };
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
+use serde_with::rust::double_option;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -97,6 +98,7 @@ pub struct LevelLDMUpdate {
     pub ldm_id: Option<i32>,
     pub id_type: Option<LevelLDMType>,
     pub status: Option<LevelLDMStatus>,
+    #[serde(default, with = "double_option")]
     pub description: Option<Option<String>>,
 }
 

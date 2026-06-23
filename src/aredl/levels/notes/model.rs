@@ -12,10 +12,12 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use diesel::{
-    pg::Pg, ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _, Selectable, SelectableHelper as _,
+    pg::Pg, ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _, Selectable,
+    SelectableHelper as _,
 };
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
+use serde_with::rust::double_option;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -78,7 +80,8 @@ pub struct LevelNoteInsert {
 pub struct LevelNoteUpdate {
     pub note: Option<String>,
     pub note_type: Option<LevelNotesType>,
-    pub timestamp: Option<DateTime<Utc>>,
+    #[serde(default, with = "double_option")]
+    pub timestamp: Option<Option<DateTime<Utc>>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]

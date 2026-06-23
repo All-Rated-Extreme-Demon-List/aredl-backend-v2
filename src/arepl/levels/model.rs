@@ -9,6 +9,7 @@ use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
+use serde_with::rust::double_option;
 use std::collections::HashSet;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -132,7 +133,8 @@ pub struct LevelPlace {
 #[diesel(table_name=levels)]
 pub struct LevelUpdate {
     /// The 1-indexed position of the level on the list.
-    pub position: Option<i32>,
+    #[serde(default, with = "double_option")]
+    pub position: Option<Option<i32>>,
     /// Name of the level in the game. If multiple levels share the same name, their creator's name is appended at the end. 2P levels both have (2P) or (Solo) appended at the end.
     pub name: Option<String>,
     /// Internal user UUID of the person who published the level in the game.
@@ -150,7 +152,8 @@ pub struct LevelUpdate {
     /// Tags that describe the level. Includes gameplay, length, version, etc.. tags.
     pub tags: Option<Vec<Option<String>>>,
     /// Description of the level.
-    pub description: Option<String>,
+    #[serde(default, with = "double_option")]
+    pub description: Option<Option<String>>,
 }
 
 // Level struct that has publisher and verification resolved

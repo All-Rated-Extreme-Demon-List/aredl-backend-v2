@@ -8,11 +8,12 @@ use chrono::{DateTime, Utc};
 use diesel::dsl::{count, exists};
 use diesel::pg::Pg;
 use diesel::{
-    BoolExpressionMethods as _, Connection as _, ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _,
-    Selectable, SelectableHelper as _,
+    BoolExpressionMethods as _, Connection as _, ExpressionMethods as _, JoinOnDsl as _,
+    QueryDsl as _, RunQueryDsl as _, Selectable, SelectableHelper as _,
 };
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
+use serde_with::rust::double_option;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -213,9 +214,11 @@ pub struct BountyPatch {
     /// The date after which this bounty is active.
     pub start_date: Option<DateTime<Utc>>,
     /// The date after which this bounty is closed. This can either be set in advance or left unset for bounties that are closed manually or that will close automatically after reaching a completion threshold.
-    pub end_date: Option<DateTime<Utc>>,
+    #[serde(default, with = "double_option")]
+    pub end_date: Option<Option<DateTime<Utc>>>,
     /// The target number of submissions for this bounty. This can be used to automatically close the bounty after a certain number of completions.
-    pub target_submissions: Option<i32>,
+    #[serde(default, with = "double_option")]
+    pub target_submissions: Option<Option<i32>>,
     /// Whether or not the target number of submissions for this bounty should be displayed publicly, or kept private to staff only.
     pub is_target_public: Option<bool>,
 }
@@ -255,7 +258,8 @@ impl Bounty {
             None => self.start_date,
         };
         let end_date = match patch.end_date {
-            Some(date) => Some(date),
+            Some(Some(date)) => Some(date),
+            Some(None) => None,
             None => self.end_date,
         };
 
@@ -265,7 +269,7 @@ impl Bounty {
             }
         }
 
-        if let Some(target) = patch.target_submissions {
+        if let Some(Some(target)) = patch.target_submissions {
             if target <= 0 {
                 return Err(ApiError::BadRequest(
                     "Target submissions must be a positive integer.",

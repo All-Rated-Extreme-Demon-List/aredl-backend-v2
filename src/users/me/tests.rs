@@ -243,7 +243,7 @@ async fn update_background_level_not_beaten() {
 }
 
 #[actix_web::test]
-async fn reset_background_level_to_zero() {
+async fn reset_background_level_to_null() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, None).await;
     let token =
@@ -258,7 +258,7 @@ async fn reset_background_level_to_zero() {
     let req = test::TestRequest::patch()
         .uri("/users/@me")
         .insert_header(("Authorization", format!("Bearer {token}")))
-        .set_json(json!({ "background_level": 0 }))
+        .set_json(json!({ "background_level": null }))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -270,7 +270,7 @@ async fn reset_background_level_to_zero() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     let updated: serde_json::Value = read_body_json(resp).await;
-    assert!(updated["background_level"] == 0);
+    assert!(updated["background_level"].is_null());
 }
 
 #[actix_web::test]

@@ -46,6 +46,7 @@ async-trait = "0.1.89"
 url = "2.5.7"
 indexmap = "2.14.0"
 dotenvy = "0.15.7"
+serde_with = "3.21.0"
 
 [lints.clippy]
 # Correctness / panics / unfinished code

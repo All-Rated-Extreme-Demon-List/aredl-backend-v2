@@ -8,9 +8,11 @@ use crate::users::User;
 use chrono::{DateTime, Utc};
 use diesel::dsl::now;
 use diesel::{
-    ExpressionMethods as _, JoinOnDsl as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
+    ExpressionMethods as _, JoinOnDsl as _, OptionalExtension as _, QueryDsl as _,
+    RunQueryDsl as _, SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
+use serde_with::rust::double_option;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -20,15 +22,19 @@ pub struct UserMeUpdate {
     /// Your new display name.
     pub global_name: Option<String>,
     /// Your new description.
-    pub description: Option<String>,
+    #[serde(default, with = "double_option")]
+    pub description: Option<Option<String>>,
     /// Your new country. Uses the ISO 3166-1 numeric country code. Has a 90-day cooldown.
-    pub country: Option<i32>,
+    #[serde(default, with = "double_option")]
+    pub country: Option<Option<i32>>,
     /// Your new ban level.
     pub ban_level: Option<i32>,
-    /// Your new background level. Must be the GD level ID of a level you have beaten. Can be a classic or platformer level. If the ID is 0, it will be reset to default (uses the hardest beaten level)
-    pub background_level: Option<i32>,
+    /// Your new background level. Must be the GD level ID of a level you have beaten. Can be a classic or platformer level. If null, it will be reset to default (uses the hardest beaten level)
+    #[serde(default, with = "double_option")]
+    pub background_level: Option<Option<i32>>,
     /// Your new featured badge code.
-    pub featured_badge_code: Option<String>,
+    #[serde(default, with = "double_option")]
+    pub featured_badge_code: Option<Option<String>>,
 }
 
 impl User {
@@ -69,7 +75,8 @@ impl User {
 
         if user
             .description
-            .as_deref()
+            .as_ref()
+            .and_then(|description| description.as_deref())
             .is_some_and(|description| description.len() > 300)
         {
             return Err(ApiError::BadRequest(
@@ -77,38 +84,32 @@ impl User {
             ));
         }
 
-        if let Some(background_level) = user.background_level {
-            if background_level != 0 {
-                let beaten_aredl_level: Option<AredlLevel> = aredl::records::table
-                    .filter(aredl::records::submitted_by.eq(id))
-                    .inner_join(
-                        aredl::levels::table.on(aredl::levels::id.eq(aredl::records::level_id)),
-                    )
-                    .filter(aredl::levels::level_id.eq(background_level))
-                    .select(AredlLevel::as_select())
-                    .get_result(conn)
-                    .optional()?;
+        if let Some(Some(background_level)) = user.background_level {
+            let beaten_aredl_level: Option<AredlLevel> = aredl::records::table
+                .filter(aredl::records::submitted_by.eq(id))
+                .inner_join(aredl::levels::table.on(aredl::levels::id.eq(aredl::records::level_id)))
+                .filter(aredl::levels::level_id.eq(background_level))
+                .select(AredlLevel::as_select())
+                .get_result(conn)
+                .optional()?;
 
-                let beaten_arepl_level: Option<AreplLevel> = arepl::records::table
-                    .filter(arepl::records::submitted_by.eq(id))
-                    .inner_join(
-                        arepl::levels::table.on(arepl::levels::id.eq(arepl::records::level_id)),
-                    )
-                    .filter(arepl::levels::level_id.eq(background_level))
-                    .select(AreplLevel::as_select())
-                    .get_result(conn)
-                    .optional()?;
+            let beaten_arepl_level: Option<AreplLevel> = arepl::records::table
+                .filter(arepl::records::submitted_by.eq(id))
+                .inner_join(arepl::levels::table.on(arepl::levels::id.eq(arepl::records::level_id)))
+                .filter(arepl::levels::level_id.eq(background_level))
+                .select(AreplLevel::as_select())
+                .get_result(conn)
+                .optional()?;
 
-                if beaten_aredl_level.is_none() && beaten_arepl_level.is_none() {
-                    return Err(ApiError::BadRequest(
-                        "You have not beaten the selected level.",
-                    ));
-                }
+            if beaten_aredl_level.is_none() && beaten_arepl_level.is_none() {
+                return Err(ApiError::BadRequest(
+                    "You have not beaten the selected level.",
+                ));
             }
         }
 
-        if let Some(code) = &user.featured_badge_code {
-            if !code.is_empty() && !UserBadge::has_code(conn, id, code)? {
+        if let Some(Some(code)) = &user.featured_badge_code {
+            if !UserBadge::has_code(conn, id, code)? {
                 return Err(ApiError::BadRequest(
                     "You have not unlocked the selected badge.",
                 ));

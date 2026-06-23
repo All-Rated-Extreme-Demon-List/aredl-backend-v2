@@ -89,9 +89,9 @@ pub struct RecordInsert {
     /// Video link of the completion.
     pub video_url: String,
     /// Whether the record's video should be hidden on the website.
-    pub hide_video: Option<bool>,
+    pub hide_video: bool,
     /// Whether this record is the verification of this level or not.
-    pub is_verification: Option<bool>,
+    pub is_verification: bool,
     /// Timestamp of when this record was achieved, used for ordering.
     pub achieved_at: Option<DateTime<Utc>>,
     /// Timestamp of when the record was created (first accepted).
@@ -181,7 +181,7 @@ impl SubmissionPatchMod {
             mobile: Some(record.mobile),
             video_url: Some(record.video_url),
             status: Some(SubmissionStatus::Accepted),
-            reviewer_notes: Some("Added by a moderator".to_owned()),
+            reviewer_notes: Some(Some("Added by a moderator".to_owned())),
             ..Default::default()
         }
     }
@@ -190,7 +190,7 @@ impl SubmissionPatchMod {
         Self {
             mobile: record.mobile,
             video_url: record.video_url,
-            reviewer_notes: Some("Updated by a moderator".to_owned()),
+            reviewer_notes: Some(Some("Updated by a moderator".to_owned())),
             status: Some(SubmissionStatus::Accepted),
             ..Default::default()
         }
@@ -200,8 +200,8 @@ impl SubmissionPatchMod {
 impl RecordUpdate {
     pub fn from_record_insert(record: &RecordInsert) -> Self {
         Self {
-            hide_video: record.hide_video,
-            is_verification: record.is_verification,
+            hide_video: Some(record.hide_video),
+            is_verification: Some(record.is_verification),
             achieved_at: record.achieved_at,
         }
     }
@@ -235,7 +235,7 @@ impl Submission {
             );
             Ok(
                 diesel::update(submissions::table.filter(submissions::id.eq(submission_id)))
-                    .set((submission_update,))
+                    .set(submission_update)
                     .returning(Submission::as_select())
                     .get_result::<Self>(conn)?,
             )

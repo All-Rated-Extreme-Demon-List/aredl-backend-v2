@@ -5,8 +5,8 @@ use crate::schema::{roles, user_roles, users};
 use crate::users::BaseUser;
 use crate::{app_data::db::DbConnection, auth::Authenticated};
 use diesel::{
-    ExpressionMethods as _, JoinOnDsl as _, NullableExpressionMethods as _, QueryDsl as _, RunQueryDsl as _,
-    SelectableHelper as _,
+    ExpressionMethods as _, JoinOnDsl as _, NullableExpressionMethods as _, QueryDsl as _,
+    RunQueryDsl as _, SelectableHelper as _,
 };
 use itertools::Itertools as _;
 use serde::{Deserialize, Serialize};
@@ -37,7 +37,7 @@ pub struct RoleCreate {
     /// Name of the role to create.
     pub role_desc: String,
     /// Whether this role should be hidden from public listings and only used to grant permissions.
-    pub hide: Option<bool>,
+    pub hide: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Insertable, AsChangeset, ToSchema)]

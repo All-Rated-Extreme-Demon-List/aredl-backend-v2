@@ -39,8 +39,6 @@ impl From<DiscordUser> for UserUpsert {
             placeholder: false,
             country: None,
             discord_avatar: user.avatar,
-            discord_banner: user.banner,
-            discord_accent_color: user.accent_color,
             last_discord_avatar_update: Some(Utc::now().naive_utc()),
         }
     }

@@ -400,8 +400,6 @@ async fn upsert_creates_and_updates_user() {
         placeholder: false,
         country: Some(1),
         discord_avatar: Some("avatar".to_owned()),
-        discord_banner: None,
-        discord_accent_color: None,
         last_discord_avatar_update: Some(Utc::now().naive_utc()),
     };
 
@@ -419,8 +417,6 @@ async fn upsert_creates_and_updates_user() {
         placeholder: false,
         country: Some(2),
         discord_avatar: Some("newavatar".to_owned()),
-        discord_banner: Some("banner".to_owned()),
-        discord_accent_color: Some(5),
         last_discord_avatar_update: Some(Utc::now().naive_utc()),
     };
 

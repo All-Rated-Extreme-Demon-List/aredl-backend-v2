@@ -31,8 +31,6 @@ pub async fn create_test_user(
             users::placeholder.eq(false),
             users::country.eq(None::<i32>),
             users::discord_avatar.eq(None::<String>),
-            users::discord_banner.eq(None::<String>),
-            users::discord_accent_color.eq(None::<i32>),
         ))
         .execute(conn)
         .expect("Failed to create fake user");
@@ -81,8 +79,6 @@ pub async fn create_test_placeholder_user(db: &Arc<DbAppState>) -> (Uuid, String
             users::placeholder.eq(true),
             users::country.eq(None::<i32>),
             users::discord_avatar.eq(None::<String>),
-            users::discord_banner.eq(None::<String>),
-            users::discord_accent_color.eq(None::<i32>),
         ))
         .execute(conn)
         .expect("Failed to create fake user");

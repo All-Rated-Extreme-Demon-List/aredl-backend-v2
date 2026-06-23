@@ -176,6 +176,7 @@ impl SubmissionPostMod {
             video_url: record.video_url,
             status: Some(SubmissionStatus::Accepted),
             reviewer_notes: Some("Added by a moderator".to_owned()),
+            completion_time: record.completion_time,
             ..Default::default()
         }
     }
@@ -187,7 +188,8 @@ impl SubmissionPatchMod {
             mobile: Some(record.mobile),
             video_url: Some(record.video_url),
             status: Some(SubmissionStatus::Accepted),
-            reviewer_notes: Some("Added by a moderator".to_owned()),
+            reviewer_notes: Some(Some("Added by a moderator".to_owned())),
+            completion_time: Some(record.completion_time),
             ..Default::default()
         }
     }
@@ -196,8 +198,9 @@ impl SubmissionPatchMod {
         Self {
             mobile: record.mobile,
             video_url: record.video_url,
-            reviewer_notes: Some("Updated by a moderator".to_owned()),
+            reviewer_notes: Some(Some("Updated by a moderator".to_owned())),
             status: Some(SubmissionStatus::Accepted),
+            completion_time: record.completion_time,
             ..Default::default()
         }
     }

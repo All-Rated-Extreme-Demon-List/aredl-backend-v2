@@ -1,7 +1,7 @@
 use crate::{
     app_data::db::DbConnection,
     arepl::levels::LevelStatus,
-    arepl::submissions::{status::SubmissionsEnabled, SubmissionStatus, Submission},
+    arepl::submissions::{status::SubmissionsEnabled, Submission, SubmissionStatus},
     auth::{Authenticated, Permission},
     error_handler::ApiError,
     notifications::WebsocketNotification,
@@ -16,8 +16,12 @@ use crate::{
 };
 use chrono::Utc;
 use diesel::Connection as _;
-use diesel::{ExpressionMethods as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _};
+use diesel::{
+    ExpressionMethods as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _,
+    SelectableHelper as _,
+};
 use serde::{Deserialize, Serialize};
+use serde_with::rust::double_option;
 use tokio::sync::broadcast;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -28,7 +32,8 @@ pub struct SubmissionPatchUser {
     /// Whether the record was completed on mobile or not.
     pub mobile: Option<bool>,
     /// ID of the LDM used for the record, if any.
-    pub ldm_id: Option<i32>,
+    #[serde(default, with = "double_option")]
+    pub ldm_id: Option<Option<i32>>,
     /// Completion video URL.
     ///
     /// The provider is enforced and the URL is stored in a standardized canonical form.
@@ -41,11 +46,13 @@ pub struct SubmissionPatchUser {
     /// Only requires a valid URL (the site is not enforced). If the URL matches a recognized provider
     /// it is standardized, otherwise it is stored as-is.
     /// See [Allowed video URL types](#allowed-video-url-types).
-    pub raw_url: Option<String>,
+    #[serde(default, with = "double_option")]
+    pub raw_url: Option<Option<String>>,
     /// The mod menu used in this record
     pub mod_menu: Option<String>,
     /// Any additional notes left by the submitter.
-    pub user_notes: Option<String>,
+    #[serde(default, with = "double_option")]
+    pub user_notes: Option<Option<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, AsChangeset, Default, ToSchema, Clone, PartialEq)]
@@ -54,7 +61,8 @@ pub struct SubmissionPatchMod {
     /// Whether the record was completed on mobile or not.
     pub mobile: Option<bool>,
     /// ID of the LDM used for the record, if any.
-    pub ldm_id: Option<i32>,
+    #[serde(default, with = "double_option")]
+    pub ldm_id: Option<Option<i32>>,
     /// Completion video URL.
     ///
     /// The provider is enforced and the URL is stored in a standardized canonical form.
@@ -67,7 +75,8 @@ pub struct SubmissionPatchMod {
     /// Only requires a valid URL (the site is not enforced). If the URL matches a recognized provider
     /// it is standardized, otherwise it is stored as-is.
     /// See [Allowed video URL types](#allowed-video-url-types).
-    pub raw_url: Option<String>,
+    #[serde(default, with = "double_option")]
+    pub raw_url: Option<Option<String>>,
     /// [MOD ONLY] The status of the submission
     pub status: Option<SubmissionStatus>,
     /// The mod menu used in this record
@@ -75,13 +84,16 @@ pub struct SubmissionPatchMod {
     /// [MOD ONLY] Whether the record was submitted as a priority record.
     pub priority: Option<bool>,
     /// [MOD ONLY] Notes given by the reviewer when reviewing the record.
-    pub reviewer_notes: Option<String>,
+    #[serde(default, with = "double_option")]
+    pub reviewer_notes: Option<Option<String>>,
     /// [MOD ONLY] Private notes given by the reviewer when reviewing the record.
-    pub private_reviewer_notes: Option<String>,
+    #[serde(default, with = "double_option")]
+    pub private_reviewer_notes: Option<Option<String>>,
     /// [MOD ONLY] Whether or not this submission has been locked by a staff member
     pub locked: Option<bool>,
     /// Any additional notes left by the submitter.
-    pub user_notes: Option<String>,
+    #[serde(default, with = "double_option")]
+    pub user_notes: Option<Option<String>>,
 }
 impl Submission {
     pub fn update_user_shift(
@@ -160,13 +172,13 @@ impl SubmissionPatchUser {
             )?);
         }
 
-        if let Some(raw_url) = patch.raw_url.as_ref() {
-            patch.raw_url = Some(providers.validate_raw_footage_url(raw_url).map_err(
+        if let Some(Some(raw_url)) = patch.raw_url.as_ref() {
+            patch.raw_url = Some(Some(providers.validate_raw_footage_url(raw_url).map_err(
                 |mut e| {
                     e.error_message = format!("Invalid raw footage URL: {}", e.error_message);
                     e
                 },
-            )?);
+            )?));
         }
 
         let submitter_ban = users::table
@@ -272,13 +284,13 @@ impl SubmissionPatchMod {
             )?);
         }
 
-        if let Some(raw_url) = patch.raw_url.as_ref() {
-            patch.raw_url = Some(providers.validate_raw_footage_url(raw_url).map_err(
+        if let Some(Some(raw_url)) = patch.raw_url.as_ref() {
+            patch.raw_url = Some(Some(providers.validate_raw_footage_url(raw_url).map_err(
                 |mut e| {
                     e.error_message = format!("Invalid raw footage URL: {}", e.error_message);
                     e
                 },
-            )?);
+            )?));
         }
 
         let old_submission: Submission = submissions::table

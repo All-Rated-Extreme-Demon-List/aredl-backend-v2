@@ -47,6 +47,7 @@ async fn create_record() {
         "level_id": level.to_string(),
         "video_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
         "is_verification": false,
+        "hide_video": false,
         "raw_url": "https://raw.com"
     });
 
@@ -80,6 +81,7 @@ async fn create_self_record_fails() {
         "level_id": level.to_string(),
         "video_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
         "is_verification": false,
+        "hide_video": false,
         "raw_url": "https://raw.com"
     });
 
@@ -539,6 +541,7 @@ async fn update_timestamp_endpoint_fetches_youtube_published_at() {
         "level_id": level.to_string(),
         "video_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
         "is_verification": false,
+        "hide_video": false,
         "raw_url": "https://raw.com"
     });
 

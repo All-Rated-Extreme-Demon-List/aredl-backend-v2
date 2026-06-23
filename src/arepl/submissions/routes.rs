@@ -83,7 +83,7 @@ async fn find_all(
         ("id" = Uuid, description = "The ID of the submission")
     ),
 )]
-#[get("{id}", wrap = "UserAuth::load()")]
+#[get("/{id}", wrap = "UserAuth::load()")]
 async fn find_one(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
@@ -115,7 +115,7 @@ async fn find_one(
         ("status_filter" = Option<SubmissionStatus>, Query, description = "Filter submissions to specific statuses"),
         ("mobile_filter" = Option<bool>, Query, description = "Filter submissions to mobile/desktop submissions only"),
 ))]
-#[get("@me", wrap = "UserAuth::load()")]
+#[get("/@me", wrap = "UserAuth::load()")]
 async fn find_me(
     db: web::Data<Arc<DbAppState>>,
     page_query: web::Query<PageQuery<50>>,

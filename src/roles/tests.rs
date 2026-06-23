@@ -41,7 +41,7 @@ async fn create_role() {
     let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
 
-    let create_data = json!({"privilege_level": 30, "role_desc": "Tester"});
+    let create_data = json!({"privilege_level": 30, "role_desc": "Tester", "hide": false});
     let req = test::TestRequest::post()
         .uri("/roles")
         .insert_header(("Authorization", format!("Bearer {token}")))
@@ -109,7 +109,8 @@ async fn create_role_fails_when_new_role_has_same_privilege_as_user() {
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
 
     let lvl = get_permission_privilege_level(&db, Permission::RoleManage);
-    let create_data = json!({"privilege_level": lvl, "role_desc": "Same Level Role"});
+    let create_data =
+        json!({"privilege_level": lvl, "role_desc": "Same Level Role", "hide": false});
 
     let req = test::TestRequest::post()
         .uri("/roles")
@@ -134,7 +135,8 @@ async fn create_role_fails_when_new_role_has_higher_privilege_than_user() {
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
 
     let lvl = get_permission_privilege_level(&db, Permission::RoleManage);
-    let create_data = json!({"privilege_level": lvl + 1, "role_desc": "Higher Level Role"});
+    let create_data =
+        json!({"privilege_level": lvl + 1, "role_desc": "Higher Level Role", "hide": false});
 
     let req = test::TestRequest::post()
         .uri("/roles")
