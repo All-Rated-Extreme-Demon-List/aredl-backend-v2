@@ -148,7 +148,8 @@ pub struct LevelUpdate {
     /// Whether this is the 2P version of a level or not.
     pub two_player: Option<bool>,
     /// Newground's song ID for the level.
-    pub song: Option<i32>,
+    #[serde(default, with = "double_option")]
+    pub song: Option<Option<i32>>,
     /// Tags that describe the level. Includes gameplay, length, version, etc.. tags.
     pub tags: Option<Vec<Option<String>>>,
     /// Description of the level.
