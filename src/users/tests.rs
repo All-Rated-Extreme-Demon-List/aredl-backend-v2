@@ -100,8 +100,11 @@ async fn ban_user() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, username) = create_test_user(&db, None).await;
     let (staff_user_id, _) = create_test_user(&db, Some(Permission::UserBan)).await;
+    let (manager_user_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
     let staff_token =
         create_test_token(staff_user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let manager_token = create_test_token(manager_user_id, &auth.jwt_encoding_key)
+        .expect("Failed to generate token");
 
     let ban_payload = json!({ "ban_level": 2 });
 
@@ -119,6 +122,7 @@ async fn ban_user() {
 
     let req = test::TestRequest::get()
         .uri(&format!("/users?name_filter=%{username}%"))
+        .insert_header(("Authorization", format!("Bearer {manager_token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -415,7 +419,7 @@ async fn list_users_with_ban_level_filter() {
     let (app, db, auth, _) = init_test_app().await;
     let (banned_user_id, _) = create_test_user(&db, None).await;
     let (other_user_id, _) = create_test_user(&db, None).await;
-    let (staff_user_id, _) = create_test_user(&db, Some(Permission::UserBan)).await;
+    let (staff_user_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
     let staff_token =
         create_test_token(staff_user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
