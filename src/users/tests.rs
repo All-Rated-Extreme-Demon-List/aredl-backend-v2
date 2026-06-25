@@ -10,7 +10,7 @@ use {
         users::{
             test_utils::{
                 create_test_user, get_permission_privilege_level, get_test_user,
-                set_test_user_discord_id,
+                set_test_user_ban_level, set_test_user_discord_id,
             },
             User, UserUpsert,
         },
@@ -408,6 +408,34 @@ async fn list_users_with_discord_id_filter() {
         .unwrap()
         .iter()
         .any(|user| user["id"] == user_id.to_string()));
+}
+
+#[actix_web::test]
+async fn list_users_with_ban_level_filter() {
+    let (app, db, _, _) = init_test_app().await;
+    let (banned_user_id, _) = create_test_user(&db, None).await;
+    let (other_user_id, _) = create_test_user(&db, None).await;
+
+    set_test_user_ban_level(&db, banned_user_id, 2).await;
+    set_test_user_ban_level(&db, other_user_id, 0).await;
+
+    let req = test::TestRequest::get()
+        .uri("/users?ban_level=2")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    let users: serde_json::Value = read_body_json(resp).await;
+
+    assert!(users["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|user| user["id"] == banned_user_id.to_string()));
+    assert!(!users["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|user| user["id"] == other_user_id.to_string()));
 }
 
 #[actix_web::test]

@@ -159,6 +159,7 @@ pub struct PlaceholderOptions {
 pub struct UserListQueryOptions {
     pub name_filter: Option<String>,
     pub placeholder: Option<bool>,
+    pub ban_level: Option<i32>,
 }
 
 #[derive(Serialize, Debug, ToSchema)]
@@ -312,6 +313,9 @@ impl User {
             }
             if let Some(placeholder) = options.placeholder {
                 q = q.filter(users::placeholder.eq(placeholder));
+            }
+            if let Some(ban_level) = options.ban_level {
+                q = q.filter(users::ban_level.eq(ban_level));
             }
             q
         };
