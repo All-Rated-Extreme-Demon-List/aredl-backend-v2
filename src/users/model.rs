@@ -170,13 +170,18 @@ pub struct UserPage {
 // user filter that matches either by UUID, username, or discord_id
 pub fn user_filter<'a>(input: &'a String) -> users::BoxedQuery<'a, Pg> {
     let mut q = users::table.into_boxed::<Pg>();
+    let uuid_candidate: String = input
+        .chars()
+        .filter(|c| c.is_ascii_hexdigit() || *c == '-')
+        .collect();
 
-    if let Ok(uuid) = Uuid::parse_str(input) {
+    if let Ok(uuid) = Uuid::parse_str(&uuid_candidate) {
         q = q.filter(users::id.eq(uuid));
     } else {
+        let discord_candidate: String = input.chars().filter(char::is_ascii_digit).collect();
         q = q.filter(
             users::discord_id
-                .eq(Some(input.to_owned()))
+                .eq(Some(discord_candidate))
                 .or(users::username.eq(input)),
         );
     }
@@ -299,9 +304,10 @@ impl User {
             let mut q = users::table.into_boxed::<Pg>();
             if let Some(name_like) = &options.name_filter {
                 q = q.filter(
-                    users::global_name.ilike(name_like).or(users::username
+                    users::global_name
                         .ilike(name_like)
-                        .or(users::id.eq_any(user_filter(name_like).select(users::id)))),
+                        .or(users::username.ilike(name_like))
+                        .or(users::id.eq_any(user_filter(name_like).select(users::id))),
                 );
             }
             if let Some(placeholder) = options.placeholder {

@@ -390,6 +390,27 @@ async fn list_users_with_filters() {
 }
 
 #[actix_web::test]
+async fn list_users_with_discord_id_filter() {
+    let (app, db, _, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let discord_id = "1234567890";
+
+    set_test_user_discord_id(&db, user_id, discord_id).await;
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/users?name_filter=%25{discord_id}%25"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    let users: serde_json::Value = read_body_json(resp).await;
+    assert!(users["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|user| user["id"] == user_id.to_string()));
+}
+
+#[actix_web::test]
 async fn upsert_creates_and_updates_user() {
     let (_, db, _, _) = init_test_app().await;
 
