@@ -300,7 +300,12 @@ impl User {
         conn: &mut DbConnection,
         page_query: PageQuery<D>,
         options: &UserListQueryOptions,
+        authenticated: Option<&Authenticated>,
     ) -> Result<Paginated<UserPage>, ApiError> {
+        let has_permission = authenticated.is_some_and(|auth| {
+            auth.has_permission(conn, Permission::UserBan)
+                .unwrap_or(false)
+        });
         let build_query = || {
             let mut q = users::table.into_boxed::<Pg>();
             if let Some(name_like) = &options.name_filter {
@@ -316,6 +321,10 @@ impl User {
             }
             if let Some(ban_level) = options.ban_level {
                 q = q.filter(users::ban_level.eq(ban_level));
+            }
+
+            if !has_permission {
+                q = q.filter(users::ban_level.eq(0));
             }
             q
         };

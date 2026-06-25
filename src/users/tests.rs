@@ -412,6 +412,38 @@ async fn list_users_with_discord_id_filter() {
 
 #[actix_web::test]
 async fn list_users_with_ban_level_filter() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (banned_user_id, _) = create_test_user(&db, None).await;
+    let (other_user_id, _) = create_test_user(&db, None).await;
+    let (staff_user_id, _) = create_test_user(&db, Some(Permission::UserBan)).await;
+    let staff_token =
+        create_test_token(staff_user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    set_test_user_ban_level(&db, banned_user_id, 2).await;
+    set_test_user_ban_level(&db, other_user_id, 0).await;
+
+    let req = test::TestRequest::get()
+        .uri("/users?ban_level=2")
+        .insert_header(("Authorization", format!("Bearer {staff_token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    let users: serde_json::Value = read_body_json(resp).await;
+
+    assert!(users["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|user| user["id"] == banned_user_id.to_string()));
+    assert!(!users["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|user| user["id"] == other_user_id.to_string()));
+}
+
+#[actix_web::test]
+async fn list_users_hides_banned_users_for_unauthenticated_requests() {
     let (app, db, _, _) = init_test_app().await;
     let (banned_user_id, _) = create_test_user(&db, None).await;
     let (other_user_id, _) = create_test_user(&db, None).await;
@@ -426,7 +458,7 @@ async fn list_users_with_ban_level_filter() {
     assert!(resp.status().is_success());
     let users: serde_json::Value = read_body_json(resp).await;
 
-    assert!(users["data"]
+    assert!(!users["data"]
         .as_array()
         .unwrap()
         .iter()
