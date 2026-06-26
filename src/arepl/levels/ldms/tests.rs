@@ -144,7 +144,7 @@ async fn ldm_auth() {
     assert_error_response(
         resp,
         StatusCode::FORBIDDEN,
-        Some("You do not have the required permission (level_modify) to access this endpoint"),
+        Some("You do not have the required permission (custom_copies_modify) to access this endpoint"),
     )
     .await;
 }
