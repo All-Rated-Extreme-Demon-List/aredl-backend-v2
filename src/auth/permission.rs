@@ -10,6 +10,7 @@ use uuid::Uuid;
 #[strum(serialize_all = "snake_case")]
 pub enum Permission {
     LevelModify,
+    CustomCopiesModify,
     RecordModify,
     PackTierModify,
     PackModify,

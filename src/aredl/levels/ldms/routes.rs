@@ -63,9 +63,12 @@ async fn find_all(
     responses(
         (status = 200, body = LevelLDM)
     ),
-    security(("access_token" = ["LevelModify"]))
+    security(("access_token" = ["CustomCopiesModify"]))
 )]
-#[post("/{level_id}", wrap = "UserAuth::require(Permission::LevelModify)")]
+#[post(
+    "/{level_id}",
+    wrap = "UserAuth::require(Permission::CustomCopiesModify)"
+)]
 async fn create(
     db: web::Data<Arc<DbAppState>>,
     body: web::Json<LevelLDMBody>,
@@ -92,9 +95,12 @@ async fn create(
     responses(
         (status = 200, body = LevelLDM)
     ),
-    security(("access_token" = ["LevelModify"]))
+    security(("access_token" = ["CustomCopiesModify"]))
 )]
-#[patch("/{ldm_id}", wrap = "UserAuth::require(Permission::LevelModify)")]
+#[patch(
+    "/{ldm_id}",
+    wrap = "UserAuth::require(Permission::CustomCopiesModify)"
+)]
 async fn update(
     db: web::Data<Arc<DbAppState>>,
     body: web::Json<LevelLDMUpdate>,
@@ -122,9 +128,12 @@ async fn update(
     responses(
         (status = 200)
     ),
-    security(("access_token" = ["LevelModify"]))
+    security(("access_token" = ["CustomCopiesModify"]))
 )]
-#[delete("/{ldm_id}", wrap = "UserAuth::require(Permission::LevelModify)")]
+#[delete(
+    "/{ldm_id}",
+    wrap = "UserAuth::require(Permission::CustomCopiesModify)"
+)]
 async fn delete(
     db: web::Data<Arc<DbAppState>>,
     ldm_id: web::Path<Uuid>,

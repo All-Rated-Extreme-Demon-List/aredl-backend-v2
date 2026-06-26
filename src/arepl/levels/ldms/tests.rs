@@ -14,7 +14,7 @@ use {
 #[actix_web::test]
 async fn create_ldm() {
     let (app, db, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&db, Some(Permission::LevelModify)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::CustomCopiesModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -51,7 +51,7 @@ async fn create_ldm() {
 #[actix_web::test]
 async fn update_ldm() {
     let (app, db, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&db, Some(Permission::LevelModify)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::CustomCopiesModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -79,7 +79,7 @@ async fn update_ldm() {
 #[actix_web::test]
 async fn delete_ldm() {
     let (app, db, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&db, Some(Permission::LevelModify)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::CustomCopiesModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -98,7 +98,7 @@ async fn delete_ldm() {
 #[actix_web::test]
 async fn list_ldms() {
     let (app, db, _, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&db, Some(Permission::LevelModify)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::CustomCopiesModify)).await;
     let level_id = create_test_level(&db).await;
 
     create_test_ldm(&db, level_id, user_id).await;

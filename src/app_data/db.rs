@@ -77,6 +77,7 @@ fn init_test_db_schema_and_seed() {
             ("record_modify", 20),
             ("placeholder_create", 25),
             ("user_modify", 25),
+            ("custom_copies_modify", 30),
             ("pack_tier_modify", 40),
             ("pack_modify", 40),
             ("user_ban", 45),
