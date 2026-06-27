@@ -432,6 +432,140 @@ async fn get_submission_queue() {
 }
 
 #[actix_web::test]
+async fn priority_submission_queue_position_uses_updated_at() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user, _) = create_test_user(&db, None).await;
+    let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
+    let level_a = create_test_level(&db).await;
+    let level_b = create_test_level(&db).await;
+
+    let older_created = create_test_submission(level_a, user, &db).await;
+    let newer_created = create_test_submission(level_b, user, &db).await;
+
+    let early_created: DateTime<Utc> = "2020-01-01T00:00:00Z".parse().unwrap();
+    let late_created: DateTime<Utc> = "2021-01-01T00:00:00Z".parse().unwrap();
+    let early_updated: DateTime<Utc> = "2022-01-01T00:00:00Z".parse().unwrap();
+    let late_updated: DateTime<Utc> = "2020-06-01T00:00:00Z".parse().unwrap();
+
+    diesel::update(submissions::table.filter(submissions::id.eq(newer_created)))
+        .set((
+            submissions::priority.eq(true),
+            submissions::created_at.eq(late_created),
+            submissions::updated_at.eq(late_updated),
+        ))
+        .execute(&mut db.connection().unwrap())
+        .unwrap();
+
+    diesel::update(submissions::table.filter(submissions::id.eq(older_created)))
+        .set((
+            submissions::priority.eq(true),
+            submissions::created_at.eq(early_created),
+            submissions::updated_at.eq(early_updated),
+        ))
+        .execute(&mut db.connection().unwrap())
+        .unwrap();
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/aredl/submissions/{newer_created}/queue"))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["position"].as_i64().unwrap(), 1);
+    assert!(body["priority"].as_bool().unwrap());
+}
+
+#[actix_web::test]
+async fn regular_submission_queue_position_still_uses_created_at() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user, _) = create_test_user(&db, None).await;
+    let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
+    let level_a = create_test_level(&db).await;
+    let level_b = create_test_level(&db).await;
+
+    let older_created = create_test_submission(level_a, user, &db).await;
+    let newer_created = create_test_submission(level_b, user, &db).await;
+
+    let early_created: DateTime<Utc> = "2020-01-01T00:00:00Z".parse().unwrap();
+    let late_created: DateTime<Utc> = "2021-01-01T00:00:00Z".parse().unwrap();
+    let early_updated: DateTime<Utc> = "2022-01-01T00:00:00Z".parse().unwrap();
+    let late_updated: DateTime<Utc> = "2020-06-01T00:00:00Z".parse().unwrap();
+
+    diesel::update(submissions::table.filter(submissions::id.eq(older_created)))
+        .set((
+            submissions::created_at.eq(early_created),
+            submissions::updated_at.eq(early_updated),
+        ))
+        .execute(&mut db.connection().unwrap())
+        .unwrap();
+
+    diesel::update(submissions::table.filter(submissions::id.eq(newer_created)))
+        .set((
+            submissions::created_at.eq(late_created),
+            submissions::updated_at.eq(late_updated),
+        ))
+        .execute(&mut db.connection().unwrap())
+        .unwrap();
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/aredl/submissions/{older_created}/queue"))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["position"].as_i64().unwrap(), 1);
+    assert!(!body["priority"].as_bool().unwrap());
+}
+
+#[actix_web::test]
+async fn claim_priority_submission_uses_updated_at() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (full_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (submitter, _) = create_test_user(&db, None).await;
+    let token = create_test_token(full_reviewer, &auth.jwt_encoding_key).unwrap();
+    let level_a = create_test_level(&db).await;
+    let level_b = create_test_level(&db).await;
+
+    let older_created = create_test_submission(level_a, submitter, &db).await;
+    let newer_created = create_test_submission(level_b, submitter, &db).await;
+
+    let early_created: DateTime<Utc> = "2020-01-01T00:00:00Z".parse().unwrap();
+    let late_created: DateTime<Utc> = "2021-01-01T00:00:00Z".parse().unwrap();
+    let early_updated: DateTime<Utc> = "2022-01-01T00:00:00Z".parse().unwrap();
+    let late_updated: DateTime<Utc> = "2020-06-01T00:00:00Z".parse().unwrap();
+
+    diesel::update(submissions::table.filter(submissions::id.eq(newer_created)))
+        .set((
+            submissions::priority.eq(true),
+            submissions::created_at.eq(late_created),
+            submissions::updated_at.eq(late_updated),
+        ))
+        .execute(&mut db.connection().unwrap())
+        .unwrap();
+
+    diesel::update(submissions::table.filter(submissions::id.eq(older_created)))
+        .set((
+            submissions::priority.eq(true),
+            submissions::created_at.eq(early_created),
+            submissions::updated_at.eq(early_updated),
+        ))
+        .execute(&mut db.connection().unwrap())
+        .unwrap();
+
+    let req = test::TestRequest::get()
+        .uri("/aredl/submissions/claim")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["id"].as_str().unwrap(), newer_created.to_string());
+}
+
+#[actix_web::test]
 async fn claim_submission_base_reviewer_skips_raw_submissions() {
     let (app, db, auth, _) = init_test_app().await;
     let (base_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;

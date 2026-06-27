@@ -219,7 +219,7 @@ impl Submission {
 
             // check if any submissions exist already
             let exists_submission = submissions::table
-                .filter(submissions::submitted_by.eq(authenticated.user_id))
+                .filter(submissions::submitted_by.eq(inserted_submission.submitted_by))
                 .filter(submissions::level_id.eq(inserted_submission.level_id))
                 .select(submissions::id)
                 .first::<Uuid>(connection)

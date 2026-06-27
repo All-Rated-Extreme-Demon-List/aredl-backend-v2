@@ -1,6 +1,6 @@
 use crate::{
     app_data::db::DbConnection,
-    aredl::submissions::{Submission, SubmissionStatus},
+    aredl::submissions::{Submission, SubmissionFilter, SubmissionStatus},
     error_handler::ApiError,
     schema::aredl::submissions,
 };
@@ -31,25 +31,53 @@ pub struct QueuePositionResponse {
 }
 
 impl Submission {
+    // filters out all submissions that come after the target one
+    fn queue_position_filter(
+        target_priority: bool,
+        target_created_at: DateTime<Utc>,
+        target_updated_at: DateTime<Utc>,
+    ) -> SubmissionFilter {
+        if target_priority {
+            Box::new(
+                submissions::status
+                    .eq(SubmissionStatus::Pending)
+                    .and(submissions::priority.eq(true))
+                    .and(submissions::updated_at.lt(target_updated_at)),
+            )
+        } else {
+            Box::new(
+                submissions::status
+                    .eq(SubmissionStatus::Pending)
+                    .and(submissions::priority.eq(false))
+                    .and(submissions::created_at.lt(target_created_at)),
+            )
+        }
+    }
     pub fn get_queue_position(
         conn: &mut DbConnection,
         submission_id: Uuid,
     ) -> Result<(i64, bool), ApiError> {
-        // Get the priority and created_at of the target submission
-        let (target_priority, target_created_at): (bool, DateTime<Utc>) = submissions::table
+        let (target_priority, target_created_at, target_updated_at): (
+            bool,
+            DateTime<Utc>,
+            DateTime<Utc>,
+        ) = submissions::table
             .filter(submissions::id.eq(submission_id))
             .filter(submissions::status.eq(SubmissionStatus::Pending))
-            .select((submissions::priority, submissions::created_at))
+            .select((
+                submissions::priority,
+                submissions::created_at,
+                submissions::updated_at,
+            ))
             .first(conn)?;
 
         // Count how many pending submissions come before this one
         let position = submissions::table
-            .filter(submissions::status.eq(SubmissionStatus::Pending))
-            .filter(
-                submissions::priority
-                    .eq(target_priority)
-                    .and(submissions::created_at.lt(target_created_at)),
-            )
+            .filter(Self::queue_position_filter(
+                target_priority,
+                target_created_at,
+                target_updated_at,
+            ))
             .count()
             .get_result::<i64>(conn)?
             + 1;

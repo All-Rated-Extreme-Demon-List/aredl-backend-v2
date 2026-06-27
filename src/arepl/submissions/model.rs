@@ -8,8 +8,8 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use diesel::{
-    pg::Pg, BoolExpressionMethods, Connection, ExpressionMethods, OptionalExtension, QueryDsl,
-    RunQueryDsl, Selectable,
+    pg::Pg, sql_types::Bool, BoolExpressionMethods, BoxableExpression, Connection,
+    ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, Selectable,
 };
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
@@ -149,41 +149,68 @@ pub struct SubmissionPage {
     data: Vec<Submission>,
 }
 
+pub type SubmissionFilter = Box<dyn BoxableExpression<submissions::table, Pg, SqlType = Bool>>;
+
 impl Submission {
+    // filters for submissions that can be claimed by the current reviewer
+    fn claimable_filter(
+        reviewer_id: Uuid,
+        is_full_reviewer: bool,
+        priority: bool,
+    ) -> SubmissionFilter {
+        let base = submissions::submitted_by
+            // prevent reviewers from claiming their own submissions
+            .ne(reviewer_id)
+            .and(submissions::priority.eq(priority));
+
+        // full reviewers can claim any pending submission or URs sent by base reviewers
+        if is_full_reviewer {
+            Box::new(
+                base.and(
+                    submissions::status
+                        .eq(SubmissionStatus::Pending)
+                        .or(submissions::status.eq(SubmissionStatus::UnderReview)),
+                ),
+            )
+        } else {
+            // base reviewers can only review pending submissions with no raw footage
+            Box::new(
+                base.and(submissions::status.eq(SubmissionStatus::Pending))
+                    .and(submissions::raw_url.is_null()),
+            )
+        }
+    }
+
+    // Picks the next submission (if any) in the queue/prio queue, depending on the reviewer's permissions
     fn find_next_claimable_id(
         conn: &mut DbConnection,
         reviewer_id: Uuid,
         is_full_reviewer: bool,
         priority: bool,
     ) -> Result<Option<Uuid>, ApiError> {
-        let next_id = if is_full_reviewer {
-            submissions::table
-                .filter(
-                    submissions::status
-                        .eq(SubmissionStatus::Pending)
-                        .or(submissions::status.eq(SubmissionStatus::UnderReview)),
-                )
-                // prevent full reviewers from claiming their own submissions
-                .filter(submissions::submitted_by.ne(reviewer_id))
-                .filter(submissions::priority.eq(priority))
-                .for_update()
-                .skip_locked()
-                .order(submissions::created_at.asc())
-                .select(submissions::id)
-                .first::<Uuid>(conn)
+        let query = submissions::table
+            .filter(Self::claimable_filter(
+                reviewer_id,
+                is_full_reviewer,
+                priority,
+            ))
+            .for_update()
+            .skip_locked()
+            .select(submissions::id);
+
+        // for the priority queue, order by last update, so that people who just got aredl+ are placed at the end of the prio queue
+        // (this however makes any update/resubmit have to go through the prio queue again, which is fine since it is barely anything
+        // compared to the main queue, for which we prefer using created_at instead)
+
+        let next_id = if priority {
+            query
+                .order(submissions::updated_at.asc())
+                .first(conn)
                 .optional()?
         } else {
-            submissions::table
-                .filter(submissions::status.eq(SubmissionStatus::Pending))
-                // prevent base reviewers from claiming their own submissions or any submission with a raw field that isn't null
-                .filter(submissions::submitted_by.ne(reviewer_id))
-                .filter(submissions::priority.eq(priority))
-                .filter(submissions::raw_url.is_null())
-                .for_update()
-                .skip_locked()
+            query
                 .order(submissions::created_at.asc())
-                .select(submissions::id)
-                .first::<Uuid>(conn)
+                .first(conn)
                 .optional()?
         };
 
