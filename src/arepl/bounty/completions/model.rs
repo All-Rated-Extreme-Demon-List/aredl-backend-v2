@@ -1,5 +1,7 @@
 use chrono::{DateTime, Utc};
-use diesel::{ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _};
+use diesel::{
+    ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
+};
 use serde::Serialize;
 use utoipa::ToSchema;
 use uuid::Uuid;

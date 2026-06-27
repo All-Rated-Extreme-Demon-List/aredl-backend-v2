@@ -6,8 +6,9 @@ use crate::schema::{
 };
 use diesel::pg::Pg;
 use diesel::{
-    BelongingToDsl as _, BoolExpressionMethods as _, ExpressionMethods as _, GroupedBy as _, JoinOnDsl as _,
-    NullableExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
+    BelongingToDsl as _, BoolExpressionMethods as _, ExpressionMethods as _, GroupedBy as _,
+    JoinOnDsl as _, NullableExpressionMethods as _, QueryDsl as _, RunQueryDsl as _,
+    SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

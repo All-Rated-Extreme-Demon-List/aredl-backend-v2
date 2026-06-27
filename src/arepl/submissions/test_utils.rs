@@ -9,7 +9,10 @@ use {
         schema::arepl::{submission_history, submissions},
     },
     chrono::{DateTime, Utc},
-    diesel::{ExpressionMethods as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _},
+    diesel::{
+        ExpressionMethods as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _,
+        SelectableHelper as _,
+    },
     std::sync::Arc,
     uuid::Uuid,
 };
@@ -212,6 +215,68 @@ pub fn set_test_submission_history_reviewer(
     .set(submission_history::reviewer_id.eq(reviewer_id))
     .execute(&mut db.connection().unwrap())
     .expect("Failed to set test arepl submission history reviewer");
+}
+
+#[cfg(test)]
+pub async fn create_regular_queue_order_test_submissions(
+    db: &Arc<DbAppState>,
+    submitter_id: Uuid,
+) -> (Uuid, Uuid) {
+    let level_a = create_test_level(db).await;
+    let level_b = create_test_level(db).await;
+
+    let older_created = create_test_submission(level_a, submitter_id, db).await;
+    let newer_created = create_test_submission(level_b, submitter_id, db).await;
+
+    let early_created: DateTime<Utc> = "2020-01-01T00:00:00Z".parse().unwrap();
+    let late_created: DateTime<Utc> = "2021-01-01T00:00:00Z".parse().unwrap();
+
+    diesel::update(submissions::table.filter(submissions::id.eq(older_created)))
+        .set(submissions::created_at.eq(early_created))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to set older test arepl submission created_at");
+
+    diesel::update(submissions::table.filter(submissions::id.eq(newer_created)))
+        .set(submissions::created_at.eq(late_created))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to set newer test arepl submission created_at");
+
+    (older_created, newer_created)
+}
+
+#[cfg(test)]
+pub async fn create_priority_queue_order_test_submissions(
+    db: &Arc<DbAppState>,
+    submitter_id: Uuid,
+) -> (Uuid, Uuid) {
+    let level_a = create_test_level(db).await;
+    let level_b = create_test_level(db).await;
+
+    let older_created = create_test_submission(level_a, submitter_id, db).await;
+    let newer_created = create_test_submission(level_b, submitter_id, db).await;
+
+    let early_created: DateTime<Utc> = "2020-01-01T00:00:00Z".parse().unwrap();
+    let late_created: DateTime<Utc> = "2021-01-01T00:00:00Z".parse().unwrap();
+
+    diesel::update(submissions::table.filter(submissions::id.eq(newer_created)))
+        .set((
+            submissions::priority.eq(true),
+            submissions::created_at.eq(late_created),
+        ))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to set first priority test arepl submission");
+
+    tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+
+    diesel::update(submissions::table.filter(submissions::id.eq(older_created)))
+        .set((
+            submissions::priority.eq(true),
+            submissions::created_at.eq(early_created),
+        ))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to set second priority test arepl submission");
+
+    (older_created, newer_created)
 }
 
 #[cfg(test)]

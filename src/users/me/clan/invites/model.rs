@@ -7,8 +7,8 @@ use crate::schema::{clan_invites, clan_members, clans, users};
 use crate::users::me::notifications::{Notification, NotificationType};
 use crate::users::BaseUser;
 use diesel::{
-    delete, insert_into, Connection as _, ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _,
-    SelectableHelper as _,
+    delete, insert_into, Connection as _, ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _,
+    RunQueryDsl as _, SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;

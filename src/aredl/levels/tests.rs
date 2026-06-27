@@ -230,7 +230,8 @@ async fn list_creators() {
     assert_eq!(
         body.as_array().unwrap()[0].as_object().unwrap()["id"]
             .as_str()
-            .unwrap().to_owned(),
+            .unwrap()
+            .to_owned(),
         creator_id.to_string(),
         "Creators do not match!"
     );
@@ -317,7 +318,8 @@ async fn get_level_history() {
     assert_eq!(
         move_entry["cause"].as_object().unwrap()["id"]
             .as_str()
-            .unwrap().to_owned(),
+            .unwrap()
+            .to_owned(),
         other_level.to_string()
     );
     assert_eq!(move_entry["position_diff"].as_i64().unwrap(), 1);
@@ -344,7 +346,8 @@ async fn get_level_pack() {
     assert_eq!(
         arr[0].as_object().unwrap()["id"]
             .as_str()
-            .unwrap().to_owned(),
+            .unwrap()
+            .to_owned(),
         pack.to_string(),
         "Pack IDs do not match!"
     );
@@ -368,7 +371,8 @@ async fn get_level_records() {
     assert_eq!(
         arr[0].as_object().unwrap()["id"]
             .as_str()
-            .unwrap().to_owned(),
+            .unwrap()
+            .to_owned(),
         record_id.to_string(),
         "Record IDs do not match!"
     );

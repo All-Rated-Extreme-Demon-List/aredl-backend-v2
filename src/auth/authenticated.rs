@@ -9,7 +9,8 @@ use crate::users::User;
 use actix_web::dev::Payload;
 use actix_web::{FromRequest, HttpMessage as _, HttpRequest};
 use diesel::{
-    ExpressionMethods as _, JoinOnDsl as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
+    ExpressionMethods as _, JoinOnDsl as _, OptionalExtension as _, QueryDsl as _,
+    RunQueryDsl as _, SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use std::future::{ready, Ready};

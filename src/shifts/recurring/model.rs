@@ -9,8 +9,8 @@ use crate::{
 };
 use chrono::{DateTime, NaiveDate, TimeZone as _, Utc};
 use diesel::{
-    AsChangeset, ExpressionMethods as _, Identifiable, Insertable, JoinOnDsl as _, QueryDsl as _, Queryable,
-    RunQueryDsl as _, SelectableHelper as _,
+    AsChangeset, ExpressionMethods as _, Identifiable, Insertable, JoinOnDsl as _, QueryDsl as _,
+    Queryable, RunQueryDsl as _, SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;

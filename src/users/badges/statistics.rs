@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use diesel::{
-    BoolExpressionMethods as _, ExpressionMethods as _, JoinOnDsl as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _,
+    BoolExpressionMethods as _, ExpressionMethods as _, JoinOnDsl as _, OptionalExtension as _,
+    QueryDsl as _, RunQueryDsl as _,
 };
 use uuid::Uuid;
 

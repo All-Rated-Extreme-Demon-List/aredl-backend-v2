@@ -1,6 +1,9 @@
 use crate::{
     app_data::db::DbConnection,
-    arepl::{levels::ExtendedBaseLevel, submissions::{Submission, SubmissionStatus, SubmissionResolved}},
+    arepl::{
+        levels::ExtendedBaseLevel,
+        submissions::{Submission, SubmissionResolved, SubmissionStatus},
+    },
     auth::{Authenticated, Permission},
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
@@ -17,7 +20,8 @@ use diesel::{
     BoolExpressionMethods as _, PgTextExpressionMethods as _,
 };
 use diesel::{
-    pg::Pg, ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _, Selectable, SelectableHelper as _,
+    pg::Pg, ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _, Selectable,
+    SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 

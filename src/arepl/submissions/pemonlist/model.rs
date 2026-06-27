@@ -72,9 +72,7 @@ impl PemonlistPlayer {
             .map_err(|e| ApiError::BadGateway(e.to_string()))?;
 
         let pemonlist_response: PemonlistResponse = resp.json().map_err(|e| {
-            ApiError::BadGateway(format!(
-                "Failed to parse data received from pemonlist: {e}"
-            ))
+            ApiError::BadGateway(format!("Failed to parse data received from pemonlist: {e}"))
         })?;
 
         let pemonlist_data = match pemonlist_response {

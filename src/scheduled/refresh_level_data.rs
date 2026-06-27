@@ -8,7 +8,8 @@ use crate::schema::arepl;
 use chrono::Utc;
 use diesel::dsl::exists;
 use diesel::{
-    select, BoolExpressionMethods as _, Connection as _, ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _,
+    select, BoolExpressionMethods as _, Connection as _, ExpressionMethods as _, JoinOnDsl as _,
+    QueryDsl as _, RunQueryDsl as _,
 };
 use serde::Deserialize;
 use std::sync::Arc;
@@ -290,9 +291,8 @@ async fn read_spreadsheet(
     spreadsheet_id: &str,
     range: &str,
 ) -> Result<SheetValues, ApiError> {
-    let url = format!(
-        "https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}/values/{range}"
-    );
+    let url =
+        format!("https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}/values/{range}");
     let response = reqwest::Client::new()
         .get(&url)
         .bearer_auth(access_token)

@@ -9,8 +9,8 @@ use crate::users::ExtendedBaseUser;
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::{
-    delete, insert_into, Connection as _, ExpressionMethods as _, JoinOnDsl as _, OptionalExtension as _, QueryDsl as _,
-    RunQueryDsl as _, SelectableHelper as _,
+    delete, insert_into, Connection as _, ExpressionMethods as _, JoinOnDsl as _,
+    OptionalExtension as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;

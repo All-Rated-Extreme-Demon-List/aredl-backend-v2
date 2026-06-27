@@ -8,8 +8,8 @@ use crate::{
 };
 use chrono::{DateTime, Datelike as _, NaiveDate, Timelike as _, Utc, Weekday as ChronoWeekday};
 use diesel::{
-    pg::Pg, AsChangeset, ExpressionMethods as _, Identifiable, JoinOnDsl as _, QueryDsl as _, Queryable,
-    RunQueryDsl as _, SelectableHelper as _,
+    pg::Pg, AsChangeset, ExpressionMethods as _, Identifiable, JoinOnDsl as _, QueryDsl as _,
+    Queryable, RunQueryDsl as _, SelectableHelper as _,
 };
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};

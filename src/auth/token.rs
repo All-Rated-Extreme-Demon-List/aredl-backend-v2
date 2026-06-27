@@ -4,7 +4,8 @@ use crate::schema::users;
 use crate::users::User;
 use chrono::{DateTime, Duration, TimeZone as _, Utc};
 use diesel::{
-    result::Error as DieselError, ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
+    result::Error as DieselError, ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _,
+    SelectableHelper as _,
 };
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
@@ -69,9 +70,8 @@ pub fn decode_token<T: Into<String>>(
 }
 
 pub fn decode_user_claims(token_claims: &TokenClaims) -> Result<UserClaims, ApiError> {
-    serde_json::from_str(&token_claims.sub).map_err(|e| {
-        ApiError::Unauthorized(format!("Failed to decode user claims! {e}").as_str())
-    })
+    serde_json::from_str(&token_claims.sub)
+        .map_err(|e| ApiError::Unauthorized(format!("Failed to decode user claims! {e}").as_str()))
 }
 
 pub fn check_token_valid(

@@ -37,8 +37,9 @@ async fn sleep_for_ratelimit(headers: &HeaderMap, default_sleep_ms: u64) {
         header_f64(headers, "x-ratelimit-reset-after"),
     ) {
         (Some(remaining), Some(reset_after)) if remaining <= 1 => {
-            Duration::try_from_secs_f64(reset_after)
-                .map_or(default_sleep, |duration| duration.saturating_add(Duration::from_millis(50)))
+            Duration::try_from_secs_f64(reset_after).map_or(default_sleep, |duration| {
+                duration.saturating_add(Duration::from_millis(50))
+            })
         }
         _ => default_sleep,
     };

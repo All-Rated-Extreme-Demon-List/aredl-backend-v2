@@ -200,12 +200,16 @@ impl From<DieselError> for ApiError {
                 )),
             },
             DieselError::NotFound => ApiError::NotFound("Not found"),
-            err @
-(DieselError::InvalidCString(_) | DieselError::QueryBuilderError(_) |
-DieselError::DeserializationError(_) | DieselError::SerializationError(_) |
-DieselError::RollbackErrorOnCommit { .. } | DieselError::RollbackTransaction |
-DieselError::AlreadyInTransaction | DieselError::NotInTransaction |
-DieselError::BrokenTransactionManager) | err => ApiError::InternalServerError(format!("Unexpected Internal error: {err}")),
+            err @ (DieselError::InvalidCString(_)
+            | DieselError::QueryBuilderError(_)
+            | DieselError::DeserializationError(_)
+            | DieselError::SerializationError(_)
+            | DieselError::RollbackErrorOnCommit { .. }
+            | DieselError::RollbackTransaction
+            | DieselError::AlreadyInTransaction
+            | DieselError::NotInTransaction
+            | DieselError::BrokenTransactionManager)
+            | err => ApiError::InternalServerError(format!("Unexpected Internal error: {err}")),
         }
     }
 }

@@ -12,12 +12,13 @@ use {
             submissions::{
                 status::SubmissionsEnabled,
                 test_utils::{
-                    create_test_submission, create_two_test_submissions_with_different_timestamps,
-                    get_test_submission, get_test_submission_optional,
-                    latest_test_submission_history, set_test_submission_raw_url,
-                    set_test_submission_raw_url_status_and_reviewer, set_test_submission_reviewer,
-                    set_test_submission_reviewer_with_private_notes, set_test_submission_status,
-                    set_test_submissions_raw_url,
+                    create_priority_queue_order_test_submissions,
+                    create_regular_queue_order_test_submissions, create_test_submission,
+                    create_two_test_submissions_with_different_timestamps, get_test_submission,
+                    get_test_submission_optional, latest_test_submission_history,
+                    set_test_submission_raw_url, set_test_submission_raw_url_status_and_reviewer,
+                    set_test_submission_reviewer, set_test_submission_reviewer_with_private_notes,
+                    set_test_submission_status, set_test_submissions_raw_url,
                 },
                 SubmissionStatus,
             },
@@ -828,6 +829,65 @@ async fn get_submission_queue() {
     assert!(resp.status().is_success());
     let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(body["position"].as_i64().unwrap(), 1);
+    assert!(!body["priority"].as_bool().unwrap());
+}
+
+#[actix_web::test]
+async fn priority_submission_queue_position_uses_updated_at() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user, _) = create_test_user(&db, None).await;
+    let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
+    let (_older_created, newer_created) =
+        create_priority_queue_order_test_submissions(&db, user).await;
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/aredl/submissions/{newer_created}/queue"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["position"].as_i64().unwrap(), 1);
+    assert!(body["priority"].as_bool().unwrap());
+}
+
+#[actix_web::test]
+async fn regular_submission_queue_position_still_uses_created_at() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user, _) = create_test_user(&db, None).await;
+    let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
+    let (older_created, _newer_created) =
+        create_regular_queue_order_test_submissions(&db, user).await;
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/aredl/submissions/{older_created}/queue"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["position"].as_i64().unwrap(), 1);
+    assert!(!body["priority"].as_bool().unwrap());
+}
+
+#[actix_web::test]
+async fn claim_priority_submission_uses_updated_at() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (full_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (submitter, _) = create_test_user(&db, None).await;
+    let token = create_test_token(full_reviewer, &auth.jwt_encoding_key).unwrap();
+    let (_older_created, newer_created) =
+        create_priority_queue_order_test_submissions(&db, submitter).await;
+
+    let req = test::TestRequest::get()
+        .uri("/aredl/submissions/claim")
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["id"].as_str().unwrap(), newer_created.to_string());
 }
 
 #[actix_web::test]

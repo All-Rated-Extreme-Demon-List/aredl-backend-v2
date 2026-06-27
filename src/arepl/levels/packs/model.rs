@@ -3,7 +3,9 @@ use crate::arepl::packs::{BasePack, PackWithTierResolved};
 use crate::arepl::packtiers::BasePackTier;
 use crate::error_handler::ApiError;
 use crate::schema::arepl::{pack_levels, pack_tiers, packs};
-use diesel::{ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _};
+use diesel::{
+    ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
+};
 use uuid::Uuid;
 
 impl PackWithTierResolved {

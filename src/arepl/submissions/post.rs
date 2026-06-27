@@ -2,14 +2,15 @@ use crate::{
     app_data::db::DbConnection,
     arepl::bounty::Bounty,
     arepl::levels::LevelStatus,
-    arepl::submissions::{status::SubmissionsEnabled, SubmissionStatus, Submission},
+    arepl::submissions::{status::SubmissionsEnabled, Submission, SubmissionStatus},
     auth::{Authenticated, Permission},
     error_handler::ApiError,
     providers::ProvidersAppState,
     schema::arepl::{levels, submissions},
 };
 use diesel::{
-    Connection as _, ExpressionMethods as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
+    Connection as _, ExpressionMethods as _, OptionalExtension as _, QueryDsl as _,
+    RunQueryDsl as _, SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -221,7 +222,7 @@ impl Submission {
 
             // check if any submissions exist already
             let exists_submission = submissions::table
-                .filter(submissions::submitted_by.eq(authenticated.user_id))
+                .filter(submissions::submitted_by.eq(inserted_submission.submitted_by))
                 .filter(submissions::level_id.eq(inserted_submission.level_id))
                 .select(submissions::id)
                 .first::<Uuid>(connection)

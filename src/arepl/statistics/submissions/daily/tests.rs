@@ -40,9 +40,8 @@ async fn submission_stats_filter_moderator() {
     insert_history_entry(sub, Some(mod_id), SubmissionStatus::Denied, &db).await;
     refresh_test_submission_stats(&db).await;
 
-    let uri = format!(
-        "/arepl/statistics/submissions/daily?reviewer_id={mod_id}&page=1&per_page=10"
-    );
+    let uri =
+        format!("/arepl/statistics/submissions/daily?reviewer_id={mod_id}&page=1&per_page=10");
     let req = test::TestRequest::get()
         .uri(&uri)
         .insert_header((header::AUTHORIZATION, format!("Bearer {token}")))
@@ -91,10 +90,7 @@ async fn submission_stats_hides_base_reviewer_filter_for_non_auditor() {
 
     let req = test::TestRequest::get()
         .uri(&uri)
-        .insert_header((
-            header::AUTHORIZATION,
-            format!("Bearer {non_auditor_token}"),
-        ))
+        .insert_header((header::AUTHORIZATION, format!("Bearer {non_auditor_token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "Status: {}", resp.status());
@@ -158,10 +154,7 @@ async fn submission_leaderboard_include_base_reviewers_requires_audit() {
 
     let req = test::TestRequest::get()
         .uri(uri)
-        .insert_header((
-            header::AUTHORIZATION,
-            format!("Bearer {non_auditor_token}"),
-        ))
+        .insert_header((header::AUTHORIZATION, format!("Bearer {non_auditor_token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -292,9 +285,7 @@ async fn submission_leaderboard_since_filters_out_future_date() {
     refresh_test_submission_stats(&db).await;
 
     let tomorrow = chrono::Utc::now().date_naive() + chrono::Duration::days(1);
-    let uri = format!(
-        "/arepl/statistics/submissions/daily/leaderboard?since={tomorrow}"
-    );
+    let uri = format!("/arepl/statistics/submissions/daily/leaderboard?since={tomorrow}");
 
     let req = test::TestRequest::get()
         .uri(&uri)

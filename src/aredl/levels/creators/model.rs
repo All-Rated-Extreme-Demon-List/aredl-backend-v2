@@ -4,8 +4,8 @@ use crate::schema::aredl::levels_created;
 use crate::schema::users;
 use crate::users::{BaseUser, BaseUserWithBanLevel};
 use diesel::{
-    delete, insert_into, Connection as _, ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _,
-    SelectableHelper as _,
+    delete, insert_into, Connection as _, ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _,
+    RunQueryDsl as _, SelectableHelper as _,
 };
 use uuid::Uuid;
 

@@ -10,7 +10,9 @@ use crate::users::test_utils::create_test_user;
 #[cfg(test)]
 use crate::{app_data::db::DbAppState, arepl::records::test_utils::create_test_record};
 #[cfg(test)]
-use diesel::{sql_query, ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _};
+use diesel::{
+    sql_query, ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
+};
 #[cfg(test)]
 use uuid::Uuid;
 

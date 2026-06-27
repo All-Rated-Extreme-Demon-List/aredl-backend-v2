@@ -6,8 +6,8 @@ use crate::schema::aredl::{levels, position_history};
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::{
-    ExpressionMethods as _, JoinOnDsl as _, NullableExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, Selectable,
-    SelectableHelper as _,
+    ExpressionMethods as _, JoinOnDsl as _, NullableExpressionMethods as _, QueryDsl as _,
+    RunQueryDsl as _, Selectable, SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;

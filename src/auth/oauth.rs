@@ -3,12 +3,15 @@ use crate::error_handler::ApiError;
 use crate::schema::{oauth_requests, oauth_tokens};
 use crate::{get_optional_secret, get_secret};
 use chrono::{DateTime, Utc};
-use diesel::{Connection as _, ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _};
+use diesel::{
+    Connection as _, ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
+};
 use diesel_derive_enum::DbEnum;
 use oauth2::basic::BasicClient;
 use oauth2::{
     AuthType, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, EndpointNotSet,
-    EndpointSet, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, TokenResponse as _, TokenUrl,
+    EndpointSet, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope, TokenResponse as _,
+    TokenUrl,
 };
 use serde::{Deserialize, Serialize};
 use strum_macros::Display;

@@ -5,7 +5,8 @@ use crate::roles::Role;
 use crate::schema::{user_roles, users};
 use crate::users::BaseUser;
 use diesel::{
-    insert_into, Connection as _, ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
+    insert_into, Connection as _, ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _,
+    RunQueryDsl as _, SelectableHelper as _,
 };
 use uuid::Uuid;
 

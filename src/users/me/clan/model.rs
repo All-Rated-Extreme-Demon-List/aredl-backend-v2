@@ -3,7 +3,8 @@ use crate::clans::{Clan, ClanMember};
 use crate::error_handler::ApiError;
 use crate::schema::clan_members;
 use diesel::{
-    delete, ExpressionMethods as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
+    delete, ExpressionMethods as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _,
+    SelectableHelper as _,
 };
 use uuid::Uuid;
 

@@ -14,7 +14,8 @@ use crate::users::{BaseUser, ExtendedBaseUser};
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::{
-    ExpressionMethods as _, JoinOnDsl as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
+    ExpressionMethods as _, JoinOnDsl as _, OptionalExtension as _, QueryDsl as _,
+    RunQueryDsl as _, SelectableHelper as _,
 };
 use indexmap::map::Entry;
 use indexmap::IndexMap;

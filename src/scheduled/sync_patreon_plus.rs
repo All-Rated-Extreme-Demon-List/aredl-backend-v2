@@ -148,9 +148,7 @@ async fn fetch_active_patreon_user_ids(
     let mut cursor: Option<String> = None;
 
     loop {
-        let url = format!(
-            "{patreon_base}/oauth2/v2/campaigns/{campaign_id}/members"
-        );
+        let url = format!("{patreon_base}/oauth2/v2/campaigns/{campaign_id}/members");
         let mut request = client.get(url).bearer_auth(&access_token).query(&[
             ("include", "user"),
             ("fields[member]", "patron_status"),

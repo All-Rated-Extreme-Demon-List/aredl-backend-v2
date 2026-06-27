@@ -13,7 +13,10 @@ use chacha20poly1305::{
     XChaCha20Poly1305, XNonce,
 };
 use chrono::{Duration as ChronoDuration, Utc};
-use diesel::{ExpressionMethods as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _};
+use diesel::{
+    ExpressionMethods as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _,
+    SelectableHelper as _,
+};
 use serde::Deserialize;
 use std::sync::OnceLock;
 use tokio::sync::Mutex;
@@ -313,9 +316,8 @@ fn token_cipher() -> Result<&'static XChaCha20Poly1305, ApiError> {
             .decode(secret)
             .map_err(|_err| "OAUTH_TOKEN_ENCRYPTION_KEY must be base64-encoded 32 random bytes")?;
 
-        XChaCha20Poly1305::new_from_slice(&key).map_err(|_err| {
-            "OAUTH_TOKEN_ENCRYPTION_KEY must decode to exactly 32 bytes".to_owned()
-        })
+        XChaCha20Poly1305::new_from_slice(&key)
+            .map_err(|_err| "OAUTH_TOKEN_ENCRYPTION_KEY must decode to exactly 32 bytes".to_owned())
     });
 
     cipher_result.as_ref().map_err(|message| {
