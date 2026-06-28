@@ -1,5 +1,6 @@
 use crate::app_data::db::DbAppState;
 use crate::auth::{Authenticated, Permission, UserAuth};
+use crate::cache_control::CacheController;
 use crate::clans::members::ClanMemberResolved;
 use crate::clans::members::{ClanInviteCreate, ClanMemberInvite, ClanMemberUpdate};
 use crate::clans::{
@@ -24,7 +25,7 @@ use uuid::Uuid;
         (status = 200, body = [ClanMemberResolved])
     ),
 )]
-#[get("")]
+#[get("", wrap = "CacheController::public_with_max_age(300)")]
 async fn list(
     db: web::Data<Arc<DbAppState>>,
     clan_id: web::Path<Uuid>,

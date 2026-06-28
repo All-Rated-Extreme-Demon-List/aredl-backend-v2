@@ -5,6 +5,7 @@ use crate::{
         Submission,
     },
     auth::{Authenticated, UserAuth},
+    cache_control::CacheController,
     error_handler::ApiError,
 };
 use actix_web::{get, web, HttpResponse};
@@ -51,7 +52,7 @@ async fn get_queue_position(
         (status = 200, body = SubmissionQueue)
     )
 )]
-#[get("queue")]
+#[get("queue", wrap = "CacheController::public_with_max_age(60)")]
 async fn get_queue(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
     let submission =
         web::block(move || SubmissionQueue::get_queue(&mut db.connection()?)).await??;

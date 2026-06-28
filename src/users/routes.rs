@@ -1,5 +1,6 @@
 use crate::app_data::db::DbAppState;
 use crate::auth::{Authenticated, Permission, UserAuth};
+use crate::cache_control::CacheController;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::users::{
@@ -24,7 +25,11 @@ use uuid::Uuid;
         (status = 200, body = UserResolved)
     ),
 )]
-#[get("/{id}", wrap = "UserAuth::load()")]
+#[get(
+    "/{id}",
+    wrap = "UserAuth::load()",
+    wrap = "CacheController::auth_public_with_max_age(300)"
+)]
 async fn find(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<String>,
@@ -56,7 +61,7 @@ async fn find(
         (status = 200, body = Paginated<UserPage>)
     ),
 )]
-#[get("")]
+#[get("", wrap = "CacheController::public_with_max_age(180)")]
 async fn list(
     db: web::Data<Arc<DbAppState>>,
     page_query: web::Query<PageQuery<100>>,

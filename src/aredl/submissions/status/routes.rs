@@ -1,7 +1,8 @@
 use crate::{
+    app_data::db::DbAppState,
     aredl::submissions::status::{SubmissionsEnabled, SubmissionsEnabledFull},
     auth::{Authenticated, Permission, UserAuth},
-    app_data::db::DbAppState,
+    cache_control::CacheController,
     error_handler::ApiError,
 };
 use actix_web::{get, post, web, HttpResponse};
@@ -96,7 +97,7 @@ async fn get_status_full(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse,
         ("api_key" = []),
     ),
 )]
-#[get("")]
+#[get("", wrap = "CacheController::public_with_max_age(60)")]
 async fn get_status(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
     let res = web::block(move || SubmissionsEnabled::is_enabled(&mut db.connection()?)).await??;
     return Ok(HttpResponse::Ok().json(res));
@@ -115,7 +116,10 @@ async fn get_status(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiE
         ("api_key" = []),
     ),
 )]
-#[get("/history")]
+#[get(
+    "/history",
+    wrap = "UserAuth::require(Permission::SubmissionStatusManage)"
+)]
 async fn get_history(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
     let res =
         web::block(move || SubmissionsEnabledFull::get_statuses(&mut db.connection()?)).await??;
