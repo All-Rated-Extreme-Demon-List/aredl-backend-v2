@@ -24,7 +24,11 @@ use utoipa::OpenApi;
         (status = 200, body = UserResolved)
     ),
 )]
-#[get("/{id}", wrap = "UserAuth::load()")]
+#[get(
+    "/{id}",
+    wrap = "UserAuth::load()",
+    wrap = "CacheController::auth_public_with_max_age(300)"
+)]
 async fn find(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<String>,

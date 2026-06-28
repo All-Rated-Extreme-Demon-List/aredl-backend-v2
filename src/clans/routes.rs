@@ -1,5 +1,6 @@
 use crate::app_data::db::DbAppState;
 use crate::auth::{Authenticated, Permission, UserAuth};
+use crate::cache_control::CacheController;
 use crate::clans::{members, Clan, ClanCreate, ClanListQueryOptions, ClanPage, ClanUpdate};
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
@@ -26,7 +27,7 @@ use uuid::Uuid;
         (status = 200, body = Paginated<ClanPage>)
     ),
 )]
-#[get("")]
+#[get("", wrap = "CacheController::public_with_max_age(180)")]
 async fn list(
     db: web::Data<Arc<DbAppState>>,
     page_query: web::Query<PageQuery<100>>,
