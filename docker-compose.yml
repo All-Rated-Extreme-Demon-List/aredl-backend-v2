@@ -11,6 +11,14 @@ services:
       - "${API_DB_PORT}:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
+    command:
+    - "postgres"
+    - "-c"
+    - "shared_preload_libraries=pg_stat_statements"
+    - "-c"
+    - "pg_stat_statements.track=top"
+    - "-c"
+    - "pg_stat_statements.max=5000"
 
   api:
     container_name: api
