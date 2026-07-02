@@ -17,8 +17,12 @@ use uuid::Uuid;
 pub struct SubmissionQueue {
     /// The amount of pending submissions that are not marked as priority.
     pub regular_submissions_in_queue: i64,
+    /// The amount of pending submissions that are not marked as priority and do not have raw footage.
+    pub regular_submissions_without_raw_in_queue: i64,
     /// The amount of pending submissions that are marked as priority.
     pub priority_submissions_in_queue: i64,
+    /// The amount of pending submissions that are marked as priority and do not have raw footage.
+    pub priority_submissions_without_raw_in_queue: i64,
     /// The amount of submissions currently under consideration.
     pub uc_submissions: i64,
     /// The timestamp of the oldest pending submission in the queue, if any.
@@ -39,31 +43,39 @@ impl Submission {
         target_priority: bool,
         target_created_at: DateTime<Utc>,
         target_updated_at: DateTime<Utc>,
+        target_has_raw_footage: bool,
     ) -> SubmissionFilter {
+        let mut base_filter: SubmissionFilter =
+            Box::new(submissions::status.eq(SubmissionStatus::Pending));
+
+        if !target_has_raw_footage {
+            base_filter = Box::new(base_filter.and(submissions::raw_url.is_null()));
+        }
+
         if target_priority {
             Box::new(
-                submissions::status
-                    .eq(SubmissionStatus::Pending)
+                base_filter
                     .and(submissions::priority.eq(true))
                     .and(submissions::updated_at.lt(target_updated_at)),
             )
         } else {
             Box::new(
-                submissions::status
-                    .eq(SubmissionStatus::Pending)
+                base_filter
                     .and(submissions::priority.eq(false))
                     .and(submissions::created_at.lt(target_created_at)),
             )
         }
     }
+
     pub fn get_queue_position(
         conn: &mut DbConnection,
         submission_id: Uuid,
     ) -> Result<(i64, bool), ApiError> {
-        let (target_priority, target_created_at, target_updated_at): (
+        let (target_priority, target_created_at, target_updated_at, target_has_raw_footage): (
             bool,
             DateTime<Utc>,
             DateTime<Utc>,
+            bool,
         ) = submissions::table
             .filter(submissions::id.eq(submission_id))
             .filter(submissions::status.eq(SubmissionStatus::Pending))
@@ -71,6 +83,7 @@ impl Submission {
                 submissions::priority,
                 submissions::created_at,
                 submissions::updated_at,
+                submissions::raw_url.is_not_null(),
             ))
             .first(conn)?;
 
@@ -80,6 +93,7 @@ impl Submission {
                 target_priority,
                 target_created_at,
                 target_updated_at,
+                target_has_raw_footage,
             ))
             .count()
             .get_result::<i64>(conn)?
@@ -90,16 +104,38 @@ impl Submission {
 }
 
 impl SubmissionQueue {
+    fn pending_filter(priority: bool, exclude_raw: bool) -> SubmissionFilter {
+        let base_pending_filter: SubmissionFilter = Box::new(
+            submissions::status
+                .eq(SubmissionStatus::Pending)
+                .and(submissions::priority.eq(priority)),
+        );
+
+        if exclude_raw {
+            Box::new(base_pending_filter.and(submissions::raw_url.is_null()))
+        } else {
+            base_pending_filter
+        }
+    }
+
     pub fn get_queue(conn: &mut DbConnection) -> Result<Self, ApiError> {
         let regular_submissions_in_queue = submissions::table
-            .filter(submissions::status.eq(SubmissionStatus::Pending))
-            .filter(submissions::priority.eq(false))
+            .filter(Self::pending_filter(false, false))
+            .count()
+            .get_result::<i64>(conn)?;
+
+        let regular_submissions_without_raw_in_queue = submissions::table
+            .filter(Self::pending_filter(false, true))
             .count()
             .get_result::<i64>(conn)?;
 
         let priority_submissions_in_queue = submissions::table
-            .filter(submissions::status.eq(SubmissionStatus::Pending))
-            .filter(submissions::priority.eq(true))
+            .filter(Self::pending_filter(true, false))
+            .count()
+            .get_result::<i64>(conn)?;
+
+        let priority_submissions_without_raw_in_queue = submissions::table
+            .filter(Self::pending_filter(true, true))
             .count()
             .get_result::<i64>(conn)?;
 
@@ -117,7 +153,9 @@ impl SubmissionQueue {
 
         Ok(Self {
             regular_submissions_in_queue,
+            regular_submissions_without_raw_in_queue,
             priority_submissions_in_queue,
+            priority_submissions_without_raw_in_queue,
             uc_submissions,
             oldest_submission,
         })
