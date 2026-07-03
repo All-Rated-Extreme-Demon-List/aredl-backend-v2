@@ -366,7 +366,7 @@ async fn get_level_records() {
     let res = test::call_service(&app, req).await;
     assert!(res.status().is_success(), "status is {}", res.status());
     let body: serde_json::Value = read_body_json(res).await;
-    let arr = body.as_array().unwrap();
+    let arr = body["data"].as_array().unwrap();
     assert_eq!(arr.len(), 1, "This level has more than 1 record!");
     assert_eq!(
         arr[0].as_object().unwrap()["id"]

@@ -1,8 +1,9 @@
 use crate::app_data::db::DbAppState;
-use crate::aredl::levels::records::LevelResolvedRecordExtended;
+use crate::aredl::levels::records::{LevelResolvedRecordExtended, LevelResolvedRecordPage};
 use crate::aredl::levels::{id_resolver::resolve_level_id, records::RecordQuery};
 use crate::cache_control::CacheController;
 use crate::error_handler::ApiError;
+use crate::page_helper::{PageQuery, Paginated};
 use actix_web::{get, web, HttpResponse};
 use std::sync::Arc;
 use utoipa::OpenApi;
@@ -13,22 +14,30 @@ use utoipa::OpenApi;
     description = "List all of this levels records",
     tag = "AREDL - Levels",
     params(
-        ("level_id" = String, description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
+        ("level_id" = String, description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)"),
+        ("page" = Option<i64>, Query, description = "The page of records to fetch"),
+        ("per_page" = Option<i64>, Query, description = "The number of records to fetch per page"),
     ),
     responses(
-        (status = 200, body = [LevelResolvedRecordExtended])
+        (status = 200, body = Paginated<LevelResolvedRecordPage>)
     ),
 )]
 #[get("", wrap = "CacheController::public_with_max_age(900)")]
 async fn find_all(
     db: web::Data<Arc<DbAppState>>,
     level_id: web::Path<String>,
+    page_query: web::Query<PageQuery<20>>,
     opts: web::Query<RecordQuery>,
 ) -> Result<HttpResponse, ApiError> {
     let records = web::block(move || {
         let conn = &mut db.connection()?;
         let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
-        LevelResolvedRecordExtended::find_all_by_level(conn, level_id, &opts.into_inner())
+        LevelResolvedRecordExtended::find_all_by_level(
+            conn,
+            level_id,
+            page_query.into_inner(),
+            &opts.into_inner(),
+        )
     })
     .await??;
     Ok(HttpResponse::Ok().json(records))
@@ -42,6 +51,7 @@ async fn find_all(
     components(
         schemas(
             LevelResolvedRecordExtended,
+            LevelResolvedRecordPage,
         )
     ),
     paths(

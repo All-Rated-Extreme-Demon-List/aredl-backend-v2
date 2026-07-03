@@ -1,6 +1,7 @@
 use crate::app_data::db::DbConnection;
 use crate::arepl::records::Record;
 use crate::error_handler::ApiError;
+use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::{arepl::records, users};
 use crate::users::{BaseUser, ExtendedBaseUser};
 use chrono::{DateTime, Utc};
@@ -59,6 +60,11 @@ pub struct LevelResolvedRecordExtended {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct LevelResolvedRecordPage {
+    pub data: Vec<LevelResolvedRecordExtended>,
+}
+
 impl LevelResolvedRecord {
     pub fn from_data(record: Record, user: BaseUser) -> Self {
         Self {
@@ -75,33 +81,38 @@ impl LevelResolvedRecord {
 }
 
 impl LevelResolvedRecordExtended {
-    pub fn find_all_by_level(
+    pub fn find_all_by_level<const D: i64>(
         conn: &mut DbConnection,
         level_id: Uuid,
+        page_query: PageQuery<D>,
         opts: &RecordQuery,
-    ) -> Result<Vec<Self>, ApiError> {
-        let users_high_extremes = if let Some(true) = opts.high_extremes {
-            records::table
-                .group_by(records::submitted_by)
-                .having(count(records::id).gt(50))
-                .select(records::submitted_by)
-                .load::<Uuid>(conn)?
-        } else {
-            Vec::<Uuid>::new()
+    ) -> Result<Paginated<LevelResolvedRecordPage>, ApiError> {
+        let build_filtered = |conn: &mut DbConnection| -> Result<_, ApiError> {
+            let mut query = records::table
+                .filter(records::level_id.eq(level_id))
+                .filter(records::is_verification.eq(false))
+                .inner_join(users::table.on(records::submitted_by.eq(users::id)))
+                .filter(users::ban_level.le(1))
+                .into_boxed();
+
+            if let Some(true) = opts.high_extremes {
+                let users_high_extremes = records::table
+                    .group_by(records::submitted_by)
+                    .having(count(records::id).gt(50))
+                    .select(records::submitted_by)
+                    .load::<Uuid>(conn)?;
+
+                query = query.filter(records::submitted_by.eq_any(users_high_extremes));
+            }
+
+            Ok(query)
         };
 
-        let mut query = records::table
-            .filter(records::level_id.eq(level_id))
-            .filter(records::is_verification.eq(false))
-            .inner_join(users::table.on(records::submitted_by.eq(users::id)))
-            .filter(users::ban_level.le(1))
-            .into_boxed();
+        let total_count = build_filtered(conn)?.count().get_result::<i64>(conn)?;
 
-        if !users_high_extremes.is_empty() {
-            query = query.filter(records::submitted_by.eq_any(users_high_extremes));
-        }
-
-        let records = query
+        let records = build_filtered(conn)?
+            .limit(page_query.per_page())
+            .offset(page_query.offset())
             .order(records::completion_time.asc())
             .select((Record::as_select(), ExtendedBaseUser::as_select()))
             .load::<(Record, ExtendedBaseUser)>(conn)?;
@@ -110,7 +121,14 @@ impl LevelResolvedRecordExtended {
             .into_iter()
             .map(|(record, user)| Self::from_data(record, user))
             .collect();
-        Ok(records_resolved)
+
+        Ok(Paginated::from_data(
+            page_query,
+            total_count,
+            LevelResolvedRecordPage {
+                data: records_resolved,
+            },
+        ))
     }
 
     pub fn from_data(record: Record, user: ExtendedBaseUser) -> Self {

@@ -15,6 +15,8 @@ pub struct Paginated<T> {
     pub per_page: i64,
     /// The total amount of available pages with these settings.
     pub pages: i64,
+    /// The total amount of available items with these settings.
+    pub count: i64,
     #[serde(flatten)]
     pub data: T,
 }
@@ -26,6 +28,7 @@ impl<T> Paginated<T> {
             page: query.page(),
             per_page: query.per_page(),
             pages,
+            count,
             data,
         }
     }
