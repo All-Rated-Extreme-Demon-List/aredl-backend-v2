@@ -79,6 +79,9 @@ jobs:
           trap 'kill $TUNNEL_PID' EXIT
           sleep 3
 
+          echo "Waiting 60 seconds for the API to start and finish migrations"
+          sleep 60
+
           python backfill-repo/run_backfill.py \
             --db-url "postgresql://${PGUSER}:${PGPASSWORD}@127.0.0.1:55432/aredl" \
             --environment "${{ inputs.environment_name }}"
