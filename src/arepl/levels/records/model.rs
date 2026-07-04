@@ -3,7 +3,7 @@ use crate::arepl::records::Record;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::{arepl::records, users};
-use crate::users::{BaseUser, ExtendedBaseUser};
+use crate::users::{user_filter, BaseUser, ExtendedBaseUser};
 use chrono::{DateTime, Utc};
 use diesel::dsl::count;
 use diesel::{
@@ -16,6 +16,7 @@ use uuid::Uuid;
 #[derive(utoipa::ToSchema, Serialize, Deserialize, Debug)]
 pub struct RecordQuery {
     high_extremes: Option<bool>,
+    submitter_filter: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
@@ -94,6 +95,11 @@ impl LevelResolvedRecordExtended {
                 .inner_join(users::table.on(records::submitted_by.eq(users::id)))
                 .filter(users::ban_level.le(1))
                 .into_boxed();
+
+            if let Some(submitter_filter) = &opts.submitter_filter {
+                query =
+                    query.filter(users::id.eq_any(user_filter(submitter_filter).select(users::id)));
+            }
 
             if let Some(true) = opts.high_extremes {
                 let users_high_extremes = records::table
