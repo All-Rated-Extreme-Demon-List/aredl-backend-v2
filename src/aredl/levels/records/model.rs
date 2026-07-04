@@ -3,7 +3,7 @@ use crate::aredl::records::Record;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::{aredl::records, users};
-use crate::users::{user_filter, BaseUser, ExtendedBaseUser};
+use crate::users::{user_ilike_filter, BaseUser, ExtendedBaseUser};
 use chrono::{DateTime, Utc};
 use diesel::dsl::count;
 use diesel::{
@@ -97,8 +97,9 @@ impl LevelResolvedRecordExtended {
                 .into_boxed();
 
             if let Some(submitter_filter) = &opts.submitter_filter {
-                query =
-                    query.filter(users::id.eq_any(user_filter(submitter_filter).select(users::id)));
+                query = query.filter(
+                    users::id.eq_any(user_ilike_filter(submitter_filter).select(users::id)),
+                );
             }
 
             if let Some(true) = opts.high_extremes {

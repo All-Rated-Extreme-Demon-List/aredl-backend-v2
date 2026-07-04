@@ -190,6 +190,18 @@ pub fn user_filter<'a>(input: &'a String) -> users::BoxedQuery<'a, Pg> {
     q
 }
 
+// user ilike filter that matches either by partial username or global_name or exact user_filter match
+pub fn user_ilike_filter<'a>(input: &'a String) -> users::BoxedQuery<'a, Pg> {
+    let mut q = users::table.into_boxed::<Pg>();
+    q = q.filter(
+        users::username
+            .ilike(input)
+            .or(users::global_name.ilike(input))
+            .or(users::id.eq_any(user_filter(input).select(users::id))),
+    );
+    q
+}
+
 impl BaseUser {
     pub fn hidden() -> Self {
         BaseUser {
@@ -309,12 +321,7 @@ impl User {
         let build_query = || {
             let mut q = users::table.into_boxed::<Pg>();
             if let Some(name_like) = &options.name_filter {
-                q = q.filter(
-                    users::global_name
-                        .ilike(name_like)
-                        .or(users::username.ilike(name_like))
-                        .or(users::id.eq_any(user_filter(name_like).select(users::id))),
-                );
+                q = q.filter(users::id.eq_any(user_ilike_filter(name_like).select(users::id)));
             }
             if let Some(placeholder) = options.placeholder {
                 q = q.filter(users::placeholder.eq(placeholder));
