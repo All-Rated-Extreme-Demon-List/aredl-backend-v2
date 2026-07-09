@@ -25,9 +25,11 @@ pub struct LeaderboardEntry {
     pub rank: i32,
     pub extremes_rank: i32,
     pub raw_rank: i32,
+    pub hardest_rank: i32,
     pub country_rank: i32,
     pub country_extremes_rank: i32,
     pub country_raw_rank: i32,
+    pub country_hardest_rank: i32,
     pub user_id: Uuid,
     pub country: Option<i32>,
     pub total_points: i32,
@@ -45,12 +47,16 @@ pub struct LeaderboardEntryResolved {
     pub extremes_rank: i32,
     /// Rank of the user in the global leaderboard, sorted by total points (excluding packs).
     pub raw_rank: i32,
+    /// Rank of the user in the global leaderboard, sorted by hardest completed level position.
+    pub hardest_rank: i32,
     /// Rank of the user in the country leaderboard, sorted by total points (including packs).
     pub country_rank: i32,
     /// Rank of the user in the country leaderboard, sorted by count of extremes completed.
     pub country_extremes_rank: i32,
     /// Rank of the user in the country leaderboard, sorted by total points (excluding packs).
     pub country_raw_rank: i32,
+    /// Rank of the user in the country leaderboard, sorted by hardest completed level position.
+    pub country_hardest_rank: i32,
     /// This entry's user.
     pub user: ExtendedBaseUser,
     /// Country of the user. Uses the ISO 3166-1 numeric country code.
@@ -83,6 +89,8 @@ pub enum LeaderboardOrder {
     RawPoints,
     /// Sort by count of extremes completed.
     ExtremeCount,
+    /// Sort by hardest completed level position.
+    Hardest,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -137,6 +145,9 @@ impl LeaderboardPage {
             (false, LeaderboardOrder::RawPoints) => {
                 query = query.order(user_leaderboard::raw_rank.asc());
             }
+            (false, LeaderboardOrder::Hardest) => {
+                query = query.order(user_leaderboard::hardest_rank.asc());
+            }
             (true, LeaderboardOrder::TotalPoints) => {
                 query = query.order(user_leaderboard::country_rank.asc());
             }
@@ -145,6 +156,9 @@ impl LeaderboardPage {
             }
             (true, LeaderboardOrder::RawPoints) => {
                 query = query.order(user_leaderboard::country_raw_rank.asc());
+            }
+            (true, LeaderboardOrder::Hardest) => {
+                query = query.order(user_leaderboard::country_hardest_rank.asc());
             }
         }
 
@@ -172,9 +186,11 @@ impl LeaderboardPage {
                 rank: e.rank,
                 extremes_rank: e.extremes_rank,
                 raw_rank: e.raw_rank,
+                hardest_rank: e.hardest_rank,
                 country_rank: e.country_rank,
                 country_extremes_rank: e.country_extremes_rank,
                 country_raw_rank: e.country_raw_rank,
+                country_hardest_rank: e.country_hardest_rank,
                 user,
                 country: e.country,
                 total_points: e.total_points,

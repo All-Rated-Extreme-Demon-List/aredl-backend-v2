@@ -23,6 +23,7 @@ use uuid::Uuid;
 pub struct CountryLeaderboardEntry {
     pub rank: i32,
     pub extremes_rank: i32,
+    pub hardest_rank: i32,
     pub country: i32,
     pub level_points: i32,
     pub members_count: i32,
@@ -36,6 +37,8 @@ pub struct CountryLeaderboardEntryResolved {
     pub rank: i32,
     /// Rank of the country, sorted by count of extremes completed.
     pub extremes_rank: i32,
+    /// Rank of the country, sorted by hardest completed level position.
+    pub hardest_rank: i32,
     /// This entry's country. Uses the ISO 3166-1 numeric country code.
     pub country: i32,
     /// Total points of the country.
@@ -84,7 +87,12 @@ impl CountryLeaderboardPage {
             LeaderboardOrder::ExtremeCount => {
                 query = query.order(country_leaderboard::extremes_rank.asc());
             }
+            LeaderboardOrder::Hardest => {
+                query = query.order(country_leaderboard::hardest_rank.asc());
+            }
         }
+
+        query = query.then_order_by(country_leaderboard::country.asc());
 
         let raw_entries: Vec<(CountryLeaderboardEntry, Option<BaseLevel>)> = query
             .limit(page_query.per_page())
@@ -100,6 +108,7 @@ impl CountryLeaderboardPage {
             .map(|(entry, hardest)| CountryLeaderboardEntryResolved {
                 rank: entry.rank,
                 extremes_rank: entry.extremes_rank,
+                hardest_rank: entry.hardest_rank,
                 country: entry.country,
                 level_points: entry.level_points,
                 members_count: entry.members_count,

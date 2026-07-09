@@ -178,6 +178,43 @@ async fn leaderboard_filters() {
 }
 
 #[actix_web::test]
+async fn leaderboard_orders_by_hardest_position() {
+    let (app, db, _, _) = init_test_app().await;
+
+    let lower_position_level = create_test_level(&db).await;
+    let middle_position_level = create_test_level(&db).await;
+    let top_position_level = create_test_level(&db).await;
+
+    let (hardest_user, _) = create_test_user(&db, None).await;
+    let (more_records_user, _) = create_test_user(&db, None).await;
+
+    create_test_record(&db, hardest_user, top_position_level).await;
+    create_test_record(&db, more_records_user, lower_position_level).await;
+    create_test_record(&db, more_records_user, middle_position_level).await;
+
+    set_test_user_country(&db, hardest_user, Some(840)).await;
+    set_test_user_country(&db, more_records_user, Some(840)).await;
+
+    refresh_test_leaderboards(&db).await;
+
+    let req = test::TestRequest::get()
+        .uri("/arepl/leaderboard/?order=Hardest")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["data"][0]["user"]["id"], hardest_user.to_string());
+    assert_eq!(body["data"][0]["hardest_rank"], 1);
+
+    let req = test::TestRequest::get()
+        .uri("/arepl/leaderboard/?country_filter=840&order=Hardest")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["data"][0]["user"]["id"], hardest_user.to_string());
+    assert_eq!(body["data"][0]["country_hardest_rank"], 1);
+}
+
+#[actix_web::test]
 async fn country_clan_leaderboard_orders() {
     let (app, db, _, _) = init_test_app().await;
     let (u1, _) = create_test_user(&db, None).await;
@@ -191,6 +228,8 @@ async fn country_clan_leaderboard_orders() {
 
     let clan_id = create_test_clan(&db).await;
     create_test_clan_member(&db, clan_id, u1, 0).await;
+    let harder_clan_id = create_test_clan(&db).await;
+    create_test_clan_member(&db, harder_clan_id, u2, 0).await;
 
     refresh_test_leaderboards(&db).await;
 
@@ -206,7 +245,23 @@ async fn country_clan_leaderboard_orders() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     let body: serde_json::Value = read_body_json(resp).await;
-    assert_eq!(body["data"][0]["clan"]["id"], clan_id.to_string());
+    assert_eq!(body["data"][0]["clan"]["id"], harder_clan_id.to_string());
+
+    let req = test::TestRequest::get()
+        .uri("/arepl/leaderboard/countries?order=Hardest")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["data"][0]["country"], 124);
+    assert_eq!(body["data"][0]["hardest_rank"], 1);
+
+    let req = test::TestRequest::get()
+        .uri("/arepl/leaderboard/clans?order=Hardest")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["data"][0]["clan"]["id"], harder_clan_id.to_string());
+    assert_eq!(body["data"][0]["hardest_rank"], 1);
 }
 
 #[actix_web::test]

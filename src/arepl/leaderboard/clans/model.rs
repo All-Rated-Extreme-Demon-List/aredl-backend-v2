@@ -24,6 +24,7 @@ use uuid::Uuid;
 pub struct ClansLeaderboardEntry {
     pub rank: i32,
     pub extremes_rank: i32,
+    pub hardest_rank: i32,
     pub clan_id: Uuid,
     pub level_points: i32,
     pub members_count: i32,
@@ -37,6 +38,8 @@ pub struct ClansLeaderboardEntryResolved {
     pub rank: i32,
     /// Rank of the clan, sorted by count of extremes completed.
     pub extremes_rank: i32,
+    /// Rank of the clan, sorted by hardest completed level position.
+    pub hardest_rank: i32,
     /// This entry's clan id.
     pub clan: Clan,
     /// Total points of the country.
@@ -95,6 +98,9 @@ impl ClansLeaderboardPage {
             LeaderboardOrder::ExtremeCount => {
                 query = query.order(clans_leaderboard::extremes_rank.asc());
             }
+            LeaderboardOrder::Hardest => {
+                query = query.order(clans_leaderboard::hardest_rank.asc());
+            }
         }
 
         query = query.then_order_by(clans_leaderboard::clan_id.asc());
@@ -114,6 +120,7 @@ impl ClansLeaderboardPage {
             .map(|(entry, clan, hardest)| ClansLeaderboardEntryResolved {
                 rank: entry.rank,
                 extremes_rank: entry.extremes_rank,
+                hardest_rank: entry.hardest_rank,
                 clan,
                 level_points: entry.level_points,
                 members_count: entry.members_count,

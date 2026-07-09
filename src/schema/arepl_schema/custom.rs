@@ -64,9 +64,11 @@ diesel::table! {
         rank -> Int4,
         raw_rank -> Int4,
         extremes_rank -> Int4,
+        hardest_rank -> Int4,
         country_rank -> Int4,
         country_raw_rank -> Int4,
         country_extremes_rank -> Int4,
+        country_hardest_rank -> Int4,
         user_id -> Uuid,
         country -> Nullable<Int4>,
         total_points -> Int4,
@@ -81,6 +83,7 @@ diesel::table! {
     arepl.country_leaderboard (country) {
         rank -> Int4,
         extremes_rank -> Int4,
+        hardest_rank -> Int4,
         country -> Int4,
         level_points -> Int4,
         members_count -> Int4,
@@ -163,6 +166,7 @@ diesel::table! {
     arepl.clans_leaderboard (clan_id) {
         rank -> Int4,
         extremes_rank -> Int4,
+        hardest_rank -> Int4,
         clan_id -> Uuid,
         level_points -> Int4,
         members_count -> Int4,
