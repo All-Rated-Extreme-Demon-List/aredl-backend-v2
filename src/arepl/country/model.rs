@@ -175,6 +175,7 @@ impl CountryProfileResolved {
                 .filter(country_created_levels::country.eq(country))
                 .inner_join(levels::table.on(levels::id.eq(country_created_levels::level_id)))
                 .inner_join(users::table.on(users::id.eq(country_created_levels::creator_id)))
+                .filter(users::ban_level.ne(3))
                 .order_by((
                     country_created_levels::order_pos.asc(),
                     users::global_name.asc(),
@@ -207,6 +208,7 @@ impl CountryProfileResolved {
         let published = levels::table
             .inner_join(users::table.on(users::id.eq(levels::publisher_id)))
             .filter(users::country.eq(country))
+            .filter(users::ban_level.ne(3))
             .order_by(levels::position.asc())
             .select((ExtendedBaseLevel::as_select(), BaseUser::as_select()))
             .load(conn)?

@@ -3,9 +3,12 @@ use crate::arepl::levels::ExtendedBaseLevel;
 use crate::arepl::records::Record;
 use crate::auth::{Authenticated, Permission};
 use crate::error_handler::ApiError;
-use crate::schema::arepl::{bounties, bounty_completed, levels};
+use crate::schema::{
+    arepl::{bounties, bounty_completed, levels},
+    users,
+};
 use chrono::{DateTime, Utc};
-use diesel::dsl::{count, exists};
+use diesel::dsl::count;
 use diesel::pg::Pg;
 use diesel::{
     BoolExpressionMethods as _, Connection as _, ExpressionMethods as _, JoinOnDsl as _,
@@ -14,6 +17,7 @@ use diesel::{
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
 use serde_with::rust::double_option;
+use std::collections::{HashMap, HashSet};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -92,49 +96,39 @@ impl BountyResolved {
         let base_bounties_query =
             bounties::table.inner_join(levels::table.on(bounties::level_id.eq(levels::id)));
 
-        let bounties = match user_id {
-            Some(user) => base_bounties_query
-                .select((
-                    Bounty::as_select(),
-                    ExtendedBaseLevel::as_select(),
-                    bounty_completed::table
-                        .filter(bounty_completed::bounty_id.eq(bounties::id))
-                        .select(count(bounty_completed::user_id))
-                        .single_value(),
-                    exists(
-                        bounty_completed::table.filter(
-                            bounty_completed::bounty_id
-                                .eq(bounties::id)
-                                .and(bounty_completed::user_id.eq(user)),
-                        ),
-                    ),
-                ))
-                .load::<(Bounty, ExtendedBaseLevel, Option<i64>, bool)>(conn)?
+        let bounties = base_bounties_query
+            .select((Bounty::as_select(), ExtendedBaseLevel::as_select()))
+            .load::<(Bounty, ExtendedBaseLevel)>(conn)?;
+
+        let bounty_ids = bounties
+            .iter()
+            .map(|(bounty, _)| bounty.id)
+            .collect::<Vec<_>>();
+
+        let completion_counts = bounty_completed::table
+            .inner_join(users::table.on(users::id.eq(bounty_completed::user_id)))
+            .filter(bounty_completed::bounty_id.eq_any(&bounty_ids))
+            .filter(users::ban_level.le(1))
+            .group_by(bounty_completed::bounty_id)
+            .select((
+                bounty_completed::bounty_id,
+                count(bounty_completed::user_id),
+            ))
+            .load::<(Uuid, i64)>(conn)?
+            .into_iter()
+            .collect::<HashMap<_, _>>();
+
+        let completed_by_user = match user_id {
+            Some(user) => bounty_completed::table
+                .inner_join(users::table.on(users::id.eq(bounty_completed::user_id)))
+                .filter(bounty_completed::bounty_id.eq_any(&bounty_ids))
+                .filter(bounty_completed::user_id.eq(user))
+                .filter(users::ban_level.le(1))
+                .select(bounty_completed::bounty_id)
+                .load::<Uuid>(conn)?
                 .into_iter()
-                .map(|(bounty, level, current_completions, user_completed)| {
-                    (
-                        bounty,
-                        level,
-                        current_completions.unwrap_or(0),
-                        Some(user_completed),
-                    )
-                })
-                .collect::<Vec<_>>(),
-            None => base_bounties_query
-                .select((
-                    Bounty::as_select(),
-                    ExtendedBaseLevel::as_select(),
-                    bounty_completed::table
-                        .filter(bounty_completed::bounty_id.eq(bounties::id))
-                        .select(count(bounty_completed::user_id))
-                        .single_value(),
-                ))
-                .load::<(Bounty, ExtendedBaseLevel, Option<i64>)>(conn)?
-                .into_iter()
-                .map(|(bounty, level, current_completions)| {
-                    (bounty, level, current_completions.unwrap_or(0), None)
-                })
-                .collect::<Vec<_>>(),
+                .collect::<HashSet<_>>(),
+            None => HashSet::new(),
         };
 
         let has_bounty_manage = authenticated.is_some_and(|auth| {
@@ -144,13 +138,13 @@ impl BountyResolved {
 
         Ok(bounties
             .into_iter()
-            .map(|(bounty, level, current_completions, user_completed)| {
+            .map(|(bounty, level)| {
                 let hide_target = !has_bounty_manage && !bounty.is_target_public;
                 Self::from_data(
                     &bounty,
                     level,
-                    current_completions,
-                    user_completed,
+                    completion_counts.get(&bounty.id).copied().unwrap_or(0),
+                    user_id.map(|_| completed_by_user.contains(&bounty.id)),
                     hide_target,
                 )
             })

@@ -228,6 +228,7 @@ impl ClanProfileResolved {
                 .filter(clans_created_levels::clan_id.eq(clan_id))
                 .inner_join(levels::table.on(levels::id.eq(clans_created_levels::level_id)))
                 .inner_join(users::table.on(users::id.eq(clans_created_levels::creator_id)))
+                .filter(users::ban_level.ne(3))
                 .order_by((
                     clans_created_levels::order_pos.asc(),
                     users::global_name.asc(),
@@ -260,6 +261,7 @@ impl ClanProfileResolved {
             .inner_join(users::table.on(users::id.eq(levels::publisher_id)))
             .inner_join(clan_members::table.on(clan_members::user_id.eq(users::id)))
             .filter(clan_members::clan_id.eq(clan_id))
+            .filter(users::ban_level.ne(3))
             .order_by(levels::position.asc())
             .select((ExtendedBaseLevel::as_select(), BaseUser::as_select()))
             .load(conn)?
