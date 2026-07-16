@@ -30,6 +30,7 @@ use uuid::Uuid;
 pub struct Rank {
     pub rank: i32,
     pub extremes_rank: i32,
+    pub hardest_rank: i32,
     pub level_points: i32,
     pub extremes: i32,
 }

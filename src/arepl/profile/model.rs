@@ -33,12 +33,16 @@ pub struct Rank {
     pub raw_rank: i32,
     /// Rank of the user in the global leaderboard, sorted by count of extremes completed.
     pub extremes_rank: i32,
+    /// Rank of the user in the global leaderboard, sorted by hardest completed level position.
+    pub hardest_rank: i32,
     /// Rank of the user in the country leaderboard, sorted by total points (including packs).
     pub country_rank: i32,
     /// Rank of the user in the country leaderboard, sorted by total points (excluding packs).
     pub country_raw_rank: i32,
     /// Rank of the user in the country leaderboard, sorted by count of extremes completed.
     pub country_extremes_rank: i32,
+    /// Rank of the user in the country leaderboard, sorted by hardest completed level position.
+    pub country_hardest_rank: i32,
     /// Total points of the user, including pack points.
     pub total_points: i32,
     /// Pack points of the user.
