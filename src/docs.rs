@@ -158,6 +158,7 @@ Each permission then requires the user's privilege level to be higher or equal t
 | **UserBan** | 45 |
 | **LevelModify** | 50 |
 | **MergeReview** | 50 |
+| **ShiftCreateOwn** | 50 |
 | **ClanModify** | 60 |
 | **NotificationsSubscribe** | 70 |
 | **UserRedact** | 75 |

@@ -7,7 +7,8 @@ use crate::{
     shifts::{ShiftInsert, Weekday},
     users::BaseUser,
 };
-use chrono::{DateTime, NaiveDate, TimeZone as _, Utc};
+use chrono::{DateTime, NaiveDate, TimeZone as _, Timelike as _, Utc};
+use chrono_tz::Tz;
 use diesel::{
     AsChangeset, ExpressionMethods as _, Identifiable, Insertable, JoinOnDsl as _, QueryDsl as _,
     Queryable, RunQueryDsl as _, SelectableHelper as _,
@@ -74,6 +75,20 @@ pub struct RecurringShiftInsert {
     pub target_count: i32,
 }
 
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct SelfRecurringShiftInsert {
+    /// The day of the week this shift is assigned at.
+    pub weekday: Weekday,
+    /// The start time of the shift on the assigned day.
+    pub start_hour: i32,
+    /// The timezone this user is in, as an IANA timezone string (e.g., "America/New_York").
+    pub timezone: String,
+    /// How long this shift should last, in hours.
+    pub duration: i32,
+    /// The target number of submissions to review for this shift.
+    pub target_count: i32,
+}
+
 #[derive(Deserialize, ToSchema, AsChangeset, Debug)]
 #[diesel(table_name = recurrent_shifts)]
 pub struct RecurringShiftPatch {
@@ -82,6 +97,33 @@ pub struct RecurringShiftPatch {
     pub target_count: Option<i32>,
     pub start_hour: Option<i32>,
     pub duration: Option<i32>,
+}
+
+pub fn convert_start_hour_to_utc(
+    start_hour_in_timezone: u32,
+    weekday: &Weekday,
+    timezone: Tz,
+) -> Result<(u32, Weekday), ApiError> {
+    let now = Utc::now();
+    let today = now.date_naive();
+    let today_weekday = Weekday::from(today);
+
+    let days_until_shift = (weekday.clone() as i32 + 7 - today_weekday as i32) % 7;
+    let shift_date = today + chrono::Duration::days(days_until_shift.into());
+
+    let naive_dt = shift_date
+        .and_hms_opt(start_hour_in_timezone, 0, 0)
+        .ok_or_else(|| ApiError::BadRequest("Invalid start hour"))?;
+
+    let local_dt = timezone
+        .from_local_datetime(&naive_dt)
+        .single()
+        .ok_or_else(|| ApiError::BadRequest("Invalid local time for the given timezone"))?;
+
+    let utc_dt = local_dt.with_timezone(&Utc);
+    let new_weekday = Weekday::from(utc_dt.date_naive());
+
+    Ok((utc_dt.hour(), new_weekday))
 }
 
 impl ResolvedRecurringShift {
