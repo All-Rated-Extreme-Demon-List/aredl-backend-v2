@@ -21,7 +21,7 @@ use uuid::Uuid;
     get,
     summary = "List Updates",
     description = "List all updates for a level",
-    tag = "AREDL (P) - Level Updates",
+    tag = "AREDL (P) - Levels (Updates)",
     responses(
         (status = 200, body = LevelUpdateEntryPage)
     ),
@@ -53,7 +53,7 @@ async fn find_all(
     post,
     summary = "[Staff]Add Update",
     description = "Add an update to a level",
-    tag = "AREDL (P) - Level Updates",
+    tag = "AREDL (P) - Levels (Updates)",
     params(
         ("level_id" = String, description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
@@ -81,7 +81,7 @@ async fn create(
     patch,
     summary = "[Staff]Update Update",
     description = "Update a level update's info",
-    tag = "AREDL (P) - Level Updates",
+    tag = "AREDL (P) - Levels (Updates)",
     params(
         ("update_id" = Uuid, description = "The internal ID of this update")
     ),
@@ -111,7 +111,7 @@ async fn update(
     delete,
     summary = "[Staff]Delete Update",
     description = "Deletes a level update",
-    tag = "AREDL (P) - Level Updates",
+    tag = "AREDL (P) - Levels (Updates)",
     params(
         ("update_id" = Uuid, description = "The internal ID of this update")
     ),
@@ -133,7 +133,7 @@ async fn delete(
 #[derive(OpenApi)]
 #[openapi(
     tags((
-        name = "AREDL (P) - Level Updates",
+        name = "AREDL (P) - Levels (Updates)",
         description = "Endpoints for fetching and managing level updates on the AREDL",
     )),
     components(schemas(

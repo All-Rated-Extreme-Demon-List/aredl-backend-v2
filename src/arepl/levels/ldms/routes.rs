@@ -21,7 +21,7 @@ use uuid::Uuid;
     get,
     summary = "List LDMs",
     description = "List all LDMs for a level",
-    tag = "AREDL (P) - Level LDMs",
+    tag = "AREDL (P) - Levels (LDMs)",
     responses(
         (status = 200, body = [LevelLDM])
     ),
@@ -56,7 +56,7 @@ async fn find_all(
     post,
     summary = "[Staff]Add LDM",
     description = "Add an LDM to a level",
-    tag = "AREDL (P) - Level LDMs",
+    tag = "AREDL (P) - Levels (LDMs)",
     params(
         ("level_id" = String, description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
@@ -87,7 +87,7 @@ async fn create(
     patch,
     summary = "[Staff]Update LDM",
     description = "Update an LDM's info",
-    tag = "AREDL (P) - Level LDMs",
+    tag = "AREDL (P) - Levels (LDMs)",
     params(
         ("ldm_id" = Uuid, description = "The internal ID of this LDM")
     ),
@@ -119,7 +119,7 @@ async fn update(
     delete,
     summary = "[Staff]Delete LDM",
     description = "Deletes an LDM",
-    tag = "AREDL (P) - Level LDMs",
+    tag = "AREDL (P) - Levels (LDMs)",
     params(
         ("ldm_id" = Uuid, description = "The internal ID of this LDM")
     ),
@@ -142,7 +142,7 @@ async fn delete(
 #[derive(OpenApi)]
 #[openapi(
     tags((
-        name = "AREDL (P) - Level LDMs",
+        name = "AREDL (P) - Levels (LDMs)",
         description = "Endpoints for fetching and managing level LDMs on the AREDL",
     )),
     components(schemas(

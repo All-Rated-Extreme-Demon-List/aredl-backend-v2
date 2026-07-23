@@ -21,7 +21,7 @@ use uuid::Uuid;
     get,
     summary = "[AuthPublic]List Notes",
     description = "List all notes for a level",
-    tag = "AREDL - Level Notes",
+    tag = "AREDL - Levels (Notes)",
     responses(
         (status = 200, body = LevelNotesResolvedPage)
     ),
@@ -65,7 +65,7 @@ async fn find_all(
     post,
     summary = "[Staff]Add Note",
     description = "Add a note to a level",
-    tag = "AREDL - Level Notes",
+    tag = "AREDL - Levels (Notes)",
     params(
         ("level_id" = String, description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
@@ -94,7 +94,7 @@ async fn create(
     patch,
     summary = "[Staff]Update Note",
     description = "Update a note's info",
-    tag = "AREDL - Level Notes",
+    tag = "AREDL - Levels (Notes)",
     params(
         ("note_id" = Uuid, description = "The internal ID of this note")
     ),
@@ -124,7 +124,7 @@ async fn update(
     delete,
     summary = "[Staff]Delete Note",
     description = "Deletes a level note",
-    tag = "AREDL - Level Notes",
+    tag = "AREDL - Levels (Notes)",
     params(
         ("note_id" = Uuid, description = "The internal ID of this note")
     ),
@@ -145,7 +145,7 @@ async fn delete(
 #[derive(OpenApi)]
 #[openapi(
     tags((
-        name = "AREDL - Level Notes",
+        name = "AREDL - Levels (Notes)",
         description = "Endpoints for fetching and managing level notes on the AREDL",
     )),
     components(schemas(
