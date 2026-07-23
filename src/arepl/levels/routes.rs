@@ -3,7 +3,7 @@ use crate::arepl::levels::{
     creators, history, id_resolver::resolve_level_id, ldms, packs, records, Level, LevelPlace,
     LevelUpdate, LevelWithUserCompletionStatus, ResolvedLevel,
 };
-use crate::arepl::levels::{notes, LevelQueryOptions};
+use crate::arepl::levels::{notes, updates, LevelQueryOptions};
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::cache_control::CacheController;
 use crate::error_handler::ApiError;
@@ -146,6 +146,7 @@ async fn find(
         (path = "/{level_id}/packs", api = packs::ApiDoc),
         (path = "/ldms", api = ldms::ApiDoc),
         (path = "/notes", api = notes::ApiDoc),
+        (path = "/updates", api = updates::ApiDoc),
     ),
     tags(
         (name = "AREDL (P) - Levels", description="Endpoints for fetching and managing platformer levels on the AREDL")
@@ -173,6 +174,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .configure(creators::init_routes)
             .configure(ldms::init_routes)
             .configure(notes::init_routes)
+            .configure(updates::init_routes)
             .service(list)
             .service(create)
             .service(update)

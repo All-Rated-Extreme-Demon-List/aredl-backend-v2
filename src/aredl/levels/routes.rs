@@ -1,7 +1,7 @@
 use crate::app_data::db::DbAppState;
 use crate::aredl::levels::id_resolver::resolve_level_id;
 use crate::aredl::levels::{
-    creators, history, ldms, notes, packs, records, Level, LevelPlace, LevelQueryOptions,
+    creators, history, ldms, notes, packs, records, updates, Level, LevelPlace, LevelQueryOptions,
     LevelUpdate, LevelWithUserCompletionStatus, ResolvedLevel,
 };
 use crate::auth::{Authenticated, Permission, UserAuth};
@@ -134,6 +134,7 @@ async fn find(
         (path = "/{level_id}/packs", api = packs::ApiDoc),
         (path = "/ldms", api = ldms::ApiDoc),
         (path = "/notes", api = notes::ApiDoc),
+        (path = "/updates", api = updates::ApiDoc),
     ),
     tags((
         name = "AREDL - Levels",
@@ -151,6 +152,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .configure(records::init_routes)
             .configure(ldms::init_routes)
             .configure(notes::init_routes)
+            .configure(updates::init_routes)
             .configure(creators::init_routes)
             .service(list)
             .service(create)
