@@ -21,7 +21,7 @@ pub async fn create_test_note(db: &Arc<DbAppState>, level_id: Uuid, user: Uuid) 
             level_notes::id.eq(level_uuid),
             level_notes::added_by.eq(user),
             level_notes::level_id.eq(level_id),
-            level_notes::note_type.eq(LevelNotesType::BuffDate),
+            level_notes::note_type.eq(LevelNotesType::PublicNotes),
             level_notes::note.eq("This is a test note".to_owned()),
             level_notes::timestamp.eq(chrono::Utc::now()),
         ))

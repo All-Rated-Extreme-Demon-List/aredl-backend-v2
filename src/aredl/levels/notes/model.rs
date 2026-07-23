@@ -26,8 +26,7 @@ use uuid::Uuid;
 #[DbValueStyle = "PascalCase"]
 pub enum LevelNotesType {
     ReviewerNotes,
-    NerfDate,
-    BuffDate,
+    PublicNotes,
     Other,
 }
 
@@ -40,7 +39,7 @@ pub struct LevelNotes {
     pub level_id: Uuid,
     /// The content of this note
     pub note: String,
-    /// The type of this note, e.g. whether it's a reviewer's note or a nerf/buff date
+    /// The type of this note.
     pub note_type: LevelNotesType,
     /// An optional timestamp after which this note should apply
     pub timestamp: Option<DateTime<Utc>>,

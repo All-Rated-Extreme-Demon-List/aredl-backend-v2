@@ -23,6 +23,10 @@ pub mod arepl {
         pub struct LevelNotesType;
 
         #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+        #[diesel(postgres_type(name = "level_update_type", schema = "arepl"))]
+        pub struct LevelUpdateType;
+
+        #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
         #[diesel(postgres_type(name = "level_status"))]
         pub struct LevelStatus;
 
@@ -91,6 +95,20 @@ pub mod arepl {
             note_type -> LevelNotesType,
             timestamp -> Nullable<Timestamptz>,
             added_by -> Uuid,
+            created_at -> Timestamptz,
+        }
+    }
+
+    diesel::table! {
+        use diesel::sql_types::*;
+        use super::sql_types::LevelUpdateType;
+
+        arepl.level_updates (id) {
+            id -> Uuid,
+            level_id -> Uuid,
+            changelog -> Nullable<Text>,
+            update_type -> LevelUpdateType,
+            timestamp -> Timestamptz,
             created_at -> Timestamptz,
         }
     }
@@ -247,6 +265,7 @@ pub mod arepl {
     diesel::joinable!(bounty_completed -> bounties (bounty_id));
     diesel::joinable!(level_ldms -> levels (level_id));
     diesel::joinable!(level_notes -> levels (level_id));
+    diesel::joinable!(level_updates -> levels (level_id));
     diesel::joinable!(records -> submissions (submission_id));
     diesel::joinable!(submission_history -> submissions (submission_id));
 
@@ -256,6 +275,7 @@ pub mod arepl {
         last_gddl_update,
         level_ldms,
         level_notes,
+        level_updates,
         levels,
         levels_created,
         pack_levels,

@@ -61,7 +61,7 @@ async fn update_note() {
 
     let note_data = json!({
         "note": "updated note",
-        "note_type": "NerfDate"
+        "note_type": "PublicNotes"
     });
     let req = test::TestRequest::patch()
         .uri(format!("/arepl/levels/notes/{note_id}").as_str())
