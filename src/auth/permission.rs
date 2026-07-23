@@ -31,6 +31,7 @@ pub enum Permission {
     NotificationsSubscribe,
     ExternalConnectionsManage,
     BountyManage,
+    ShiftCreateOwn,
 }
 
 pub fn get_privilege_level(conn: &mut DbConnection, user_id: Uuid) -> i32 {

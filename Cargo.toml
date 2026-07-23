@@ -47,6 +47,8 @@ url = "2.5.7"
 indexmap = "2.14.0"
 dotenvy = "0.15.7"
 serde_with = "3.21.0"
+rsa = "0.9.10"
+chrono-tz = "0.10.4"
 
 [lints.clippy]
 # Correctness / panics / unfinished code
