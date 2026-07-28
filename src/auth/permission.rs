@@ -9,35 +9,64 @@ use uuid::Uuid;
 
 #[derive(Clone, EnumString, Display, EnumIter, Copy)]
 #[strum(serialize_all = "snake_case")]
+/// Represents all available permissions. "Editing" usually refers to the ability to create, update, and delete.
 pub enum Permission {
+    /// Allows placing and editing levels on the list
     LevelModify,
+    /// Allows editing custom copy IDs for a level
     LevelCustomCopiesModify,
+    /// Allows editing updates for a level (nerfs, buffs, balances, etc.)
     LevelUpdatesModify,
+    /// Allows editing public or reviewer notes for a level
     LevelNotesModify,
+    /// Allows editing existing records for a level
     RecordModify,
+    /// Allows editing pack tiers
     PackTierModify,
+    /// Allows editing pack and their levels
     PackModify,
+    /// Allows creating an empty placeholder user account
     PlaceholderCreate,
+    /// Allows editing user names, country, etc
     UserModify,
+    /// Allows banning a user (ban_level 2)
     UserBan,
+    /// Allows redacting a user (ban_level 3)
     UserRedact,
+    /// Allows editing roles and permissions below your highest role
     RoleManage,
+    /// Allows reviewing merge requests submitted through the site
     MergeReview,
+    /// Allows directly merging two users
     DirectMerge,
+    /// Allows editing clans and their members
     ClanModify,
+    /// Allows reviewing submissions
     SubmissionReview,
+    /// By default, submission reviewers are hidden. This permission makes a reviewer visible to other reviewers.
     SubmissionReviewerVisible,
+    /// Allows editing submissions that you do not have claimed through the claim system
     SubmissionEditNonSelfClaimed,
+    /// Allows editing submissions that have raw footage attached
     SubmissionEditWithRawFootage,
+    /// Allows seeing other reviewers' statistics. Otherwise, you can only see your own.
     SubmissionSeeOtherReviewerStatistics,
+    /// Sets the user's submissions to priority if they have this. (AREDL+)
     SubmissionPriority,
+    /// Allows editing reviewers shifts
     ShiftManage,
-    SubmissionStatusManage,
-    ReviewersAudit,
-    NotificationsSubscribe,
-    ExternalConnectionsManage,
-    BountyManage,
+    /// Allows editing your own shifts
     ShiftCreateOwn,
+    /// Allows opening and closing new submissions.
+    SubmissionStatusManage,
+    /// Allows seeing the identity of all reviewers, including hidden ones.
+    ReviewersAudit,
+    /// Allows subscribing to a websocket for submissions notifications. (Used by the discord bot)
+    NotificationsSubscribe,
+    /// Allows editing users external connections (Patreon)
+    ExternalConnectionsManage,
+    /// Allows editing weekly, monthly, event and bounty levels
+    BountyManage,
 }
 
 pub fn get_highest_role_privilege_level(conn: &mut DbConnection, user_id: Uuid) -> i32 {
