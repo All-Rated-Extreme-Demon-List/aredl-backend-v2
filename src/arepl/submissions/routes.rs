@@ -48,7 +48,7 @@ use super::{history, queue};
         ("reviewer_filter" = Option<String>, Query, description = "Filter submissions to a specific reviewer (UUID, discord ID, or username)"),
         ("note_filter" = Option<String>, Query, description = "Filter submissions that contain a specific note substring"),
 ))]
-#[get("", wrap = "UserAuth::require(Permission::SubmissionReviewFull)")]
+#[get("", wrap = "UserAuth::require(Permission::SubmissionReview)")]
 async fn find_all(
     db: web::Data<Arc<DbAppState>>,
     page_query: web::Query<PageQuery<50>>,
@@ -198,7 +198,7 @@ async fn patch(
     let providers_clone = providers.clone();
     let patched = web::block(move || {
         let conn = &mut db.connection()?;
-        if authenticated.has_permission(conn, Permission::SubmissionReviewBase)? {
+        if authenticated.has_permission(conn, Permission::SubmissionReview)? {
             SubmissionPatchMod::patch(
                 body.into_inner(),
                 id.into_inner(),
@@ -240,7 +240,7 @@ async fn patch(
         ("api_key" = []),
     ),
 )]
-#[get("/claim", wrap = "UserAuth::require(Permission::SubmissionReviewBase)")]
+#[get("/claim", wrap = "UserAuth::require(Permission::SubmissionReview)")]
 async fn claim(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,

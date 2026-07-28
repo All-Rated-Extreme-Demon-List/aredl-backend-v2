@@ -1,9 +1,9 @@
 use crate::{
     app_data::db::DbConnection,
     aredl::submissions::SubmissionStatus,
-    auth::{Authenticated, Permission},
+    auth::Authenticated,
     error_handler::ApiError,
-    roles::RoleResolved,
+    roles::ReviewerVisibility,
     schema::{aredl::submission_history, users},
     users::BaseUser,
 };
@@ -102,24 +102,18 @@ impl SubmissionHistoryResolved {
             .map(SubmissionHistoryResolved::from_data)
             .collect::<Vec<_>>();
 
-        let base_reviewers = RoleResolved::find_all_base_reviewers(conn)?.base_reviewers;
+        let visibility = ReviewerVisibility::new(conn, authenticated)?;
 
-        if !authenticated.has_permission(conn, Permission::SubmissionReviewFull)? {
-            for history in &mut resolved_history {
-                history.private_reviewer_notes = None;
-                history.reviewer = None;
-            }
-        }
-
-        // hide base reviewers
-        if !authenticated.has_permission(conn, Permission::ReviewersAudit)? {
-            for history in &mut resolved_history {
-                if let Some(reviewer) = &history.reviewer {
-                    if base_reviewers.contains(&reviewer.id) {
-                        history.reviewer = Some(BaseUser::hidden());
-                    }
-                }
-            }
+        for history in &mut resolved_history {
+            visibility
+                .should_hide_reviewer(
+                    history
+                        .reviewer
+                        .as_ref()
+                        .map(|reviewer| reviewer.id)
+                        .as_ref(),
+                )
+                .apply_base(&mut history.reviewer, &mut history.private_reviewer_notes);
         }
 
         Ok(resolved_history)

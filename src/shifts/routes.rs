@@ -67,7 +67,7 @@ async fn find_all_shifts(
         ("api_key" = ["ShiftManage"]),
     ),
 )]
-#[get("/@me", wrap = "UserAuth::require(Permission::SubmissionReviewBase)")]
+#[get("/@me", wrap = "UserAuth::require(Permission::SubmissionReview)")]
 async fn find_all_shifts_me(
     db: web::Data<Arc<DbAppState>>,
     page_query: web::Query<PageQuery<50>>,
@@ -94,11 +94,11 @@ async fn find_all_shifts_me(
     ),
 	request_body = ShiftCreate,
     security(
-        ("access_token" = ["SubmissionReviewBase"]),
-        ("api_key" = ["SubmissionReviewBase"]),
+        ("access_token" = ["SubmissionReview"]),
+        ("api_key" = ["SubmissionReview"]),
     )
 )]
-#[post("", wrap = "UserAuth::require(Permission::SubmissionReviewBase)")]
+#[post("", wrap = "UserAuth::require(Permission::SubmissionReview)")]
 async fn create_shift_now(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,

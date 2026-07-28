@@ -23,11 +23,11 @@ use uuid::Uuid;
         (status = 200, body = Vec<ResolvedRecurringShift>)
     ),
     security(
-        ("access_token" = ["SubmissionReviewFull"]),
-        ("api_key" = ["SubmissionReviewFull"]),
+        ("access_token" = ["SubmissionReview"]),
+        ("api_key" = ["SubmissionReview"]),
     ),
 )]
-#[get("", wrap = "UserAuth::require(Permission::SubmissionReviewFull)")]
+#[get("", wrap = "UserAuth::require(Permission::SubmissionReview)")]
 async fn find_all_recurring_shifts(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,

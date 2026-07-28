@@ -1,8 +1,8 @@
 use crate::{
     app_data::db::DbConnection,
-    auth::{Authenticated, Permission},
+    auth::Authenticated,
     error_handler::ApiError,
-    roles::RoleResolved,
+    roles::ReviewerVisibility,
     schema::{recurrent_shifts, shifts, users},
     shifts::{ShiftInsert, Weekday},
     users::BaseUser,
@@ -159,10 +159,9 @@ impl ResolvedRecurringShift {
             .map(ResolvedRecurringShift::from_data)
             .collect::<Vec<_>>();
 
-        if !authenticated.has_permission(conn, Permission::ReviewersAudit)? {
-            let base_reviewers = RoleResolved::find_all_base_reviewers(conn)?.base_reviewers;
-            result.retain(|shift| !base_reviewers.contains(&shift.user.id));
-        }
+        let visibility = ReviewerVisibility::new(conn, authenticated)?;
+
+        result.retain(|shift| visibility.can_see_identity(&shift.user.id));
 
         Ok(result)
     }
