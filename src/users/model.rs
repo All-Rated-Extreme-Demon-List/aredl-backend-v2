@@ -1,12 +1,12 @@
 use crate::app_data::db::DbConnection;
-use crate::auth::{Authenticated, Permission};
+use crate::auth::{permission, Authenticated, Permission};
 use crate::clans::Clan;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::roles::Role;
 use crate::schema::{
-    aredl::submissions, arepl::submissions as plat_submissions, clan_members, clans, permissions,
-    roles, user_roles, users,
+    aredl::submissions, arepl::submissions as plat_submissions, clan_members, clans, roles,
+    user_roles, users,
 };
 use crate::users::badges::UserBadge;
 use crate::{
@@ -487,22 +487,7 @@ impl UserResolved {
             roles.retain(|role| !role.hide);
         }
 
-        let user_privilege_level: i32 = roles
-            .iter()
-            .map(|role| role.privilege_level)
-            .max()
-            .unwrap_or(0);
-
-        let all_permissions = permissions::table
-            .select((permissions::permission, permissions::privilege_level))
-            .load::<(String, i32)>(conn)?;
-
-        let scopes = all_permissions
-            .into_iter()
-            .filter_map(|(permission, privilege_level)| {
-                (user_privilege_level >= privilege_level).then_some(permission)
-            })
-            .collect::<Vec<String>>();
+        let scopes = permission::get_user_permissions(conn, user.id, !can_view_hidden_roles)?;
 
         let badges = UserBadge::find_all(conn, user.id)?;
 

@@ -110,7 +110,7 @@ async fn reject_merge_request() {
 
     let (user_1_id, _) = create_test_user(&db, None).await;
     let (user_2_id, _) = create_test_placeholder_user(&db).await;
-    let (mod_id, _) = create_test_user(&db, Some(Permission::DirectMerge)).await;
+    let (mod_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
     let token =
         create_test_token(mod_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 

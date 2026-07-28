@@ -2,6 +2,7 @@ mod aredl_schema;
 mod arepl_schema;
 mod public_schema;
 
+pub use public_schema::custom::*;
 pub use public_schema::generated::public::*;
 
 pub mod aredl {

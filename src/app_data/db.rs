@@ -1,3 +1,5 @@
+#[cfg(test)]
+use crate::auth::Permission;
 use crate::error_handler::{ApiError, StartupError};
 use crate::get_secret;
 #[cfg(test)]
@@ -10,6 +12,8 @@ use diesel_migrations::{EmbeddedMigrations, MigrationHarness as _};
 use std::sync::Arc;
 #[cfg(test)]
 use std::sync::Once;
+#[cfg(test)]
+use strum::IntoEnumIterator as _;
 
 type Pool = r2d2::Pool<ConnectionManager<PgConnection>>;
 pub type DbConnection = r2d2::PooledConnection<ConnectionManager<PgConnection>>;
@@ -70,41 +74,10 @@ fn init_test_db_schema_and_seed() {
         conn.run_pending_migrations(MIGRATIONS)
             .expect("Failed to run migrations");
 
-        let permissions_data = vec![
-            ("submission_review_base", 10),
-            ("edit_non_claimed_submissions", 11),
-            ("submission_review_full", 15),
-            ("record_modify", 20),
-            ("placeholder_create", 25),
-            ("user_modify", 25),
-            ("custom_copies_modify", 30),
-            ("pack_tier_modify", 40),
-            ("pack_modify", 40),
-            ("user_ban", 45),
-            ("merge_review", 50),
-            ("level_modify", 50),
-            ("clan_modify", 60),
-            ("notifications_subscribe", 70),
-            ("user_redact", 75),
-            ("direct_merge", 80),
-            ("submission_status_manage", 80),
-            ("bounty_manage", 80),
-            ("reviewers_audit", 85),
-            ("role_manage", 85),
-            ("shift_manage", 90),
-            ("external_connections_manage", 90),
-        ];
-
         diesel::insert_into(permissions::table)
             .values(
-                permissions_data
-                    .iter()
-                    .map(|(permission, privilege_level)| {
-                        (
-                            permissions::permission.eq(*permission),
-                            permissions::privilege_level.eq(*privilege_level),
-                        )
-                    })
+                Permission::iter()
+                    .map(|permission| permissions::permission.eq(permission.to_string()))
                     .collect::<Vec<_>>(),
             )
             .execute(&mut conn)

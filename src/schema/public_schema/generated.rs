@@ -139,7 +139,6 @@ pub mod public {
 
     diesel::table! {
         permissions (permission) {
-            privilege_level -> Int4,
             permission -> Varchar,
         }
     }
@@ -161,11 +160,19 @@ pub mod public {
     }
 
     diesel::table! {
+        role_permissions (role_id, permission) {
+            role_id -> Int4,
+            permission -> Varchar,
+        }
+    }
+
+    diesel::table! {
         roles (id) {
             id -> Int4,
             privilege_level -> Int4,
             role_desc -> Varchar,
             hide -> Bool,
+            inherits_from_role_id -> Nullable<Int4>,
         }
     }
 
@@ -230,6 +237,8 @@ pub mod public {
     diesel::joinable!(notifications -> users (user_id));
     diesel::joinable!(oauth_connected_accounts -> users (user_id));
     diesel::joinable!(oauth_requests -> users (user_id));
+    diesel::joinable!(role_permissions -> permissions (permission));
+    diesel::joinable!(role_permissions -> roles (role_id));
     diesel::joinable!(user_badges -> users (user_id));
     diesel::joinable!(user_roles -> roles (role_id));
     diesel::joinable!(user_roles -> users (user_id));
@@ -247,6 +256,7 @@ pub mod public {
         oauth_tokens,
         permissions,
         recurrent_shifts,
+        role_permissions,
         roles,
         shifts,
         user_badges,
