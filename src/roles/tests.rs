@@ -105,53 +105,32 @@ async fn delete_role() {
 }
 
 #[actix_web::test]
-async fn create_role_fails_when_new_role_has_same_privilege_as_user() {
+async fn create_role_rejects_same_or_higher_privilege_than_user() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
 
-    let lvl = TEST_STAFF_ROLE_PRIVILEGE_LEVEL;
-    let create_data =
-        json!({"privilege_level": lvl, "role_desc": "Same Level Role", "hide": false});
+    for (privilege_level, role_desc) in [
+        (TEST_STAFF_ROLE_PRIVILEGE_LEVEL, "Same Level Role"),
+        (TEST_STAFF_ROLE_PRIVILEGE_LEVEL + 1, "Higher Level Role"),
+    ] {
+        let create_data =
+            json!({"privilege_level": privilege_level, "role_desc": role_desc, "hide": false});
 
-    let req = test::TestRequest::post()
-        .uri("/roles")
-        .insert_header(("Authorization", format!("Bearer {token}")))
-        .set_json(&create_data)
-        .to_request();
+        let req = test::TestRequest::post()
+            .uri("/roles")
+            .insert_header(("Authorization", format!("Bearer {token}")))
+            .set_json(&create_data)
+            .to_request();
 
-    let resp = test::call_service(&app, req).await;
-    assert_error_response!(
-        resp,
-        StatusCode::FORBIDDEN,
-        Some("You can not create a role with higher permissions than yourself."),
-    );
-}
-
-#[actix_web::test]
-async fn create_role_fails_when_new_role_has_higher_privilege_than_user() {
-    let (app, db, auth, _) = init_test_app().await;
-
-    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
-    let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
-
-    let lvl = TEST_STAFF_ROLE_PRIVILEGE_LEVEL;
-    let create_data =
-        json!({"privilege_level": lvl + 1, "role_desc": "Higher Level Role", "hide": false});
-
-    let req = test::TestRequest::post()
-        .uri("/roles")
-        .insert_header(("Authorization", format!("Bearer {token}")))
-        .set_json(&create_data)
-        .to_request();
-
-    let resp = test::call_service(&app, req).await;
-    assert_error_response!(
-        resp,
-        StatusCode::FORBIDDEN,
-        Some("You can not create a role with higher permissions than yourself."),
-    );
+        let resp = test::call_service(&app, req).await;
+        assert_error_response!(
+            resp,
+            StatusCode::FORBIDDEN,
+            Some("You can not create a role with higher permissions than yourself."),
+        );
+    }
 }
 
 #[actix_web::test]

@@ -130,7 +130,7 @@ async fn reject_merge_request() {
 
     let records = test_records_for_user(&db, user_1_id).len();
 
-    assert_eq!(records, 1, "User does not have exactly 2 records!");
+    assert_eq!(records, 1, "User does not have exactly 1 record!");
 
     assert!(
         body["is_rejected"].as_bool().unwrap(),

@@ -37,7 +37,7 @@ async fn enable_submissions() {
 }
 
 #[actix_web::test]
-async fn submission_status_routes_reject_hidden_reviewer_without_status_manage() {
+async fn enable_submissions_rejects_reviewer_without_status_manage() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let token =

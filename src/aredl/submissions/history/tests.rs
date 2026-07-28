@@ -165,7 +165,7 @@ async fn get_full_submission_history() {
 }
 
 #[actix_web::test]
-async fn get_submission_history_hides_private_fields_for_hidden_reviewer() {
+async fn get_submission_history_hides_visible_reviewer_private_notes_from_hidden_reviewer() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&db, None).await;

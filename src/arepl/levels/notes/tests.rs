@@ -127,7 +127,7 @@ async fn list_notes() {
 }
 
 #[actix_web::test]
-async fn notes_auth() {
+async fn create_note_requires_level_modify() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&db, None).await;

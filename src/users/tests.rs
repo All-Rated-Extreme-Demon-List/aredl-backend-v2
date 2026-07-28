@@ -75,7 +75,7 @@ async fn update_user_info() {
 }
 
 #[actix_web::test]
-async fn update_user_info_less_privilege() {
+async fn update_user_info_rejects_editing_user_with_same_or_higher_privilege() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, Some(Permission::UserModify)).await;
     let user_token =
@@ -330,7 +330,7 @@ async fn list_users() {
 }
 
 #[actix_web::test]
-async fn user_character_limit() {
+async fn user_display_name_limit_applies_to_self_update() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, None).await;
     let (staff_user_id, _) = create_test_user(&db, Some(Permission::UserModify)).await;

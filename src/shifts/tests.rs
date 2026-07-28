@@ -22,7 +22,7 @@ use {
 };
 
 #[actix_web::test]
-async fn get_shifts_list() {
+async fn list_shifts_returns_created_shift_for_shift_manager() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user_with_permissions(
         &db,
@@ -43,7 +43,7 @@ async fn get_shifts_list() {
 }
 
 #[actix_web::test]
-async fn get_my_shifts() {
+async fn get_my_shifts_returns_only_authenticated_reviewers_shifts() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_visible_reviewer(&db).await;
     let token =

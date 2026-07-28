@@ -75,7 +75,7 @@ async fn resolved_find_me_and_filters() {
 }
 
 #[actix_web::test]
-async fn resolved_find_one_unauthorized() {
+async fn resolved_find_one_hides_other_users_submission() {
     let (app, db, auth, _) = init_test_app().await;
     let (user1, _) = create_test_user(&db, None).await;
     let (user2, _) = create_test_user(&db, None).await;
@@ -92,7 +92,7 @@ async fn resolved_find_one_unauthorized() {
 }
 
 #[actix_web::test]
-async fn resolved_find_all() {
+async fn resolved_find_all_allows_submission_reviewer() {
     let (app, db, auth, _) = init_test_app().await;
     let (mod_user, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let token = create_test_token(mod_user, &auth.jwt_encoding_key).unwrap();
@@ -152,15 +152,13 @@ async fn resolved_find_all_reviewer_filter_hides_hidden_reviewer_for_non_auditor
 }
 
 #[actix_web::test]
-async fn resolved_find_all_redacts_hidden_reviewer_but_auditor_can_filter_and_see() {
+async fn resolved_find_all_redacts_hidden_reviewer_for_visible_reviewer() {
     let (app, db, auth, _) = init_test_app().await;
     let (owner, _) = create_test_user(&db, None).await;
     let (hidden_reviewer, _) = create_test_hidden_reviewer(&db).await;
     let (visible_non_auditor, _) = create_test_visible_reviewer(&db).await;
-    let (auditor, _) = create_test_auditor(&db).await;
 
     let visible_token = create_test_token(visible_non_auditor, &auth.jwt_encoding_key).unwrap();
-    let auditor_token = create_test_token(auditor, &auth.jwt_encoding_key).unwrap();
 
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, owner, &db).await;
@@ -186,6 +184,21 @@ async fn resolved_find_all_redacts_hidden_reviewer_but_auditor_can_filter_and_se
         "00000000-0000-0000-0000-000000000000"
     );
     assert_eq!(entry["reviewer"]["username"], "Hidden user");
+}
+
+#[actix_web::test]
+async fn resolved_find_all_allows_auditor_to_filter_and_see_hidden_reviewer() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (owner, _) = create_test_user(&db, None).await;
+    let (hidden_reviewer, _) = create_test_hidden_reviewer(&db).await;
+    let (auditor, _) = create_test_auditor(&db).await;
+
+    let auditor_token = create_test_token(auditor, &auth.jwt_encoding_key).unwrap();
+
+    let level = create_test_level(&db).await;
+    let submission = create_test_submission(level, owner, &db).await;
+
+    set_test_submission_reviewer(&db, submission, Some(hidden_reviewer));
 
     let req = test::TestRequest::get()
         .uri(format!("/arepl/submissions?reviewer_filter={hidden_reviewer}").as_str())
@@ -227,7 +240,7 @@ async fn resolved_find_own() {
 }
 
 #[actix_web::test]
-async fn resolved_find_one_hides_private_fields_for_hidden_reviewer() {
+async fn resolved_find_one_hides_visible_reviewer_private_notes_from_hidden_reviewer() {
     let (app, db, auth, _) = init_test_app().await;
     let (owner, _) = create_test_user(&db, None).await;
     let (visible_reviewer, _) = create_test_full_reviewer(&db).await;
@@ -959,7 +972,7 @@ async fn patch_resubmission_closed() {
 }
 
 #[actix_web::test]
-async fn patch_submission_mod_invalid_urls() {
+async fn patch_submission_reviewer_patch_rejects_invalid_urls() {
     let (app, db, auth, _) = init_test_app().await;
     let (moderator, _) = create_test_full_reviewer(&db).await;
     let (user, _) = create_test_user(&db, None).await;
@@ -1138,11 +1151,11 @@ async fn claim_priority_submission_uses_updated_at() {
 }
 
 #[actix_web::test]
-async fn claim_submission_hidden_reviewer_skips_raw_submissions() {
+async fn claim_submission_without_raw_footage_permission_skips_raw_submissions() {
     let (app, db, auth, _) = init_test_app().await;
-    let (hidden_reviewer, _) = create_test_hidden_reviewer(&db).await;
+    let (reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let (submitter, _) = create_test_user(&db, None).await;
-    let token = create_test_token(hidden_reviewer, &auth.jwt_encoding_key).unwrap();
+    let token = create_test_token(reviewer, &auth.jwt_encoding_key).unwrap();
 
     let raw_level = create_test_level(&db).await;
     let non_raw_level = create_test_level(&db).await;
@@ -1164,11 +1177,12 @@ async fn claim_submission_hidden_reviewer_skips_raw_submissions() {
 }
 
 #[actix_web::test]
-async fn claim_submission_hidden_reviewer_no_claimable_submissions() {
+async fn claim_submission_without_raw_footage_permission_returns_not_found_when_only_raw_available()
+{
     let (app, db, auth, _) = init_test_app().await;
-    let (hidden_reviewer, _) = create_test_hidden_reviewer(&db).await;
+    let (reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let (submitter, _) = create_test_user(&db, None).await;
-    let token = create_test_token(hidden_reviewer, &auth.jwt_encoding_key).unwrap();
+    let token = create_test_token(reviewer, &auth.jwt_encoding_key).unwrap();
 
     let level = create_test_level(&db).await;
     create_test_submission(level, submitter, &db).await;
@@ -1215,11 +1229,11 @@ async fn claim_submission_raw_claim_reviewer_can_claim_raw_submission() {
 }
 
 #[actix_web::test]
-async fn patch_submission_hidden_reviewer_cannot_edit_other_raw_submission() {
+async fn patch_submission_without_raw_footage_permission_cannot_edit_unclaimed_raw_submission() {
     let (app, db, auth, _) = init_test_app().await;
-    let (hidden_reviewer, _) = create_test_hidden_reviewer(&db).await;
+    let (reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let (submitter, _) = create_test_user(&db, None).await;
-    let token = create_test_token(hidden_reviewer, &auth.jwt_encoding_key).unwrap();
+    let token = create_test_token(reviewer, &auth.jwt_encoding_key).unwrap();
 
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, submitter, &db).await;
@@ -1239,11 +1253,12 @@ async fn patch_submission_hidden_reviewer_cannot_edit_other_raw_submission() {
 }
 
 #[actix_web::test]
-async fn patch_submission_hidden_reviewer_cannot_edit_other_under_consideration_submission() {
+async fn patch_submission_requires_claim_or_non_self_claimed_edit_permission_for_unclaimed_under_consideration_submission(
+) {
     let (app, db, auth, _) = init_test_app().await;
-    let (hidden_reviewer, _) = create_test_hidden_reviewer(&db).await;
+    let (reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let (submitter, _) = create_test_user(&db, None).await;
-    let token = create_test_token(hidden_reviewer, &auth.jwt_encoding_key).unwrap();
+    let token = create_test_token(reviewer, &auth.jwt_encoding_key).unwrap();
 
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, submitter, &db).await;
@@ -1271,11 +1286,11 @@ async fn patch_submission_hidden_reviewer_cannot_edit_other_under_consideration_
 }
 
 #[actix_web::test]
-async fn patch_submission_hidden_reviewer_can_edit_claimed_submission_without_raw() {
+async fn patch_submission_assigned_reviewer_can_edit_claimed_submission_without_raw() {
     let (app, db, auth, _) = init_test_app().await;
-    let (hidden_reviewer, _) = create_test_hidden_reviewer(&db).await;
+    let (reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let (submitter, _) = create_test_user(&db, None).await;
-    let token = create_test_token(hidden_reviewer, &auth.jwt_encoding_key).unwrap();
+    let token = create_test_token(reviewer, &auth.jwt_encoding_key).unwrap();
 
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, submitter, &db).await;
@@ -1285,7 +1300,7 @@ async fn patch_submission_hidden_reviewer_can_edit_claimed_submission_without_ra
         submission,
         None,
         SubmissionStatus::Claimed,
-        Some(hidden_reviewer),
+        Some(reviewer),
     );
 
     let req = test::TestRequest::patch()
@@ -1298,7 +1313,7 @@ async fn patch_submission_hidden_reviewer_can_edit_claimed_submission_without_ra
 
     let stored = get_test_submission(&db, submission);
 
-    assert_eq!(stored.reviewer_id, Some(hidden_reviewer));
+    assert_eq!(stored.reviewer_id, Some(reviewer));
     assert_eq!(
         stored.reviewer_notes.as_deref(),
         Some("Reviewed by assigned reviewer")
@@ -1306,13 +1321,13 @@ async fn patch_submission_hidden_reviewer_can_edit_claimed_submission_without_ra
 }
 
 #[actix_web::test]
-async fn patch_submission_hidden_reviewer_cannot_edit_claimed_submission_assigned_to_other_reviewer(
+async fn patch_submission_requires_non_self_claimed_edit_permission_when_assigned_to_another_reviewer(
 ) {
     let (app, db, auth, _) = init_test_app().await;
-    let (hidden_reviewer, _) = create_test_hidden_reviewer(&db).await;
+    let (reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let (other_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let (submitter, _) = create_test_user(&db, None).await;
-    let token = create_test_token(hidden_reviewer, &auth.jwt_encoding_key).unwrap();
+    let token = create_test_token(reviewer, &auth.jwt_encoding_key).unwrap();
 
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, submitter, &db).await;
@@ -1340,11 +1355,11 @@ async fn patch_submission_hidden_reviewer_cannot_edit_claimed_submission_assigne
 }
 
 #[actix_web::test]
-async fn create_submission_hidden_reviewer_cannot_override_submitted_by() {
+async fn create_submission_without_non_self_claimed_permission_cannot_override_submitted_by() {
     let (app, db, auth, _) = init_test_app().await;
-    let (hidden_reviewer, _) = create_test_hidden_reviewer(&db).await;
+    let (reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let (other_user, _) = create_test_user(&db, None).await;
-    let token = create_test_token(hidden_reviewer, &auth.jwt_encoding_key).unwrap();
+    let token = create_test_token(reviewer, &auth.jwt_encoding_key).unwrap();
     let level_id = create_test_level(&db).await;
 
     let submission_data = json!({
@@ -1365,11 +1380,11 @@ async fn create_submission_hidden_reviewer_cannot_override_submitted_by() {
     assert!(resp.status().is_success(), "status is {}", resp.status());
 
     let body: serde_json::Value = read_body_json(resp).await;
-    assert_eq!(body["submitted_by"], hidden_reviewer.to_string());
+    assert_eq!(body["submitted_by"], reviewer.to_string());
 }
 
 #[actix_web::test]
-async fn patch_submission_no_changes() {
+async fn patch_submission_user_patch_requires_changes() {
     let (app, db, auth, _) = init_test_app().await;
     let (user, _) = create_test_user(&db, None).await;
     let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
@@ -1390,7 +1405,7 @@ async fn patch_submission_no_changes() {
 }
 
 #[actix_web::test]
-async fn patch_submission_invalid_urls() {
+async fn patch_submission_user_patch_rejects_invalid_urls() {
     let (app, db, auth, _) = init_test_app().await;
     let (user, _) = create_test_user(&db, None).await;
     let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
@@ -1423,7 +1438,7 @@ async fn patch_submission_invalid_urls() {
 }
 
 #[actix_web::test]
-async fn patch_submission_mod_no_changes() {
+async fn patch_submission_reviewer_patch_requires_changes() {
     let (app, db, auth, _) = init_test_app().await;
     let (moderator, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let token = create_test_token(moderator, &auth.jwt_encoding_key).unwrap();
@@ -2113,7 +2128,7 @@ async fn accept_submission_triggers_record_timestamp_fetch_from_youtube() {
 }
 
 #[actix_web::test]
-async fn patch_submission_mod_patch_non_claimed() {
+async fn patch_submission_requires_claim_or_non_self_claimed_edit_permission() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (submitter_id, _) = create_test_user(&db, None).await;
@@ -2130,14 +2145,12 @@ async fn patch_submission_mod_patch_non_claimed() {
     let submission_1 = create_test_submission(level_1, submitter_id, &db).await;
     let submission_2 = create_test_submission(level_2, submitter_id, &db).await;
 
-    // Remove the raw URL from the test submissions
     set_test_submissions_raw_url(&db, vec![submission_1, submission_2], None);
 
     let patch_data = json!({
         "status": "Accepted"
     });
 
-    // Ensure the hidden reviewer cannot accept this submission while it is not claimed
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission_1}"))
         .insert_header(("Authorization", format!("Bearer {mod_token}")))
@@ -2152,7 +2165,6 @@ async fn patch_submission_mod_patch_non_claimed() {
         Some("You do not have permission to edit this submission."),
     );
 
-    // Claim the submission
     set_test_submission_raw_url_status_and_reviewer(
         &db,
         submission_1,
@@ -2161,7 +2173,6 @@ async fn patch_submission_mod_patch_non_claimed() {
         Some(mod_id),
     );
 
-    // Retry accepting
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission_1}"))
         .insert_header(("Authorization", format!("Bearer {mod_token}")))
@@ -2176,7 +2187,6 @@ async fn patch_submission_mod_patch_non_claimed() {
 
     assert_eq!(body["status"], "Accepted");
 
-    // Ensure a user with the SubmissionEditNonSelfClaimed permission can accept a submission that is not claimed
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission_2}"))
         .insert_header(("Authorization", format!("Bearer {elevated_token}")))

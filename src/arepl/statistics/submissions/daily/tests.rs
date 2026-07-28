@@ -59,7 +59,7 @@ async fn submission_stats_filter_moderator() {
 }
 
 #[actix_web::test]
-async fn submission_stats_hides_hidden_reviewer_filter_for_non_auditor() {
+async fn submission_stats_reviewer_filter_returns_empty_for_hidden_reviewer_without_audit() {
     let (app, db, auth, _db) = init_test_app().await;
 
     let (hidden_reviewer, _) = create_test_hidden_reviewer(&db).await;
@@ -107,7 +107,7 @@ async fn submission_stats_hides_hidden_reviewer_filter_for_non_auditor() {
 }
 
 #[actix_web::test]
-async fn submission_leaderboard_include_hidden_reviewers_requires_audit() {
+async fn submission_leaderboard_ignores_include_hidden_reviewers_without_audit() {
     let (app, db, auth, _db) = init_test_app().await;
     let (hidden_reviewer, _) = create_test_hidden_reviewer(&db).await;
     let (visible_reviewer, _) = create_test_full_reviewer(&db).await;
@@ -166,7 +166,7 @@ async fn submission_leaderboard_include_hidden_reviewers_requires_audit() {
 }
 
 #[actix_web::test]
-async fn submission_stats_endpoints_require_review_permission() {
+async fn submission_stats_requires_review_permission() {
     let (app, db, auth, _db) = init_test_app().await;
     let (user, _) = create_test_user(&db, None).await;
     let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
@@ -181,6 +181,13 @@ async fn submission_stats_endpoints_require_review_permission() {
         StatusCode::FORBIDDEN,
         Some("You do not have the required permission (submission_review) to access this endpoint"),
     );
+}
+
+#[actix_web::test]
+async fn submission_leaderboard_requires_see_other_reviewer_statistics_permission() {
+    let (app, db, auth, _db) = init_test_app().await;
+    let (user, _) = create_test_user(&db, None).await;
+    let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
 
     let req = test::TestRequest::get()
         .uri("/arepl/statistics/submissions/daily/leaderboard")

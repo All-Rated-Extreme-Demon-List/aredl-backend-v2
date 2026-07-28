@@ -121,7 +121,7 @@ async fn list_ldms() {
 }
 
 #[actix_web::test]
-async fn ldm_auth() {
+async fn create_ldm_requires_custom_copies_modify() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, None).await;
     let token =
