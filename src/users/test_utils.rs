@@ -81,6 +81,11 @@ pub async fn create_test_user_with_permissions(
 }
 
 #[cfg(test)]
+pub async fn create_test_user_with_priority_submissions(db: &Arc<DbAppState>) -> (Uuid, String) {
+    create_test_user_with_permissions(db, &[Permission::SubmissionPriority]).await
+}
+
+#[cfg(test)]
 pub async fn create_test_visible_reviewer(db: &Arc<DbAppState>) -> (Uuid, String) {
     create_test_user_with_permissions(
         db,

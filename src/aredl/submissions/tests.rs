@@ -1,4 +1,6 @@
+use crate::users::test_utils::create_test_user_with_priority_submissions;
 use actix_http::StatusCode;
+
 #[cfg(test)]
 use {
     crate::{
@@ -34,7 +36,6 @@ use {
             },
             ProvidersAppState,
         },
-        roles::test_utils::{add_user_to_role, create_test_role_with_desc},
         shifts::{
             test_utils::{create_test_shift, get_test_shift, set_test_shift_target_count},
             ShiftStatus,
@@ -628,11 +629,8 @@ async fn submission_aredlplus_boost() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&db, None).await;
-    let (user_id_2, _) = create_test_user(&db, None).await;
+    let (user_id_2, _) = create_test_user_with_priority_submissions(&db).await;
     let (user_id_mod, _) = create_test_full_reviewer(&db).await;
-
-    let role_id = create_test_role_with_desc(&db, 5, "plus").await;
-    add_user_to_role(&db, role_id, user_id_2).await;
 
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");

@@ -28,6 +28,7 @@ pub enum Permission {
     SubmissionEditNonSelfClaimed,
     SubmissionEditWithRawFootage,
     SubmissionSeeOtherReviewerStatistics,
+    SubmissionPriority,
     ShiftManage,
     SubmissionStatusManage,
     ReviewersAudit,
