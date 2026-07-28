@@ -14,7 +14,7 @@ use {
 #[actix_web::test]
 async fn create_ldm() {
     let (app, db, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&db, Some(Permission::CustomCopiesModify)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::LevelCustomCopiesModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -51,7 +51,7 @@ async fn create_ldm() {
 #[actix_web::test]
 async fn update_ldm() {
     let (app, db, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&db, Some(Permission::CustomCopiesModify)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::LevelCustomCopiesModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -79,7 +79,7 @@ async fn update_ldm() {
 #[actix_web::test]
 async fn delete_ldm() {
     let (app, db, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&db, Some(Permission::CustomCopiesModify)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::LevelCustomCopiesModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -98,7 +98,7 @@ async fn delete_ldm() {
 #[actix_web::test]
 async fn list_ldms() {
     let (app, db, _, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&db, Some(Permission::CustomCopiesModify)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::LevelCustomCopiesModify)).await;
     let level_id = create_test_level(&db).await;
 
     create_test_ldm(&db, level_id, user_id).await;
@@ -121,7 +121,7 @@ async fn list_ldms() {
 }
 
 #[actix_web::test]
-async fn create_ldm_requires_custom_copies_modify() {
+async fn create_ldm_requires_level_custom_copies_modify() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, None).await;
     let token =
@@ -144,6 +144,6 @@ async fn create_ldm_requires_custom_copies_modify() {
     assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
-        Some("You do not have the required permission (custom_copies_modify) to access this endpoint"),
+        Some("You do not have the required permission (level_custom_copies_modify) to access this endpoint"),
     );
 }

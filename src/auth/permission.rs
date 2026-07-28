@@ -11,7 +11,9 @@ use uuid::Uuid;
 #[strum(serialize_all = "snake_case")]
 pub enum Permission {
     LevelModify,
-    CustomCopiesModify,
+    LevelCustomCopiesModify,
+    LevelUpdatesModify,
+    LevelNotesModify,
     RecordModify,
     PackTierModify,
     PackModify,

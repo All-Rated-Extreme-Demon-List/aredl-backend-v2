@@ -72,9 +72,12 @@ async fn find_all(
     responses(
         (status = 200, body = LevelNotes)
     ),
-    security(("access_token" = ["LevelModify"]))
+    security(("access_token" = ["LevelNotesModify"]))
 )]
-#[post("/{level_id}", wrap = "UserAuth::require(Permission::LevelModify)")]
+#[post(
+    "/{level_id}",
+    wrap = "UserAuth::require(Permission::LevelNotesModify)"
+)]
 async fn create(
     db: web::Data<Arc<DbAppState>>,
     body: web::Json<LevelNotePost>,
@@ -101,9 +104,9 @@ async fn create(
     responses(
         (status = 200, body = LevelNotes)
     ),
-    security(("access_token" = ["LevelModify"]))
+    security(("access_token" = ["LevelNotesModify"]))
 )]
-#[patch("/{note_id}", wrap = "UserAuth::require(Permission::LevelModify)")]
+#[patch("/{note_id}", wrap = "UserAuth::require(Permission::LevelNotesModify)")]
 async fn update(
     db: web::Data<Arc<DbAppState>>,
     body: web::Json<LevelNoteUpdate>,
@@ -131,9 +134,9 @@ async fn update(
     responses(
         (status = 200)
     ),
-    security(("access_token" = ["LevelModify"]))
+    security(("access_token" = ["LevelNotesModify"]))
 )]
-#[delete("/{note_id}", wrap = "UserAuth::require(Permission::LevelModify)")]
+#[delete("/{note_id}", wrap = "UserAuth::require(Permission::LevelNotesModify)")]
 async fn delete(
     db: web::Data<Arc<DbAppState>>,
     note_id: web::Path<Uuid>,

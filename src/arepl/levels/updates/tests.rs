@@ -17,7 +17,7 @@ use {
 async fn create_update() {
     let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&db, Some(Permission::LevelModify)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::LevelUpdatesModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -52,7 +52,7 @@ async fn create_update() {
 async fn update_update() {
     let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&db, Some(Permission::LevelModify)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::LevelUpdatesModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -82,7 +82,7 @@ async fn update_update() {
 async fn delete_update() {
     let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&db, Some(Permission::LevelModify)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::LevelUpdatesModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -122,7 +122,7 @@ async fn list_updates() {
 }
 
 #[actix_web::test]
-async fn create_update_requires_level_modify() {
+async fn create_update_requires_level_updates_modify() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&db, None).await;
@@ -145,6 +145,6 @@ async fn create_update_requires_level_modify() {
     assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
-        Some("You do not have the required permission (level_modify) to access this endpoint"),
+        Some("You do not have the required permission (level_updates_modify) to access this endpoint"),
     );
 }
