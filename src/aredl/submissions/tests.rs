@@ -84,7 +84,7 @@ async fn resolved_find_one_unauthorized() {
         .insert_header(("Authorization", format!("Bearer {token2}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(resp, StatusCode::NOT_FOUND, Some("Not found")).await;
+    assert_error_response!(resp, StatusCode::NOT_FOUND, Some("Not found"));
 }
 
 #[actix_web::test]
@@ -97,12 +97,11 @@ async fn resolved_find_all_requires_auth() {
         .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
         Some("You do not have the required permission (submission_review_full) to access this endpoint"),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -133,12 +132,11 @@ async fn resolved_find_all_base_reviewer_forbidden() {
         .to_request();
     let resp = test::call_service(&app, req).await;
 
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
         Some("You do not have the required permission (submission_review_full) to access this endpoint"),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -450,12 +448,11 @@ async fn submission_without_raw() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::UNPROCESSABLE_ENTITY,
         Some("This level requires raw footage"),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -499,18 +496,16 @@ async fn submission_malformed_url() {
 
     let resp2 = test::call_service(&app, req).await;
 
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::BAD_REQUEST,
         Some("Invalid completion video URL: Malformed URL: relative URL without a base"),
-    )
-    .await;
-    assert_error_response(
+    );
+    assert_error_response!(
         resp2,
         StatusCode::BAD_REQUEST,
         Some("Invalid raw footage URL: Malformed URL: relative URL without a base"),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -559,12 +554,11 @@ async fn submission_edit_no_perms() {
         .to_request();
 
     let resp_edit_other = test::call_service(&app, edit_req_other).await;
-    assert_error_response(
+    assert_error_response!(
         resp_edit_other,
         StatusCode::FORBIDDEN,
         Some("You can only edit your own submissions."),
-    )
-    .await;
+    );
 
     // edit other submission as mod
     let edit_req_mod = test::TestRequest::patch()
@@ -762,12 +756,11 @@ async fn submission_banned_player() {
         .to_request();
 
     let resp_2 = test::call_service(&app, req_2).await;
-    assert_error_response(
+    assert_error_response!(
         resp_2,
         StatusCode::FORBIDDEN,
         Some("You have been banned from the list."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -932,12 +925,11 @@ async fn claim_submission_base_reviewer_no_claimable_submissions() {
         .to_request();
     let resp = test::call_service(&app, req).await;
 
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::NOT_FOUND,
         Some("There are no submissions available to claim"),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -978,12 +970,11 @@ async fn patch_submission_base_reviewer_cannot_edit_other_raw_submission() {
         .to_request();
     let resp = test::call_service(&app, req).await;
 
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
         Some("You do not have permission to edit this submission."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -1011,12 +1002,11 @@ async fn patch_submission_base_reviewer_cannot_edit_other_under_consideration_su
         .to_request();
     let resp = test::call_service(&app, req).await;
 
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
         Some("You do not have permission to edit this submission."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -1078,12 +1068,11 @@ async fn patch_submission_base_reviewer_cannot_edit_claimed_submission_assigned_
         .to_request();
     let resp = test::call_service(&app, req).await;
 
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
         Some("You do not have permission to edit this submission."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -1128,12 +1117,11 @@ async fn patch_submission_no_changes() {
         .set_json(json!({}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::BAD_REQUEST,
         Some("No changes were provided!"),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -1150,12 +1138,11 @@ async fn patch_submission_invalid_urls() {
         .set_json(json!({"video_url":"not a url"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::BAD_REQUEST,
         Some("Invalid completion video URL: Malformed URL"),
-    )
-    .await;
+    );
 
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
@@ -1163,12 +1150,11 @@ async fn patch_submission_invalid_urls() {
         .set_json(json!({"raw_url":"not a url"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::BAD_REQUEST,
         Some("Invalid raw footage URL: Malformed URL"),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -1187,12 +1173,11 @@ async fn patch_submission_banned_submitter() {
         .set_json(json!({"video_url": "https://www.youtube.com/watch?v=banupdate11"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
         Some("You have been banned from submitting records."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -1211,12 +1196,11 @@ async fn patch_submission_legacy_level_rejected() {
         .set_json(json!({"raw_url": "https://www.youtube.com/watch?v=rawupdate11"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::UNPROCESSABLE_ENTITY,
         Some("This level is on the legacy list and is not accepting records!"),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -1235,12 +1219,11 @@ async fn patch_submission_under_review_rejected() {
         .set_json(json!({"video_url": "https://www.youtube.com/watch?v=reviewed111"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::CONFLICT,
         Some("This submission is currently being reviewed and cannot be edited."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -1261,12 +1244,11 @@ async fn patch_resubmission_closed() {
         .set_json(json!({"video_url": "https://www.youtube.com/watch?v=closed11111"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::BAD_REQUEST,
         Some("Submissions are currently closed. You can only edit pending submissions."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -1284,12 +1266,11 @@ async fn patch_submission_mod_invalid_urls() {
         .set_json(json!({"video_url": "not a url"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::BAD_REQUEST,
         Some("Invalid completion video URL: Malformed URL"),
-    )
-    .await;
+    );
 
     let req = test::TestRequest::patch()
         .uri(&format!("/aredl/submissions/{submission}"))
@@ -1297,12 +1278,11 @@ async fn patch_submission_mod_invalid_urls() {
         .set_json(json!({"raw_url": "not a url"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::BAD_REQUEST,
         Some("Invalid raw footage URL: Malformed URL"),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -1346,12 +1326,11 @@ async fn patch_submission_mod_no_changes() {
         .set_json(json!({}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::BAD_REQUEST,
         Some("No changes were provided!"),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -1382,12 +1361,11 @@ async fn post_submission_duplicate_level() {
         .set_json(&submission_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::CONFLICT,
         Some("You already have a submission for this level"),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -1412,12 +1390,11 @@ async fn post_submission_legacy_level_rejected() {
         .set_json(&submission_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::UNPROCESSABLE_ENTITY,
         Some("This level is on the legacy list and is not accepting records."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -1439,12 +1416,11 @@ async fn post_submission_level_missing() {
         .set_json(&submission_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::NOT_FOUND,
         Some("Could not find this level"),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -1469,12 +1445,11 @@ async fn post_submission_closed() {
         .set_json(&submission_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
         Some("Submissions are currently disabled"),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -1744,12 +1719,11 @@ async fn cannot_edit_after_submission_locked() {
         .to_request();
 
     let resp = test::call_service(&app, edit_req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
         Some("This submission has been locked and cannot be edited"),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -2055,12 +2029,11 @@ async fn patch_submission_mod_patch_non_claimed() {
 
     let resp = test::call_service(&app, req).await;
 
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
         Some("You do not have permission to edit this submission."),
-    )
-    .await;
+    );
 
     // Claim the submission
     set_test_submission_raw_url_status_and_reviewer(

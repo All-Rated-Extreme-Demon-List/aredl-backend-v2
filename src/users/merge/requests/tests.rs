@@ -157,12 +157,11 @@ async fn create_merge_request_rejects_self_merge() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::UNPROCESSABLE_ENTITY,
         Some("You cannot merge your account with itself."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -184,12 +183,11 @@ async fn create_merge_request_rejects_unknown_user() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::NOT_FOUND,
         Some("The secondary user does not exist."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -212,12 +210,11 @@ async fn create_merge_request_rejects_non_placeholder_user() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::CONFLICT,
         Some("You can only submit merge requests for placeholder users. To merge your account with a user that is already linked to another discord account, please make a support post on our discord server."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -242,12 +239,11 @@ async fn create_merge_request_rejects_duplicate_submission() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::CONFLICT,
         Some("You already submitted a merge request for your account. Please wait until it's either accepted or denied before submitting a new one."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]

@@ -49,12 +49,11 @@ async fn submission_status_routes_reject_base_reviewer_without_status_manage() {
         .to_request();
     let resp = test::call_service(&app, req).await;
 
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
         Some("You do not have the required permission (submission_status_manage) to access this endpoint"),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -95,12 +94,11 @@ async fn disable_submissions() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
         Some("Submissions are currently disabled"),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]

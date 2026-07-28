@@ -67,12 +67,11 @@ async fn bounty_board_permissions_and_validation() {
             .to_request(),
     )
     .await;
-    assert_error_response(
+    assert_error_response!(
         forbidden_create,
         StatusCode::FORBIDDEN,
         Some("You do not have the required permission (bounty_manage) to access this endpoint"),
-    )
-    .await;
+    );
 
     let invalid_target = test::call_service(
         &app,
@@ -91,12 +90,11 @@ async fn bounty_board_permissions_and_validation() {
             .to_request(),
     )
     .await;
-    assert_error_response(
+    assert_error_response!(
         invalid_target,
         StatusCode::BAD_REQUEST,
         Some("Target submissions must be a positive integer."),
-    )
-    .await;
+    );
 
     let invalid_dates = test::call_service(
         &app,
@@ -115,12 +113,11 @@ async fn bounty_board_permissions_and_validation() {
             .to_request(),
     )
     .await;
-    assert_error_response(
+    assert_error_response!(
         invalid_dates,
         StatusCode::BAD_REQUEST,
         Some("End date must be after start date."),
-    )
-    .await;
+    );
 
     let create_resp = test::call_service(
         &app,
@@ -150,12 +147,11 @@ async fn bounty_board_permissions_and_validation() {
             .to_request(),
     )
     .await;
-    assert_error_response(
+    assert_error_response!(
         invalid_update,
         StatusCode::BAD_REQUEST,
         Some("End date must be after start date."),
-    )
-    .await;
+    );
 
     let forbidden_delete = test::call_service(
         &app,
@@ -165,12 +161,11 @@ async fn bounty_board_permissions_and_validation() {
             .to_request(),
     )
     .await;
-    assert_error_response(
+    assert_error_response!(
         forbidden_delete,
         StatusCode::FORBIDDEN,
         Some("You do not have the required permission (bounty_manage) to access this endpoint"),
-    )
-    .await;
+    );
 
     let delete_resp = test::call_service(
         &app,

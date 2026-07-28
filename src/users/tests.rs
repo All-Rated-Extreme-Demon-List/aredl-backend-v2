@@ -358,12 +358,11 @@ async fn user_character_limit() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::BAD_REQUEST,
         Some("The display name can at most be 35 characters long."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]

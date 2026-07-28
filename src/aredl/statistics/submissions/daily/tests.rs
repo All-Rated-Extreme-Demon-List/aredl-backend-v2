@@ -185,24 +185,22 @@ async fn submission_stats_endpoints_require_full_review_permission() {
         .insert_header((header::AUTHORIZATION, format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
         Some("You do not have the required permission (submission_review_full) to access this endpoint"),
-    )
-    .await;
+    );
 
     let req = test::TestRequest::get()
         .uri("/aredl/statistics/submissions/daily/leaderboard")
         .insert_header((header::AUTHORIZATION, format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
         Some("You do not have the required permission (submission_review_full) to access this endpoint"),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]

@@ -97,12 +97,11 @@ async fn add_role_users_fails_when_target_role_has_same_privilege_as_user() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
         Some("You do not have sufficient permissions to edit this role."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -124,12 +123,11 @@ async fn set_role_users_fails_when_target_role_has_same_privilege_as_user() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
         Some("You do not have sufficient permissions to edit this role."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -151,10 +149,9 @@ async fn delete_role_users_fails_when_target_role_has_same_privilege_as_user() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
         Some("You do not have sufficient permissions to edit this role."),
-    )
-    .await;
+    );
 }

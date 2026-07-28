@@ -3,8 +3,7 @@ use actix_http::StatusCode;
 use {
     crate::{
         aredl::{
-            levels::test_utils::create_test_level,
-            levels::updates::test_utils::create_test_update,
+            levels::test_utils::create_test_level, levels::updates::test_utils::create_test_update,
         },
         auth::{create_test_token, Permission},
         test_utils::{assert_error_response, init_test_app},
@@ -143,10 +142,9 @@ async fn update_auth() {
         .set_json(&update_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
         Some("You do not have the required permission (level_modify) to access this endpoint"),
-    )
-    .await;
+    );
 }

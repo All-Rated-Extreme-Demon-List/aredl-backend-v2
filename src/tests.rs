@@ -171,7 +171,7 @@ async fn error_handler_client_error_response_preserves_message() {
         .await;
 
     let resp = test::call_service(&app, test::TestRequest::get().uri("/").to_request()).await;
-    assert_error_response(resp, StatusCode::BAD_REQUEST, Some("bad request")).await;
+    assert_error_response!(resp, StatusCode::BAD_REQUEST, Some("bad request"));
 }
 
 #[actix_web::test]
@@ -183,7 +183,7 @@ async fn error_handler_named_status_response_preserves_client_message() {
     .await;
 
     let resp = test::call_service(&app, test::TestRequest::get().uri("/").to_request()).await;
-    assert_error_response(resp, StatusCode::FORBIDDEN, Some("forbidden")).await;
+    assert_error_response!(resp, StatusCode::FORBIDDEN, Some("forbidden"));
 }
 
 #[actix_web::test]
@@ -197,10 +197,9 @@ async fn error_handler_server_error_response_masks_message() {
     .await;
 
     let resp = test::call_service(&app, test::TestRequest::get().uri("/").to_request()).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::INTERNAL_SERVER_ERROR,
         Some("Internal server error"),
-    )
-    .await;
+    );
 }

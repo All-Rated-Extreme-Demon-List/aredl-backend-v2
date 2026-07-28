@@ -147,12 +147,11 @@ async fn notes_auth() {
         .set_json(&note_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
         Some("You do not have the required permission (level_modify) to access this endpoint"),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]

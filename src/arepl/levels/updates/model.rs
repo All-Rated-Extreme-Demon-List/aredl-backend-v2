@@ -104,7 +104,10 @@ impl LevelUpdateEntry {
         let updates = build_filtered()?
             .limit(page_query.per_page())
             .offset(page_query.offset())
-            .order((level_updates::timestamp.desc(), level_updates::created_at.desc()))
+            .order((
+                level_updates::timestamp.desc(),
+                level_updates::created_at.desc(),
+            ))
             .select(LevelUpdateEntry::as_select())
             .load(conn)?;
 
