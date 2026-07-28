@@ -9,7 +9,9 @@ use {
         },
         auth::{create_test_token, Permission},
         test_utils::*,
-        users::test_utils::create_test_user,
+        users::test_utils::{
+            create_test_full_reviewer, create_test_hidden_reviewer, create_test_user,
+        },
     },
     actix_web::test::{self, read_body_json},
     serde_json::json,
@@ -21,7 +23,7 @@ async fn get_submission_history() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&db, None).await;
-    let (moderator_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (moderator_id, _) = create_test_full_reviewer(&db).await;
     let user_token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let moderator_token =
@@ -81,7 +83,7 @@ async fn get_full_submission_history() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&db, None).await;
-    let (moderator_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (moderator_id, _) = create_test_full_reviewer(&db).await;
     let token =
         create_test_token(moderator_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let level_id = create_test_level(&db).await;
@@ -163,16 +165,16 @@ async fn get_full_submission_history() {
 }
 
 #[actix_web::test]
-async fn get_submission_history_hides_private_fields_for_base_reviewer() {
+async fn get_submission_history_hides_private_fields_for_hidden_reviewer() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&db, None).await;
-    let (full_reviewer_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
-    let (base_reviewer_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
+    let (visible_reviewer_id, _) = create_test_full_reviewer(&db).await;
+    let (hidden_reviewer_id, _) = create_test_hidden_reviewer(&db).await;
 
-    let full_token = create_test_token(full_reviewer_id, &auth.jwt_encoding_key)
+    let visible_token = create_test_token(visible_reviewer_id, &auth.jwt_encoding_key)
         .expect("Failed to generate token");
-    let base_token = create_test_token(base_reviewer_id, &auth.jwt_encoding_key)
+    let hidden_token = create_test_token(hidden_reviewer_id, &auth.jwt_encoding_key)
         .expect("Failed to generate token");
 
     let level_id = create_test_level(&db).await;
@@ -186,7 +188,7 @@ async fn get_submission_history_hides_private_fields_for_base_reviewer() {
 
     let patch_req = test::TestRequest::patch()
         .uri(format!("/aredl/submissions/{submission}").as_str())
-        .insert_header(("Authorization", format!("Bearer {full_token}")))
+        .insert_header(("Authorization", format!("Bearer {visible_token}")))
         .set_json(&patch_data)
         .to_request();
     let patch_resp = test::call_service(&app, patch_req).await;
@@ -198,7 +200,7 @@ async fn get_submission_history_hides_private_fields_for_base_reviewer() {
 
     let req = test::TestRequest::get()
         .uri(format!("/aredl/submissions/{submission}/history").as_str())
-        .insert_header(("Authorization", format!("Bearer {base_token}")))
+        .insert_header(("Authorization", format!("Bearer {hidden_token}")))
         .to_request();
 
     let res = test::call_service(&app, req).await;
@@ -215,21 +217,24 @@ async fn get_submission_history_hides_private_fields_for_base_reviewer() {
     assert_eq!(latest["submission_id"], submission.to_string());
     assert_eq!(latest["status"], "UnderConsideration");
     assert_eq!(latest["reviewer_notes"], "Visible reviewer note");
-    assert!(latest.get("reviewer").is_none());
+    assert_eq!(
+        latest["reviewer"]["id"],
+        "00000000-0000-0000-0000-000000000000"
+    );
+    assert_eq!(latest["reviewer"]["username"], "Hidden user");
     assert!(latest.get("private_reviewer_notes").is_none());
 }
 
 #[actix_web::test]
-async fn get_submission_history_redacts_base_reviewer_for_non_auditor_but_not_for_auditor() {
+async fn get_submission_history_redacts_hidden_reviewer_for_non_auditor_but_not_for_auditor() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&db, None).await;
-    let (base_reviewer_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
-    let (full_non_auditor_id, _) =
-        create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (hidden_reviewer_id, _) = create_test_hidden_reviewer(&db).await;
+    let (visible_non_auditor_id, _) = create_test_full_reviewer(&db).await;
     let (auditor_id, _) = create_test_user(&db, Some(Permission::ReviewersAudit)).await;
 
-    let full_token = create_test_token(full_non_auditor_id, &auth.jwt_encoding_key)
+    let visible_token = create_test_token(visible_non_auditor_id, &auth.jwt_encoding_key)
         .expect("Failed to generate token");
     let auditor_token =
         create_test_token(auditor_id, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -240,12 +245,12 @@ async fn get_submission_history_redacts_base_reviewer_for_non_auditor_but_not_fo
     let patch_data = json!({
         "status": "UnderConsideration",
         "reviewer_notes": "Visible reviewer note",
-        "private_reviewer_notes": "Visible to full reviewers"
+        "private_reviewer_notes": "Visible to reviewers"
     });
 
     let patch_req = test::TestRequest::patch()
         .uri(format!("/aredl/submissions/{submission}").as_str())
-        .insert_header(("Authorization", format!("Bearer {full_token}")))
+        .insert_header(("Authorization", format!("Bearer {visible_token}")))
         .set_json(&patch_data)
         .to_request();
     let patch_resp = test::call_service(&app, patch_req).await;
@@ -255,12 +260,12 @@ async fn get_submission_history_redacts_base_reviewer_for_non_auditor_but_not_fo
         patch_resp.status()
     );
 
-    // Make the reviewer in history a base reviewer to validate redaction behavior.
-    set_test_submission_history_reviewer(&db, submission, Some(base_reviewer_id));
+    // Make the reviewer in history a hidden reviewer to validate redaction behavior.
+    set_test_submission_history_reviewer(&db, submission, Some(hidden_reviewer_id));
 
     let req = test::TestRequest::get()
         .uri(format!("/aredl/submissions/{submission}/history").as_str())
-        .insert_header(("Authorization", format!("Bearer {full_token}")))
+        .insert_header(("Authorization", format!("Bearer {visible_token}")))
         .to_request();
     let res = test::call_service(&app, req).await;
     assert!(
@@ -287,5 +292,5 @@ async fn get_submission_history_redacts_base_reviewer_for_non_auditor_but_not_fo
     );
     let body: serde_json::Value = read_body_json(res).await;
     let latest = &body.as_array().unwrap()[0];
-    assert_eq!(latest["reviewer"]["id"], base_reviewer_id.to_string());
+    assert_eq!(latest["reviewer"]["id"], hidden_reviewer_id.to_string());
 }

@@ -6,7 +6,8 @@ use std::sync::Arc;
 #[cfg(test)]
 use crate::{
     app_data::db::DbAppState,
-    schema::{roles, user_roles},
+    auth::Permission,
+    schema::{role_permissions, roles, user_roles},
 };
 #[cfg(test)]
 use diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _};
@@ -33,6 +34,28 @@ pub async fn create_test_role_with_desc(
         .returning(roles::id)
         .get_result::<i32>(&mut db.connection().unwrap())
         .expect("Failed to create test role!")
+}
+
+#[cfg(test)]
+pub async fn create_test_role_with_permission(
+    db: &Arc<DbAppState>,
+    privilege_level: i32,
+    permission: Permission,
+) -> i32 {
+    let role_id = create_test_role(db, privilege_level).await;
+    add_permission_to_role(db, role_id, permission).await;
+    role_id
+}
+
+#[cfg(test)]
+pub async fn add_permission_to_role(db: &Arc<DbAppState>, role_id: i32, permission: Permission) {
+    diesel::insert_into(role_permissions::table)
+        .values((
+            role_permissions::role_id.eq(role_id),
+            role_permissions::permission.eq(permission.to_string()),
+        ))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to assign permission to role!");
 }
 
 #[cfg(test)]
