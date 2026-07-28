@@ -1,18 +1,16 @@
-#[cfg(test)]
 use crate::auth::Permission;
 use crate::error_handler::{ApiError, StartupError};
 use crate::get_secret;
-#[cfg(test)]
 use crate::schema::permissions;
 use diesel::r2d2::ConnectionManager;
-use diesel::{r2d2, PgConnection};
 #[cfg(test)]
-use diesel::{Connection as _, ExpressionMethods as _, RunQueryDsl as _};
+use diesel::Connection as _;
+use diesel::{r2d2, PgConnection};
+use diesel::{ExpressionMethods as _, RunQueryDsl as _};
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness as _};
 use std::sync::Arc;
 #[cfg(test)]
 use std::sync::Once;
-#[cfg(test)]
 use strum::IntoEnumIterator as _;
 
 type Pool = r2d2::Pool<ConnectionManager<PgConnection>>;
@@ -32,14 +30,30 @@ impl DbAppState {
     }
 
     pub fn run_pending_migrations(&self) -> Result<(), StartupError> {
-        self.connection()?
-            .run_pending_migrations(MIGRATIONS)
-            .map_err(|error| {
-                StartupError::Init(format!("Failed to run database migrations: {error}"))
-            })?;
+        let mut conn = self.connection()?;
+
+        conn.run_pending_migrations(MIGRATIONS).map_err(|error| {
+            StartupError::Init(format!("Failed to run database migrations: {error}"))
+        })?;
+
+        seed_permissions(&mut conn)?;
 
         Ok(())
     }
+}
+
+fn seed_permissions(conn: &mut PgConnection) -> Result<(), StartupError> {
+    diesel::insert_into(permissions::table)
+        .values(
+            Permission::iter()
+                .map(|permission| permissions::permission.eq(permission.to_string()))
+                .collect::<Vec<_>>(),
+        )
+        .on_conflict_do_nothing()
+        .execute(conn)
+        .map_err(|error| StartupError::Init(format!("Failed to seed permissions: {error}")))?;
+
+    Ok(())
 }
 
 pub fn init_app_state() -> Result<Arc<DbAppState>, StartupError> {
@@ -74,14 +88,7 @@ fn init_test_db_schema_and_seed() {
         conn.run_pending_migrations(MIGRATIONS)
             .expect("Failed to run migrations");
 
-        diesel::insert_into(permissions::table)
-            .values(
-                Permission::iter()
-                    .map(|permission| permissions::permission.eq(permission.to_string()))
-                    .collect::<Vec<_>>(),
-            )
-            .execute(&mut conn)
-            .expect("Failed to insert permissions");
+        seed_permissions(&mut conn).expect("Failed to insert permissions");
     });
 }
 
