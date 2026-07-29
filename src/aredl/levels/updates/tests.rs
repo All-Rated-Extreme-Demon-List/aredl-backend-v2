@@ -3,8 +3,7 @@ use actix_http::StatusCode;
 use {
     crate::{
         aredl::{
-            levels::test_utils::create_test_level,
-            levels::updates::test_utils::create_test_update,
+            levels::test_utils::create_test_level, levels::updates::test_utils::create_test_update,
         },
         auth::{create_test_token, Permission},
         test_utils::{assert_error_response, init_test_app},
@@ -18,7 +17,7 @@ use {
 async fn create_update() {
     let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&db, Some(Permission::LevelModify)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::LevelUpdatesModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -53,7 +52,7 @@ async fn create_update() {
 async fn update_update() {
     let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&db, Some(Permission::LevelModify)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::LevelUpdatesModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -83,7 +82,7 @@ async fn update_update() {
 async fn delete_update() {
     let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&db, Some(Permission::LevelModify)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::LevelUpdatesModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -123,7 +122,7 @@ async fn list_updates() {
 }
 
 #[actix_web::test]
-async fn update_auth() {
+async fn create_update_requires_level_updates_modify() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&db, None).await;
@@ -143,10 +142,9 @@ async fn update_auth() {
         .set_json(&update_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
-        Some("You do not have the required permission (level_modify) to access this endpoint"),
-    )
-    .await;
+        Some("You do not have the required permission (level_updates_modify) to access this endpoint"),
+    );
 }

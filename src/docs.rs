@@ -133,7 +133,7 @@ Recognized providers include all providers listed above plus:
 ## Privilege level and Permissions
 Staff endpoints require specific permissions to be accessed.
 
-Each role gives a certain privilege level, and each user's privilege level is the highest one given by one of their roles:
+Each role has a privilege level used for role hierarchy checks, such as deciding whether a staff member can edit a role or affect another user:
 
 | Role | Privilege Level |
 |---|---|
@@ -144,30 +144,7 @@ Each role gives a certain privilege level, and each user's privilege level is th
 | **Developer** | 100 |
 | **Owner** | 110 |
 
-Each permission then requires the user's privilege level to be higher or equal to a certain level:
-
-| Permission | Required Level |
-|---|---|
-| **SubmissionReviewBase** | 10 |
-| **SubmissionReviewFull** | 15 |
-| **RecordModify** | 20 |
-| **UserModify** | 25 |
-| **PlaceholderCreate** | 25 |
-| **PackTierModify** | 40 |
-| **PackModify** | 40 |
-| **UserBan** | 45 |
-| **LevelModify** | 50 |
-| **MergeReview** | 50 |
-| **ShiftCreateOwn** | 50 |
-| **ClanModify** | 60 |
-| **NotificationsSubscribe** | 70 |
-| **UserRedact** | 75 |
-| **DirectMerge** | 80 |
-| **SubmissionStatusManage** | 80 |
-| **ReviewersAudit** | 85 |
-| **RoleManage** | 85 |
-| **ShiftManage** | 90 |
-| **ExternalConnectionsManage** | 90 |
+Permissions are explicit grants on roles. A role can inherit grants from another role and add its own grants on top.
 ";
 
 #[derive(OpenApi)]

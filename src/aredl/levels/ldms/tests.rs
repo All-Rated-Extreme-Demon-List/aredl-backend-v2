@@ -15,7 +15,7 @@ use {
 async fn create_ldm() {
     let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&db, Some(Permission::CustomCopiesModify)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::LevelCustomCopiesModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -53,7 +53,7 @@ async fn create_ldm() {
 async fn update_ldm() {
     let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&db, Some(Permission::CustomCopiesModify)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::LevelCustomCopiesModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -82,7 +82,7 @@ async fn update_ldm() {
 async fn delete_ldm() {
     let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&db, Some(Permission::CustomCopiesModify)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::LevelCustomCopiesModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -102,7 +102,7 @@ async fn delete_ldm() {
 async fn list_ldms() {
     let (app, db, _, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&db, Some(Permission::CustomCopiesModify)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::LevelCustomCopiesModify)).await;
     let level_id = create_test_level(&db).await;
 
     create_test_ldm(&db, level_id, user_id).await;
@@ -125,7 +125,7 @@ async fn list_ldms() {
 }
 
 #[actix_web::test]
-async fn ldm_auth() {
+async fn create_ldm_requires_level_custom_copies_modify() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&db, None).await;
@@ -146,10 +146,9 @@ async fn ldm_auth() {
         .set_json(&ldm_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
-        Some("You do not have the required permission (custom_copies_modify) to access this endpoint"),
-    )
-    .await;
+        Some("You do not have the required permission (level_custom_copies_modify) to access this endpoint"),
+    );
 }

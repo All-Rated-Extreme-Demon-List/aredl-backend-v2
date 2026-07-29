@@ -2,11 +2,12 @@ use crate::app_data::db::{DbAppState, DbConnection};
 use crate::aredl::submissions::SubmissionStatus as AredlSubmissionStatus;
 use crate::arepl::submissions::SubmissionStatus as AreplSubmissionStatus;
 use crate::auth::oauth::OAuthProvider;
+use crate::auth::Permission;
 use crate::error_handler::{ApiError, StartupError};
 use crate::get_secret;
 use crate::providers::{context::backend_oauth::OAuthProviderContext, ProvidersAppState};
 use crate::scheduled::{sleep_until_next, startup_schedule};
-use crate::schema::{aredl, arepl, oauth_connected_accounts, roles, user_roles};
+use crate::schema::{aredl, arepl, oauth_connected_accounts, role_permissions_full, user_roles};
 use diesel::{Connection as _, ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _};
 use serde::Deserialize;
 use std::collections::HashSet;
@@ -224,9 +225,14 @@ pub fn apply_patreon_plus_sync(
     conn: &mut DbConnection,
     active_patreon_user_ids: &HashSet<String>,
 ) -> Result<PatreonPlusSyncResult, ApiError> {
-    let role_id = roles::table
-        .filter(roles::role_desc.eq("plus"))
-        .select(roles::id)
+    let role_id = role_permissions_full::table
+        .select(role_permissions_full::role_id)
+        .group_by(role_permissions_full::role_id)
+        .having(diesel::dsl::count(role_permissions_full::permission).eq(1))
+        .having(
+            diesel::dsl::max(role_permissions_full::permission)
+                .eq(Permission::SubmissionPriority.to_string()),
+        )
         .first::<i32>(conn)?;
 
     let matched_user_ids = if active_patreon_user_ids.is_empty() {

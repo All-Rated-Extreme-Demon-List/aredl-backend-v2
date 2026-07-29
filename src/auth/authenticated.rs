@@ -3,14 +3,13 @@ use crate::auth::token::UserClaims;
 use crate::auth::{permission, Permission};
 use crate::clans::ClanMember;
 use crate::error_handler::ApiError;
-use crate::roles::Role;
-use crate::schema::{clan_members, roles, user_roles};
+use crate::schema::clan_members;
 use crate::users::User;
 use actix_web::dev::Payload;
 use actix_web::{FromRequest, HttpMessage as _, HttpRequest};
 use diesel::{
-    ExpressionMethods as _, JoinOnDsl as _, OptionalExtension as _, QueryDsl as _,
-    RunQueryDsl as _, SelectableHelper as _,
+    ExpressionMethods as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _,
+    SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use std::future::{ready, Ready};
@@ -61,8 +60,10 @@ impl Authenticated {
         conn: &mut DbConnection,
         target_user_id: Uuid,
     ) -> Result<(), ApiError> {
-        let acting_user_privilege = permission::get_privilege_level(conn, self.user_id);
-        let target_user_privilege = permission::get_privilege_level(conn, target_user_id);
+        let acting_user_privilege =
+            permission::get_highest_role_privilege_level(conn, self.user_id);
+        let target_user_privilege =
+            permission::get_highest_role_privilege_level(conn, target_user_id);
 
         if acting_user_privilege <= target_user_privilege {
             return Err(ApiError::Forbidden(
@@ -78,7 +79,7 @@ impl Authenticated {
         conn: &mut DbConnection,
         required_privilege: i32,
     ) -> bool {
-        let user_privilege = permission::get_privilege_level(conn, self.user_id);
+        let user_privilege = permission::get_highest_role_privilege_level(conn, self.user_id);
         user_privilege > required_privilege
     }
 
@@ -88,6 +89,10 @@ impl Authenticated {
         permission: Permission,
     ) -> Result<bool, ApiError> {
         permission::check_user_permission(conn, self.user_id, permission)
+    }
+
+    pub fn get_permissions(&self, conn: &mut DbConnection) -> Result<Vec<String>, ApiError> {
+        permission::get_user_permissions(conn, self.user_id, false)
     }
 
     pub fn ensure_has_clan_permission(
@@ -131,18 +136,6 @@ impl Authenticated {
         }
 
         Ok(())
-    }
-
-    pub fn is_aredl_plus(&self, conn: &mut DbConnection) -> Result<bool, ApiError> {
-        let roles = user_roles::table
-            .inner_join(roles::table.on(user_roles::role_id.eq(roles::id)))
-            .filter(user_roles::user_id.eq(self.user_id))
-            .select(Role::as_select())
-            .load::<Role>(conn)?;
-
-        let has_role = roles.iter().any(|role| role.role_desc == "plus");
-
-        Ok(has_role)
     }
 }
 

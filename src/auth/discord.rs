@@ -12,12 +12,13 @@ use crate::app_data::auth::AuthAppState;
 use crate::app_data::db::DbAppState;
 use crate::auth::oauth::OAuthProvider;
 use crate::auth::oauth::{exchange_oauth_code, OAuthCallbackQuery, OAuthRequestData};
+use crate::auth::permission;
 use crate::auth::token::{self, UserClaims};
 use crate::auth::OAuthOptions;
 use crate::error_handler::ApiError;
 use crate::providers::ProvidersAppState;
 use crate::roles::Role;
-use crate::schema::{permissions, roles, user_roles};
+use crate::schema::{roles, user_roles};
 use crate::users::{User, UserUpsert};
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -162,22 +163,7 @@ async fn discord_callback(
             .select(Role::as_select())
             .load::<Role>(conn)?;
 
-        let user_privilege_level: i32 = roles
-            .iter()
-            .map(|role| role.privilege_level)
-            .max()
-            .unwrap_or(0);
-
-        let all_permissions = permissions::table
-            .select((permissions::permission, permissions::privilege_level))
-            .load::<(String, i32)>(conn)?;
-
-        let scopes = all_permissions
-            .into_iter()
-            .filter_map(|(permission, privilege_level)| {
-                (user_privilege_level >= privilege_level).then_some(permission)
-            })
-            .collect::<Vec<String>>();
+        let scopes = permission::get_user_permissions(conn, user.id, false)?;
 
         Ok::<_, ApiError>((user, roles, scopes))
     })

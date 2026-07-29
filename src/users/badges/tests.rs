@@ -152,10 +152,9 @@ async fn grant_user_badge_rejects_invalid_code() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::BAD_REQUEST,
         Some("Unknown badge code: global.invalid_badge"),
-    )
-    .await;
+    );
 }

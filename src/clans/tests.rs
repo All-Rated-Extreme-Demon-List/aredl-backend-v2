@@ -120,142 +120,48 @@ async fn delete_clan_with_multiple_members_forbidden() {
         .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
         Some("You cannot delete a clan unless you're the only member left in it."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
-async fn create_clan_name_too_long() {
+async fn create_clan_rejects_overlong_fields() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, None).await;
-    let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
-
-    let name = "a".repeat(101);
-    let payload = json!({"global_name": name, "tag": "TL"});
-    let req = test::TestRequest::post()
-        .uri("/clans")
-        .insert_header(("Authorization", format!("Bearer {token}")))
-        .set_json(&payload)
-        .to_request();
-    let resp = test::call_service(&app, req).await;
-    assert_error_response(
-        resp,
-        StatusCode::UNPROCESSABLE_ENTITY,
-        Some("The clan name can at most be 100 characters long."),
-    )
-    .await;
-}
-
-#[actix_web::test]
-async fn create_empty_clan_name_too_long() {
-    let (app, db, auth, _) = init_test_app().await;
     let (staff_id, _) = create_test_user(&db, Some(Permission::ClanModify)).await;
-    let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
+    let user_token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
+    let staff_token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
 
-    let name = "a".repeat(101);
-    let payload = json!({"global_name": name, "tag": "TL"});
-    let req = test::TestRequest::post()
-        .uri("/clans/placeholder")
-        .insert_header(("Authorization", format!("Bearer {token}")))
-        .set_json(&payload)
-        .to_request();
-    let resp = test::call_service(&app, req).await;
-    assert_error_response(
-        resp,
-        StatusCode::UNPROCESSABLE_ENTITY,
-        Some("The clan name can at most be 100 characters long."),
-    )
-    .await;
-}
-
-#[actix_web::test]
-async fn create_clan_tag_too_long() {
-    let (app, db, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&db, None).await;
-    let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
-
-    let payload = json!({"global_name": "TagLong", "tag": "TOOLONG"});
-    let req = test::TestRequest::post()
-        .uri("/clans")
-        .insert_header(("Authorization", format!("Bearer {token}")))
-        .set_json(&payload)
-        .to_request();
-    let resp = test::call_service(&app, req).await;
-    assert_error_response(
-        resp,
-        StatusCode::UNPROCESSABLE_ENTITY,
-        Some("The clan tag can at most be 5 characters long."),
-    )
-    .await;
-}
-
-#[actix_web::test]
-async fn create_empty_clan_tag_too_long() {
-    let (app, db, auth, _) = init_test_app().await;
-    let (staff_id, _) = create_test_user(&db, Some(Permission::ClanModify)).await;
-    let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
-
-    let payload = json!({"global_name": "TagLong", "tag": "TOOLONG"});
-    let req = test::TestRequest::post()
-        .uri("/clans/placeholder")
-        .insert_header(("Authorization", format!("Bearer {token}")))
-        .set_json(&payload)
-        .to_request();
-    let resp = test::call_service(&app, req).await;
-    assert_error_response(
-        resp,
-        StatusCode::UNPROCESSABLE_ENTITY,
-        Some("The clan tag can at most be 5 characters long."),
-    )
-    .await;
-}
-
-#[actix_web::test]
-async fn create_clan_description_too_long() {
-    let (app, db, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&db, None).await;
-    let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
-
-    let desc = "d".repeat(301);
-    let payload = json!({"global_name": "DescLong", "tag": "DL", "description": desc});
-    let req = test::TestRequest::post()
-        .uri("/clans")
-        .insert_header(("Authorization", format!("Bearer {token}")))
-        .set_json(&payload)
-        .to_request();
-    let resp = test::call_service(&app, req).await;
-    assert_error_response(
-        resp,
-        StatusCode::UNPROCESSABLE_ENTITY,
-        Some("The clan description can at most be 300 characters long."),
-    )
-    .await;
-}
-
-#[actix_web::test]
-async fn create_empty_clan_description_too_long() {
-    let (app, db, auth, _) = init_test_app().await;
-    let (staff_id, _) = create_test_user(&db, Some(Permission::ClanModify)).await;
-    let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
-
-    let desc = "d".repeat(301);
-    let payload = json!({"global_name": "DescLong", "tag": "DL", "description": desc});
-    let req = test::TestRequest::post()
-        .uri("/clans/placeholder")
-        .insert_header(("Authorization", format!("Bearer {token}")))
-        .set_json(&payload)
-        .to_request();
-    let resp = test::call_service(&app, req).await;
-    assert_error_response(
-        resp,
-        StatusCode::UNPROCESSABLE_ENTITY,
-        Some("The clan description can at most be 300 characters long."),
-    )
-    .await;
+    for (payload, message) in [
+        (
+            json!({"global_name": "a".repeat(101), "tag": "TL"}),
+            "The clan name can at most be 100 characters long.",
+        ),
+        (
+            json!({"global_name": "TagLong", "tag": "TOOLONG"}),
+            "The clan tag can at most be 5 characters long.",
+        ),
+        (
+            json!({"global_name": "DescLong", "tag": "DL", "description": "d".repeat(301)}),
+            "The clan description can at most be 300 characters long.",
+        ),
+    ] {
+        for (uri, token) in [
+            ("/clans", &user_token),
+            ("/clans/placeholder", &staff_token),
+        ] {
+            let req = test::TestRequest::post()
+                .uri(uri)
+                .insert_header(("Authorization", format!("Bearer {token}")))
+                .set_json(&payload)
+                .to_request();
+            let resp = test::call_service(&app, req).await;
+            assert_error_response!(resp, StatusCode::UNPROCESSABLE_ENTITY, Some(message));
+        }
+    }
 }
 
 #[actix_web::test]
@@ -273,12 +179,11 @@ async fn create_clan_already_in_clan() {
         .set_json(&payload)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::CONFLICT,
         Some("You are already in a clan."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -297,12 +202,11 @@ async fn update_clan_name_too_long() {
         .set_json(&payload)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::UNPROCESSABLE_ENTITY,
         Some("The clan name can at most be 100 characters long."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -320,12 +224,11 @@ async fn update_clan_tag_too_long() {
         .set_json(&payload)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::UNPROCESSABLE_ENTITY,
         Some("The clan tag can at most be 5 characters long."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -344,12 +247,11 @@ async fn update_clan_description_too_long() {
         .set_json(&payload)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::UNPROCESSABLE_ENTITY,
         Some("The clan description can at most be 300 characters long."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]

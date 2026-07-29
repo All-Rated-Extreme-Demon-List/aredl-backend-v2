@@ -150,7 +150,8 @@ impl SubmissionInsert {
             mod_menu: body.mod_menu,
             user_notes: body.user_notes,
             completion_time: body.completion_time,
-            priority: authenticated.is_aredl_plus(conn)? || !active_bounties.is_empty(),
+            priority: authenticated.has_permission(conn, Permission::SubmissionPriority)?
+                || !active_bounties.is_empty(),
             status: SubmissionStatus::Pending,
             ..Default::default()
         })
@@ -163,7 +164,7 @@ impl SubmissionInsert {
     ) -> Result<Self, ApiError> {
         let submitted_by = body.submitted_by.unwrap_or(authenticated.user_id);
 
-        if !authenticated.has_permission(conn, Permission::SubmissionReviewFull)?
+        if !authenticated.has_permission(conn, Permission::SubmissionEditNonSelfClaimed)?
             || submitted_by == authenticated.user_id
         {
             return SubmissionInsert::from_user(conn, body.downgrade(), authenticated);

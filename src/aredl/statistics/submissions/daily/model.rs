@@ -1,10 +1,10 @@
 use crate::app_data::db::DbConnection;
 use crate::aredl::statistics::submissions::daily::routes::LeaderboardQuery;
-use crate::auth::{Authenticated, Permission};
+use crate::auth::Authenticated;
 use crate::page_helper::{PageQuery, Paginated};
+use crate::roles::ReviewerVisibility;
 use crate::{
     error_handler::ApiError,
-    roles::RoleResolved,
     schema::{aredl::submission_stats, users},
     users::{BaseUser, ExtendedBaseUser},
 };
@@ -66,6 +66,7 @@ impl ResolvedDailyStats {
         }
     }
 }
+
 impl DailyStatsPage {
     pub fn find<const D: i64>(
         conn: &mut DbConnection,
@@ -73,10 +74,11 @@ impl DailyStatsPage {
         reviewer_id: Option<Uuid>,
         authenticated: &Authenticated,
     ) -> Result<Paginated<Self>, ApiError> {
+        let visibility = ReviewerVisibility::new(conn, authenticated)?;
+
         if let Some(filter) = reviewer_id.as_ref() {
-            if !authenticated.has_permission(conn, Permission::ReviewersAudit)? {
-                let reviewer_sets = RoleResolved::find_all_base_reviewers(conn)?;
-                if reviewer_sets.base_reviewers.contains(filter) {
+            if !visibility.can_see_stats(*filter, false) {
+                {
                     return Ok(Paginated::from_data(
                         page_query,
                         0,
@@ -140,20 +142,15 @@ pub fn stats_mod_leaderboard(
     }
 
     let all_rows: Vec<(DailyStats, ExtendedBaseUser)> = query.load(conn)?;
-    let reviewer_sets = RoleResolved::find_all_base_reviewers(conn)?;
-    let include_base_reviewers = options.include_base_reviewers.unwrap_or(false)
-        && authenticated.has_permission(conn, Permission::ReviewersAudit)?;
 
-    let rows = all_rows.into_iter().filter_map(|(stats, user)| {
-        if reviewer_sets.full_reviewers.contains(&user.id) {
-            Some((stats, user))
-        } else if reviewer_sets.base_reviewers.contains(&user.id) {
-            include_base_reviewers.then_some((stats, user))
-        } else if options.only_active.unwrap_or(false) {
-            None
-        } else {
-            Some((stats, user))
+    let visibility = ReviewerVisibility::new(conn, authenticated)?;
+
+    let rows = all_rows.into_iter().filter(|(_, user)| {
+        if options.only_active.unwrap_or(false) && !visibility.is_reviewer(user.id) {
+            return false;
         }
+
+        visibility.can_see_stats(user.id, !options.include_hidden_reviewers.unwrap_or(false))
     });
 
     let acc: HashMap<Uuid, ResolvedLeaderboardRow> =

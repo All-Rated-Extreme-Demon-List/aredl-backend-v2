@@ -1,13 +1,16 @@
 #[cfg(test)]
 use {
     crate::{
-        auth::{create_test_token, Permission},
+        auth::{create_test_token, permission, Permission},
         roles::{
-            test_utils::{add_user_to_role, create_test_role},
+            test_utils::{add_user_to_role, create_test_role, create_test_role_with_permission},
             Role, RoleResolved,
         },
         test_utils::{assert_error_response, init_test_app},
-        users::test_utils::{create_test_user, get_permission_privilege_level},
+        users::test_utils::{
+            create_test_hidden_reviewer, create_test_user, create_test_full_reviewer,
+            TEST_STAFF_ROLE_PRIVILEGE_LEVEL,
+        },
     },
     actix_http::StatusCode,
     actix_web::test::{self, read_body_json},
@@ -19,7 +22,7 @@ async fn list_roles() {
     let (app, db, auth, _) = init_test_app().await;
     let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
-    let role1 = create_test_role(&db, 10).await;
+    let role1 = create_test_role_with_permission(&db, 10, Permission::LevelNotesModify).await;
     let role2 = create_test_role(&db, 20).await;
 
     let req = test::TestRequest::get()
@@ -33,6 +36,16 @@ async fn list_roles() {
     let ids: Vec<i32> = roles.iter().map(|r| r.role.id).collect();
     assert!(ids.contains(&role1));
     assert!(ids.contains(&role2));
+
+    let role1 = roles
+        .iter()
+        .find(|role| role.role.id == role1)
+        .expect("role should be returned");
+
+    assert_eq!(
+        role1.permissions,
+        vec![Permission::LevelNotesModify.to_string()]
+    );
 }
 
 #[actix_web::test]
@@ -102,55 +115,32 @@ async fn delete_role() {
 }
 
 #[actix_web::test]
-async fn create_role_fails_when_new_role_has_same_privilege_as_user() {
+async fn create_role_rejects_same_or_higher_privilege_than_user() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
 
-    let lvl = get_permission_privilege_level(&db, Permission::RoleManage);
-    let create_data =
-        json!({"privilege_level": lvl, "role_desc": "Same Level Role", "hide": false});
+    for (privilege_level, role_desc) in [
+        (TEST_STAFF_ROLE_PRIVILEGE_LEVEL, "Same Level Role"),
+        (TEST_STAFF_ROLE_PRIVILEGE_LEVEL + 1, "Higher Level Role"),
+    ] {
+        let create_data =
+            json!({"privilege_level": privilege_level, "role_desc": role_desc, "hide": false});
 
-    let req = test::TestRequest::post()
-        .uri("/roles")
-        .insert_header(("Authorization", format!("Bearer {token}")))
-        .set_json(&create_data)
-        .to_request();
+        let req = test::TestRequest::post()
+            .uri("/roles")
+            .insert_header(("Authorization", format!("Bearer {token}")))
+            .set_json(&create_data)
+            .to_request();
 
-    let resp = test::call_service(&app, req).await;
-    assert_error_response(
-        resp,
-        StatusCode::FORBIDDEN,
-        Some("You can not create a role with higher permissions than yourself."),
-    )
-    .await;
-}
-
-#[actix_web::test]
-async fn create_role_fails_when_new_role_has_higher_privilege_than_user() {
-    let (app, db, auth, _) = init_test_app().await;
-
-    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
-    let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
-
-    let lvl = get_permission_privilege_level(&db, Permission::RoleManage);
-    let create_data =
-        json!({"privilege_level": lvl + 1, "role_desc": "Higher Level Role", "hide": false});
-
-    let req = test::TestRequest::post()
-        .uri("/roles")
-        .insert_header(("Authorization", format!("Bearer {token}")))
-        .set_json(&create_data)
-        .to_request();
-
-    let resp = test::call_service(&app, req).await;
-    assert_error_response(
-        resp,
-        StatusCode::FORBIDDEN,
-        Some("You can not create a role with higher permissions than yourself."),
-    )
-    .await;
+        let resp = test::call_service(&app, req).await;
+        assert_error_response!(
+            resp,
+            StatusCode::FORBIDDEN,
+            Some("You can not create a role with higher permissions than yourself."),
+        );
+    }
 }
 
 #[actix_web::test]
@@ -160,7 +150,7 @@ async fn update_role_fails_when_target_role_has_same_privilege_as_user() {
     let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
 
-    let lvl = get_permission_privilege_level(&db, Permission::RoleManage);
+    let lvl = TEST_STAFF_ROLE_PRIVILEGE_LEVEL;
     let role_id = create_test_role(&db, lvl).await;
 
     let req = test::TestRequest::patch()
@@ -170,12 +160,11 @@ async fn update_role_fails_when_target_role_has_same_privilege_as_user() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
         Some("You do not have sufficient permissions to edit this role."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -185,7 +174,7 @@ async fn delete_role_fails_when_target_role_has_same_privilege_as_user() {
     let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
 
-    let lvl = get_permission_privilege_level(&db, Permission::RoleManage);
+    let lvl = TEST_STAFF_ROLE_PRIVILEGE_LEVEL;
     let role_id = create_test_role(&db, lvl).await;
 
     let req = test::TestRequest::delete()
@@ -194,36 +183,45 @@ async fn delete_role_fails_when_target_role_has_same_privilege_as_user() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
         Some("You do not have sufficient permissions to edit this role."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
-async fn find_all_base_reviewers_excludes_full_reviewers_and_mixed_role_users() {
+async fn find_reviewer_visibility_excludes_visible_reviewers_and_mixed_role_users() {
     let (_app, db, _auth, _) = init_test_app().await;
 
-    let (base_only_user, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
-    let (full_user, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (hidden_only_user, _) = create_test_hidden_reviewer(&db).await;
+    let (visible_user, _) = create_test_full_reviewer(&db).await;
     let (mixed_user, _) = create_test_user(&db, None).await;
 
-    let base_level = get_permission_privilege_level(&db, Permission::SubmissionReviewBase);
-    let full_level = get_permission_privilege_level(&db, Permission::SubmissionReviewFull);
+    let review_role = create_test_role_with_permission(&db, 0, Permission::SubmissionReview).await;
+    let visibility_role =
+        create_test_role_with_permission(&db, 0, Permission::SubmissionReviewerVisible).await;
+    add_user_to_role(&db, review_role, mixed_user).await;
+    add_user_to_role(&db, visibility_role, mixed_user).await;
 
-    let base_role = create_test_role(&db, base_level).await;
-    let full_role = create_test_role(&db, full_level).await;
-    add_user_to_role(&db, base_role, mixed_user).await;
-    add_user_to_role(&db, full_role, mixed_user).await;
+    let conn = &mut db.connection().unwrap();
+    let reviewers = permission::get_users_with_permission(conn, Permission::SubmissionReview)
+        .expect("Failed to load reviewers");
+    let visible_permissions =
+        permission::get_users_with_permission(conn, Permission::SubmissionReviewerVisible)
+            .expect("Failed to load visible reviewers");
+    let visible_reviewers = reviewers
+        .intersection(&visible_permissions)
+        .copied()
+        .collect::<std::collections::HashSet<_>>();
+    let hidden_reviewers = reviewers
+        .difference(&visible_reviewers)
+        .copied()
+        .collect::<std::collections::HashSet<_>>();
 
-    let reviewer_sets =
-        RoleResolved::find_all_base_reviewers(&mut db.connection().unwrap()).unwrap();
-
-    assert!(reviewer_sets.base_reviewers.contains(&base_only_user));
-    assert!(reviewer_sets.full_reviewers.contains(&full_user));
-    assert!(reviewer_sets.full_reviewers.contains(&mixed_user));
-    assert!(!reviewer_sets.base_reviewers.contains(&full_user));
-    assert!(!reviewer_sets.base_reviewers.contains(&mixed_user));
+    assert!(hidden_reviewers.contains(&hidden_only_user));
+    assert!(visible_reviewers.contains(&visible_user));
+    assert!(visible_reviewers.contains(&mixed_user));
+    assert!(!hidden_reviewers.contains(&visible_user));
+    assert!(!hidden_reviewers.contains(&mixed_user));
 }

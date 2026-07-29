@@ -162,11 +162,11 @@ pub async fn init_test_app_with_providers(
     (app, db_app_state, auth_app_state, notify_tx)
 }
 
-pub async fn assert_error_response(
+pub async fn check_error_response(
     resp: ServiceResponse<BoxBody>,
     expected_status: StatusCode,
     expected_message: Option<&str>,
-) {
+) -> Result<(), String> {
     let actual_status = resp.status().as_u16();
     let body_bytes = test::read_body(resp).await;
     let body_text = String::from_utf8_lossy(&body_bytes).to_string();
@@ -179,16 +179,36 @@ pub async fn assert_error_response(
 
     let actual_message = message_from_json.unwrap_or(body_text.as_str());
 
-    assert_eq!(
-        actual_status,
-        expected_status.as_u16(),
-        "Unexpected status. message={actual_message}"
-    );
+    if actual_status != expected_status.as_u16() {
+        return Err(format!(
+            "Unexpected status.\nexpected: {}\nactual: {}\nmessage: {}",
+            expected_status.as_u16(),
+            actual_status,
+            actual_message
+        ));
+    }
 
     if let Some(expected_message) = expected_message {
-        assert_eq!(
-            actual_message, expected_message,
-            "Unexpected error message."
-        );
+        if actual_message != expected_message {
+            return Err(format!(
+                "Unexpected error message.\nexpected: {expected_message:?}\nactual: {actual_message:?}"
+            ));
+        }
     }
+
+    Ok(())
 }
+
+#[macro_export]
+macro_rules! assert_error_response {
+    ($resp:expr, $expected_status:expr, $expected_message:expr $(,)?) => {{
+        match $crate::test_utils::check_error_response($resp, $expected_status, $expected_message)
+            .await
+        {
+            Ok(()) => {}
+            Err(message) => panic!("{message}"),
+        }
+    }};
+}
+
+pub use crate::assert_error_response;

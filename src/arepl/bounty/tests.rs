@@ -27,7 +27,7 @@ use {
             ProvidersAppState,
         },
         test_utils::*,
-        users::test_utils::create_test_user,
+        users::test_utils::{create_test_full_reviewer, create_test_user},
     },
     actix_web::test::{self, read_body_json},
     chrono::{DateTime, Duration as ChronoDuration, Utc},
@@ -67,12 +67,11 @@ async fn bounty_board_permissions_and_validation() {
             .to_request(),
     )
     .await;
-    assert_error_response(
+    assert_error_response!(
         forbidden_create,
         StatusCode::FORBIDDEN,
         Some("You do not have the required permission (bounty_manage) to access this endpoint"),
-    )
-    .await;
+    );
 
     let invalid_target = test::call_service(
         &app,
@@ -91,12 +90,11 @@ async fn bounty_board_permissions_and_validation() {
             .to_request(),
     )
     .await;
-    assert_error_response(
+    assert_error_response!(
         invalid_target,
         StatusCode::BAD_REQUEST,
         Some("Target submissions must be a positive integer."),
-    )
-    .await;
+    );
 
     let invalid_dates = test::call_service(
         &app,
@@ -115,12 +113,11 @@ async fn bounty_board_permissions_and_validation() {
             .to_request(),
     )
     .await;
-    assert_error_response(
+    assert_error_response!(
         invalid_dates,
         StatusCode::BAD_REQUEST,
         Some("End date must be after start date."),
-    )
-    .await;
+    );
 
     let create_resp = test::call_service(
         &app,
@@ -150,12 +147,11 @@ async fn bounty_board_permissions_and_validation() {
             .to_request(),
     )
     .await;
-    assert_error_response(
+    assert_error_response!(
         invalid_update,
         StatusCode::BAD_REQUEST,
         Some("End date must be after start date."),
-    )
-    .await;
+    );
 
     let forbidden_delete = test::call_service(
         &app,
@@ -165,12 +161,11 @@ async fn bounty_board_permissions_and_validation() {
             .to_request(),
     )
     .await;
-    assert_error_response(
+    assert_error_response!(
         forbidden_delete,
         StatusCode::FORBIDDEN,
         Some("You do not have the required permission (bounty_manage) to access this endpoint"),
-    )
-    .await;
+    );
 
     let delete_resp = test::call_service(
         &app,
@@ -502,7 +497,7 @@ async fn bounty_completion_uses_fetched_video_timestamp() {
     ));
     let (app, db, auth, _) = init_test_app_with_providers(providers_app_state).await;
     seed_oauth_token(&db, OAuthProvider::Google, Some("refresh_a"));
-    let (moderator_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (moderator_id, _) = create_test_full_reviewer(&db).await;
     let moderator_token = create_test_token(moderator_id, &auth.jwt_encoding_key).unwrap();
     let (inside_user, _) = create_test_user(&db, None).await;
     let (outside_user, _) = create_test_user(&db, None).await;

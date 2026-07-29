@@ -308,13 +308,16 @@ impl SubmissionPatchMod {
             );
         }
 
-        let is_full_staff =
-            authenticated.has_permission(conn, Permission::EditNonClaimedSubmissions)?;
+        let can_edit_non_self_claimed =
+            authenticated.has_permission(conn, Permission::SubmissionEditNonSelfClaimed)?;
 
-        if !is_full_staff
-            && (old_submission.raw_url.is_some()
-                || old_submission.status != SubmissionStatus::Claimed
+        let can_edit_with_raw_footage =
+            authenticated.has_permission(conn, Permission::SubmissionEditWithRawFootage)?;
+
+        if !can_edit_non_self_claimed
+            && (old_submission.status != SubmissionStatus::Claimed
                 || old_submission.reviewer_id != Some(authenticated.user_id))
+            || (!can_edit_with_raw_footage && old_submission.raw_url.is_some())
         {
             return Err(ApiError::Forbidden(
                 "You do not have permission to edit this submission.",

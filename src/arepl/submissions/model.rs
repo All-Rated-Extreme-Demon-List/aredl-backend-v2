@@ -149,7 +149,7 @@ impl Submission {
     // filters for submissions that can be claimed by the current reviewer
     fn claimable_filter(
         reviewer_id: Uuid,
-        is_full_reviewer: bool,
+        can_claim_raw_footage: bool,
         priority: bool,
     ) -> SubmissionFilter {
         let base = submissions::submitted_by
@@ -157,8 +157,7 @@ impl Submission {
             .ne(reviewer_id)
             .and(submissions::priority.eq(priority));
 
-        // full reviewers can claim any pending submission or URs sent by base reviewers
-        if is_full_reviewer {
+        if can_claim_raw_footage {
             Box::new(
                 base.and(
                     submissions::status
@@ -167,7 +166,6 @@ impl Submission {
                 ),
             )
         } else {
-            // base reviewers can only review pending submissions with no raw footage
             Box::new(
                 base.and(submissions::status.eq(SubmissionStatus::Pending))
                     .and(submissions::raw_url.is_null()),
@@ -179,13 +177,13 @@ impl Submission {
     fn find_next_claimable_id(
         conn: &mut DbConnection,
         reviewer_id: Uuid,
-        is_full_reviewer: bool,
+        can_claim_raw_footage: bool,
         priority: bool,
     ) -> Result<Option<Uuid>, ApiError> {
         let query = submissions::table
             .filter(Self::claimable_filter(
                 reviewer_id,
-                is_full_reviewer,
+                can_claim_raw_footage,
                 priority,
             ))
             .for_update()
@@ -216,17 +214,24 @@ impl Submission {
         authenticated: &Authenticated,
     ) -> Result<SubmissionResolved, ApiError> {
         conn.transaction(|conn| -> Result<SubmissionResolved, ApiError> {
-            let is_full_reviewer =
-                authenticated.has_permission(conn, Permission::SubmissionReviewFull)?;
+            let can_claim_raw_footage =
+                authenticated.has_permission(conn, Permission::SubmissionEditWithRawFootage)?;
 
-            let preferred_id =
-                Self::find_next_claimable_id(conn, authenticated.user_id, is_full_reviewer, true)?;
+            let preferred_id = Self::find_next_claimable_id(
+                conn,
+                authenticated.user_id,
+                can_claim_raw_footage,
+                true,
+            )?;
 
             let next_id = if let Some(id) = preferred_id {
                 id
-            } else if let Some(id) =
-                Self::find_next_claimable_id(conn, authenticated.user_id, is_full_reviewer, false)?
-            {
+            } else if let Some(id) = Self::find_next_claimable_id(
+                conn,
+                authenticated.user_id,
+                can_claim_raw_footage,
+                false,
+            )? {
                 id
             } else {
                 return Err(ApiError::NotFound(
@@ -258,7 +263,9 @@ impl Submission {
                 .filter(submissions::id.eq(submission_id))
                 .into_boxed();
 
-            if !authenticated.has_permission(connection, Permission::SubmissionReviewFull)? {
+            if !authenticated
+                .has_permission(connection, Permission::SubmissionEditNonSelfClaimed)?
+            {
                 query = query
                     .filter(submissions::submitted_by.eq(authenticated.user_id))
                     .filter(submissions::status.eq(SubmissionStatus::Pending));

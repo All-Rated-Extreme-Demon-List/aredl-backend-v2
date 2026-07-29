@@ -16,7 +16,7 @@ use {
 };
 
 #[actix_web::test]
-async fn list_leaderboard() {
+async fn get_leaderboard() {
     let (app, db, _, _) = init_test_app().await;
     let (user, _) = create_test_user(&db, None).await;
     let (level_id, _) = create_test_level_with_record(&db, user).await;
@@ -65,7 +65,7 @@ async fn list_leaderboard() {
 }
 
 #[actix_web::test]
-async fn get_country_lb() {
+async fn get_country_leaderboard() {
     let (app, db, _, _) = init_test_app().await;
     let (user, _) = create_test_user(&db, None).await;
     create_test_level_with_record(&db, user).await;
@@ -95,7 +95,7 @@ async fn get_country_lb() {
 }
 
 #[actix_web::test]
-async fn get_clans_lb() {
+async fn get_clans_leaderboard() {
     let (app, db, _, _) = init_test_app().await;
     let (user, _) = create_test_user(&db, None).await;
     create_test_level_with_record(&db, user).await;

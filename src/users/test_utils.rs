@@ -4,8 +4,7 @@ use std::sync::Arc;
 #[cfg(test)]
 use crate::app_data::db::DbAppState;
 use crate::auth::Permission;
-use crate::schema::permissions;
-use crate::schema::{roles, user_roles, users};
+use crate::schema::{role_permissions, roles, user_roles, users};
 use crate::users::User;
 use chrono::{DateTime, Utc};
 
@@ -14,9 +13,21 @@ use diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, Selectable
 use uuid::Uuid;
 
 #[cfg(test)]
+pub const TEST_STAFF_ROLE_PRIVILEGE_LEVEL: i32 = 100;
+
+#[cfg(test)]
 pub async fn create_test_user(
     db: &Arc<DbAppState>,
     required_permission: Option<Permission>,
+) -> (Uuid, String) {
+    let permissions = required_permission.into_iter().collect::<Vec<_>>();
+    create_test_user_with_permissions(db, &permissions).await
+}
+
+#[cfg(test)]
+pub async fn create_test_user_with_permissions(
+    db: &Arc<DbAppState>,
+    permissions: &[Permission],
 ) -> (Uuid, String) {
     let conn = &mut db.connection().unwrap();
     let user_id = Uuid::new_v4();
@@ -35,17 +46,11 @@ pub async fn create_test_user(
         .execute(conn)
         .expect("Failed to create fake user");
 
-    if let Some(required_permission) = required_permission {
-        let privilege_level = permissions::table
-            .filter(permissions::permission.eq(required_permission.to_string()))
-            .select(permissions::privilege_level)
-            .first::<i32>(conn)
-            .expect("Failed to get privilege level");
-
+    if !permissions.is_empty() {
         let role_id: i32 = diesel::insert_into(roles::table)
             .values((
-                roles::privilege_level.eq(privilege_level),
-                roles::role_desc.eq(format!("Test Role - {privilege_level}")),
+                roles::privilege_level.eq(TEST_STAFF_ROLE_PRIVILEGE_LEVEL),
+                roles::role_desc.eq("Test Role"),
             ))
             .returning(roles::id)
             .get_result(conn)
@@ -58,9 +63,71 @@ pub async fn create_test_user(
             ))
             .execute(conn)
             .expect("Failed to assign role to user");
+
+        let role_permissions = permissions.iter().map(|permission| {
+            (
+                role_permissions::role_id.eq(role_id),
+                role_permissions::permission.eq(permission.to_string()),
+            )
+        });
+
+        diesel::insert_into(role_permissions::table)
+            .values(role_permissions.collect::<Vec<_>>())
+            .execute(conn)
+            .expect("Failed to assign permissions to role");
     }
 
     (user_id, username)
+}
+
+#[cfg(test)]
+pub async fn create_test_user_with_priority_submissions(db: &Arc<DbAppState>) -> (Uuid, String) {
+    create_test_user_with_permissions(db, &[Permission::SubmissionPriority]).await
+}
+
+#[cfg(test)]
+pub async fn create_test_hidden_reviewer(db: &Arc<DbAppState>) -> (Uuid, String) {
+    create_test_user_with_permissions(
+        db,
+        &[
+            Permission::SubmissionReview,
+            Permission::SubmissionSeeStatistics,
+        ],
+    )
+    .await
+}
+
+#[cfg(test)]
+pub async fn create_test_full_reviewer(db: &Arc<DbAppState>) -> (Uuid, String) {
+    create_test_user_with_permissions(
+        db,
+        &[
+            Permission::SubmissionReview,
+            Permission::SubmissionSeeStatistics,
+            Permission::SubmissionReviewerVisible,
+            Permission::SubmissionSeeOtherReviewerStatistics,
+            Permission::SubmissionEditNonSelfClaimed,
+            Permission::SubmissionEditWithRawFootage,
+        ],
+    )
+    .await
+}
+
+#[cfg(test)]
+pub async fn create_test_auditor(db: &Arc<DbAppState>) -> (Uuid, String) {
+    create_test_user_with_permissions(
+        db,
+        &[
+            Permission::SubmissionReview,
+            Permission::SubmissionSeeStatistics,
+            Permission::SubmissionReviewerVisible,
+            Permission::SubmissionSeeOtherReviewerStatistics,
+            Permission::SubmissionEditNonSelfClaimed,
+            Permission::SubmissionEditWithRawFootage,
+            Permission::ReviewersAudit,
+        ],
+    )
+    .await
 }
 
 #[cfg(test)]
@@ -84,16 +151,6 @@ pub async fn create_test_placeholder_user(db: &Arc<DbAppState>) -> (Uuid, String
         .expect("Failed to create fake user");
 
     (user_id, username)
-}
-
-#[cfg(test)]
-pub fn get_permission_privilege_level(db: &DbAppState, permission: Permission) -> i32 {
-    let conn = &mut db.connection().unwrap();
-    permissions::table
-        .filter(permissions::permission.eq(permission.to_string()))
-        .select(permissions::privilege_level)
-        .first::<i32>(conn)
-        .expect("Failed to get privilege level from permissions table")
 }
 
 #[cfg(test)]

@@ -5,11 +5,13 @@ use crate::users::test_utils::create_test_placeholder_user;
 use {
     crate::{
         auth::{create_test_token, Permission},
-        roles::test_utils::{add_user_to_role, create_test_hidden_role, create_test_role},
+        roles::test_utils::{
+            add_permission_to_role, add_user_to_role, create_test_hidden_role, create_test_role,
+        },
         test_utils::{assert_error_response, init_test_app},
         users::{
             test_utils::{
-                create_test_user, get_permission_privilege_level, get_test_user,
+                create_test_user, create_test_user_with_permissions, get_test_user,
                 set_test_user_ban_level, set_test_user_discord_id,
             },
             User, UserUpsert,
@@ -48,8 +50,8 @@ async fn create_placeholder_user() {
 #[actix_web::test]
 async fn update_user_info() {
     let (app, db, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&db, Some(Permission::UserModify)).await;
-    let (staff_user_id, _) = create_test_user(&db, Some(Permission::UserBan)).await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let (staff_user_id, _) = create_test_user(&db, Some(Permission::UserModify)).await;
     let staff_token =
         create_test_token(staff_user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -73,7 +75,7 @@ async fn update_user_info() {
 }
 
 #[actix_web::test]
-async fn update_user_info_less_privilege() {
+async fn update_user_info_rejects_editing_user_with_same_or_higher_privilege() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, Some(Permission::UserModify)).await;
     let user_token =
@@ -100,7 +102,7 @@ async fn ban_user() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, username) = create_test_user(&db, None).await;
     let (staff_user_id, _) = create_test_user(&db, Some(Permission::UserBan)).await;
-    let (manager_user_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
+    let (manager_user_id, _) = create_test_user(&db, Some(Permission::UserBan)).await;
     let staff_token =
         create_test_token(staff_user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let manager_token = create_test_token(manager_user_id, &auth.jwt_encoding_key)
@@ -158,7 +160,9 @@ async fn redact_user_requires_redact_permission() {
 async fn redact_user_succeeds_with_redact_permission() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, None).await;
-    let (staff_user_id, _) = create_test_user(&db, Some(Permission::UserRedact)).await;
+    let (staff_user_id, _) =
+        create_test_user_with_permissions(&db, &[Permission::UserBan, Permission::UserRedact])
+            .await;
     let staff_token =
         create_test_token(staff_user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -220,11 +224,8 @@ async fn find_user_hides_hidden_roles_and_hidden_scopes_except_for_role_manage()
     let (manager_requester, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
 
     let visible_role_id = create_test_role(&db, 1).await;
-    let hidden_role_id = create_test_hidden_role(
-        &db,
-        get_permission_privilege_level(&db, Permission::SubmissionReviewBase),
-    )
-    .await;
+    let hidden_role_id = create_test_hidden_role(&db, 0).await;
+    add_permission_to_role(&db, hidden_role_id, Permission::SubmissionReview).await;
 
     add_user_to_role(&db, visible_role_id, target_user).await;
     add_user_to_role(&db, hidden_role_id, target_user).await;
@@ -249,7 +250,7 @@ async fn find_user_hides_hidden_roles_and_hidden_scopes_except_for_role_manage()
             "Visible role should be present in user response"
         );
         assert!(
-            !scopes.iter().any(|scope| scope == "submission_review_base"),
+            !scopes.iter().any(|scope| scope == "submission_review"),
             "Hidden-role-derived scope should not be present in user response"
         );
     };
@@ -267,7 +268,7 @@ async fn find_user_hides_hidden_roles_and_hidden_scopes_except_for_role_manage()
             "Hidden role should be present for role_manage users"
         );
         assert!(
-            scopes.iter().any(|scope| scope == "submission_review_base"),
+            scopes.iter().any(|scope| scope == "submission_review"),
             "Hidden-role-derived scope should be present for role_manage users"
         );
     };
@@ -329,10 +330,10 @@ async fn list_users() {
 }
 
 #[actix_web::test]
-async fn user_character_limit() {
+async fn user_display_name_limit_applies_to_self_update() {
     let (app, db, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&db, Some(Permission::UserModify)).await;
-    let (staff_user_id, _) = create_test_user(&db, Some(Permission::UserBan)).await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let (staff_user_id, _) = create_test_user(&db, Some(Permission::UserModify)).await;
     let user_token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let staff_token =
@@ -358,12 +359,11 @@ async fn user_character_limit() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::BAD_REQUEST,
         Some("The display name can at most be 35 characters long."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -419,7 +419,7 @@ async fn list_users_with_ban_level_filter() {
     let (app, db, auth, _) = init_test_app().await;
     let (banned_user_id, _) = create_test_user(&db, None).await;
     let (other_user_id, _) = create_test_user(&db, None).await;
-    let (staff_user_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
+    let (staff_user_id, _) = create_test_user(&db, Some(Permission::UserBan)).await;
     let staff_token =
         create_test_token(staff_user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 

@@ -91,12 +91,11 @@ async fn create_self_record_fails() {
         .set_json(&record_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
         Some("You cannot create records for yourself"),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -165,12 +164,11 @@ async fn update_self_record_fails() {
         .set_json(&update_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
         Some("You cannot update records for yourself"),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]

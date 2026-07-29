@@ -3,9 +3,9 @@ use crate::{
     auth::{Authenticated, Permission, UserAuth},
     error_handler::ApiError,
     shifts::{
+        convert_start_hour_to_utc,
         recurring::{RecurringShift, RecurringShiftInsert, RecurringShiftPatch},
         ResolvedRecurringShift, SelfRecurringShiftInsert,
-        convert_start_hour_to_utc
     },
 };
 use actix_web::{delete, get, patch, post, web, HttpResponse};
@@ -23,11 +23,11 @@ use uuid::Uuid;
         (status = 200, body = Vec<ResolvedRecurringShift>)
     ),
     security(
-        ("access_token" = ["SubmissionReviewFull"]),
-        ("api_key" = ["SubmissionReviewFull"]),
+        ("access_token" = ["SubmissionReview"]),
+        ("api_key" = ["SubmissionReview"]),
     ),
 )]
-#[get("", wrap = "UserAuth::require(Permission::SubmissionReviewFull)")]
+#[get("", wrap = "UserAuth::require(Permission::SubmissionReview)")]
 async fn find_all_recurring_shifts(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,
@@ -95,13 +95,17 @@ async fn create_own_recurring_shift(
             )
         })?;
 
-        let timezone = new_shift.timezone.parse::<chrono_tz::Tz>().map_err(|_foo| {
-            ApiError::BadRequest(
-                "Invalid timezone provided. Please provide a valid IANA timezone string.",
-            )
-        })?;
+        let timezone = new_shift
+            .timezone
+            .parse::<chrono_tz::Tz>()
+            .map_err(|_foo| {
+                ApiError::BadRequest(
+                    "Invalid timezone provided. Please provide a valid IANA timezone string.",
+                )
+            })?;
 
-        let (start_hour_utc, weekday) = convert_start_hour_to_utc(start_hour_in_timezone, &new_shift.weekday, timezone)?;
+        let (start_hour_utc, weekday) =
+            convert_start_hour_to_utc(start_hour_in_timezone, &new_shift.weekday, timezone)?;
 
         RecurringShift::create(
             &mut db.connection()?,

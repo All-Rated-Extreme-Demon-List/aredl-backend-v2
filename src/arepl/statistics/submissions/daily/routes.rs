@@ -30,9 +30,9 @@ pub struct StatsQuery {
         ("reviewer_id" = Option<Uuid>, Query, description = "Filter for a specific moderator")
     ),
     responses((status = 200, body = Paginated<DailyStatsPage>)),
-    security(("access_token" = ["SubmissionReviewFull"]), ("api_key" = ["SubmissionReviewFull"]))
+    security(("access_token" = ["SubmissionSeeStatistics"]), ("api_key" = ["SubmissionSeeStatistics"]))
 )]
-#[get("", wrap = "UserAuth::require(Permission::SubmissionReviewFull)")]
+#[get("", wrap = "UserAuth::require(Permission::SubmissionSeeStatistics)")]
 pub async fn stats(
     db: web::Data<Arc<DbAppState>>,
     page: web::Query<PageQuery<20>>,
@@ -57,7 +57,7 @@ pub struct LeaderboardQuery {
     pub since: Option<NaiveDate>,
     pub until: Option<NaiveDate>,
     pub only_active: Option<bool>,
-    pub include_base_reviewers: Option<bool>,
+    pub include_hidden_reviewers: Option<bool>,
 }
 
 #[utoipa::path(
@@ -67,15 +67,16 @@ pub struct LeaderboardQuery {
     tag = "AREDL (P) - Statistics",
     params(
         ("since" = Option<NaiveDate>, Query, description = "Only include data since this date"),
+        ("until" = Option<NaiveDate>, Query, description = "Only include data until this date"),
         ("only_active" = Option<bool>, Query, description = "Whether or not to exclude moderators that aren't staff anymore"),
-        ("include_base_reviewers" = Option<bool>, Query, description = "Whether to include base reviewers in the results. Requires `ReviewersAudit`; otherwise forced to false."),
+        ("include_hidden_reviewers" = Option<bool>, Query, description = "Whether to include hidden reviewers in the results. Requires `ReviewersAudit`; otherwise forced to false."),
     ),
     responses((status = 200, body = [ResolvedLeaderboardRow])),
-    security(("access_token" = ["SubmissionReviewFull"]), ("api_key" = ["SubmissionReviewFull"]))
+    security(("access_token" = ["SubmissionSeeOtherReviewerStatistics"]), ("api_key" = ["SubmissionSeeOtherReviewerStatistics"]))
 )]
 #[get(
     "/leaderboard",
-    wrap = "UserAuth::require(Permission::SubmissionReviewFull)"
+    wrap = "UserAuth::require(Permission::SubmissionSeeOtherReviewerStatistics)"
 )]
 pub async fn leaderboard_route(
     db: web::Data<Arc<DbAppState>>,

@@ -105,7 +105,9 @@ impl LevelNotes {
         authenticated: Option<Authenticated>,
     ) -> Result<Paginated<LevelNotesResolvedPage>, ApiError> {
         let is_reviewer = match authenticated {
-            Some(authenticated) => authenticated.has_permission(conn, Permission::LevelModify)?,
+            Some(authenticated) => {
+                authenticated.has_permission(conn, Permission::SubmissionReview)?
+            }
             None => false,
         };
 

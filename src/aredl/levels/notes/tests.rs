@@ -17,7 +17,7 @@ use {
 async fn create_note() {
     let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&db, Some(Permission::LevelModify)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::LevelNotesModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -51,7 +51,7 @@ async fn create_note() {
 async fn update_note() {
     let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&db, Some(Permission::LevelModify)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::LevelNotesModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -80,7 +80,7 @@ async fn update_note() {
 async fn delete_note() {
     let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&db, Some(Permission::LevelModify)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::LevelNotesModify)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -100,7 +100,7 @@ async fn delete_note() {
 async fn list_notes() {
     let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&db, Some(Permission::LevelModify)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -127,7 +127,7 @@ async fn list_notes() {
 }
 
 #[actix_web::test]
-async fn notes_auth() {
+async fn create_note_requires_level_notes_modify() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&db, None).await;
@@ -147,12 +147,13 @@ async fn notes_auth() {
         .set_json(&note_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
-        Some("You do not have the required permission (level_modify) to access this endpoint"),
-    )
-    .await;
+        Some(
+            "You do not have the required permission (level_notes_modify) to access this endpoint"
+        ),
+    );
 }
 
 #[actix_web::test]
@@ -161,10 +162,9 @@ async fn reviewer_notes_are_private() {
 
     let level_id = create_test_level(&db).await;
 
-    // Create a reviewer note as a reviewer
-    let (reviewer_id, _) = create_test_user(&db, Some(Permission::LevelModify)).await;
-    let reviewer_token =
-        create_test_token(reviewer_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let (note_editor_id, _) = create_test_user(&db, Some(Permission::LevelNotesModify)).await;
+    let note_editor_token = create_test_token(note_editor_id, &auth.jwt_encoding_key)
+        .expect("Failed to generate token");
 
     let reviewer_note_data = json!({
         "note": "secret reviewer note",
@@ -173,7 +173,7 @@ async fn reviewer_notes_are_private() {
     });
     let create_req = test::TestRequest::post()
         .uri(format!("/aredl/levels/notes/{level_id}").as_str())
-        .insert_header(("Authorization", format!("Bearer {reviewer_token}")))
+        .insert_header(("Authorization", format!("Bearer {note_editor_token}")))
         .set_json(&reviewer_note_data)
         .to_request();
     let create_resp = test::call_service(&app, create_req).await;
@@ -219,7 +219,11 @@ async fn reviewer_notes_are_private() {
         .iter()
         .all(|x| x["note_type"] != "ReviewerNotes"));
 
-    // reviewer should see ReviewerNotes
+    let (reviewer_id, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
+    let reviewer_token =
+        create_test_token(reviewer_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    // submission reviewers should see ReviewerNotes
     let reviewer_list_req = test::TestRequest::get()
         .uri(format!("/aredl/levels/notes?level_id={level_id}").as_str())
         .insert_header(("Authorization", format!("Bearer {reviewer_token}")))

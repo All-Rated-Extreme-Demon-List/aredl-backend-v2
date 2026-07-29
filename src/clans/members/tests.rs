@@ -172,7 +172,7 @@ async fn delete_members_unauthorized() {
         .set_json(vec![owner_id])
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(resp, StatusCode::FORBIDDEN, None).await;
+    assert_error_response!(resp, StatusCode::FORBIDDEN, None);
 }
 
 #[actix_web::test]
@@ -212,7 +212,7 @@ async fn invite_member_unauthorized() {
         .set_json(json!({"user_id": user_id}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(resp, StatusCode::FORBIDDEN, None).await;
+    assert_error_response!(resp, StatusCode::FORBIDDEN, None);
 }
 
 #[actix_web::test]
@@ -252,7 +252,7 @@ async fn edit_member_unauthorized() {
         .set_json(json!({"role": 1}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(resp, StatusCode::FORBIDDEN, None).await;
+    assert_error_response!(resp, StatusCode::FORBIDDEN, None);
 }
 
 #[actix_web::test]
@@ -295,10 +295,9 @@ async fn invite_member_already_in_clan() {
         .set_json(json!({"user_id": user_id}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
         StatusCode::CONFLICT,
         Some("This user is already in a clan"),
-    )
-    .await;
+    );
 }
