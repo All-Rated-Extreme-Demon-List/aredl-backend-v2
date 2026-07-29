@@ -1,13 +1,12 @@
 use crate::auth::permission;
 use crate::auth::Permission;
 use crate::error_handler::ApiError;
-use crate::schema::{roles, user_roles, users};
+use crate::schema::{role_permissions, roles, user_roles, users};
 use crate::users::BaseUser;
 use crate::users::ExtendedBaseUser;
 use crate::{app_data::db::DbConnection, auth::Authenticated};
 use diesel::{
-    ExpressionMethods as _, JoinOnDsl as _, NullableExpressionMethods as _, QueryDsl as _,
-    RunQueryDsl as _, SelectableHelper as _,
+    ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
 };
 use itertools::Itertools as _;
 use serde::{Deserialize, Serialize};
@@ -64,6 +63,8 @@ pub struct RoleResolved {
     pub role: Role,
     /// Users with this role.
     pub users: Vec<BaseUser>,
+    /// Permissions directly assigned to this role.
+    pub permissions: Vec<String>,
 }
 
 impl Role {
@@ -134,40 +135,43 @@ impl Role {
 
 impl RoleResolved {
     pub fn find_all(conn: &mut DbConnection) -> Result<Vec<Self>, ApiError> {
-        let rows: Vec<(Role, Option<BaseUser>)> = roles::table
-            .left_join(user_roles::table.on(user_roles::role_id.eq(roles::id)))
-            .left_join(users::table.on(users::id.nullable().eq(user_roles::user_id.nullable())))
-            .select((Role::as_select(), Option::<BaseUser>::as_select()))
+        let roles = roles::table
             .order_by(roles::privilege_level.desc())
             .then_order_by(roles::id.asc())
+            .load::<Role>(conn)?;
+
+        let role_ids = roles.iter().map(|role| role.id).collect::<Vec<_>>();
+
+        let users_by_role = user_roles::table
+            .inner_join(users::table.on(users::id.eq(user_roles::user_id)))
+            .filter(user_roles::role_id.eq_any(&role_ids))
+            .select((user_roles::role_id, BaseUser::as_select()))
+            .order_by(user_roles::role_id.asc())
             .then_order_by(users::id.asc())
-            .load(conn)?;
-
-        let resolved = rows
+            .load::<(i32, BaseUser)>(conn)?
             .into_iter()
-            .chunk_by(|(role, _)| role.id)
+            .into_group_map();
+
+        let permissions_by_role = role_permissions::table
+            .filter(role_permissions::role_id.eq_any(&role_ids))
+            .select((role_permissions::role_id, role_permissions::permission))
+            .order_by(role_permissions::role_id.asc())
+            .then_order_by(role_permissions::permission.asc())
+            .load::<(i32, String)>(conn)?
             .into_iter()
-            .map(|(_role_id, group)| {
-                let mut role: Option<Role> = None;
-                let mut users_vec = Vec::new();
+            .into_group_map();
 
-                for (current_role, user) in group {
-                    role.get_or_insert(current_role);
-                    if let Some(u) = user {
-                        users_vec.push(u);
-                    }
-                }
-
-                Ok(RoleResolved {
-                    role: role.ok_or_else(|| {
-                        ApiError::InternalServerError("Role unexpectedly without users")
-                    })?,
-                    users: users_vec,
-                })
+        Ok(roles
+            .into_iter()
+            .map(|role| RoleResolved {
+                users: users_by_role.get(&role.id).cloned().unwrap_or_default(),
+                permissions: permissions_by_role
+                    .get(&role.id)
+                    .cloned()
+                    .unwrap_or_default(),
+                role,
             })
-            .collect::<Result<Vec<RoleResolved>, ApiError>>()?;
-
-        Ok(resolved)
+            .collect())
     }
 }
 

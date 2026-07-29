@@ -22,7 +22,7 @@ async fn list_roles() {
     let (app, db, auth, _) = init_test_app().await;
     let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
-    let role1 = create_test_role(&db, 10).await;
+    let role1 = create_test_role_with_permission(&db, 10, Permission::LevelNotesModify).await;
     let role2 = create_test_role(&db, 20).await;
 
     let req = test::TestRequest::get()
@@ -36,6 +36,16 @@ async fn list_roles() {
     let ids: Vec<i32> = roles.iter().map(|r| r.role.id).collect();
     assert!(ids.contains(&role1));
     assert!(ids.contains(&role2));
+
+    let role1 = roles
+        .iter()
+        .find(|role| role.role.id == role1)
+        .expect("role should be returned");
+
+    assert_eq!(
+        role1.permissions,
+        vec![Permission::LevelNotesModify.to_string()]
+    );
 }
 
 #[actix_web::test]

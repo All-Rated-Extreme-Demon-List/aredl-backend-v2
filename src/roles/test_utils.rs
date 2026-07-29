@@ -48,6 +48,24 @@ pub async fn create_test_role_with_permission(
 }
 
 #[cfg(test)]
+pub async fn create_test_role_inheriting(
+    db: &Arc<DbAppState>,
+    privilege_level: i32,
+    inherits_from_role_id: i32,
+) -> i32 {
+    let role_name = format!("Test Role {privilege_level}");
+    diesel::insert_into(roles::table)
+        .values((
+            roles::role_desc.eq(role_name),
+            roles::privilege_level.eq(privilege_level),
+            roles::inherits_from_role_id.eq(inherits_from_role_id),
+        ))
+        .returning(roles::id)
+        .get_result::<i32>(&mut db.connection().unwrap())
+        .expect("Failed to create inheriting test role!")
+}
+
+#[cfg(test)]
 pub async fn add_permission_to_role(db: &Arc<DbAppState>, role_id: i32, permission: Permission) {
     diesel::insert_into(role_permissions::table)
         .values((

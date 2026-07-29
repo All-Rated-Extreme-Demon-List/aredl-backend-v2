@@ -33,7 +33,7 @@ pub struct BaseUserWithBanLevel {
     pub ban_level: i32,
 }
 
-#[derive(Debug, Serialize, Deserialize, Queryable, Selectable, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Queryable, Selectable, ToSchema, Clone)]
 #[diesel(table_name=users, check_for_backend(Pg))]
 pub struct BaseUser {
     /// Internal UUID of the user.
