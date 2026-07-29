@@ -86,21 +86,15 @@ pub async fn create_test_user_with_priority_submissions(db: &Arc<DbAppState>) ->
 }
 
 #[cfg(test)]
-pub async fn create_test_visible_reviewer(db: &Arc<DbAppState>) -> (Uuid, String) {
+pub async fn create_test_hidden_reviewer(db: &Arc<DbAppState>) -> (Uuid, String) {
     create_test_user_with_permissions(
         db,
         &[
             Permission::SubmissionReview,
-            Permission::SubmissionReviewerVisible,
-            Permission::SubmissionSeeOtherReviewerStatistics,
+            Permission::SubmissionSeeStatistics,
         ],
     )
     .await
-}
-
-#[cfg(test)]
-pub async fn create_test_hidden_reviewer(db: &Arc<DbAppState>) -> (Uuid, String) {
-    create_test_user(db, Some(Permission::SubmissionReview)).await
 }
 
 #[cfg(test)]
@@ -109,6 +103,7 @@ pub async fn create_test_full_reviewer(db: &Arc<DbAppState>) -> (Uuid, String) {
         db,
         &[
             Permission::SubmissionReview,
+            Permission::SubmissionSeeStatistics,
             Permission::SubmissionReviewerVisible,
             Permission::SubmissionSeeOtherReviewerStatistics,
             Permission::SubmissionEditNonSelfClaimed,
@@ -124,6 +119,7 @@ pub async fn create_test_auditor(db: &Arc<DbAppState>) -> (Uuid, String) {
         db,
         &[
             Permission::SubmissionReview,
+            Permission::SubmissionSeeStatistics,
             Permission::SubmissionReviewerVisible,
             Permission::SubmissionSeeOtherReviewerStatistics,
             Permission::SubmissionEditNonSelfClaimed,

@@ -16,7 +16,7 @@ use {
         test_utils::{assert_error_response, init_test_app},
         users::test_utils::{
             create_test_auditor, create_test_full_reviewer, create_test_hidden_reviewer,
-            create_test_user, create_test_visible_reviewer,
+            create_test_user,
         },
     },
     actix_web::{
@@ -30,7 +30,7 @@ use {
 #[actix_web::test]
 async fn submission_stats_filter_moderator() {
     let (app, db, auth, _db) = init_test_app().await;
-    let (mod1, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
+    let (mod1, _) = create_test_user(&db, Some(Permission::SubmissionSeeStatistics)).await;
     let token = create_test_token(mod1, &auth.jwt_encoding_key).unwrap();
 
     let level_id = create_test_level(&db).await;
@@ -63,7 +63,7 @@ async fn submission_stats_reviewer_filter_returns_empty_for_hidden_reviewer_with
     let (app, db, auth, _db) = init_test_app().await;
 
     let (hidden_reviewer, _) = create_test_hidden_reviewer(&db).await;
-    let (requester_non_auditor, _) = create_test_visible_reviewer(&db).await;
+    let (requester_non_auditor, _) = create_test_full_reviewer(&db).await;
     let (requester_auditor, _) = create_test_auditor(&db).await;
 
     let non_auditor_token = create_test_token(requester_non_auditor, &auth.jwt_encoding_key)
@@ -179,7 +179,7 @@ async fn submission_stats_requires_review_permission() {
     assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
-        Some("You do not have the required permission (submission_review) to access this endpoint"),
+        Some("You do not have the required permission (submission_see_statistics) to access this endpoint"),
     );
 }
 

@@ -12,7 +12,7 @@ use {
             test_utils::*,
             users::test_utils::{
                 create_test_hidden_reviewer, create_test_user, create_test_user_with_permissions,
-                create_test_visible_reviewer,
+                create_test_full_reviewer,
             },
         },
     },
@@ -45,7 +45,7 @@ async fn list_shifts_returns_created_shift_for_shift_manager() {
 #[actix_web::test]
 async fn get_my_shifts_returns_only_authenticated_reviewers_shifts() {
     let (app, db, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_visible_reviewer(&db).await;
+    let (user_id, _) = create_test_full_reviewer(&db).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     create_test_shift(&db, user_id, false).await;
@@ -166,7 +166,7 @@ async fn create_recurring_shift() {
 #[actix_web::test]
 async fn list_recurring_shifts() {
     let (app, db, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_visible_reviewer(&db).await;
+    let (user_id, _) = create_test_full_reviewer(&db).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     create_test_recurring_shift(&db, user_id).await;
@@ -187,9 +187,9 @@ async fn list_recurring_shifts() {
 #[actix_web::test]
 async fn list_recurring_shifts_hides_hidden_reviewers_for_non_auditor() {
     let (app, db, auth, _) = init_test_app().await;
-    let (requester_id, _) = create_test_visible_reviewer(&db).await;
+    let (requester_id, _) = create_test_full_reviewer(&db).await;
     let (hidden_reviewer_id, _) = create_test_hidden_reviewer(&db).await;
-    let (visible_reviewer_id, _) = create_test_visible_reviewer(&db).await;
+    let (visible_reviewer_id, _) = create_test_full_reviewer(&db).await;
     let token =
         create_test_token(requester_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 

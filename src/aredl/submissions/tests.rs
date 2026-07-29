@@ -43,8 +43,7 @@ use {
         test_utils::*,
         users::test_utils::{
             create_test_auditor, create_test_full_reviewer, create_test_hidden_reviewer,
-            create_test_user, create_test_user_with_permissions, create_test_visible_reviewer,
-            set_test_user_ban_level,
+            create_test_user, create_test_user_with_permissions, set_test_user_ban_level,
         },
     },
     actix_web::test::{self, read_body_json},
@@ -132,7 +131,7 @@ async fn resolved_find_all_reviewer_filter_hides_hidden_reviewer_for_non_auditor
     let (app, db, auth, _) = init_test_app().await;
     let (owner, _) = create_test_user(&db, None).await;
     let (hidden_reviewer, _) = create_test_hidden_reviewer(&db).await;
-    let (visible_non_auditor, _) = create_test_visible_reviewer(&db).await;
+    let (visible_non_auditor, _) = create_test_full_reviewer(&db).await;
 
     let token = create_test_token(visible_non_auditor, &auth.jwt_encoding_key).unwrap();
 
@@ -157,7 +156,7 @@ async fn resolved_find_all_redacts_hidden_reviewer_for_visible_reviewer() {
     let (app, db, auth, _) = init_test_app().await;
     let (owner, _) = create_test_user(&db, None).await;
     let (hidden_reviewer, _) = create_test_hidden_reviewer(&db).await;
-    let (visible_non_auditor, _) = create_test_visible_reviewer(&db).await;
+    let (visible_non_auditor, _) = create_test_full_reviewer(&db).await;
 
     let visible_token = create_test_token(visible_non_auditor, &auth.jwt_encoding_key).unwrap();
 
@@ -291,7 +290,7 @@ async fn resolved_find_one_hides_hidden_reviewer_for_non_auditor_but_not_for_aud
     let (app, db, auth, _) = init_test_app().await;
     let (owner, _) = create_test_user(&db, None).await;
     let (hidden_reviewer, _) = create_test_hidden_reviewer(&db).await;
-    let (visible_non_auditor, _) = create_test_visible_reviewer(&db).await;
+    let (visible_non_auditor, _) = create_test_full_reviewer(&db).await;
     let (auditor, _) = create_test_auditor(&db).await;
 
     let visible_token = create_test_token(visible_non_auditor, &auth.jwt_encoding_key).unwrap();

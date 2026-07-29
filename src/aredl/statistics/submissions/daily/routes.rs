@@ -30,9 +30,9 @@ pub struct StatsQuery {
         ("reviewer_id" = Option<Uuid>, Query, description = "Filter for a specific moderator")
     ),
     responses((status = 200, body = Paginated<DailyStatsPage>)),
-    security(("access_token" = ["SubmissionReview"]), ("api_key" = ["SubmissionReview"]))
+    security(("access_token" = ["SubmissionSeeStatistics"]), ("api_key" = ["SubmissionSeeStatistics"]))
 )]
-#[get("", wrap = "UserAuth::require(Permission::SubmissionReview)")]
+#[get("", wrap = "UserAuth::require(Permission::SubmissionSeeStatistics)")]
 pub async fn stats(
     db: web::Data<Arc<DbAppState>>,
     page: web::Query<PageQuery<20>>,

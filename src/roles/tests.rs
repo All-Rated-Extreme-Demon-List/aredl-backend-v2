@@ -8,7 +8,7 @@ use {
         },
         test_utils::{assert_error_response, init_test_app},
         users::test_utils::{
-            create_test_hidden_reviewer, create_test_user, create_test_visible_reviewer,
+            create_test_hidden_reviewer, create_test_user, create_test_full_reviewer,
             TEST_STAFF_ROLE_PRIVILEGE_LEVEL,
         },
     },
@@ -195,7 +195,7 @@ async fn find_reviewer_visibility_excludes_visible_reviewers_and_mixed_role_user
     let (_app, db, _auth, _) = init_test_app().await;
 
     let (hidden_only_user, _) = create_test_hidden_reviewer(&db).await;
-    let (visible_user, _) = create_test_visible_reviewer(&db).await;
+    let (visible_user, _) = create_test_full_reviewer(&db).await;
     let (mixed_user, _) = create_test_user(&db, None).await;
 
     let review_role = create_test_role_with_permission(&db, 0, Permission::SubmissionReview).await;

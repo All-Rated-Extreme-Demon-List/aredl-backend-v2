@@ -49,6 +49,8 @@ pub enum Permission {
     SubmissionEditNonSelfClaimed,
     /// Allows editing submissions that have raw footage attached
     SubmissionEditWithRawFootage,
+    /// Allows seeing submission statistics (total and own)
+    SubmissionSeeStatistics,
     /// Allows seeing other reviewers' statistics. Otherwise, you can only see your own.
     SubmissionSeeOtherReviewerStatistics,
     /// Sets the user's submissions to priority if they have this. (AREDL+)
