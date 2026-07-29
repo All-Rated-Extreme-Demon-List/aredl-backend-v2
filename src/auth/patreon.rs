@@ -10,7 +10,7 @@ use actix_http::header;
 use actix_web::web::Json;
 use actix_web::{get, post, web, HttpResponse};
 use diesel::{
-    BoolExpressionMethods as _, Connection as _, ExpressionMethods as _, QueryDsl as _,
+    Connection as _, ExpressionMethods as _, OptionalExtension as _, QueryDsl as _,
     RunQueryDsl as _,
 };
 use serde::{Deserialize, Serialize};
@@ -97,6 +97,7 @@ async fn patreon_link(
     tag = "Authentication",
     responses(
         (status = 200, body = PatreonLinkedResponse),
+        (status = 409, description = "Patreon account is already linked to another user"),
         (status = 302)
     )
 )]
@@ -146,14 +147,23 @@ async fn patreon_callback(
     web::block(move || {
         let conn = &mut db_for_link.connection()?;
         conn.transaction(|conn| {
+            let existing_user_id = oauth_connected_accounts::table
+                .filter(oauth_connected_accounts::provider.eq(OAuthProvider::Patreon))
+                .filter(oauth_connected_accounts::provider_user_id.eq(&provider_user_id_for_db))
+                .select(oauth_connected_accounts::user_id)
+                .first::<uuid::Uuid>(conn)
+                .optional()?;
+
+            if existing_user_id.is_some_and(|existing_user_id| existing_user_id != user_id) {
+                return Err(ApiError::Conflict(
+                    "This Patreon account is already linked to another user",
+                ));
+            }
+
             diesel::delete(
                 oauth_connected_accounts::table
                     .filter(oauth_connected_accounts::provider.eq(OAuthProvider::Patreon))
-                    .filter(
-                        oauth_connected_accounts::provider_user_id
-                            .eq(&provider_user_id_for_db)
-                            .or(oauth_connected_accounts::user_id.eq(user_id)),
-                    ),
+                    .filter(oauth_connected_accounts::user_id.eq(user_id)),
             )
             .execute(conn)?;
 

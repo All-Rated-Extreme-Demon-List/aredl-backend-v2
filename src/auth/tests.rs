@@ -6,6 +6,7 @@ use {
         test_utils::init_test_app,
         users::test_utils::create_test_user,
     },
+    actix_http::StatusCode,
     actix_web::{
         http::header,
         test::{self, read_body_json},
@@ -595,7 +596,7 @@ async fn patreon_callback_links_current_site_user() {
 
 #[actix_web::test]
 #[serial]
-async fn patreon_callback_transfers_existing_patreon_link() {
+async fn patreon_callback_rejects_patreon_link_connected_to_another_user() {
     clear_oauth_env(OAuthProvider::Patreon);
 
     let server = MockServer::start_async().await;
@@ -630,12 +631,12 @@ async fn patreon_callback_transfers_existing_patreon_link() {
         .to_request();
     let resp = test::call_service(&app, req).await;
 
-    assert!(resp.status().is_success());
-    assert!(patreon_connections_for_user(&db, previous_user).is_empty());
+    assert_eq!(resp.status(), StatusCode::CONFLICT);
     assert_eq!(
-        patreon_connections_for_user(&db, current_user),
+        patreon_connections_for_user(&db, previous_user),
         vec!["patreon_123"]
     );
+    assert!(patreon_connections_for_user(&db, current_user).is_empty());
 
     clear_oauth_env(OAuthProvider::Patreon);
 }
