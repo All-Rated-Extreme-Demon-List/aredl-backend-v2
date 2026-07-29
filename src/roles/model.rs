@@ -10,12 +10,12 @@ use diesel::{
 };
 use itertools::Itertools as _;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(
-    Serialize, Deserialize, Queryable, Selectable, Identifiable, PartialEq, Debug, ToSchema,
+    Serialize, Deserialize, Queryable, Selectable, Identifiable, PartialEq, Debug, Clone, ToSchema,
 )]
 #[diesel(table_name = roles)]
 pub struct Role {
@@ -61,6 +61,8 @@ pub struct RoleUpdate {
 pub struct RoleResolved {
     #[serde(flatten)]
     pub role: Role,
+    /// Role whose permissions are inherited by this role.
+    pub inherits_from_role: Option<Role>,
     /// Users with this role.
     pub users: Vec<BaseUser>,
     /// Permissions directly assigned to this role.
@@ -140,7 +142,11 @@ impl RoleResolved {
             .then_order_by(roles::id.asc())
             .load::<Role>(conn)?;
 
-        let role_ids = roles.iter().map(|role| role.id).collect::<Vec<_>>();
+        let roles_by_id = roles
+            .iter()
+            .map(|role| (role.id, role.clone()))
+            .collect::<HashMap<_, _>>();
+        let role_ids = roles_by_id.keys().copied().collect::<Vec<_>>();
 
         let users_by_role = user_roles::table
             .inner_join(users::table.on(users::id.eq(user_roles::user_id)))
@@ -164,6 +170,9 @@ impl RoleResolved {
         Ok(roles
             .into_iter()
             .map(|role| RoleResolved {
+                inherits_from_role: role
+                    .inherits_from_role_id
+                    .and_then(|role_id| roles_by_id.get(&role_id).cloned()),
                 users: users_by_role.get(&role.id).cloned().unwrap_or_default(),
                 permissions: permissions_by_role
                     .get(&role.id)
