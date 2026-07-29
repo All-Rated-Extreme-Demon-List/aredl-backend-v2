@@ -91,6 +91,10 @@ impl Authenticated {
         permission::check_user_permission(conn, self.user_id, permission)
     }
 
+    pub fn get_permissions(&self, conn: &mut DbConnection) -> Result<Vec<String>, ApiError> {
+        permission::get_user_permissions(conn, self.user_id, false)
+    }
+
     pub fn ensure_has_clan_permission(
         &self,
         conn: &mut DbConnection,

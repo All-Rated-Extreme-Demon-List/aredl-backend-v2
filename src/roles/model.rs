@@ -203,10 +203,11 @@ pub enum ReviewerFieldVisibility {
 // Utils for handling visibility between shadow and regular helpers.
 impl ReviewerVisibility {
     pub fn new(conn: &mut DbConnection, authenticated: &Authenticated) -> Result<Self, ApiError> {
-        let can_audit = authenticated.has_permission(conn, Permission::ReviewersAudit)?;
-        let is_reviewer = authenticated.has_permission(conn, Permission::SubmissionReview)?;
+        let permissions = authenticated.get_permissions(conn)?;
+        let can_audit = permissions.contains(&Permission::ReviewersAudit.to_string());
+        let is_reviewer = permissions.contains(&Permission::SubmissionReview.to_string());
         let can_see_other_stats =
-            authenticated.has_permission(conn, Permission::SubmissionSeeOtherReviewerStatistics)?;
+            permissions.contains(&Permission::SubmissionSeeOtherReviewerStatistics.to_string());
 
         let reviewers = permission::get_users_with_permission(conn, Permission::SubmissionReview)?;
         let users_with_visible_permission =

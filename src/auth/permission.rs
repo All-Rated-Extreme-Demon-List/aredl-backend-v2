@@ -2,7 +2,9 @@ use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::{role_permissions_full, roles, user_roles};
 use diesel::dsl::max;
-use diesel::{ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _};
+use diesel::{
+    ExpressionMethods as _, JoinOnDsl as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _,
+};
 use std::collections::HashSet;
 use strum_macros::{Display, EnumIter, EnumString};
 use uuid::Uuid;
@@ -125,6 +127,14 @@ pub fn check_user_permission(
     user_id: Uuid,
     permission: Permission,
 ) -> Result<bool, ApiError> {
-    let user_permissions = get_user_permissions(conn, user_id, false)?;
-    Ok(user_permissions.contains(&permission.to_string()))
+    let has_permission = role_permissions_full::table
+        .inner_join(user_roles::table.on(user_roles::role_id.eq(role_permissions_full::role_id)))
+        .filter(user_roles::user_id.eq(user_id))
+        .filter(role_permissions_full::permission.eq(permission.to_string()))
+        .select(role_permissions_full::permission)
+        .first::<String>(conn)
+        .optional()?
+        .is_some();
+
+    Ok(has_permission)
 }

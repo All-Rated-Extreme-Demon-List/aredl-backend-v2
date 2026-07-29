@@ -4,6 +4,8 @@ ALTER TABLE roles
         inherits_from_role_id IS NULL OR inherits_from_role_id <> id
     );
 
+CREATE INDEX user_roles_user_id_idx ON user_roles(user_id);
+
 CREATE TABLE role_permissions (
     role_id INTEGER NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
     permission VARCHAR NOT NULL REFERENCES permissions(permission) ON DELETE CASCADE,
