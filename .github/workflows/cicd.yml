@@ -166,6 +166,7 @@ jobs:
       db_alias: db_prod
       oauth_return_uri_base: oauth_return_uri_base_prod
       auth_callback_allow_localhost: false
+      patreon_sync_schedule: /run/secrets/patreon_sync_schedule
     secrets:
       API_HOST: ${{ secrets.API_HOST }}
       API_PORT: ${{ secrets.API_PORT }}

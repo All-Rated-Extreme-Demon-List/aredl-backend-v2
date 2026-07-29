@@ -4,10 +4,10 @@ use crate::arepl::submissions::SubmissionStatus as AreplSubmissionStatus;
 use crate::auth::oauth::OAuthProvider;
 use crate::auth::Permission;
 use crate::error_handler::{ApiError, StartupError};
-use crate::get_secret;
 use crate::providers::{context::backend_oauth::OAuthProviderContext, ProvidersAppState};
-use crate::scheduled::{sleep_until_next, startup_schedule};
+use crate::scheduled::{parse_startup_schedule, sleep_until_next};
 use crate::schema::{aredl, arepl, oauth_connected_accounts, role_permissions_full, user_roles};
+use crate::{get_optional_secret, get_secret};
 use diesel::{Connection as _, ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _};
 use serde::Deserialize;
 use std::collections::HashSet;
@@ -80,7 +80,13 @@ pub async fn start_patreon_plus_sync(
     db: Arc<DbAppState>,
     providers: Arc<ProvidersAppState>,
 ) -> Result<(), StartupError> {
-    let schedule = startup_schedule("PATREON_SYNC_SCHEDULE")?;
+    let Some(schedule_config) =
+        get_optional_secret("PATREON_SYNC_SCHEDULE").filter(|value| !value.is_empty())
+    else {
+        tracing::info!("PATREON_SYNC_SCHEDULE not set, patreon sync is disabled");
+        return Ok(());
+    };
+    let schedule = parse_startup_schedule("PATREON_SYNC_SCHEDULE", &schedule_config)?;
     let campaign_id = get_secret("PATREON_CAMPAIGN_ID")?;
 
     let Some(patreon_auth) = providers.context.patreon_auth.clone() else {

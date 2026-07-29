@@ -67,7 +67,7 @@ services:
       DISCORD_AVATARS_REFRESH_SCHEDULE: /run/secrets/discord_avatars_refresh_schedule
       DATA_CLEANER_SCHEDULE: /run/secrets/data_cleaner_schedule
       RECURRING_SHIFTS_SCHEDULE: /run/secrets/recurring_shifts_schedule
-      PATREON_SYNC_SCHEDULE: /run/secrets/patreon_sync_schedule
+      PATREON_SYNC_SCHEDULE: ${PATREON_SYNC_SCHEDULE:-}
 
       EDEL_SHEET_ID: /run/secrets/edel_sheet_id
       NLW_SHEET_ID: /run/secrets/nlw_sheet_id

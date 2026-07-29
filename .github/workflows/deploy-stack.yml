@@ -28,6 +28,10 @@ on:
         required: false
         default: true
         type: boolean
+      patreon_sync_schedule:
+        required: false
+        default: ""
+        type: string
         
 
 
@@ -74,6 +78,7 @@ jobs:
             echo "DB_ALIAS=${{ inputs.db_alias }}"
             echo "OAUTH_RETURN_URI_BASE=${{ inputs.oauth_return_uri_base }}"
             echo "AUTH_CALLBACK_ALLOW_LOCALHOST=${{ inputs.auth_callback_allow_localhost }}"
+            echo "PATREON_SYNC_SCHEDULE=${{ inputs.patreon_sync_schedule }}"
           } >> .env
 
       - name: Check if remote directory exists
@@ -103,6 +108,7 @@ jobs:
             DB_ALIAS='${{ inputs.db_alias }}' \
             OAUTH_RETURN_URI_BASE='${{ inputs.oauth_return_uri_base }}' \
             AUTH_CALLBACK_ALLOW_LOCALHOST='${{ inputs.auth_callback_allow_localhost }}' \
+            PATREON_SYNC_SCHEDULE='${{ inputs.patreon_sync_schedule }}' \
             docker stack deploy \
               --with-registry-auth \
               --compose-file \"\${REMOTE_PATH}/docker-stack.yml\" \
