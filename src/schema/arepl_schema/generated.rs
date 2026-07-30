@@ -23,12 +23,12 @@ pub mod arepl {
         pub struct LevelNotesType;
 
         #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
-        #[diesel(postgres_type(name = "level_update_type", schema = "arepl"))]
-        pub struct LevelUpdateType;
-
-        #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
         #[diesel(postgres_type(name = "level_status"))]
         pub struct LevelStatus;
+
+        #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+        #[diesel(postgres_type(name = "level_update_type", schema = "arepl"))]
+        pub struct LevelUpdateType;
 
         #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
         #[diesel(postgres_type(name = "submission_status"))]
@@ -72,10 +72,10 @@ pub mod arepl {
         use super::sql_types::CustomIdType;
         use super::sql_types::CustomIdStatus;
 
-        arepl.level_ldms (id) {
+        arepl.level_custom_copies (id) {
             id -> Uuid,
             level_id -> Uuid,
-            ldm_id -> Int4,
+            copy_id -> Int4,
             added_by -> Uuid,
             description -> Nullable<Varchar>,
             created_at -> Timestamptz,
@@ -215,7 +215,7 @@ pub mod arepl {
             user_notes -> Nullable<Text>,
             reviewer_id -> Nullable<Uuid>,
             mobile -> Nullable<Bool>,
-            ldm_id -> Nullable<Int4>,
+            custom_copy_id -> Nullable<Int4>,
             video_url -> Nullable<Varchar>,
             raw_url -> Nullable<Varchar>,
             mod_menu -> Nullable<Varchar>,
@@ -235,7 +235,7 @@ pub mod arepl {
             level_id -> Uuid,
             submitted_by -> Uuid,
             mobile -> Bool,
-            ldm_id -> Nullable<Int4>,
+            custom_copy_id -> Nullable<Int4>,
             video_url -> Varchar,
             raw_url -> Nullable<Varchar>,
             reviewer_id -> Nullable<Uuid>,
@@ -263,7 +263,7 @@ pub mod arepl {
 
     diesel::joinable!(bounties -> levels (level_id));
     diesel::joinable!(bounty_completed -> bounties (bounty_id));
-    diesel::joinable!(level_ldms -> levels (level_id));
+    diesel::joinable!(level_custom_copies -> levels (level_id));
     diesel::joinable!(level_notes -> levels (level_id));
     diesel::joinable!(level_updates -> levels (level_id));
     diesel::joinable!(records -> submissions (submission_id));
@@ -273,7 +273,7 @@ pub mod arepl {
         bounties,
         bounty_completed,
         last_gddl_update,
-        level_ldms,
+        level_custom_copies,
         level_notes,
         level_updates,
         levels,

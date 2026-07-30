@@ -1,8 +1,8 @@
 use crate::app_data::db::DbAppState;
 use crate::aredl::levels::id_resolver::resolve_level_id;
 use crate::aredl::levels::{
-    creators, history, ldms, notes, packs, records, updates, Level, LevelPlace, LevelQueryOptions,
-    LevelUpdate, LevelWithUserCompletionStatus, ResolvedLevel,
+    creators, custom_copies, history, notes, packs, records, updates, Level, LevelPlace,
+    LevelQueryOptions, LevelUpdate, LevelWithUserCompletionStatus, ResolvedLevel,
 };
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::cache_control::CacheController;
@@ -132,7 +132,7 @@ async fn find(
         (path = "/{level_id}/history", api = history::ApiDoc),
         (path = "/{level_id}/records", api = records::ApiDoc),
         (path = "/{level_id}/packs", api = packs::ApiDoc),
-        (path = "/ldms", api = ldms::ApiDoc),
+        (path = "/custom-copies", api = custom_copies::ApiDoc),
         (path = "/notes", api = notes::ApiDoc),
         (path = "/updates", api = updates::ApiDoc),
     ),
@@ -150,7 +150,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .configure(history::init_routes)
             .configure(packs::init_routes)
             .configure(records::init_routes)
-            .configure(ldms::init_routes)
+            .configure(custom_copies::init_routes)
             .configure(notes::init_routes)
             .configure(updates::init_routes)
             .configure(creators::init_routes)

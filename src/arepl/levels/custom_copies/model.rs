@@ -5,7 +5,7 @@ use crate::{
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
     schema::{
-        arepl::{level_ldms, levels},
+        arepl::{level_custom_copies, levels},
         users,
     },
     users::BaseUser,
@@ -24,9 +24,8 @@ use uuid::Uuid;
 #[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq)]
 #[ExistingTypePath = "crate::schema::arepl::sql_types::CustomIdStatus"]
 #[DbValueStyle = "PascalCase"]
-pub enum LevelLDMStatus {
-    /// This ID is the one suggested for use. Levels can only have 1
-    /// "Published" ID per type per level (e.g. one bugfix, one globed copy, etc.)
+pub enum LevelCustomCopyStatus {
+    /// This ID is suggested for use and officially displayed on the site.
     Published,
     /// This ID is not the one suggested for use, but is allowed in records
     Allowed,
@@ -37,7 +36,7 @@ pub enum LevelLDMStatus {
 #[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq)]
 #[ExistingTypePath = "crate::schema::arepl::sql_types::CustomIdType"]
 #[DbValueStyle = "PascalCase"]
-pub enum LevelLDMType {
+pub enum LevelCustomCopyType {
     /// This level fixes a bug in the offical level
     Bugfix,
     /// This level is made for use with Globed Deathlink
@@ -48,106 +47,107 @@ pub enum LevelLDMType {
 }
 
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
-#[diesel(table_name = level_ldms, check_for_backend(Pg))]
-pub struct LevelLDM {
-    /// The internal ID of this LDM entry
+#[diesel(table_name = level_custom_copies, check_for_backend(Pg))]
+pub struct LevelCustomCopy {
+    /// The internal ID of this custom copy entry
     pub id: Uuid,
-    /// The internal ID this LDM is for
+    /// The internal ID this custom copy is for
     pub level_id: Uuid,
-    /// The in-game ID of this LDM
-    pub ldm_id: i32,
-    /// The moderator who added this LDM
+    /// The in-game ID of this custom copy
+    pub copy_id: i32,
+    /// The moderator who added this custom copy
     pub added_by: Uuid,
-    pub id_type: LevelLDMType,
-    pub status: LevelLDMStatus,
+    pub id_type: LevelCustomCopyType,
+    pub status: LevelCustomCopyStatus,
     pub description: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
-pub struct LevelLDMResolved {
+pub struct LevelCustomCopyResolved {
     pub id: Uuid,
     pub level_id: Uuid,
-    pub ldm_id: i32,
-    pub id_type: LevelLDMType,
-    pub status: LevelLDMStatus,
+    pub copy_id: i32,
+    pub id_type: LevelCustomCopyType,
+    pub status: LevelCustomCopyStatus,
     pub added_by: BaseUser,
     pub description: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
-pub struct LevelLDMResolvedPage {
-    pub data: Vec<LevelLDMResolved>,
+pub struct LevelCustomCopyResolvedPage {
+    pub data: Vec<LevelCustomCopyResolved>,
 }
 
 #[derive(Serialize, Deserialize, Queryable, Selectable, Insertable)]
-#[diesel(table_name = level_ldms)]
-pub struct LevelLDMInsert {
+#[diesel(table_name = level_custom_copies)]
+pub struct LevelCustomCopyInsert {
     pub level_id: Uuid,
-    pub ldm_id: i32,
-    pub id_type: LevelLDMType,
-    pub status: LevelLDMStatus,
+    pub copy_id: i32,
+    pub id_type: LevelCustomCopyType,
+    pub status: LevelCustomCopyStatus,
     pub description: Option<String>,
     pub added_by: Uuid,
 }
 
 #[derive(Serialize, Deserialize, AsChangeset, ToSchema)]
-#[diesel(table_name = level_ldms, check_for_backend(Pg))]
-pub struct LevelLDMUpdate {
-    pub ldm_id: Option<i32>,
-    pub id_type: Option<LevelLDMType>,
-    pub status: Option<LevelLDMStatus>,
+#[diesel(table_name = level_custom_copies, check_for_backend(Pg))]
+pub struct LevelCustomCopyUpdate {
+    pub copy_id: Option<i32>,
+    pub id_type: Option<LevelCustomCopyType>,
+    pub status: Option<LevelCustomCopyStatus>,
     #[serde(default, with = "double_option")]
     pub description: Option<Option<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
-pub struct LevelLDMBody {
-    pub ldm_id: i32,
-    pub id_type: LevelLDMType,
-    pub status: LevelLDMStatus,
+pub struct LevelCustomCopyBody {
+    pub copy_id: i32,
+    pub id_type: LevelCustomCopyType,
+    pub status: LevelCustomCopyStatus,
     pub description: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
-pub struct LevelLDMQueryOptions {
+pub struct LevelCustomCopyQueryOptions {
     pub level_id: Option<String>,
-    pub type_filter: Option<LevelLDMType>,
-    pub status_filter: Option<LevelLDMStatus>,
+    pub type_filter: Option<LevelCustomCopyType>,
+    pub status_filter: Option<LevelCustomCopyStatus>,
     pub description_filter: Option<Option<String>>,
     pub added_by: Option<Uuid>,
 }
 
-impl LevelLDM {
+impl LevelCustomCopy {
     pub fn find_all<const D: i64>(
         conn: &mut DbConnection,
-        filters: &LevelLDMQueryOptions,
+        filters: &LevelCustomCopyQueryOptions,
         page_query: PageQuery<D>,
-    ) -> Result<Paginated<LevelLDMResolvedPage>, ApiError> {
+    ) -> Result<Paginated<LevelCustomCopyResolvedPage>, ApiError> {
         let build_filtered = || -> Result<_, ApiError> {
-            let mut query = level_ldms::table.into_boxed::<Pg>();
+            let mut query = level_custom_copies::table.into_boxed::<Pg>();
 
             if let Some(level_id) = filters.level_id.as_deref() {
                 query = query.filter(
-                    level_ldms::level_id.eq_any(level_filter(level_id)?.select(levels::id)),
+                    level_custom_copies::level_id
+                        .eq_any(level_filter(level_id)?.select(levels::id)),
                 );
             }
             if let Some(added_by) = filters.added_by {
-                query = query.filter(level_ldms::added_by.eq(added_by));
+                query = query.filter(level_custom_copies::added_by.eq(added_by));
             }
-            if let Some(ldm_type) = filters.type_filter.as_ref() {
-                query = query.filter(level_ldms::id_type.eq(ldm_type));
+            if let Some(custom_copy_type) = filters.type_filter.as_ref() {
+                query = query.filter(level_custom_copies::id_type.eq(custom_copy_type));
             }
             if let Some(status) = filters.status_filter.as_ref() {
-                query = query.filter(level_ldms::status.eq(status));
+                query = query.filter(level_custom_copies::status.eq(status));
             }
             if let Some(description_filter) = filters.description_filter.as_ref() {
                 match description_filter {
                     Some(description) => {
-                        query = query.filter(level_ldms::description.ilike(description));
+                        query = query.filter(level_custom_copies::description.ilike(description));
                     }
-                    None => query = query.filter(level_ldms::description.is_null()),
+                    None => query = query.filter(level_custom_copies::description.is_null()),
                 }
             }
 
@@ -159,70 +159,72 @@ impl LevelLDM {
         let query = build_filtered()?
             .limit(page_query.per_page())
             .offset(page_query.offset())
-            .order(level_ldms::created_at.desc())
-            .inner_join(users::table.on(level_ldms::added_by.eq(users::id)))
-            .select((LevelLDM::as_select(), BaseUser::as_select()));
+            .order(level_custom_copies::created_at.desc())
+            .inner_join(users::table.on(level_custom_copies::added_by.eq(users::id)))
+            .select((LevelCustomCopy::as_select(), BaseUser::as_select()));
 
-        let ldms: Vec<(LevelLDM, BaseUser)> = query.load(conn)?;
+        let custom_copies: Vec<(LevelCustomCopy, BaseUser)> = query.load(conn)?;
 
-        let ldms = ldms
+        let custom_copies = custom_copies
             .into_iter()
-            .map(|(ldm, moderator)| LevelLDMResolved {
-                id: ldm.id,
-                level_id: ldm.level_id,
-                ldm_id: ldm.ldm_id,
-                id_type: ldm.id_type,
-                status: ldm.status,
+            .map(|(custom_copy, moderator)| LevelCustomCopyResolved {
+                id: custom_copy.id,
+                level_id: custom_copy.level_id,
+                copy_id: custom_copy.copy_id,
+                id_type: custom_copy.id_type,
+                status: custom_copy.status,
                 added_by: moderator,
-                description: ldm.description,
-                created_at: ldm.created_at,
+                description: custom_copy.description,
+                created_at: custom_copy.created_at,
             })
-            .collect::<Vec<LevelLDMResolved>>();
+            .collect::<Vec<LevelCustomCopyResolved>>();
 
         Ok(Paginated::from_data(
             page_query,
             count,
-            LevelLDMResolvedPage { data: ldms },
+            LevelCustomCopyResolvedPage {
+                data: custom_copies,
+            },
         ))
     }
 
     pub fn create(
         conn: &mut DbConnection,
-        body: LevelLDMBody,
+        body: LevelCustomCopyBody,
         level_id: Uuid,
         auth: &Authenticated,
-    ) -> Result<LevelLDM, ApiError> {
-        let data = LevelLDMInsert {
+    ) -> Result<LevelCustomCopy, ApiError> {
+        let data = LevelCustomCopyInsert {
             level_id,
             status: body.status,
             id_type: body.id_type,
-            ldm_id: body.ldm_id,
+            copy_id: body.copy_id,
             description: body.description,
             added_by: auth.user_id,
         };
-        let ldm = diesel::insert_into(level_ldms::table)
+        let custom_copy = diesel::insert_into(level_custom_copies::table)
             .values(data)
-            .returning(LevelLDM::as_select())
+            .returning(LevelCustomCopy::as_select())
             .get_result(conn)?;
 
-        Ok(ldm)
+        Ok(custom_copy)
     }
     pub fn update(
         conn: &mut DbConnection,
-        data: LevelLDMUpdate,
+        data: LevelCustomCopyUpdate,
         id: Uuid,
-    ) -> Result<LevelLDM, ApiError> {
-        let ldm = diesel::update(level_ldms::table)
-            .filter(level_ldms::id.eq(id))
+    ) -> Result<LevelCustomCopy, ApiError> {
+        let custom_copy = diesel::update(level_custom_copies::table)
+            .filter(level_custom_copies::id.eq(id))
             .set(data)
-            .returning(LevelLDM::as_select())
+            .returning(LevelCustomCopy::as_select())
             .get_result(conn)?;
 
-        Ok(ldm)
+        Ok(custom_copy)
     }
     pub fn delete(conn: &mut DbConnection, id: Uuid) -> Result<(), ApiError> {
-        diesel::delete(level_ldms::table)
-            .filter(level_ldms::id.eq(id))
+        diesel::delete(level_custom_copies::table)
+            .filter(level_custom_copies::id.eq(id))
             .execute(conn)?;
 
         Ok(())

@@ -25,8 +25,8 @@ pub struct SubmissionPostUser {
     pub level_id: Uuid,
     /// Set to `true` if this completion is on a mobile device.
     pub mobile: bool,
-    /// ID of the LDM used for the record, if any.
-    pub ldm_id: Option<i32>,
+    /// ID of the custom copy used for the record, if any.
+    pub custom_copy_id: Option<i32>,
     /// Completion video URL.
     ///
     /// The provider is enforced and the URL is stored in a standardized canonical form.
@@ -53,8 +53,8 @@ pub struct SubmissionPostMod {
     pub level_id: Uuid,
     /// Set to `true` if this completion is on a mobile device.
     pub mobile: bool,
-    /// ID of the LDM used for the record, if any.
-    pub ldm_id: Option<i32>,
+    /// ID of the custom copy used for the record, if any.
+    pub custom_copy_id: Option<i32>,
     /// Completion video URL.
     ///
     /// The provider is enforced and the URL is stored in a standardized canonical form.
@@ -87,8 +87,8 @@ pub struct SubmissionInsert {
     pub level_id: Uuid,
     /// Set to `true` if this completion is on a mobile device.
     pub mobile: bool,
-    /// ID of the LDM used for the record, if any.
-    pub ldm_id: Option<i32>,
+    /// ID of the custom copy used for the record, if any.
+    pub custom_copy_id: Option<i32>,
     /// Completion video URL.
     ///
     /// The provider is enforced and the URL is stored in a standardized canonical form.
@@ -119,7 +119,7 @@ impl SubmissionPostMod {
         SubmissionPostUser {
             level_id: self.level_id,
             mobile: self.mobile,
-            ldm_id: self.ldm_id,
+            custom_copy_id: self.custom_copy_id,
             video_url: self.video_url,
             raw_url: self.raw_url,
             mod_menu: self.mod_menu,
@@ -139,7 +139,7 @@ impl SubmissionInsert {
             submitted_by: authenticated.user_id,
             level_id: body.level_id,
             mobile: body.mobile,
-            ldm_id: body.ldm_id,
+            custom_copy_id: body.custom_copy_id,
             video_url: body.video_url,
             raw_url: body.raw_url,
             mod_menu: body.mod_menu,
@@ -168,7 +168,7 @@ impl SubmissionInsert {
             submitted_by,
             level_id: body.level_id,
             mobile: body.mobile,
-            ldm_id: body.ldm_id,
+            custom_copy_id: body.custom_copy_id,
             video_url: body.video_url,
             raw_url: body.raw_url,
             mod_menu: body.mod_menu,

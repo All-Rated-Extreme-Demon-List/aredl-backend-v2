@@ -52,8 +52,8 @@ pub struct Submission {
     pub submitted_by: Uuid,
     /// Whether the record was completed on mobile or not.
     pub mobile: bool,
-    /// ID of the LDM used for the record, if any.
-    pub ldm_id: Option<i32>,
+    /// ID of the custom copy used for the record, if any.
+    pub custom_copy_id: Option<i32>,
     /// Completion video URL.
     ///
     /// The provider is enforced and the URL is stored in a standardized canonical form.
@@ -99,8 +99,8 @@ pub struct SubmissionResolved {
     pub submitted_by: ExtendedBaseUser,
     /// Whether the record was completed on mobile or not.
     pub mobile: bool,
-    /// ID of the LDM used for the record, if any.
-    pub ldm_id: Option<i32>,
+    /// ID of the custom copy used for the record, if any.
+    pub custom_copy_id: Option<i32>,
     /// Completion video URL.
     ///
     /// The provider is enforced and the URL is stored in a standardized canonical form.

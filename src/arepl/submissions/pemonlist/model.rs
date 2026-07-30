@@ -150,7 +150,7 @@ impl PemonlistPlayer {
                         submissions::submitted_by.eq(authenticated.user_id),
                         submissions::level_id.eq(existing_level.id),
                         submissions::mobile.eq(pemonlist_record.mobile),
-                        submissions::ldm_id.eq::<Option<i32>>(None),
+                        submissions::custom_copy_id.eq::<Option<i32>>(None),
                         submissions::video_url.eq(video_url),
                         submissions::raw_url.eq::<Option<String>>(None),
                         submissions::mod_menu.eq::<Option<String>>(Some(String::from("None"))),

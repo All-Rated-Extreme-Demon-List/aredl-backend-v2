@@ -52,7 +52,7 @@ pub async fn insert_history_entry(
         video_url: Some("https://video.com".to_owned()),
         raw_url: Some("https://raw.com".to_owned()),
         mobile: Some(false),
-        ldm_id: None,
+        custom_copy_id: None,
         mod_menu: Some("Mega Hack v8".to_owned()),
         timestamp: Utc::now(),
         user_notes: None,

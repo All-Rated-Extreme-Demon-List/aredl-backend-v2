@@ -30,9 +30,9 @@ use uuid::Uuid;
 pub struct SubmissionPatchUser {
     /// Whether the record was completed on mobile or not.
     pub mobile: Option<bool>,
-    /// ID of the LDM used for the record, if any.
+    /// ID of the custom copy used for the record, if any.
     #[serde(default, with = "double_option")]
-    pub ldm_id: Option<Option<i32>>,
+    pub custom_copy_id: Option<Option<i32>>,
     /// Completion video URL.
     ///
     /// The provider is enforced and the URL is stored in a standardized canonical form.
@@ -57,9 +57,9 @@ pub struct SubmissionPatchUser {
 pub struct SubmissionPatchMod {
     /// Whether the record was completed on mobile or not.
     pub mobile: Option<bool>,
-    /// ID of the LDM used for the record, if any.
+    /// ID of the custom copy used for the record, if any.
     #[serde(default, with = "double_option")]
-    pub ldm_id: Option<Option<i32>>,
+    pub custom_copy_id: Option<Option<i32>>,
     /// Completion video URL.
     ///
     /// The provider is enforced and the URL is stored in a standardized canonical form.
@@ -400,7 +400,7 @@ impl SubmissionPatchMod {
     pub fn downgrade(s: Self) -> SubmissionPatchUser {
         SubmissionPatchUser {
             mobile: s.mobile,
-            ldm_id: s.ldm_id,
+            custom_copy_id: s.custom_copy_id,
             video_url: s.video_url,
             raw_url: s.raw_url,
             mod_menu: s.mod_menu,

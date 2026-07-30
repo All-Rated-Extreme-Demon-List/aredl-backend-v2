@@ -104,7 +104,7 @@ impl SubmissionResolved {
             level,
             submitted_by: submitter,
             mobile: submission.mobile,
-            ldm_id: submission.ldm_id,
+            custom_copy_id: submission.custom_copy_id,
             video_url: submission.video_url,
             completion_time: submission.completion_time,
             raw_url: submission.raw_url,

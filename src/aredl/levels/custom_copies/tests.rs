@@ -2,7 +2,10 @@ use actix_http::StatusCode;
 #[cfg(test)]
 use {
     crate::{
-        aredl::{levels::ldms::test_utils::create_test_ldm, levels::test_utils::create_test_level},
+        aredl::{
+            levels::custom_copies::test_utils::create_test_custom_copy,
+            levels::test_utils::create_test_level,
+        },
         auth::{create_test_token, Permission},
         test_utils::{assert_error_response, init_test_app},
         users::test_utils::create_test_user,
@@ -12,7 +15,7 @@ use {
 };
 
 #[actix_web::test]
-async fn create_ldm() {
+async fn create_custom_copy() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&db, Some(Permission::LevelCustomCopiesModify)).await;
@@ -21,15 +24,15 @@ async fn create_ldm() {
 
     let level_id = create_test_level(&db).await;
 
-    let ldm_data = json!({
-        "ldm_id": 123_456,
+    let custom_copy_data = json!({
+        "copy_id": 123_456,
         "id_type": "Bugfix",
         "status": "Allowed",
     });
     let req = test::TestRequest::post()
-        .uri(format!("/aredl/levels/ldms/{level_id}").as_str())
+        .uri(format!("/aredl/levels/custom-copies/{level_id}").as_str())
         .insert_header(("Authorization", format!("Bearer {token}")))
-        .set_json(&ldm_data)
+        .set_json(&custom_copy_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -41,16 +44,16 @@ async fn create_ldm() {
         "Level IDs do not match!"
     );
     assert_eq!(
-        ldm_data["ldm_id"],
-        body["ldm_id"].as_i64().unwrap(),
+        custom_copy_data["copy_id"],
+        body["copy_id"].as_i64().unwrap(),
         "Level IDs do not match!"
     );
-    assert_eq!(ldm_data["id_type"], "Bugfix");
+    assert_eq!(custom_copy_data["id_type"], "Bugfix");
     assert_eq!(body["added_by"], user_id.to_string());
 }
 
 #[actix_web::test]
-async fn update_ldm() {
+async fn update_custom_copy() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&db, Some(Permission::LevelCustomCopiesModify)).await;
@@ -59,27 +62,27 @@ async fn update_ldm() {
 
     let level_id = create_test_level(&db).await;
 
-    let ldm = create_test_ldm(&db, level_id, user_id).await;
+    let custom_copy = create_test_custom_copy(&db, level_id, user_id).await;
 
-    let ldm_data = json!({
+    let custom_copy_data = json!({
         "status": "Banned",
         "id_type": "Ldm"
     });
     let req = test::TestRequest::patch()
-        .uri(format!("/aredl/levels/ldms/{ldm}").as_str())
+        .uri(format!("/aredl/levels/custom-copies/{custom_copy}").as_str())
         .insert_header(("Authorization", format!("Bearer {token}")))
-        .set_json(&ldm_data)
+        .set_json(&custom_copy_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
 
     let body: serde_json::Value = read_body_json(resp).await;
-    assert_eq!(body["status"], ldm_data["status"]);
-    assert_eq!(body["id_type"], ldm_data["id_type"]);
+    assert_eq!(body["status"], custom_copy_data["status"]);
+    assert_eq!(body["id_type"], custom_copy_data["id_type"]);
 }
 
 #[actix_web::test]
-async fn delete_ldm() {
+async fn delete_custom_copy() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&db, Some(Permission::LevelCustomCopiesModify)).await;
@@ -88,10 +91,10 @@ async fn delete_ldm() {
 
     let level_id = create_test_level(&db).await;
 
-    let ldm = create_test_ldm(&db, level_id, user_id).await;
+    let custom_copy = create_test_custom_copy(&db, level_id, user_id).await;
 
     let req = test::TestRequest::delete()
-        .uri(format!("/aredl/levels/ldms/{ldm}").as_str())
+        .uri(format!("/aredl/levels/custom-copies/{custom_copy}").as_str())
         .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -99,17 +102,17 @@ async fn delete_ldm() {
 }
 
 #[actix_web::test]
-async fn list_ldms() {
+async fn list_custom_copies() {
     let (app, db, _, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&db, Some(Permission::LevelCustomCopiesModify)).await;
     let level_id = create_test_level(&db).await;
 
-    create_test_ldm(&db, level_id, user_id).await;
-    create_test_ldm(&db, level_id, user_id).await;
+    create_test_custom_copy(&db, level_id, user_id).await;
+    create_test_custom_copy(&db, level_id, user_id).await;
 
     let req = test::TestRequest::get()
-        .uri(format!("/aredl/levels/ldms?level_id={level_id}&type_filter=Bugfix&status_filter=Allowed&description=%es%").as_str())
+        .uri(format!("/aredl/levels/custom-copies?level_id={level_id}&type_filter=Bugfix&status_filter=Allowed&description=%es%").as_str())
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -125,7 +128,7 @@ async fn list_ldms() {
 }
 
 #[actix_web::test]
-async fn create_ldm_requires_level_custom_copies_modify() {
+async fn create_custom_copy_requires_level_custom_copies_modify() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&db, None).await;
@@ -134,16 +137,16 @@ async fn create_ldm_requires_level_custom_copies_modify() {
 
     let level_id = create_test_level(&db).await;
 
-    let ldm_data = json!({
-        "ldm_id": 123_456,
+    let custom_copy_data = json!({
+        "copy_id": 123_456,
         "description": "test description",
         "id_type": "Bugfix",
         "status": "Allowed"
     });
     let req = test::TestRequest::post()
-        .uri(format!("/aredl/levels/ldms/{level_id}").as_str())
+        .uri(format!("/aredl/levels/custom-copies/{level_id}").as_str())
         .insert_header(("Authorization", format!("Bearer {token}")))
-        .set_json(&ldm_data)
+        .set_json(&custom_copy_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_error_response!(
