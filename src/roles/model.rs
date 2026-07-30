@@ -10,6 +10,7 @@ use diesel::{
 };
 use itertools::Itertools as _;
 use serde::{Deserialize, Serialize};
+use serde_with::rust::double_option;
 use std::collections::{HashMap, HashSet};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -54,7 +55,8 @@ pub struct RoleUpdate {
     /// Whether this role should be hidden from public listings and only used to grant permissions.
     pub hide: Option<bool>,
     /// Role whose permissions are inherited by this role.
-    pub inherits_from_role_id: Option<i32>,
+    #[serde(default, with = "double_option")]
+    pub inherits_from_role_id: Option<Option<i32>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
