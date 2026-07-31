@@ -1,0 +1,37 @@
+name: Format
+
+on:
+  push:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: format-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  rustfmt:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.FORMAT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Format and push changes
+        run: |
+          cargo fmt --all
+
+          if git diff --quiet; then
+            echo "No formatting changes."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: format with cargo fmt"
+          git push
