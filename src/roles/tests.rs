@@ -8,7 +8,7 @@ use {
         },
         test_utils::{assert_error_response, init_test_app},
         users::test_utils::{
-            create_test_hidden_reviewer, create_test_user, create_test_full_reviewer,
+            create_test_full_reviewer, create_test_hidden_reviewer, create_test_user,
             TEST_STAFF_ROLE_PRIVILEGE_LEVEL,
         },
     },

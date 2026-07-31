@@ -11,8 +11,8 @@ use {
         {
             test_utils::*,
             users::test_utils::{
-                create_test_hidden_reviewer, create_test_user, create_test_user_with_permissions,
-                create_test_full_reviewer,
+                create_test_full_reviewer, create_test_hidden_reviewer, create_test_user,
+                create_test_user_with_permissions,
             },
         },
     },
