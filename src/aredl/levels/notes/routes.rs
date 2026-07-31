@@ -3,13 +3,12 @@ use crate::{
     aredl::levels::{
         id_resolver::resolve_level_id,
         notes::{
-            LevelNotePost, LevelNoteUpdate, LevelNotes, LevelNotesQueryOptions,
-            LevelNotesResolvedPage, LevelNotesType,
+            LevelNotePost, LevelNoteUpdate, LevelNotes, LevelNotesQueryOptions, LevelNotesResolved,
+            LevelNotesType,
         },
     },
     auth::{Authenticated, Permission, UserAuth},
     error_handler::ApiError,
-    page_helper::PageQuery,
     CacheController,
 };
 use actix_web::{delete, get, patch, post, web, HttpResponse};
@@ -23,7 +22,7 @@ use uuid::Uuid;
     description = "List all notes for a level",
     tag = "AREDL - Levels (Notes)",
     responses(
-        (status = 200, body = LevelNotesResolvedPage)
+        (status = 200, body = Vec<LevelNotesResolved>)
     ),
     security(
         (),
@@ -31,9 +30,6 @@ use uuid::Uuid;
         ("api_key" = []),
     ),
     params(
-        ("page" = Option<i64>, Query, description = "The page of the notes list to fetch."),
-        ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page."),
-        ("level_id" = Option<String>, Query, description = "The ID of the original level to filter by (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)"),
         ("type_filter" = Option<LevelNotesType>, Query, description = "The type of notes to filter by."),
         ("added_by" = Option<Uuid>, Query, description = "Filter by the moderator that added a note."),
     ),
@@ -46,14 +42,14 @@ use uuid::Uuid;
 async fn find_all(
     db: web::Data<Arc<DbAppState>>,
     query: web::Query<LevelNotesQueryOptions>,
-    page_query: web::Query<PageQuery<50>>,
+    level_id: web::Path<String>,
     authenticated: Option<Authenticated>,
 ) -> Result<HttpResponse, ApiError> {
     let notes = web::block(move || {
-        LevelNotes::find_all(
+        LevelNotes::find_all_level(
             &mut db.connection()?,
             &query.into_inner(),
-            page_query.into_inner(),
+            &level_id.into_inner(),
             authenticated,
         )
     })
@@ -74,10 +70,7 @@ async fn find_all(
     ),
     security(("access_token" = ["LevelNotesModify"]))
 )]
-#[post(
-    "/{level_id}",
-    wrap = "UserAuth::require(Permission::LevelNotesModify)"
-)]
+#[post("", wrap = "UserAuth::require(Permission::LevelNotesModify)")]
 async fn create(
     db: web::Data<Arc<DbAppState>>,
     body: web::Json<LevelNotePost>,
@@ -91,6 +84,11 @@ async fn create(
     })
     .await??;
     Ok(HttpResponse::Ok().json(notes))
+}
+
+#[derive(serde::Deserialize)]
+struct NotePath {
+    note_id: Uuid,
 }
 
 #[utoipa::path(
@@ -110,14 +108,10 @@ async fn create(
 async fn update(
     db: web::Data<Arc<DbAppState>>,
     body: web::Json<LevelNoteUpdate>,
-    note_id: web::Path<Uuid>,
+    path: web::Path<NotePath>,
 ) -> Result<HttpResponse, ApiError> {
     let notes = web::block(move || {
-        LevelNotes::update(
-            &mut db.connection()?,
-            body.into_inner(),
-            note_id.into_inner(),
-        )
+        LevelNotes::update(&mut db.connection()?, body.into_inner(), &path.note_id)
     })
     .await??;
     Ok(HttpResponse::Ok().json(notes))
@@ -139,9 +133,9 @@ async fn update(
 #[delete("/{note_id}", wrap = "UserAuth::require(Permission::LevelNotesModify)")]
 async fn delete(
     db: web::Data<Arc<DbAppState>>,
-    note_id: web::Path<Uuid>,
+    path: web::Path<NotePath>,
 ) -> Result<HttpResponse, ApiError> {
-    web::block(move || LevelNotes::delete(&mut db.connection()?, note_id.into_inner())).await??;
+    web::block(move || LevelNotes::delete(&mut db.connection()?, &path.note_id)).await??;
     Ok(HttpResponse::Ok().finish())
 }
 
@@ -163,7 +157,7 @@ pub struct ApiDoc;
 
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
-        web::scope("/notes")
+        web::scope("/{level_id}/notes")
             .service(find_all)
             .service(create)
             .service(update)

@@ -29,7 +29,7 @@ async fn create_note() {
         "timestamp": null,
     });
     let req = test::TestRequest::post()
-        .uri(format!("/arepl/levels/notes/{level_id}").as_str())
+        .uri(format!("/arepl/levels/{level_id}/notes").as_str())
         .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&note_data)
         .to_request();
@@ -64,7 +64,7 @@ async fn update_note() {
         "note_type": "PublicNotes"
     });
     let req = test::TestRequest::patch()
-        .uri(format!("/arepl/levels/notes/{note_id}").as_str())
+        .uri(format!("/arepl/levels/{level_id}/notes/{note_id}").as_str())
         .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&note_data)
         .to_request();
@@ -89,7 +89,7 @@ async fn delete_note() {
     let note_id = create_test_note(&db, level_id, user_id).await;
 
     let req = test::TestRequest::delete()
-        .uri(format!("/arepl/levels/notes/{note_id}").as_str())
+        .uri(format!("/arepl/levels/{level_id}/notes/{note_id}").as_str())
         .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -110,7 +110,7 @@ async fn list_notes() {
     create_test_note(&db, level_id, user_id).await;
 
     let req = test::TestRequest::get()
-        .uri(format!("/arepl/levels/notes?level_id={level_id}").as_str())
+        .uri(format!("/arepl/levels/{level_id}/notes").as_str())
         .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
@@ -118,7 +118,7 @@ async fn list_notes() {
     assert!(resp.status().is_success(), "status is {}", resp.status());
 
     let body: serde_json::Value = read_body_json(resp).await;
-    let data = body["data"].as_array().unwrap();
+    let data = body.as_array().unwrap();
 
     assert_eq!(data.len(), 2);
     assert!(data
@@ -142,7 +142,7 @@ async fn create_note_requires_level_notes_modify() {
         "timestamp": null
     });
     let req = test::TestRequest::post()
-        .uri(format!("/arepl/levels/notes/{level_id}").as_str())
+        .uri(format!("/arepl/levels/{level_id}/notes").as_str())
         .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&note_data)
         .to_request();
@@ -172,7 +172,7 @@ async fn reviewer_notes_are_private() {
         "timestamp": null
     });
     let create_req = test::TestRequest::post()
-        .uri(format!("/arepl/levels/notes/{level_id}").as_str())
+        .uri(format!("/arepl/levels/{level_id}/notes").as_str())
         .insert_header(("Authorization", format!("Bearer {note_editor_token}")))
         .set_json(&reviewer_note_data)
         .to_request();
@@ -189,7 +189,7 @@ async fn reviewer_notes_are_private() {
         .expect("Failed to generate token");
 
     let list_req = test::TestRequest::get()
-        .uri(format!("/arepl/levels/notes?level_id={level_id}").as_str())
+        .uri(format!("/arepl/levels/{level_id}/notes").as_str())
         .insert_header(("Authorization", format!("Bearer {normal_token}")))
         .to_request();
     let list_resp = test::call_service(&app, list_req).await;
@@ -200,11 +200,11 @@ async fn reviewer_notes_are_private() {
     );
 
     let list_body: serde_json::Value = read_body_json(list_resp).await;
-    let data = list_body["data"].as_array().unwrap();
+    let data = list_body.as_array().unwrap();
     assert!(data.iter().all(|x| x["note_type"] != "ReviewerNotes"));
 
     let list_req_unauth = test::TestRequest::get()
-        .uri(format!("/arepl/levels/notes?level_id={level_id}").as_str())
+        .uri(format!("/arepl/levels/{level_id}/notes").as_str())
         .to_request();
 
     let list_resp_unauth = test::call_service(&app, list_req_unauth).await;
@@ -214,7 +214,7 @@ async fn reviewer_notes_are_private() {
         list_resp_unauth.status()
     );
     let list_body_unauth: serde_json::Value = read_body_json(list_resp_unauth).await;
-    let data_unauth = list_body_unauth["data"].as_array().unwrap();
+    let data_unauth = list_body_unauth.as_array().unwrap();
     assert!(data_unauth
         .iter()
         .all(|x| x["note_type"] != "ReviewerNotes"));
@@ -225,7 +225,7 @@ async fn reviewer_notes_are_private() {
 
     // submission reviewers should see ReviewerNotes
     let reviewer_list_req = test::TestRequest::get()
-        .uri(format!("/arepl/levels/notes?level_id={level_id}").as_str())
+        .uri(format!("/arepl/levels/{level_id}/notes").as_str())
         .insert_header(("Authorization", format!("Bearer {reviewer_token}")))
         .to_request();
     let reviewer_list_resp = test::call_service(&app, reviewer_list_req).await;
@@ -235,7 +235,7 @@ async fn reviewer_notes_are_private() {
         reviewer_list_resp.status()
     );
     let reviewer_list_body: serde_json::Value = read_body_json(reviewer_list_resp).await;
-    let reviewer_data = reviewer_list_body["data"].as_array().unwrap();
+    let reviewer_data = reviewer_list_body.as_array().unwrap();
     assert!(reviewer_data
         .iter()
         .any(|x| x["note_type"] == "ReviewerNotes"));

@@ -3,7 +3,6 @@ use crate::{
     arepl::levels::id_resolver::level_filter,
     auth::{Authenticated, Permission},
     error_handler::ApiError,
-    page_helper::{PageQuery, Paginated},
     schema::{
         arepl::{level_notes, levels},
         users,
@@ -59,11 +58,6 @@ pub struct LevelNotesResolved {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Serialize, Deserialize, Debug, ToSchema)]
-pub struct LevelNotesResolvedPage {
-    pub data: Vec<LevelNotesResolved>,
-}
-
 #[derive(Serialize, Deserialize, Queryable, Selectable, Insertable)]
 #[diesel(table_name = level_notes)]
 pub struct LevelNoteInsert {
@@ -92,18 +86,17 @@ pub struct LevelNotePost {
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct LevelNotesQueryOptions {
-    pub level_id: Option<String>,
     pub type_filter: Option<LevelNotesType>,
     pub added_by: Option<Uuid>,
 }
 
 impl LevelNotes {
-    pub fn find_all<const D: i64>(
+    pub fn find_all_level(
         conn: &mut DbConnection,
         filters: &LevelNotesQueryOptions,
-        page_query: PageQuery<D>,
+        level_id: &str,
         authenticated: Option<Authenticated>,
-    ) -> Result<Paginated<LevelNotesResolvedPage>, ApiError> {
+    ) -> Result<Vec<LevelNotesResolved>, ApiError> {
         let is_reviewer = match authenticated {
             Some(authenticated) => {
                 authenticated.has_permission(conn, Permission::SubmissionReview)?
@@ -111,36 +104,23 @@ impl LevelNotes {
             None => false,
         };
 
-        let build_filtered = || -> Result<_, ApiError> {
-            let mut q = level_notes::table.into_boxed::<Pg>();
-            if let Some(user_id) = filters.added_by {
-                q = q.filter(level_notes::added_by.eq(user_id));
-            }
-            if let Some(note_type) = filters.type_filter.as_ref() {
-                q = q.filter(level_notes::note_type.eq(note_type));
-            }
-            if let Some(level_id) = filters.level_id.as_deref() {
-                q = q.filter(
-                    level_notes::level_id.eq_any(level_filter(level_id)?.select(levels::id)),
-                );
-            }
-            if !is_reviewer {
-                q = q.filter(level_notes::note_type.ne(LevelNotesType::ReviewerNotes));
-            }
-
-            Ok(q)
-        };
-
-        let count = build_filtered()?.count().get_result(conn)?;
-
-        let query = build_filtered()?
-            .limit(page_query.per_page())
-            .offset(page_query.offset())
-            .order(level_notes::created_at.desc())
-            .inner_join(users::table.on(level_notes::added_by.eq(users::id)))
-            .select((LevelNotes::as_select(), BaseUser::as_select()));
+        let mut query = level_notes::table
+            .filter(level_notes::level_id.eq_any(level_filter(level_id)?.select(levels::id)))
+            .into_boxed::<Pg>();
+        if let Some(user_id) = filters.added_by {
+            query = query.filter(level_notes::added_by.eq(user_id));
+        }
+        if let Some(note_type) = filters.type_filter.as_ref() {
+            query = query.filter(level_notes::note_type.eq(note_type));
+        }
+        if !is_reviewer {
+            query = query.filter(level_notes::note_type.ne(LevelNotesType::ReviewerNotes));
+        }
 
         let notes = query
+            .order(level_notes::created_at.desc())
+            .inner_join(users::table.on(level_notes::added_by.eq(users::id)))
+            .select((LevelNotes::as_select(), BaseUser::as_select()))
             .load(conn)?
             .into_iter()
             .map(|(note, moderator)| LevelNotesResolved {
@@ -154,11 +134,7 @@ impl LevelNotes {
             })
             .collect::<Vec<LevelNotesResolved>>();
 
-        Ok(Paginated::from_data(
-            page_query,
-            count,
-            LevelNotesResolvedPage { data: notes },
-        ))
+        Ok(notes)
     }
 
     pub fn create(
@@ -185,7 +161,7 @@ impl LevelNotes {
     pub fn update(
         conn: &mut DbConnection,
         data: LevelNoteUpdate,
-        id: Uuid,
+        id: &Uuid,
     ) -> Result<LevelNotes, ApiError> {
         let notes = diesel::update(level_notes::table)
             .filter(level_notes::id.eq(id))
@@ -196,7 +172,7 @@ impl LevelNotes {
         Ok(notes)
     }
 
-    pub fn delete(conn: &mut DbConnection, id: Uuid) -> Result<(), ApiError> {
+    pub fn delete(conn: &mut DbConnection, id: &Uuid) -> Result<(), ApiError> {
         diesel::delete(level_notes::table)
             .filter(level_notes::id.eq(id))
             .execute(conn)?;

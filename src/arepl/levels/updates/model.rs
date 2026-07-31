@@ -2,7 +2,6 @@ use crate::{
     app_data::db::DbConnection,
     arepl::levels::id_resolver::level_filter,
     error_handler::ApiError,
-    page_helper::{PageQuery, Paginated},
     schema::arepl::{level_updates, levels},
 };
 use chrono::{DateTime, Utc};
@@ -43,11 +42,6 @@ pub struct LevelUpdateEntry {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Serialize, Deserialize, Debug, ToSchema)]
-pub struct LevelUpdateEntryPage {
-    pub data: Vec<LevelUpdateEntry>,
-}
-
 #[derive(Serialize, Deserialize, Queryable, Selectable, Insertable)]
 #[diesel(table_name = level_updates)]
 pub struct LevelUpdateEntryInsert {
@@ -75,35 +69,24 @@ pub struct LevelUpdateEntryPost {
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct LevelUpdateEntryQueryOptions {
-    pub level_id: Option<String>,
     pub type_filter: Option<LevelUpdateType>,
 }
 
 impl LevelUpdateEntry {
-    pub fn find_all<const D: i64>(
+    pub fn find_all_level(
         conn: &mut DbConnection,
         filters: &LevelUpdateEntryQueryOptions,
-        page_query: PageQuery<D>,
-    ) -> Result<Paginated<LevelUpdateEntryPage>, ApiError> {
-        let build_filtered = || -> Result<_, ApiError> {
-            let mut q = level_updates::table.into_boxed::<Pg>();
-            if let Some(update_type) = filters.type_filter.as_ref() {
-                q = q.filter(level_updates::update_type.eq(update_type));
-            }
-            if let Some(level_id) = filters.level_id.as_deref() {
-                q = q.filter(
-                    level_updates::level_id.eq_any(level_filter(level_id)?.select(levels::id)),
-                );
-            }
+        level_id: &str,
+    ) -> Result<Vec<LevelUpdateEntry>, ApiError> {
+        let mut query = level_updates::table
+            .filter(level_updates::level_id.eq_any(level_filter(level_id)?.select(levels::id)))
+            .into_boxed::<Pg>();
 
-            Ok(q)
-        };
+        if let Some(update_type) = filters.type_filter.as_ref() {
+            query = query.filter(level_updates::update_type.eq(update_type));
+        }
 
-        let count = build_filtered()?.count().get_result(conn)?;
-
-        let updates = build_filtered()?
-            .limit(page_query.per_page())
-            .offset(page_query.offset())
+        let updates = query
             .order((
                 level_updates::timestamp.desc(),
                 level_updates::created_at.desc(),
@@ -111,11 +94,7 @@ impl LevelUpdateEntry {
             .select(LevelUpdateEntry::as_select())
             .load(conn)?;
 
-        Ok(Paginated::from_data(
-            page_query,
-            count,
-            LevelUpdateEntryPage { data: updates },
-        ))
+        Ok(updates)
     }
 
     pub fn create(
@@ -140,7 +119,7 @@ impl LevelUpdateEntry {
     pub fn update(
         conn: &mut DbConnection,
         data: LevelUpdateEntryUpdate,
-        id: Uuid,
+        id: &Uuid,
     ) -> Result<Self, ApiError> {
         let update = diesel::update(level_updates::table)
             .filter(level_updates::id.eq(id))
@@ -151,7 +130,7 @@ impl LevelUpdateEntry {
         Ok(update)
     }
 
-    pub fn delete(conn: &mut DbConnection, id: Uuid) -> Result<(), ApiError> {
+    pub fn delete(conn: &mut DbConnection, id: &Uuid) -> Result<(), ApiError> {
         diesel::delete(level_updates::table)
             .filter(level_updates::id.eq(id))
             .execute(conn)?;

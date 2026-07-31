@@ -3,7 +3,6 @@ use crate::{
     arepl::levels::id_resolver::level_filter,
     auth::Authenticated,
     error_handler::ApiError,
-    page_helper::{PageQuery, Paginated},
     schema::{
         arepl::{level_custom_copies, levels},
         users,
@@ -75,11 +74,6 @@ pub struct LevelCustomCopyResolved {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Serialize, Deserialize, Debug, ToSchema)]
-pub struct LevelCustomCopyResolvedPage {
-    pub data: Vec<LevelCustomCopyResolved>,
-}
-
 #[derive(Serialize, Deserialize, Queryable, Selectable, Insertable)]
 #[diesel(table_name = level_custom_copies)]
 pub struct LevelCustomCopyInsert {
@@ -111,7 +105,6 @@ pub struct LevelCustomCopyBody {
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct LevelCustomCopyQueryOptions {
-    pub level_id: Option<String>,
     pub type_filter: Option<LevelCustomCopyType>,
     pub status_filter: Option<LevelCustomCopyStatus>,
     pub description_filter: Option<Option<String>>,
@@ -119,53 +112,40 @@ pub struct LevelCustomCopyQueryOptions {
 }
 
 impl LevelCustomCopy {
-    pub fn find_all<const D: i64>(
+    pub fn find_all_level(
         conn: &mut DbConnection,
         filters: &LevelCustomCopyQueryOptions,
-        page_query: PageQuery<D>,
-    ) -> Result<Paginated<LevelCustomCopyResolvedPage>, ApiError> {
-        let build_filtered = || -> Result<_, ApiError> {
-            let mut query = level_custom_copies::table.into_boxed::<Pg>();
+        level_id: &str,
+    ) -> Result<Vec<LevelCustomCopyResolved>, ApiError> {
+        let mut query = level_custom_copies::table
+            .filter(
+                level_custom_copies::level_id.eq_any(level_filter(level_id)?.select(levels::id)),
+            )
+            .into_boxed::<Pg>();
 
-            if let Some(level_id) = filters.level_id.as_deref() {
-                query = query.filter(
-                    level_custom_copies::level_id
-                        .eq_any(level_filter(level_id)?.select(levels::id)),
-                );
-            }
-            if let Some(added_by) = filters.added_by {
-                query = query.filter(level_custom_copies::added_by.eq(added_by));
-            }
-            if let Some(custom_copy_type) = filters.type_filter.as_ref() {
-                query = query.filter(level_custom_copies::id_type.eq(custom_copy_type));
-            }
-            if let Some(status) = filters.status_filter.as_ref() {
-                query = query.filter(level_custom_copies::status.eq(status));
-            }
-            if let Some(description_filter) = filters.description_filter.as_ref() {
-                match description_filter {
-                    Some(description) => {
-                        query = query.filter(level_custom_copies::description.ilike(description));
-                    }
-                    None => query = query.filter(level_custom_copies::description.is_null()),
+        if let Some(added_by) = filters.added_by {
+            query = query.filter(level_custom_copies::added_by.eq(added_by));
+        }
+        if let Some(custom_copy_type) = filters.type_filter.as_ref() {
+            query = query.filter(level_custom_copies::id_type.eq(custom_copy_type));
+        }
+        if let Some(status) = filters.status_filter.as_ref() {
+            query = query.filter(level_custom_copies::status.eq(status));
+        }
+        if let Some(description_filter) = filters.description_filter.as_ref() {
+            match description_filter {
+                Some(description) => {
+                    query = query.filter(level_custom_copies::description.ilike(description));
                 }
+                None => query = query.filter(level_custom_copies::description.is_null()),
             }
+        }
 
-            Ok(query)
-        };
-
-        let count = build_filtered()?.count().get_result::<i64>(conn)?;
-
-        let query = build_filtered()?
-            .limit(page_query.per_page())
-            .offset(page_query.offset())
+        let custom_copies = query
             .order(level_custom_copies::created_at.desc())
             .inner_join(users::table.on(level_custom_copies::added_by.eq(users::id)))
-            .select((LevelCustomCopy::as_select(), BaseUser::as_select()));
-
-        let custom_copies: Vec<(LevelCustomCopy, BaseUser)> = query.load(conn)?;
-
-        let custom_copies = custom_copies
+            .select((LevelCustomCopy::as_select(), BaseUser::as_select()))
+            .load::<(LevelCustomCopy, BaseUser)>(conn)?
             .into_iter()
             .map(|(custom_copy, moderator)| LevelCustomCopyResolved {
                 id: custom_copy.id,
@@ -179,13 +159,7 @@ impl LevelCustomCopy {
             })
             .collect::<Vec<LevelCustomCopyResolved>>();
 
-        Ok(Paginated::from_data(
-            page_query,
-            count,
-            LevelCustomCopyResolvedPage {
-                data: custom_copies,
-            },
-        ))
+        Ok(custom_copies)
     }
 
     pub fn create(
@@ -212,7 +186,7 @@ impl LevelCustomCopy {
     pub fn update(
         conn: &mut DbConnection,
         data: LevelCustomCopyUpdate,
-        id: Uuid,
+        id: &Uuid,
     ) -> Result<LevelCustomCopy, ApiError> {
         let custom_copy = diesel::update(level_custom_copies::table)
             .filter(level_custom_copies::id.eq(id))
@@ -222,7 +196,8 @@ impl LevelCustomCopy {
 
         Ok(custom_copy)
     }
-    pub fn delete(conn: &mut DbConnection, id: Uuid) -> Result<(), ApiError> {
+
+    pub fn delete(conn: &mut DbConnection, id: &Uuid) -> Result<(), ApiError> {
         diesel::delete(level_custom_copies::table)
             .filter(level_custom_copies::id.eq(id))
             .execute(conn)?;

@@ -29,7 +29,7 @@ async fn create_custom_copy() {
         "status": "Allowed",
     });
     let req = test::TestRequest::post()
-        .uri(format!("/arepl/levels/custom-copies/{level_id}").as_str())
+        .uri(format!("/arepl/levels/{level_id}/custom-copies").as_str())
         .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&custom_copy_data)
         .to_request();
@@ -67,7 +67,7 @@ async fn update_custom_copy() {
         "id_type": "Ldm"
     });
     let req = test::TestRequest::patch()
-        .uri(format!("/arepl/levels/custom-copies/{custom_copy}").as_str())
+        .uri(format!("/arepl/levels/{level_id}/custom-copies/{custom_copy}").as_str())
         .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&custom_copy_data)
         .to_request();
@@ -91,7 +91,7 @@ async fn delete_custom_copy() {
     let custom_copy = create_test_custom_copy(&db, level_id, user_id).await;
 
     let req = test::TestRequest::delete()
-        .uri(format!("/arepl/levels/custom-copies/{custom_copy}").as_str())
+        .uri(format!("/arepl/levels/{level_id}/custom-copies/{custom_copy}").as_str())
         .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -108,14 +108,14 @@ async fn list_custom_copies() {
     create_test_custom_copy(&db, level_id, user_id).await;
 
     let req = test::TestRequest::get()
-        .uri(format!("/arepl/levels/custom-copies?level_id={level_id}&type_filter=Bugfix&status_filter=Allowed&description=%es%").as_str())
+        .uri(format!("/arepl/levels/{level_id}/custom-copies?type_filter=Bugfix&status_filter=Allowed&description=%es%").as_str())
         .to_request();
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
 
     let body: serde_json::Value = read_body_json(resp).await;
-    let data = body["data"].as_array().unwrap();
+    let data = body.as_array().unwrap();
 
     assert_eq!(data.len(), 2);
     assert!(data
@@ -139,7 +139,7 @@ async fn create_custom_copy_requires_level_custom_copies_modify() {
         "status": "Allowed"
     });
     let req = test::TestRequest::post()
-        .uri(format!("/arepl/levels/custom-copies/{level_id}").as_str())
+        .uri(format!("/arepl/levels/{level_id}/custom-copies").as_str())
         .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&custom_copy_data)
         .to_request();

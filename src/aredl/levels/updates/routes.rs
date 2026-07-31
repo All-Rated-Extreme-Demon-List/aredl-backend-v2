@@ -3,13 +3,12 @@ use crate::{
     aredl::levels::{
         id_resolver::resolve_level_id,
         updates::{
-            LevelUpdateEntry, LevelUpdateEntryPage, LevelUpdateEntryPost,
-            LevelUpdateEntryQueryOptions, LevelUpdateEntryUpdate, LevelUpdateType,
+            LevelUpdateEntry, LevelUpdateEntryPost, LevelUpdateEntryQueryOptions,
+            LevelUpdateEntryUpdate, LevelUpdateType,
         },
     },
     auth::{Permission, UserAuth},
     error_handler::ApiError,
-    page_helper::PageQuery,
     CacheController,
 };
 use actix_web::{delete, get, patch, post, web, HttpResponse};
@@ -23,12 +22,9 @@ use uuid::Uuid;
     description = "List all updates for a level",
     tag = "AREDL - Levels (Updates)",
     responses(
-        (status = 200, body = LevelUpdateEntryPage)
+        (status = 200, body = Vec<LevelUpdateEntry>)
     ),
     params(
-        ("page" = Option<i64>, Query, description = "The page of the updates list to fetch."),
-        ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page."),
-        ("level_id" = Option<String>, Query, description = "The ID of the original level to filter by (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)"),
         ("type_filter" = Option<LevelUpdateType>, Query, description = "The type of update to filter by."),
     ),
 )]
@@ -36,13 +32,13 @@ use uuid::Uuid;
 async fn find_all(
     db: web::Data<Arc<DbAppState>>,
     query: web::Query<LevelUpdateEntryQueryOptions>,
-    page_query: web::Query<PageQuery<50>>,
+    level_id: web::Path<String>,
 ) -> Result<HttpResponse, ApiError> {
     let updates = web::block(move || {
-        LevelUpdateEntry::find_all(
+        LevelUpdateEntry::find_all_level(
             &mut db.connection()?,
             &query.into_inner(),
-            page_query.into_inner(),
+            &level_id.into_inner(),
         )
     })
     .await??;
@@ -62,10 +58,7 @@ async fn find_all(
     ),
     security(("access_token" = ["LevelUpdatesModify"]))
 )]
-#[post(
-    "/{level_id}",
-    wrap = "UserAuth::require(Permission::LevelUpdatesModify)"
-)]
+#[post("", wrap = "UserAuth::require(Permission::LevelUpdatesModify)")]
 async fn create(
     db: web::Data<Arc<DbAppState>>,
     body: web::Json<LevelUpdateEntryPost>,
@@ -78,6 +71,11 @@ async fn create(
     })
     .await??;
     Ok(HttpResponse::Ok().json(created))
+}
+
+#[derive(serde::Deserialize)]
+struct UpdatePath {
+    update_id: Uuid,
 }
 
 #[utoipa::path(
@@ -100,14 +98,10 @@ async fn create(
 async fn update(
     db: web::Data<Arc<DbAppState>>,
     body: web::Json<LevelUpdateEntryUpdate>,
-    update_id: web::Path<Uuid>,
+    path: web::Path<UpdatePath>,
 ) -> Result<HttpResponse, ApiError> {
     let updated = web::block(move || {
-        LevelUpdateEntry::update(
-            &mut db.connection()?,
-            body.into_inner(),
-            update_id.into_inner(),
-        )
+        LevelUpdateEntry::update(&mut db.connection()?, body.into_inner(), &path.update_id)
     })
     .await??;
     Ok(HttpResponse::Ok().json(updated))
@@ -132,10 +126,9 @@ async fn update(
 )]
 async fn delete(
     db: web::Data<Arc<DbAppState>>,
-    update_id: web::Path<Uuid>,
+    path: web::Path<UpdatePath>,
 ) -> Result<HttpResponse, ApiError> {
-    web::block(move || LevelUpdateEntry::delete(&mut db.connection()?, update_id.into_inner()))
-        .await??;
+    web::block(move || LevelUpdateEntry::delete(&mut db.connection()?, &path.update_id)).await??;
     Ok(HttpResponse::Ok().finish())
 }
 
@@ -156,7 +149,7 @@ pub struct ApiDoc;
 
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
-        web::scope("/updates")
+        web::scope("/{level_id}/updates")
             .service(find_all)
             .service(create)
             .service(update)

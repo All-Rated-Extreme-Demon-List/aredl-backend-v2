@@ -30,7 +30,7 @@ async fn create_update() {
         "timestamp": timestamp,
     });
     let req = test::TestRequest::post()
-        .uri(format!("/aredl/levels/updates/{level_id}").as_str())
+        .uri(format!("/aredl/levels/{level_id}/updates").as_str())
         .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&update_data)
         .to_request();
@@ -66,7 +66,7 @@ async fn update_update() {
         "timestamp": timestamp,
     });
     let req = test::TestRequest::patch()
-        .uri(format!("/aredl/levels/updates/{update_id}").as_str())
+        .uri(format!("/aredl/levels/{level_id}/updates/{update_id}").as_str())
         .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&update_data)
         .to_request();
@@ -90,7 +90,7 @@ async fn delete_update() {
     let update_id = create_test_update(&db, level_id).await;
 
     let req = test::TestRequest::delete()
-        .uri(format!("/aredl/levels/updates/{update_id}").as_str())
+        .uri(format!("/aredl/levels/{level_id}/updates/{update_id}").as_str())
         .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -107,14 +107,14 @@ async fn list_updates() {
     create_test_update(&db, level_id).await;
 
     let req = test::TestRequest::get()
-        .uri(format!("/aredl/levels/updates?level_id={level_id}&type_filter=Buff").as_str())
+        .uri(format!("/aredl/levels/{level_id}/updates?type_filter=Buff").as_str())
         .to_request();
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
 
     let body: serde_json::Value = read_body_json(resp).await;
-    let data = body["data"].as_array().unwrap();
+    let data = body.as_array().unwrap();
 
     assert_eq!(data.len(), 2);
     assert!(data.iter().all(|x| x["level_id"] == level_id.to_string()));
@@ -137,7 +137,7 @@ async fn create_update_requires_level_updates_modify() {
         "timestamp": chrono::Utc::now()
     });
     let req = test::TestRequest::post()
-        .uri(format!("/aredl/levels/updates/{level_id}").as_str())
+        .uri(format!("/aredl/levels/{level_id}/updates").as_str())
         .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&update_data)
         .to_request();
