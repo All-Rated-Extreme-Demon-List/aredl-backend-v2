@@ -125,6 +125,8 @@ pub fn stats_mod_leaderboard(
     options: &LeaderboardQuery,
     authenticated: &Authenticated,
 ) -> Result<Vec<ResolvedLeaderboardRow>, ApiError> {
+    let visibility = ReviewerVisibility::new(conn, authenticated)?;
+
     let mut query = submission_stats::table
         .inner_join(users::table.on(users::id.nullable().eq(submission_stats::reviewer_id)))
         .select((DailyStats::as_select(), ExtendedBaseUser::as_select()))
@@ -142,9 +144,11 @@ pub fn stats_mod_leaderboard(
         query = query.filter(submission_stats::reviewer_id.eq(reviewer_id));
     }
 
-    let all_rows: Vec<(DailyStats, ExtendedBaseUser)> = query.load(conn)?;
+    if !visibility.can_see_other_stats {
+        query = query.filter(submission_stats::reviewer_id.eq(authenticated.user_id));
+    }
 
-    let visibility = ReviewerVisibility::new(conn, authenticated)?;
+    let all_rows: Vec<(DailyStats, ExtendedBaseUser)> = query.load(conn)?;
 
     let rows = all_rows.into_iter().filter(|(_, user)| {
         if options.only_active.unwrap_or(false) && !visibility.is_reviewer(user.id) {

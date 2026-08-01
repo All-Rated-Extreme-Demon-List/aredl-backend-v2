@@ -74,11 +74,11 @@ pub struct LeaderboardQuery {
         ("include_hidden_reviewers" = Option<bool>, Query, description = "Whether to include hidden reviewers in the results. Requires `ReviewersAudit`; otherwise forced to false."),
     ),
     responses((status = 200, body = [ResolvedLeaderboardRow])),
-    security(("access_token" = ["SubmissionSeeOtherReviewerStatistics"]), ("api_key" = ["SubmissionSeeOtherReviewerStatistics"]))
+    security(("access_token" = ["SubmissionSeeStatistics"]), ("api_key" = ["SubmissionSeeStatistics"]))
 )]
 #[get(
     "/leaderboard",
-    wrap = "UserAuth::require(Permission::SubmissionSeeOtherReviewerStatistics)"
+    wrap = "UserAuth::require(Permission::SubmissionSeeStatistics)"
 )]
 pub async fn leaderboard_route(
     db: web::Data<Arc<DbAppState>>,
