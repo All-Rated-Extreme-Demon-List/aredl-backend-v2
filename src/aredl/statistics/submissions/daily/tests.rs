@@ -198,7 +198,7 @@ async fn submission_leaderboard_requires_see_other_reviewer_statistics_permissio
     assert_error_response!(
         resp,
         StatusCode::FORBIDDEN,
-        Some("You do not have the required permission (submission_see_other_reviewer_statistics) to access this endpoint"),
+        Some("You do not have the required permission (submission_see_statistics) to access this endpoint"),
     );
 }
 

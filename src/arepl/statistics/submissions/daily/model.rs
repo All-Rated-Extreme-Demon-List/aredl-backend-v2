@@ -11,8 +11,8 @@ use crate::{
 use chrono::NaiveDate;
 use diesel::pg::Pg;
 use diesel::{
-    ExpressionMethods as _, JoinOnDsl as _, NullableExpressionMethods as _, QueryDsl as _,
-    RunQueryDsl as _, SelectableHelper as _,
+    BoolExpressionMethods as _, ExpressionMethods as _, JoinOnDsl as _,
+    NullableExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -130,6 +130,12 @@ pub fn stats_mod_leaderboard(
     let mut query = submission_stats::table
         .inner_join(users::table.on(users::id.nullable().eq(submission_stats::reviewer_id)))
         .select((DailyStats::as_select(), ExtendedBaseUser::as_select()))
+        .filter(
+            submission_stats::accepted
+                .gt(0)
+                .or(submission_stats::denied.gt(0))
+                .or(submission_stats::under_consideration.gt(0)),
+        )
         .into_boxed::<Pg>();
 
     if let Some(date) = options.since {
