@@ -29,6 +29,48 @@ async fn page_query_defaults_and_offset() {
 }
 
 #[test]
+async fn page_query_clamps_invalid_values() {
+    let q = PageQuery::<20> {
+        per_page: Some(0),
+        page: Some(-5),
+    };
+    assert_eq!(q.per_page(), 1);
+    assert_eq!(q.page(), 1);
+    assert_eq!(q.offset(), 0);
+}
+
+#[test]
+async fn page_query_limits_per_page() {
+    let q = PageQuery::<20> {
+        per_page: Some(500),
+        page: Some(2),
+    };
+    assert_eq!(q.per_page(), 100);
+    assert_eq!(q.page(), 2);
+    assert_eq!(q.offset(), 100);
+}
+
+#[test]
+async fn page_query_uses_custom_max_per_page() {
+    let q = PageQuery::<20, 500> {
+        per_page: Some(750),
+        page: Some(2),
+    };
+    assert_eq!(q.per_page(), 500);
+    assert_eq!(q.page(), 2);
+    assert_eq!(q.offset(), 500);
+}
+
+#[test]
+async fn page_query_offset_saturates() {
+    let q = PageQuery::<20> {
+        per_page: Some(100),
+        page: Some(i64::MAX),
+    };
+    assert_eq!(q.offset(), i64::MAX);
+}
+
+#[test]
 async fn page_query_paginated_from_data() {
     let q = PageQuery::<10> {
         per_page: Some(5),
@@ -39,6 +81,20 @@ async fn page_query_paginated_from_data() {
     assert_eq!(paginated.per_page, 5);
     assert_eq!(paginated.pages, 3);
     assert_eq!(paginated.data, vec![1, 2]);
+}
+
+#[test]
+async fn page_query_paginated_handles_empty_count() {
+    let q = PageQuery::<10> {
+        per_page: Some(0),
+        page: Some(0),
+    };
+    let paginated: Paginated<Vec<i32>> = Paginated::from_data(q, 0, vec![]);
+    assert_eq!(paginated.page, 1);
+    assert_eq!(paginated.per_page, 1);
+    assert_eq!(paginated.pages, 0);
+    assert_eq!(paginated.count, 0);
+    assert_eq!(paginated.data, Vec::<i32>::new());
 }
 
 #[actix_web::test]

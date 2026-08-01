@@ -68,9 +68,9 @@ impl ResolvedDailyStats {
 }
 
 impl DailyStatsPage {
-    pub fn find<const D: i64>(
+    pub fn find<const D: i64, const M: i64>(
         conn: &mut DbConnection,
-        page_query: PageQuery<D>,
+        page_query: PageQuery<D, M>,
         reviewer_id: Option<Uuid>,
         authenticated: &Authenticated,
     ) -> Result<Paginated<Self>, ApiError> {

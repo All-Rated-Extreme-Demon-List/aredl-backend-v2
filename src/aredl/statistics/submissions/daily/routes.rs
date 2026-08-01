@@ -35,7 +35,7 @@ pub struct StatsQuery {
 #[get("", wrap = "UserAuth::require(Permission::SubmissionSeeStatistics)")]
 pub async fn stats(
     db: web::Data<Arc<DbAppState>>,
-    page: web::Query<PageQuery<20>>,
+    page: web::Query<PageQuery<31, 3650>>,
     query: web::Query<StatsQuery>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {

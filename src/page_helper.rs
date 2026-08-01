@@ -1,8 +1,10 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+const DEFAULT_MAX_PER_PAGE: i64 = 100;
+
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
-pub struct PageQuery<const D: i64> {
+pub struct PageQuery<const D: i64, const M: i64 = DEFAULT_MAX_PER_PAGE> {
     pub per_page: Option<i64>,
     pub page: Option<i64>,
 }
@@ -22,11 +24,21 @@ pub struct Paginated<T> {
 }
 
 impl<T> Paginated<T> {
-    pub fn from_data<const D: i64>(query: PageQuery<D>, count: i64, data: T) -> Self {
-        let pages = (count + query.per_page() - 1) / query.per_page();
+    pub fn from_data<const D: i64, const M: i64>(
+        query: PageQuery<D, M>,
+        count: i64,
+        data: T,
+    ) -> Self {
+        let count = count.max(0);
+        let per_page = query.per_page();
+        let pages = if count == 0 {
+            0
+        } else {
+            ((count - 1) / per_page) + 1
+        };
         Self {
             page: query.page(),
-            per_page: query.per_page(),
+            per_page,
             pages,
             count,
             data,
@@ -34,16 +46,16 @@ impl<T> Paginated<T> {
     }
 }
 
-impl<const D: i64> PageQuery<D> {
-    pub fn offset(&self) -> i64 {
-        self.per_page.unwrap_or(D) * (self.page() - 1)
-    }
-
+impl<const D: i64, const M: i64> PageQuery<D, M> {
     pub fn per_page(&self) -> i64 {
-        self.per_page.unwrap_or(D)
+        self.per_page.unwrap_or(D).clamp(1, M)
     }
 
     pub fn page(&self) -> i64 {
-        self.page.unwrap_or(1)
+        self.page.unwrap_or(1).max(1)
+    }
+
+    pub fn offset(&self) -> i64 {
+        self.per_page().saturating_mul(self.page() - 1)
     }
 }
