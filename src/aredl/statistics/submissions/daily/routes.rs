@@ -56,6 +56,7 @@ pub async fn stats(
 pub struct LeaderboardQuery {
     pub since: Option<NaiveDate>,
     pub until: Option<NaiveDate>,
+    pub reviewer_id: Option<Uuid>,
     pub only_active: Option<bool>,
     pub include_hidden_reviewers: Option<bool>,
 }
@@ -68,6 +69,7 @@ pub struct LeaderboardQuery {
     params(
         ("since" = Option<NaiveDate>, Query, description = "Only include data since this date"),
         ("until" = Option<NaiveDate>, Query, description = "Only include data until this date"),
+        ("reviewer_id" = Option<Uuid>, Query, description = "Filter for a specific moderator"),
         ("only_active" = Option<bool>, Query, description = "Whether or not to exclude moderators that aren't staff anymore"),
         ("include_hidden_reviewers" = Option<bool>, Query, description = "Whether to include hidden reviewers in the results. Requires `ReviewersAudit`; otherwise forced to false."),
     ),

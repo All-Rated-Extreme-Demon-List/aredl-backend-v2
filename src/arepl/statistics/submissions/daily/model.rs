@@ -138,6 +138,10 @@ pub fn stats_mod_leaderboard(
         query = query.filter(submission_stats::day.le(date));
     }
 
+    if let Some(reviewer_id) = options.reviewer_id {
+        query = query.filter(submission_stats::reviewer_id.eq(reviewer_id));
+    }
+
     let all_rows: Vec<(DailyStats, ExtendedBaseUser)> = query.load(conn)?;
 
     let visibility = ReviewerVisibility::new(conn, authenticated)?;
