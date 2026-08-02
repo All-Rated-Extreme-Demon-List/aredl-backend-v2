@@ -2,16 +2,16 @@ use crate::auth::Permission;
 use crate::error_handler::{ApiError, StartupError};
 use crate::get_secret;
 use crate::schema::permissions;
+use diesel::prelude::*;
 use diesel::r2d2::ConnectionManager;
-#[cfg(test)]
-use diesel::Connection as _;
-use diesel::{r2d2, PgConnection};
-use diesel::{ExpressionMethods as _, RunQueryDsl as _};
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness as _};
 use std::sync::Arc;
-#[cfg(test)]
-use std::sync::Once;
 use strum::IntoEnumIterator as _;
+#[cfg(test)]
+use {
+    diesel::{r2d2, PgConnection},
+    std::sync::Once,
+};
 
 type Pool = r2d2::Pool<ConnectionManager<PgConnection>>;
 pub type DbConnection = r2d2::PooledConnection<ConnectionManager<PgConnection>>;

@@ -1,16 +1,8 @@
 #[cfg(test)]
-use std::sync::Arc;
-
-#[cfg(test)]
-use super::LevelNotesType;
-#[cfg(test)]
-use crate::app_data::db::DbAppState;
-#[cfg(test)]
-use crate::schema::aredl::level_notes;
-#[cfg(test)]
-use diesel::{ExpressionMethods as _, RunQueryDsl as _};
-#[cfg(test)]
-use uuid::Uuid;
+use {
+    super::LevelNotesType, crate::app_data::db::DbAppState, crate::schema::aredl::level_notes,
+    diesel::prelude::*, std::sync::Arc, uuid::Uuid,
+};
 
 #[cfg(test)]
 pub async fn create_test_note(db: &Arc<DbAppState>, level_id: Uuid, user: Uuid) -> Uuid {

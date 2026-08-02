@@ -16,14 +16,11 @@ use crate::schema::{
 use crate::users::badges::UserBadge;
 use crate::users::User;
 use chrono::{DateTime, Utc};
-use diesel::{
-    ExpressionMethods as _, JoinOnDsl as _, OptionalExtension as _, QueryDsl as _,
-    RunQueryDsl as _, SelectableHelper as _,
-};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
 #[diesel(table_name=user_leaderboard)]
 pub struct Rank {

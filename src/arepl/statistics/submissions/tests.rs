@@ -1,5 +1,6 @@
 #[cfg(test)]
 use {
+    super::test_utils::refresh_test_submission_totals,
     crate::{
         arepl::{
             levels::test_utils::create_test_level,
@@ -16,8 +17,6 @@ use {
         test::{self, read_body_json, TestRequest},
     },
 };
-
-use super::test_utils::refresh_test_submission_totals;
 
 #[actix_web::test]
 async fn total_submissions_counts_ordering_and_percent_unique_pairs() {

@@ -7,15 +7,13 @@ use crate::{
     users::ExtendedBaseUser,
 };
 use chrono::{DateTime, Datelike as _, NaiveDate, Timelike as _, Utc, Weekday as ChronoWeekday};
-use diesel::{
-    pg::Pg, AsChangeset, ExpressionMethods as _, Identifiable, JoinOnDsl as _, QueryDsl as _,
-    Queryable, RunQueryDsl as _, SelectableHelper as _,
-};
+use diesel::{pg::Pg, AsChangeset, Identifiable, Queryable};
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq)]
 #[ExistingTypePath = "crate::schema::sql_types::ShiftStatus"]
 #[DbValueStyle = "PascalCase"]

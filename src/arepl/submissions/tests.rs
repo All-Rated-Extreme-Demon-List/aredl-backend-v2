@@ -1,8 +1,6 @@
-use crate::users::test_utils::create_test_user_with_priority_submissions;
-use actix_http::StatusCode;
-
 #[cfg(test)]
 use {
+    crate::users::test_utils::create_test_user_with_priority_submissions,
     crate::{
         arepl::{
             bounty::test_utils::create_test_bounty,
@@ -46,6 +44,7 @@ use {
             create_test_user, create_test_user_with_permissions, set_test_user_ban_level,
         },
     },
+    actix_http::StatusCode,
     actix_web::test::{self, read_body_json},
     chrono::{DateTime, Duration as ChronoDuration, Utc},
     httpmock::prelude::*,

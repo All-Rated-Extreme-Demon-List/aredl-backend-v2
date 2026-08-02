@@ -4,12 +4,10 @@ use crate::error_handler::ApiError;
 use crate::roles::Role;
 use crate::schema::{user_roles, users};
 use crate::users::BaseUser;
-use diesel::{
-    insert_into, Connection as _, ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _,
-    RunQueryDsl as _, SelectableHelper as _,
-};
+use diesel::insert_into;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 impl BaseUser {
     pub fn role_add_all(
         conn: &mut DbConnection,

@@ -1,37 +1,40 @@
-use super::sync_patreon_plus::apply_patreon_plus_sync;
-use crate::auth::{oauth::OAuthProvider, test_utils::seed_connected_account};
-use crate::roles::test_utils::{add_user_to_role, create_test_role_with_desc, users_with_role};
-use crate::test_utils::init_test_app;
-use crate::users::test_utils::create_test_user;
-use crate::{
-    aredl::{
-        levels::test_utils::create_test_level as create_aredl_test_level,
-        submissions::{
-            test_utils::{
-                create_test_submission as create_aredl_test_submission,
-                set_test_submission_status as set_aredl_submission_status,
-                test_submission_priorities as aredl_submission_priorities,
+#[cfg(test)]
+use {
+    super::sync_patreon_plus::apply_patreon_plus_sync,
+    crate::auth::{oauth::OAuthProvider, test_utils::seed_connected_account},
+    crate::roles::test_utils::{add_user_to_role, create_test_role_with_desc, users_with_role},
+    crate::test_utils::init_test_app,
+    crate::users::test_utils::create_test_user,
+    crate::{
+        aredl::{
+            levels::test_utils::create_test_level as create_aredl_test_level,
+            submissions::{
+                test_utils::{
+                    create_test_submission as create_aredl_test_submission,
+                    set_test_submission_status as set_aredl_submission_status,
+                    test_submission_priorities as aredl_submission_priorities,
+                },
+                SubmissionStatus as AredlSubmissionStatus,
             },
-            SubmissionStatus as AredlSubmissionStatus,
         },
+        auth::Permission,
     },
-    auth::Permission,
-};
-use crate::{
-    arepl::{
-        levels::test_utils::create_test_level as create_arepl_test_level,
-        submissions::{
-            test_utils::{
-                create_test_submission as create_arepl_test_submission,
-                set_test_submission_status as set_arepl_submission_status,
-                test_submission_priorities as arepl_submission_priorities,
+    crate::{
+        arepl::{
+            levels::test_utils::create_test_level as create_arepl_test_level,
+            submissions::{
+                test_utils::{
+                    create_test_submission as create_arepl_test_submission,
+                    set_test_submission_status as set_arepl_submission_status,
+                    test_submission_priorities as arepl_submission_priorities,
+                },
+                SubmissionStatus as AreplSubmissionStatus,
             },
-            SubmissionStatus as AreplSubmissionStatus,
         },
+        roles::test_utils::create_test_role_with_permission,
     },
-    roles::test_utils::create_test_role_with_permission,
+    std::collections::HashSet,
 };
-use std::collections::HashSet;
 
 #[actix_web::test]
 async fn patreon_sync_sets_plus_role_to_active_linked_patrons() {

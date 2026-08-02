@@ -8,14 +8,11 @@ use crate::{
     providers::ProvidersAppState,
     schema::arepl::{levels, submissions},
 };
-use diesel::{
-    Connection as _, ExpressionMethods as _, OptionalExtension as _, QueryDsl as _,
-    RunQueryDsl as _, SelectableHelper as _,
-};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Debug, Insertable, ToSchema, Default)]
 #[diesel(table_name=submissions, check_for_backend(Pg))]
 pub struct SubmissionInsert {

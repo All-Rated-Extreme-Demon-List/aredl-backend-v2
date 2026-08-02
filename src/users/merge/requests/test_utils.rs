@@ -1,17 +1,12 @@
 #[cfg(test)]
-use std::sync::Arc;
-
-#[cfg(test)]
-use crate::{
-    app_data::db::DbAppState, schema::merge_requests, users::merge::requests::MergeRequest,
+use {
+    crate::{
+        app_data::db::DbAppState, schema::merge_requests, users::merge::requests::MergeRequest,
+    },
+    diesel::prelude::*,
+    std::sync::Arc,
+    uuid::Uuid,
 };
-#[cfg(test)]
-use diesel::{
-    ExpressionMethods as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _,
-    SelectableHelper as _,
-};
-#[cfg(test)]
-use uuid::Uuid;
 
 #[cfg(test)]
 pub async fn create_test_merge_req(db: &Arc<DbAppState>, user_1: Uuid, user_2_id: Uuid) -> Uuid {

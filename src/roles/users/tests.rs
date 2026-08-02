@@ -1,4 +1,3 @@
-use actix_http::StatusCode;
 #[cfg(test)]
 use {
     crate::{
@@ -8,6 +7,7 @@ use {
         users::test_utils::{create_test_user, TEST_STAFF_ROLE_PRIVILEGE_LEVEL},
         users::BaseUser,
     },
+    actix_http::StatusCode,
     actix_web::test::{self, read_body_json},
     uuid::Uuid,
 };

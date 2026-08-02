@@ -1,8 +1,6 @@
-use actix_http::StatusCode;
-
-use crate::users::test_utils::create_test_placeholder_user;
 #[cfg(test)]
 use {
+    crate::users::test_utils::create_test_placeholder_user,
     crate::{
         auth::{create_test_token, Permission},
         roles::test_utils::{
@@ -17,6 +15,7 @@ use {
             User, UserUpsert,
         },
     },
+    actix_http::StatusCode,
     actix_web::test::{self, read_body_json},
     chrono::Utc,
     serde_json::json,

@@ -5,14 +5,11 @@ use crate::{
     schema::arepl::submissions,
 };
 use chrono::{DateTime, Utc};
-use diesel::{
-    BoolExpressionMethods as _, ExpressionMethods as _, OptionalExtension as _, QueryDsl as _,
-    RunQueryDsl as _,
-};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct SubmissionQueue {
     /// The amount of pending submissions that are not marked as priority.

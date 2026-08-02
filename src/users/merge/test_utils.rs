@@ -1,13 +1,11 @@
 #[cfg(test)]
-use std::sync::Arc;
-
-#[cfg(test)]
-use crate::{app_data::db::DbAppState, schema::merge_logs};
-use chrono::Utc;
-#[cfg(test)]
-use diesel::{ExpressionMethods as _, RunQueryDsl as _};
-#[cfg(test)]
-use uuid::Uuid;
+use {
+    crate::{app_data::db::DbAppState, schema::merge_logs},
+    chrono::Utc,
+    diesel::prelude::*,
+    std::sync::Arc,
+    uuid::Uuid,
+};
 
 #[cfg(test)]
 pub async fn create_test_merge_log(

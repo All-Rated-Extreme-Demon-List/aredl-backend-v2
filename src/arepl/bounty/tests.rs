@@ -1,4 +1,3 @@
-use actix_http::StatusCode;
 #[cfg(test)]
 use {
     crate::{
@@ -29,6 +28,7 @@ use {
         test_utils::*,
         users::test_utils::{create_test_full_reviewer, create_test_user},
     },
+    actix_http::StatusCode,
     actix_web::test::{self, read_body_json},
     chrono::{DateTime, Duration as ChronoDuration, Utc},
     httpmock::prelude::*,

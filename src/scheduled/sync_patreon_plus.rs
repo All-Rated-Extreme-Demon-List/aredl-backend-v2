@@ -8,13 +8,13 @@ use crate::providers::{context::backend_oauth::OAuthProviderContext, ProvidersAp
 use crate::scheduled::{parse_startup_schedule, sleep_until_next};
 use crate::schema::{aredl, arepl, oauth_connected_accounts, role_permissions_full, user_roles};
 use crate::{get_optional_secret, get_secret};
-use diesel::{Connection as _, ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _};
 use serde::Deserialize;
 use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::task;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Debug, Deserialize)]
 struct PatreonMembersResponse {
     data: Vec<PatreonMember>,

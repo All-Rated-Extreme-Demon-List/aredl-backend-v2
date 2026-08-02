@@ -1,6 +1,6 @@
-use super::test_utils::{count_test_notifications, create_test_notification};
 #[cfg(test)]
 use {
+    super::test_utils::{count_test_notifications, create_test_notification},
     crate::{
         auth::create_test_token, test_utils::init_test_app,
         users::me::notifications::NotificationType, users::test_utils::create_test_user,

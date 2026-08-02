@@ -7,15 +7,13 @@ use crate::users::badges::badges_list::{
 use crate::users::badges::statistics::UserStatistics;
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
-use diesel::{
-    delete, insert_into, ExpressionMethods as _, OptionalExtension as _, QueryDsl as _,
-    RunQueryDsl as _, Selectable, SelectableHelper as _,
-};
+use diesel::{delete, insert_into, Selectable};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, Queryable, Selectable, Insertable)]
 #[diesel(table_name = user_badges, check_for_backend(Pg))]
 pub struct UserBadge {

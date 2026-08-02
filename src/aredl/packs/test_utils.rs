@@ -1,15 +1,11 @@
 #[cfg(test)]
-use std::sync::Arc;
-
-#[cfg(test)]
-use uuid::Uuid;
-
-#[cfg(test)]
-use crate::app_data::db::DbAppState;
-#[cfg(test)]
-use crate::schema::aredl::{pack_tiers, packs};
-#[cfg(test)]
-use diesel::{ExpressionMethods as _, RunQueryDsl as _};
+use {
+    crate::app_data::db::DbAppState,
+    crate::schema::aredl::{pack_tiers, packs},
+    diesel::prelude::*,
+    std::sync::Arc,
+    uuid::Uuid,
+};
 
 #[cfg(test)]
 pub async fn create_test_pack_tier(db: &Arc<DbAppState>) -> Uuid {

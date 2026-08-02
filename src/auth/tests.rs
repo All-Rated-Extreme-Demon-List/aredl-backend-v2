@@ -1,5 +1,9 @@
 #[cfg(test)]
 use {
+    super::test_utils::{
+        access_valid_after_for_user, patreon_connections_for_user, seed_connected_account,
+        seed_oauth_request,
+    },
     crate::{
         auth::{create_test_token, oauth::OAuthProvider, token},
         providers::test_utils::{clear_oauth_env, set_oauth_env},
@@ -13,12 +17,6 @@ use {
     },
     httpmock::{prelude::*, Mock},
     serial_test::serial,
-};
-
-#[cfg(test)]
-use super::test_utils::{
-    access_valid_after_for_user, patreon_connections_for_user, seed_connected_account,
-    seed_oauth_request,
 };
 
 #[cfg(test)]

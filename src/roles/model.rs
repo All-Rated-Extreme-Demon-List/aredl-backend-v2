@@ -5,9 +5,6 @@ use crate::schema::{role_permissions, roles, user_roles, users};
 use crate::users::BaseUser;
 use crate::users::ExtendedBaseUser;
 use crate::{app_data::db::DbConnection, auth::Authenticated};
-use diesel::{
-    ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
-};
 use itertools::Itertools as _;
 use serde::{Deserialize, Serialize};
 use serde_with::rust::double_option;
@@ -15,6 +12,7 @@ use std::collections::{HashMap, HashSet};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(
     Serialize, Deserialize, Queryable, Selectable, Identifiable, PartialEq, Debug, Clone, ToSchema,
 )]

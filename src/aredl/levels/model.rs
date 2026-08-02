@@ -6,7 +6,6 @@ use crate::schema::aredl::{levels, position_history, position_history_full_view,
 use crate::schema::users;
 use crate::users::{BaseUser, BaseUserWithBanLevel};
 use chrono::{DateTime, Utc};
-use diesel::prelude::*;
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
 use serde_with::rust::double_option;
@@ -14,6 +13,7 @@ use std::collections::HashSet;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Clone, Debug, ToSchema, PartialEq, Eq, Hash, DbEnum)]
 #[ExistingTypePath = "crate::schema::aredl::sql_types::LevelStatus"]
 #[DbValueStyle = "PascalCase"]

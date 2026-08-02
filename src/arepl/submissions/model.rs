@@ -7,15 +7,13 @@ use crate::{
     users::ExtendedBaseUser,
 };
 use chrono::{DateTime, Utc};
-use diesel::{
-    pg::Pg, sql_types::Bool, BoolExpressionMethods as _, BoxableExpression, Connection as _,
-    ExpressionMethods as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _, Selectable,
-};
+use diesel::{pg::Pg, sql_types::Bool, BoxableExpression, Selectable};
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq, Default)]
 #[ExistingTypePath = "crate::schema::arepl::sql_types::SubmissionStatus"]
 #[DbValueStyle = "PascalCase"]

@@ -15,15 +15,12 @@ use crate::{
 };
 use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::pg::Pg;
-use diesel::{
-    BoolExpressionMethods as _, ExpressionMethods as _, JoinOnDsl as _, OptionalExtension as _,
-    PgTextExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
-};
 use serde::{Deserialize, Serialize};
 use serde_with::rust::double_option;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Queryable, Selectable, Debug)]
 #[diesel(table_name = users)]
 pub struct BaseUserWithBanLevel {

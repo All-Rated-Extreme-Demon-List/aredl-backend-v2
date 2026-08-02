@@ -7,12 +7,12 @@ use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::clan_members;
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use diesel::dsl::count_star;
-use diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[utoipa::path(
     get,
     summary = "Get clans",

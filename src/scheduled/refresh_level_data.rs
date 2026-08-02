@@ -7,16 +7,14 @@ use crate::schema::aredl;
 use crate::schema::arepl;
 use chrono::Utc;
 use diesel::dsl::exists;
-use diesel::{
-    select, BoolExpressionMethods as _, Connection as _, ExpressionMethods as _, JoinOnDsl as _,
-    QueryDsl as _, RunQueryDsl as _,
-};
+use diesel::select;
 use serde::Deserialize;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::task;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 pub async fn start_level_data_refresher(
     db: Arc<DbAppState>,
     providers: Arc<ProvidersAppState>,

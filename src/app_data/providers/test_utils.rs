@@ -1,18 +1,14 @@
 #[cfg(test)]
-use httpmock::{prelude::*, Mock};
-
-#[cfg(test)]
-use crate::providers::context::backend_oauth::oauth_token_aad;
-
-#[cfg(test)]
 use {
+    crate::providers::context::backend_oauth::oauth_token_aad,
     crate::{
         app_data::{db::DbAppState, providers::context::decrypt_db_token_value},
         auth::oauth::OAuthProvider,
         schema::oauth_tokens,
     },
     chrono::{DateTime, Utc},
-    diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _},
+    diesel::prelude::*,
+    httpmock::{prelude::*, Mock},
 };
 
 #[cfg(test)]

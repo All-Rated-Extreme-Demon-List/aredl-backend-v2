@@ -3,14 +3,12 @@ use crate::error_handler::ApiError;
 use crate::schema::users;
 use crate::users::User;
 use chrono::{DateTime, Duration, TimeZone as _, Utc};
-use diesel::{
-    result::Error as DieselError, ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _,
-    SelectableHelper as _,
-};
+use diesel::result::Error as DieselError;
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct UserClaims {
     pub user_id: Uuid,

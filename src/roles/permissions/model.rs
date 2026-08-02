@@ -3,12 +3,11 @@ use crate::auth::{Authenticated, Permission};
 use crate::error_handler::ApiError;
 use crate::roles::Role;
 use crate::schema::{role_permissions, role_permissions_full};
-use diesel::{
-    insert_into, Connection as _, ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _,
-};
+use diesel::insert_into;
 use std::collections::HashSet;
 use std::str::FromStr as _;
 
+use diesel::prelude::*;
 impl Role {
     pub fn permission_find_all(
         conn: &mut DbConnection,

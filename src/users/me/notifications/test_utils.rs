@@ -5,7 +5,7 @@ use {
         schema::notifications,
         users::me::notifications::{Notification, NotificationType},
     },
-    diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _},
+    diesel::prelude::*,
     std::sync::Arc,
     uuid::Uuid,
 };

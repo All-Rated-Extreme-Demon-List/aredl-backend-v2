@@ -1,16 +1,12 @@
 #[cfg(test)]
-use std::sync::Arc;
-
-#[cfg(test)]
-use super::{LevelCustomCopyStatus, LevelCustomCopyType};
-#[cfg(test)]
-use crate::app_data::db::DbAppState;
-#[cfg(test)]
-use crate::schema::arepl::level_custom_copies;
-#[cfg(test)]
-use diesel::{ExpressionMethods as _, RunQueryDsl as _};
-#[cfg(test)]
-use uuid::Uuid;
+use {
+    super::{LevelCustomCopyStatus, LevelCustomCopyType},
+    crate::app_data::db::DbAppState,
+    crate::schema::arepl::level_custom_copies,
+    diesel::prelude::*,
+    std::sync::Arc,
+    uuid::Uuid,
+};
 
 #[cfg(test)]
 pub async fn create_test_custom_copy(db: &Arc<DbAppState>, level_id: Uuid, user: Uuid) -> Uuid {

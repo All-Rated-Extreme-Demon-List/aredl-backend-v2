@@ -1,13 +1,16 @@
-use crate::app_data::db::DbAppState;
-use crate::auth::oauth::OAuthProvider;
-use crate::schema::{
-    oauth_connected_accounts, oauth_requests,
-    users::dsl::{access_valid_after, id as user_id_col, users},
+#[cfg(test)]
+use {
+    crate::app_data::db::DbAppState,
+    crate::auth::oauth::OAuthProvider,
+    crate::schema::{
+        oauth_connected_accounts, oauth_requests,
+        users::dsl::{access_valid_after, id as user_id_col, users},
+    },
+    chrono::{DateTime, Utc},
+    diesel::prelude::*,
+    std::sync::Arc,
+    uuid::Uuid,
 };
-use chrono::{DateTime, Utc};
-use diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _};
-use std::sync::Arc;
-use uuid::Uuid;
 
 pub fn access_valid_after_for_user(db: &Arc<DbAppState>, user_id: Uuid) -> DateTime<Utc> {
     users

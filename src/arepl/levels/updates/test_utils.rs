@@ -1,16 +1,8 @@
 #[cfg(test)]
-use std::sync::Arc;
-
-#[cfg(test)]
-use super::LevelUpdateType;
-#[cfg(test)]
-use crate::app_data::db::DbAppState;
-#[cfg(test)]
-use crate::schema::arepl::level_updates;
-#[cfg(test)]
-use diesel::{ExpressionMethods as _, RunQueryDsl as _};
-#[cfg(test)]
-use uuid::Uuid;
+use {
+    super::LevelUpdateType, crate::app_data::db::DbAppState, crate::schema::arepl::level_updates,
+    diesel::prelude::*, std::sync::Arc, uuid::Uuid,
+};
 
 #[cfg(test)]
 pub async fn create_test_update(db: &Arc<DbAppState>, level_id: Uuid) -> Uuid {

@@ -1,21 +1,17 @@
 #[cfg(test)]
-use std::iter::repeat_with;
-#[cfg(test)]
-use std::sync::Arc;
-
-#[cfg(test)]
-use crate::app_data::db::DbAppState;
-#[cfg(test)]
-use crate::{
-    clans::Clan,
-    clans::ClanMember,
-    schema::{clan_invites, clan_members, clans},
+use {
+    crate::app_data::db::DbAppState,
+    crate::{
+        clans::Clan,
+        clans::ClanMember,
+        schema::{clan_invites, clan_members, clans},
+    },
+    diesel::prelude::*,
+    diesel::result::{DatabaseErrorKind, Error},
+    std::iter::repeat_with,
+    std::sync::Arc,
+    uuid::Uuid,
 };
-use diesel::result::{DatabaseErrorKind, Error};
-#[cfg(test)]
-use diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _};
-#[cfg(test)]
-use uuid::Uuid;
 
 #[cfg(test)]
 fn generate_random_tag() -> String {

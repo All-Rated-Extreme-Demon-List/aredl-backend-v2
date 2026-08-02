@@ -15,8 +15,9 @@ use {
     },
     actix_web::test::{self, read_body_json},
     serde_json::json,
+    std::time::Duration,
+    tokio::time::sleep,
 };
-use {std::time::Duration, tokio::time::sleep};
 
 #[actix_web::test]
 async fn create_level() {

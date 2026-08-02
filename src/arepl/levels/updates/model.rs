@@ -5,16 +5,14 @@ use crate::{
     schema::arepl::{level_updates, levels},
 };
 use chrono::{DateTime, Utc};
-use diesel::{
-    pg::Pg, ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, Selectable,
-    SelectableHelper as _,
-};
+use diesel::{pg::Pg, Selectable};
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
 use serde_with::rust::double_option;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq)]
 #[ExistingTypePath = "crate::schema::arepl::sql_types::LevelUpdateType"]
 #[DbValueStyle = "PascalCase"]

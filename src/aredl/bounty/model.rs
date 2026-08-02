@@ -10,10 +10,7 @@ use crate::schema::{
 use chrono::{DateTime, Utc};
 use diesel::dsl::count;
 use diesel::pg::Pg;
-use diesel::{
-    BoolExpressionMethods as _, Connection as _, ExpressionMethods as _, JoinOnDsl as _,
-    QueryDsl as _, RunQueryDsl as _, Selectable, SelectableHelper as _,
-};
+use diesel::Selectable;
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
 use serde_with::rust::double_option;
@@ -21,6 +18,7 @@ use std::collections::{HashMap, HashSet};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, Copy, PartialEq, Eq, Hash)]
 #[ExistingTypePath = "crate::schema::aredl::sql_types::BountyType"]
 #[DbValueStyle = "PascalCase"]

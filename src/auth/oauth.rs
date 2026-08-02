@@ -3,9 +3,6 @@ use crate::error_handler::ApiError;
 use crate::schema::{oauth_requests, oauth_tokens};
 use crate::{get_optional_secret, get_secret};
 use chrono::{DateTime, Utc};
-use diesel::{
-    Connection as _, ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
-};
 use diesel_derive_enum::DbEnum;
 use oauth2::basic::BasicClient;
 use oauth2::{
@@ -19,6 +16,7 @@ use url::Url;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 pub type OAuthClient =
     BasicClient<EndpointSet, EndpointNotSet, EndpointNotSet, EndpointNotSet, EndpointSet>;
 

@@ -5,16 +5,12 @@ use crate::schema::{
     aredl::levels, aredl::pack_levels, aredl::pack_tiers, aredl::packs_points, aredl::records,
 };
 use diesel::pg::Pg;
-use diesel::{
-    BelongingToDsl as _, BoolExpressionMethods as _, ExpressionMethods as _, GroupedBy as _,
-    JoinOnDsl as _, NullableExpressionMethods as _, QueryDsl as _, RunQueryDsl as _,
-    SelectableHelper as _,
-};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Identifiable, Selectable, Queryable, Debug, ToSchema)]
 #[diesel(table_name=pack_tiers, check_for_backend(Pg))]
 pub struct BasePackTier {

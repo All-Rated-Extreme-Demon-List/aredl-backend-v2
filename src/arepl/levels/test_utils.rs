@@ -1,20 +1,14 @@
 #[cfg(test)]
-use std::sync::Arc;
-
-#[cfg(test)]
-use crate::arepl::levels::{Level, LevelStatus};
-#[cfg(test)]
-use crate::schema::arepl::{levels, levels_created, pack_levels, position_history};
-#[cfg(test)]
-use crate::users::test_utils::create_test_user;
-#[cfg(test)]
-use crate::{app_data::db::DbAppState, arepl::records::test_utils::create_test_record};
-#[cfg(test)]
-use diesel::{
-    sql_query, ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
+use {
+    crate::arepl::levels::{Level, LevelStatus},
+    crate::schema::arepl::{levels, levels_created, pack_levels, position_history},
+    crate::users::test_utils::create_test_user,
+    crate::{app_data::db::DbAppState, arepl::records::test_utils::create_test_record},
+    diesel::prelude::*,
+    diesel::sql_query,
+    std::sync::Arc,
+    uuid::Uuid,
 };
-#[cfg(test)]
-use uuid::Uuid;
 
 #[cfg(test)]
 pub async fn create_test_level(db: &Arc<DbAppState>) -> Uuid {

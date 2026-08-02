@@ -7,15 +7,12 @@ use crate::users::badges::UserBadge;
 use crate::users::User;
 use chrono::{DateTime, Utc};
 use diesel::dsl::now;
-use diesel::{
-    ExpressionMethods as _, JoinOnDsl as _, OptionalExtension as _, QueryDsl as _,
-    RunQueryDsl as _, SelectableHelper as _,
-};
 use serde::{Deserialize, Serialize};
 use serde_with::rust::double_option;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, AsChangeset, Debug, ToSchema)]
 #[diesel(table_name = users, check_for_backend(Pg))]
 pub struct UserMeUpdate {

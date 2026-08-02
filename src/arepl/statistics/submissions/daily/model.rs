@@ -10,15 +10,12 @@ use crate::{
 };
 use chrono::NaiveDate;
 use diesel::pg::Pg;
-use diesel::{
-    BoolExpressionMethods as _, ExpressionMethods as _, JoinOnDsl as _,
-    NullableExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
-};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema, Clone)]
 #[diesel(table_name = submission_stats, check_for_backend(Pg))]
 pub struct DailyStats {

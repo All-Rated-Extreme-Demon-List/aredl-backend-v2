@@ -15,15 +15,12 @@ use crate::users::{user_filter, ExtendedBaseUser};
 use actix_web::web;
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
-use diesel::query_dsl::JoinOnDsl as _;
-use diesel::{
-    Connection as _, ExpressionMethods as _, Insertable, OptionalExtension as _, QueryDsl as _,
-    RunQueryDsl as _, Selectable, SelectableHelper as _,
-};
+use diesel::{Insertable, Selectable};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema, Clone)]
 #[diesel(table_name=records, check_for_backend(Pg))]
 pub struct Record {

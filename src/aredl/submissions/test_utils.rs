@@ -9,10 +9,7 @@ use {
         schema::aredl::{submission_history, submissions},
     },
     chrono::{DateTime, Utc},
-    diesel::{
-        ExpressionMethods as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _,
-        SelectableHelper as _,
-    },
+    diesel::prelude::*,
     std::sync::Arc,
     uuid::Uuid,
 };

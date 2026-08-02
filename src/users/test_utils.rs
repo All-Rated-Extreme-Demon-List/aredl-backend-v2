@@ -1,16 +1,14 @@
 #[cfg(test)]
-use std::sync::Arc;
-
-#[cfg(test)]
-use crate::app_data::db::DbAppState;
-use crate::auth::Permission;
-use crate::schema::{role_permissions, roles, user_roles, users};
-use crate::users::User;
-use chrono::{DateTime, Utc};
-
-use diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _};
-
-use uuid::Uuid;
+use {
+    crate::app_data::db::DbAppState,
+    crate::auth::Permission,
+    crate::schema::{role_permissions, roles, user_roles, users},
+    crate::users::User,
+    chrono::{DateTime, Utc},
+    diesel::prelude::*,
+    std::sync::Arc,
+    uuid::Uuid,
+};
 
 #[cfg(test)]
 pub const TEST_STAFF_ROLE_PRIVILEGE_LEVEL: i32 = 100;

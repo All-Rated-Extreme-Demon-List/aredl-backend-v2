@@ -1,5 +1,4 @@
 use chrono::{DateTime, Utc};
-use diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -11,6 +10,7 @@ use crate::{
     schema::oauth_connected_accounts,
 };
 
+use diesel::prelude::*;
 #[derive(Debug, Clone, Queryable, Selectable, Identifiable, Serialize, Deserialize, ToSchema)]
 #[diesel(table_name = oauth_connected_accounts)]
 pub struct OAuthConnectedAccount {

@@ -1,10 +1,5 @@
 #[cfg(test)]
-use std::sync::Arc;
-
-#[cfg(test)]
-use crate::app_data::db::DbAppState;
-#[cfg(test)]
-use diesel::RunQueryDsl as _;
+use {crate::app_data::db::DbAppState, diesel::prelude::*, std::sync::Arc};
 
 #[cfg(test)]
 pub async fn refresh_test_clan_created_levels(db: &Arc<DbAppState>) {

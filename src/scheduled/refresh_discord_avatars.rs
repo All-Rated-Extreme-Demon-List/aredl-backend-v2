@@ -5,8 +5,6 @@ use crate::providers::ProvidersAppState;
 use crate::scheduled::{sleep_until_next, startup_schedule};
 use crate::schema::users;
 use chrono::Utc;
-use diesel::PgSortExpressionMethods as _;
-use diesel::{BoolExpressionMethods as _, ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _};
 use reqwest::header::{HeaderMap, AUTHORIZATION};
 use reqwest::StatusCode;
 use serde::Deserialize;
@@ -14,6 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::task;
 
+use diesel::prelude::*;
 const BATCH_LIMIT: i64 = 200;
 const STALE_AFTER_DAYS: i64 = 14;
 const DEFAULT_DELAY_MS: u64 = 500;

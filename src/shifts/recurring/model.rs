@@ -9,14 +9,12 @@ use crate::{
 };
 use chrono::{DateTime, NaiveDate, TimeZone as _, Timelike as _, Utc};
 use chrono_tz::Tz;
-use diesel::{
-    AsChangeset, ExpressionMethods as _, Identifiable, Insertable, JoinOnDsl as _, QueryDsl as _,
-    Queryable, RunQueryDsl as _, SelectableHelper as _,
-};
+use diesel::{AsChangeset, Identifiable, Insertable, Queryable};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(
     Serialize, Deserialize, Selectable, Debug, Clone, Queryable, Identifiable, AsChangeset, ToSchema,
 )]

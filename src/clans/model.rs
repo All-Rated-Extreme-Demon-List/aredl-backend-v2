@@ -5,10 +5,6 @@ use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::{clan_invites, clan_members, clans};
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
-use diesel::{
-    ExpressionMethods as _, OptionalExtension as _, PgTextExpressionMethods as _, QueryDsl as _,
-    RunQueryDsl as _, SelectableHelper as _,
-};
 use serde::{Deserialize, Serialize};
 use serde_with::rust::double_option;
 use utoipa::ToSchema;
@@ -16,6 +12,7 @@ use uuid::Uuid;
 
 use super::members::ClanMemberAdd;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
 #[diesel(table_name=clans, check_for_backend(Pg))]
 pub struct Clan {

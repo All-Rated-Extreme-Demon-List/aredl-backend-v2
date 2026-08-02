@@ -1,18 +1,15 @@
 #[cfg(test)]
-use std::sync::Arc;
-
-#[cfg(test)]
-use crate::{
-    app_data::db::DbAppState,
-    schema::{recurrent_shifts, shifts},
-    shifts::{Shift, Weekday},
+use {
+    crate::{
+        app_data::db::DbAppState,
+        schema::{recurrent_shifts, shifts},
+        shifts::{Shift, Weekday},
+    },
+    chrono::Utc,
+    diesel::prelude::*,
+    std::sync::Arc,
+    uuid::Uuid,
 };
-#[cfg(test)]
-use chrono::Utc;
-#[cfg(test)]
-use diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _};
-#[cfg(test)]
-use uuid::Uuid;
 
 #[cfg(test)]
 pub async fn create_test_shift(

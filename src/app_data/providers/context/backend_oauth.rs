@@ -13,14 +13,11 @@ use chacha20poly1305::{
     XChaCha20Poly1305, XNonce,
 };
 use chrono::{Duration as ChronoDuration, Utc};
-use diesel::{
-    ExpressionMethods as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _,
-    SelectableHelper as _,
-};
 use serde::Deserialize;
 use std::sync::OnceLock;
 use tokio::sync::Mutex;
 
+use diesel::prelude::*;
 const ENCRYPTED_TOKEN_PREFIX: &str = "enc:v1:";
 
 static TOKEN_CIPHER: OnceLock<Result<XChaCha20Poly1305, String>> = OnceLock::new();

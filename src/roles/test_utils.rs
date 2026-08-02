@@ -1,18 +1,15 @@
 #[cfg(test)]
-use std::collections::HashSet;
-#[cfg(test)]
-use std::sync::Arc;
-
-#[cfg(test)]
-use crate::{
-    app_data::db::DbAppState,
-    auth::Permission,
-    schema::{role_permissions, roles, user_roles},
+use {
+    crate::{
+        app_data::db::DbAppState,
+        auth::Permission,
+        schema::{role_permissions, roles, user_roles},
+    },
+    diesel::prelude::*,
+    std::collections::HashSet,
+    std::sync::Arc,
+    uuid::Uuid,
 };
-#[cfg(test)]
-use diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _};
-#[cfg(test)]
-use uuid::Uuid;
 
 #[cfg(test)]
 pub async fn create_test_role(db: &Arc<DbAppState>, privilege_level: i32) -> i32 {

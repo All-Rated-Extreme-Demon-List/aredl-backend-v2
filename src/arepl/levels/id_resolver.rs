@@ -2,9 +2,9 @@ use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::arepl::levels;
 use diesel::pg::Pg;
-use diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _};
 use uuid::Uuid;
 
+use diesel::prelude::*;
 fn parse_gd_id(string: &str) -> Result<(i32, bool), ApiError> {
     let (parsed_id, two_player) = if let Some(stripped) = string.strip_suffix("_2p") {
         (stripped.parse::<i32>(), true)

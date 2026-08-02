@@ -1,7 +1,6 @@
 use chrono::{DateTime, Utc};
 use diesel::dsl::now;
 use diesel::pg::Pg;
-use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -14,6 +13,7 @@ use crate::users::me::notifications::{Notification, NotificationType};
 use crate::users::merge::merge_users;
 use crate::users::{user_filter, BaseUser};
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Debug, ToSchema, Insertable, AsChangeset)]
 #[diesel(table_name = merge_requests, check_for_backend(Pg))]
 pub struct MergeRequestUpsert {

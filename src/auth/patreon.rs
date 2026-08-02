@@ -9,15 +9,12 @@ use crate::schema::oauth_connected_accounts;
 use actix_http::header;
 use actix_web::web::Json;
 use actix_web::{get, post, web, HttpResponse};
-use diesel::{
-    Connection as _, ExpressionMethods as _, OptionalExtension as _, QueryDsl as _,
-    RunQueryDsl as _,
-};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use url::Url;
 use utoipa::{OpenApi, ToSchema};
 
+use diesel::prelude::*;
 #[derive(Debug, Serialize, ToSchema)]
 struct PatreonLinkResponse {
     authorize_url: String,

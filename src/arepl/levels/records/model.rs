@@ -6,13 +6,11 @@ use crate::schema::{arepl::records, users};
 use crate::users::{user_ilike_filter, BaseUser, ExtendedBaseUser};
 use chrono::{DateTime, Utc};
 use diesel::dsl::count;
-use diesel::{
-    ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
-};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(utoipa::ToSchema, Serialize, Deserialize, Debug)]
 pub struct RecordQuery {
     high_extremes: Option<bool>,

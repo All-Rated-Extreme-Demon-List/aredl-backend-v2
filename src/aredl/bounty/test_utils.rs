@@ -6,7 +6,7 @@ use {
         schema::aredl::{bounties, bounty_completed},
     },
     chrono::{DateTime, Utc},
-    diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _},
+    diesel::prelude::*,
     serde_json::Value,
     std::sync::Arc,
     uuid::Uuid,

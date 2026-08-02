@@ -5,13 +5,11 @@ use crate::schema::aredl::{completed_packs, packs};
 use crate::schema::users;
 use crate::users::ExtendedBaseUser;
 use diesel::pg::Pg;
-use diesel::{
-    ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _,
-};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
 #[diesel(table_name=packs, check_for_backend(Pg))]
 pub struct BasePack {

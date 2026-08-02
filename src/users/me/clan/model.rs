@@ -2,12 +2,10 @@ use crate::app_data::db::DbConnection;
 use crate::clans::{Clan, ClanMember};
 use crate::error_handler::ApiError;
 use crate::schema::clan_members;
-use diesel::{
-    delete, ExpressionMethods as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _,
-    SelectableHelper as _,
-};
+use diesel::delete;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 impl Clan {
     pub fn leave(conn: &mut DbConnection, user_id: Uuid) -> Result<(), ApiError> {
         let member = clan_members::table

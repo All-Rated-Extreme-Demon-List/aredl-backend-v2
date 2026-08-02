@@ -6,14 +6,12 @@ use crate::error_handler::ApiError;
 use crate::schema::{clan_invites, clan_members, clans, users};
 use crate::users::me::notifications::{Notification, NotificationType};
 use crate::users::BaseUser;
-use diesel::{
-    delete, insert_into, Connection as _, ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _,
-    RunQueryDsl as _, SelectableHelper as _,
-};
+use diesel::{delete, insert_into};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Debug, Serialize, Deserialize, ToSchema, Queryable)]
 pub struct ClanInviteResolved {
     /// Invite received by the user.

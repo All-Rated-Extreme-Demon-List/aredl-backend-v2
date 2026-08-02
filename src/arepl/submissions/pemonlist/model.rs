@@ -1,5 +1,4 @@
 use chrono::Utc;
-use diesel::prelude::*;
 use serde::Deserialize;
 
 use crate::{
@@ -16,6 +15,7 @@ use crate::{
     },
 };
 
+use diesel::prelude::*;
 #[derive(Debug, Deserialize)]
 pub struct PemonlistPlayer {
     records: Vec<PemonlistRecord>,

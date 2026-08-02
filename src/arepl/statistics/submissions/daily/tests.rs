@@ -1,4 +1,3 @@
-use actix_http::StatusCode;
 #[cfg(test)]
 use {
     crate::{
@@ -19,6 +18,7 @@ use {
             create_test_user,
         },
     },
+    actix_http::StatusCode,
     actix_web::{
         http::header,
         test::{self, read_body_json},

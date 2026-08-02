@@ -1,13 +1,9 @@
 #[cfg(test)]
-use std::sync::Arc;
-
-#[cfg(test)]
-use crate::app_data::db::DbAppState;
-use crate::arepl::levels::LevelStatus;
-use crate::schema::arepl::position_history;
-use chrono::Utc;
-use diesel::{ExpressionMethods as _, RunQueryDsl as _};
-use uuid::Uuid;
+use {
+    crate::app_data::db::DbAppState, crate::arepl::levels::LevelStatus,
+    crate::schema::arepl::position_history, chrono::Utc, diesel::prelude::*, std::sync::Arc,
+    uuid::Uuid,
+};
 
 #[cfg(test)]
 pub fn insert_history_entry(

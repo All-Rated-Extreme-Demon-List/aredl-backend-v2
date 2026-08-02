@@ -4,11 +4,11 @@ use crate::scheduled::{sleep_until_next, startup_schedule};
 use crate::schema::matview_refresh_log;
 use chrono::Utc;
 use diesel::upsert::excluded;
-use diesel::{ExpressionMethods as _, RunQueryDsl as _};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::task;
 
+use diesel::prelude::*;
 #[derive(Queryable, Insertable, Debug)]
 #[diesel(table_name = matview_refresh_log, check_for_backend(Pg))]
 pub struct MatviewRefreshLog {

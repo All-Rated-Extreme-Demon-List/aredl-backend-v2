@@ -5,14 +5,12 @@ use crate::{
     users::BaseUser,
 };
 use chrono::{DateTime, Utc};
-use diesel::{
-    pg::Pg, result::Error as DieselError, ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _,
-    RunQueryDsl as _, Selectable, SelectableHelper as _,
-};
+use diesel::{pg::Pg, result::Error as DieselError, Selectable};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Queryable, Insertable, Selectable, Debug, ToSchema, Clone)]
 #[diesel(table_name = submissions_enabled, check_for_backend(Pg))]
 pub struct SubmissionsEnabled {

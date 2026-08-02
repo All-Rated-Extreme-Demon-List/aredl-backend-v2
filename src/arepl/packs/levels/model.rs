@@ -2,12 +2,10 @@ use crate::app_data::db::DbConnection;
 use crate::arepl::levels::BaseLevel;
 use crate::error_handler::ApiError;
 use crate::schema::{arepl::levels, arepl::pack_levels};
-use diesel::{
-    insert_into, Connection as _, ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _,
-    RunQueryDsl as _, SelectableHelper as _,
-};
+use diesel::insert_into;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 impl BaseLevel {
     pub fn pack_add_all(
         conn: &mut DbConnection,

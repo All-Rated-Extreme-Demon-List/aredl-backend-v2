@@ -1,6 +1,6 @@
-use crate::aredl::records::test_utils::create_test_record;
 #[cfg(test)]
 use {
+    crate::aredl::records::test_utils::create_test_record,
     crate::{
         aredl::leaderboard::test_utils::refresh_test_leaderboards,
         aredl::levels::test_utils::{

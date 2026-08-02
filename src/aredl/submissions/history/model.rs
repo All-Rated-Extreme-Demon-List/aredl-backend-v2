@@ -8,14 +8,12 @@ use crate::{
     users::BaseUser,
 };
 use chrono::{DateTime, Utc};
-use diesel::{
-    pg::Pg, ExpressionMethods as _, JoinOnDsl as _, NullableExpressionMethods as _, QueryDsl as _,
-    RunQueryDsl as _, Selectable, SelectableHelper as _,
-};
+use diesel::{pg::Pg, Selectable};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Debug, Serialize, Deserialize, Queryable, Insertable, Selectable, ToSchema)]
 #[diesel(table_name = submission_history, check_for_backend(Pg))]
 pub struct SubmissionHistory {

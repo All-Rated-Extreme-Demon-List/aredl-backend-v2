@@ -1,5 +1,6 @@
 #[cfg(test)]
 use {
+    super::test_utils::refresh_test_record_totals,
     crate::{
         aredl::{
             levels::test_utils::create_test_level_with_record,
@@ -15,8 +16,6 @@ use {
         test::{self, read_body_json},
     },
 };
-
-use super::test_utils::refresh_test_record_totals;
 
 #[actix_web::test]
 async fn total_records_counts_and_ordering() {

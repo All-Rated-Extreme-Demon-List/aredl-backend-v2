@@ -7,14 +7,11 @@ use crate::schema::clan_members;
 use crate::users::User;
 use actix_web::dev::Payload;
 use actix_web::{FromRequest, HttpMessage as _, HttpRequest};
-use diesel::{
-    ExpressionMethods as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _,
-    SelectableHelper as _,
-};
 use serde::{Deserialize, Serialize};
 use std::future::{ready, Ready};
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Authenticated(UserClaims);
 

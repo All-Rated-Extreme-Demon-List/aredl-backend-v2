@@ -9,15 +9,12 @@ use crate::{
     providers::ProvidersAppState,
     schema::aredl::{levels, submissions},
 };
-use diesel::{
-    Connection as _, ExpressionMethods as _, OptionalExtension as _, QueryDsl as _,
-    RunQueryDsl as _, SelectableHelper as _,
-};
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Debug, Insertable, ToSchema)]
 #[diesel(table_name=submissions, check_for_backend(Pg))]
 pub struct SubmissionPostUser {

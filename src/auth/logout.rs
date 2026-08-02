@@ -6,10 +6,10 @@ use crate::schema::users;
 use actix_http::header;
 use actix_web::{post, web, HttpRequest, HttpResponse};
 use chrono::Utc;
-use diesel::prelude::*;
 use std::sync::Arc;
 use utoipa::OpenApi;
 
+use diesel::prelude::*;
 #[utoipa::path(
     post,
 	summary = "[Auth]Logout",

@@ -14,20 +14,14 @@ use crate::{
     },
     users::{user_filter, ExtendedBaseUser},
 };
-use diesel::{
-    dsl::{auto_type, AliasedFields, AsSelect, Nullable},
-    expression_methods::NullableExpressionMethods as _,
-    BoolExpressionMethods as _, PgTextExpressionMethods as _,
-};
-use diesel::{
-    pg::Pg, ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _, RunQueryDsl as _, Selectable,
-    SelectableHelper as _,
-};
+use diesel::dsl::{auto_type, AliasedFields, AsSelect, Nullable};
+use diesel::{pg::Pg, Selectable};
 use serde::{Deserialize, Serialize};
 
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 pub type ResolvedSubmissionRow = (
     Submission,
     ExtendedBaseLevel,

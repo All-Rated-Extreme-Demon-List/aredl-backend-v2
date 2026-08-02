@@ -5,12 +5,12 @@ use crate::schema::merge_logs;
 use crate::users::badges::UserBadge;
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
-use diesel::prelude::*;
 use diesel::sql_types::Uuid as DieselUuid;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Selectable, AsChangeset, Queryable, Debug, ToSchema)]
 #[diesel(table_name = merge_logs, check_for_backend(Pg))]
 pub struct MergeLog {

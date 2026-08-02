@@ -2,13 +2,11 @@ use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::{role_permissions_full, roles, user_roles};
 use diesel::dsl::max;
-use diesel::{
-    ExpressionMethods as _, JoinOnDsl as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _,
-};
 use std::collections::HashSet;
 use strum_macros::{Display, EnumIter, EnumString};
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Clone, EnumString, Display, EnumIter, Copy)]
 #[strum(serialize_all = "snake_case")]
 /// Represents all available permissions. "Editing" usually refers to the ability to create, update, and delete.

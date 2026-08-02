@@ -3,12 +3,10 @@ use crate::error_handler::ApiError;
 use crate::schema::arepl::levels_created;
 use crate::schema::users;
 use crate::users::{BaseUser, BaseUserWithBanLevel};
-use diesel::{
-    delete, insert_into, Connection as _, ExpressionMethods as _, JoinOnDsl as _, QueryDsl as _,
-    RunQueryDsl as _, SelectableHelper as _,
-};
+use diesel::{delete, insert_into};
 use uuid::Uuid;
 
+use diesel::prelude::*;
 impl BaseUser {
     pub fn arepl_find_all_creators(
         conn: &mut DbConnection,

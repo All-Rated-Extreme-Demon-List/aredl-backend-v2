@@ -3,9 +3,9 @@ use crate::app_data::{
     db::DbAppState,
     providers::init_app_state as providers_init_app_state,
 };
-#[cfg(test)]
-use crate::providers::ProvidersAppState;
 use actix_http::{Request, StatusCode};
+#[cfg(test)]
+use {crate::providers::ProvidersAppState, tokio::sync::broadcast::Sender};
 
 use actix_web::{
     body::BoxBody,
@@ -19,8 +19,6 @@ use futures_util::future::{ready, LocalBoxFuture, Ready};
 use serde_json::{from_slice, Value};
 use std::sync::Arc;
 use tokio::sync::broadcast;
-#[cfg(test)]
-use tokio::sync::broadcast::Sender;
 use tracing_actix_web::TracingLogger;
 
 use crate::{

@@ -15,17 +15,13 @@ use crate::{
     users::me::notifications::{Notification, NotificationType},
 };
 use chrono::Utc;
-use diesel::Connection as _;
-use diesel::{
-    ExpressionMethods as _, OptionalExtension as _, QueryDsl as _, RunQueryDsl as _,
-    SelectableHelper as _,
-};
 use serde::{Deserialize, Serialize};
 use serde_with::rust::double_option;
 use tokio::sync::broadcast;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Debug, AsChangeset, Default, ToSchema, Clone, PartialEq)]
 #[diesel(table_name=submissions, check_for_backend(Pg))]
 pub struct SubmissionPatchUser {

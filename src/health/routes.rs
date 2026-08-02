@@ -1,12 +1,12 @@
 use actix_web::web;
 use actix_web::{get, HttpResponse};
-use diesel::RunQueryDsl as _;
 use std::sync::Arc;
 use utoipa::OpenApi;
 
 use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
 
+use diesel::prelude::*;
 #[utoipa::path(
     get,
     responses(

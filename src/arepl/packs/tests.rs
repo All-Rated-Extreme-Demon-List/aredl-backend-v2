@@ -1,12 +1,9 @@
+#[cfg(test)]
 use {
     crate::arepl::{
         levels::test_utils::add_test_level_to_pack,
         records::test_utils::{create_test_record, set_test_record_achieved_at},
     },
-    chrono::{DateTime, Utc},
-};
-#[cfg(test)]
-use {
     crate::{
         arepl::levels::test_utils::create_test_level,
         arepl::packs::test_utils::{create_test_pack, create_test_pack_tier},
@@ -15,6 +12,7 @@ use {
         users::test_utils::create_test_user,
     },
     actix_web::test::{self, read_body_json},
+    chrono::{DateTime, Utc},
     serde_json::json,
 };
 

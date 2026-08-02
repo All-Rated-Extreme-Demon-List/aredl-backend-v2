@@ -9,10 +9,11 @@ use {
         schema::aredl::{records, submissions},
     },
     chrono::{DateTime, Utc},
-    diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _, SelectableHelper as _},
+    diesel::prelude::*,
     std::sync::Arc,
     uuid::Uuid,
 };
+
 #[cfg(test)]
 pub async fn create_test_record(db: &Arc<DbAppState>, user_id: Uuid, level_id: Uuid) -> Uuid {
     let conn = &mut db.connection().unwrap();

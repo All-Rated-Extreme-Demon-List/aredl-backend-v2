@@ -3,7 +3,6 @@ use std::sync::Arc;
 use actix_http::header;
 use actix_web::{get, web, HttpResponse};
 use chrono::{DateTime, Duration, Utc};
-use diesel::prelude::*;
 
 use serde::{Deserialize, Serialize};
 use utoipa::{OpenApi, ToSchema};
@@ -21,6 +20,7 @@ use crate::roles::Role;
 use crate::schema::{roles, user_roles};
 use crate::users::{User, UserUpsert};
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, ToSchema)]
 struct DiscordUser {
     pub id: String,

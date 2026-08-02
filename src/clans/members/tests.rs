@@ -1,4 +1,3 @@
-use actix_http::StatusCode;
 #[cfg(test)]
 use {
     crate::{
@@ -10,6 +9,7 @@ use {
         test_utils::{assert_error_response, init_test_app},
         users::test_utils::create_test_user,
     },
+    actix_http::StatusCode,
     actix_web::test::{self, read_body_json},
     chrono::{Duration, Timelike as _, Utc},
     serde_json::json,

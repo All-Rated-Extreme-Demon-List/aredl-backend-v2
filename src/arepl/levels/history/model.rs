@@ -3,11 +3,11 @@ use crate::arepl::levels::{BaseLevel, LevelStatus};
 use crate::error_handler::ApiError;
 use crate::schema::arepl::{levels, position_history_full_view};
 use chrono::{DateTime, Utc};
-use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Clone, Serialize, Deserialize, ToSchema)]
 
 pub enum HistoryEvent {
