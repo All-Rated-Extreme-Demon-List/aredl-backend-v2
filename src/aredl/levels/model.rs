@@ -224,8 +224,8 @@ impl Level {
 
         levels.retain(|level| {
             !((query.exclude_legacy == Some(true) && level.status == LevelStatus::Legacy)
-                || (query.exclude_pending == Some(true) && level.status == LevelStatus::Pending)
-                || (query.exclude_removed == Some(true) && level.status == LevelStatus::Removed))
+                || (query.exclude_pending.unwrap_or(true) && level.status == LevelStatus::Pending)
+                || (query.exclude_removed.unwrap_or(true) && level.status == LevelStatus::Removed))
         });
         Ok(levels)
     }

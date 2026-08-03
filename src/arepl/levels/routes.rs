@@ -19,8 +19,8 @@ use utoipa::OpenApi;
     tag = "AREDL (P) - Levels",
     params(
         ("exclude_legacy" = Option<bool>, Query, description = "Whether levels on the legacy list should be excluded"),
-        ("exclude_pending" = Option<bool>, Query, description = "Whether pending levels should be excluded"),
-        ("exclude_removed" = Option<bool>, Query, description = "Whether removed levels should be excluded"),
+        ("exclude_pending" = Option<bool>, Query, description = "Whether pending levels should be excluded. Defaults to true"),
+        ("exclude_removed" = Option<bool>, Query, description = "Whether removed levels should be excluded. Defaults to true"),
         ("at" = Option<DateTime<Utc>>, Query, description = "Return the state of the list at the provided timestamp"),
     ),
     responses(
