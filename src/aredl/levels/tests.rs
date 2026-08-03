@@ -5,7 +5,7 @@ use {
             levels::test_utils::{
                 add_test_level_creators, add_test_level_to_pack, create_test_level,
                 create_test_level_with_record, latest_test_position_history_created_at,
-                refresh_test_position_history,
+                refresh_test_position_history, set_test_level_gd_id,
             },
             packs::test_utils::create_test_pack,
         },
@@ -210,6 +210,24 @@ async fn find_level() {
         level_id.to_string(),
         body["id"].as_str().unwrap().to_owned(),
         "IDs do not match!"
+    );
+}
+
+#[actix_web::test]
+async fn find_level_by_position() {
+    let (app, db, _, _) = init_test_app().await;
+    let level_id = create_test_level(&db).await;
+    set_test_level_gd_id(&db, level_id, 123_456_789).await;
+
+    let req = test::TestRequest::get().uri("/aredl/levels/1").to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(
+        level_id.to_string(),
+        body["id"].as_str().unwrap().to_owned(),
+        "Position did not resolve to the expected level"
     );
 }
 

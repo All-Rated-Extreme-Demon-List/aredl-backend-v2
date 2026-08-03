@@ -24,29 +24,21 @@ pub fn level_filter(input: &str) -> Result<levels::BoxedQuery<'static, Pg>, ApiE
     if let Ok(uuid) = Uuid::parse_str(input) {
         query = query.filter(levels::id.eq(uuid));
     } else {
-        let (id, two_player) = parse_gd_id(input)?;
-        query = query
-            .filter(levels::level_id.eq(id))
-            .filter(levels::two_player.eq(two_player));
+        let (id_or_position, two_player) = parse_gd_id(input)?;
+        query = query.filter(
+            levels::level_id
+                .eq(id_or_position)
+                .and(levels::two_player.eq(two_player))
+                .or(levels::position.eq(id_or_position)),
+        );
     }
 
     Ok(query)
 }
 
-fn resolve_gd_id(conn: &mut DbConnection, string: &str) -> Result<Uuid, ApiError> {
-    let (id, two_player) = parse_gd_id(string)?;
-    let resolved_id = levels::table
-        .filter(levels::level_id.eq(id))
-        .filter(levels::two_player.eq(two_player))
+pub fn resolve_level_id(conn: &mut DbConnection, v: &str) -> Result<Uuid, ApiError> {
+    level_filter(v)?
         .select(levels::id)
         .first::<Uuid>(conn)
-        .map_err(|error| ApiError::NotFound(format!("Failed to resolve {string}: {error}")))?;
-    Ok(resolved_id)
-}
-
-pub fn resolve_level_id(conn: &mut DbConnection, v: &str) -> Result<Uuid, ApiError> {
-    match Uuid::parse_str(v) {
-        Ok(uuid) => Ok(uuid),
-        Err(_) => resolve_gd_id(conn, v),
-    }
+        .map_err(|error| ApiError::NotFound(format!("Failed to resolve {v}: {error}")))
 }

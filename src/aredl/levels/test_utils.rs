@@ -102,6 +102,14 @@ pub async fn get_test_level(db: &Arc<DbAppState>, level_id: Uuid) -> Level {
 }
 
 #[cfg(test)]
+pub async fn set_test_level_gd_id(db: &Arc<DbAppState>, level_id: Uuid, gd_id: i32) {
+    diesel::update(levels::table.filter(levels::id.eq(level_id)))
+        .set(levels::level_id.eq(gd_id))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to set test aredl level GD ID");
+}
+
+#[cfg(test)]
 pub async fn refresh_test_position_history(db: &Arc<DbAppState>) {
     sql_query("REFRESH MATERIALIZED VIEW aredl.position_history_full_view")
         .execute(&mut db.connection().unwrap())
