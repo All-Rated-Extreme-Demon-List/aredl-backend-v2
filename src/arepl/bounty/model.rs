@@ -106,7 +106,7 @@ impl BountyResolved {
         let completion_counts = bounty_completed::table
             .inner_join(users::table.on(users::id.eq(bounty_completed::user_id)))
             .filter(bounty_completed::bounty_id.eq_any(&bounty_ids))
-            .filter(users::ban_level.le(1))
+            .filter(users::ban_level.le(2))
             .group_by(bounty_completed::bounty_id)
             .select((
                 bounty_completed::bounty_id,
@@ -121,7 +121,7 @@ impl BountyResolved {
                 .inner_join(users::table.on(users::id.eq(bounty_completed::user_id)))
                 .filter(bounty_completed::bounty_id.eq_any(&bounty_ids))
                 .filter(bounty_completed::user_id.eq(user))
-                .filter(users::ban_level.le(1))
+                .filter(users::ban_level.le(2))
                 .select(bounty_completed::bounty_id)
                 .load::<Uuid>(conn)?
                 .into_iter()

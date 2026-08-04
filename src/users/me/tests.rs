@@ -134,7 +134,7 @@ async fn update_authenticated_user_banned() {
     let user_token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    set_test_user_ban_level(&db, user_id, 2).await;
+    set_test_user_ban_level(&db, user_id, 3).await;
 
     let update_payload = json!({
         "ban_level": 1

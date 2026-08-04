@@ -124,18 +124,21 @@ async fn get_country_includes_completion_counts_and_level_records() {
 
     let (member_a, _) = create_test_user(&db, None).await;
     let (member_b, _) = create_test_user(&db, None).await;
-    let (banned_member, _) = create_test_user(&db, None).await;
+    let (semi_unranked_member, _) = create_test_user(&db, None).await;
+    let (unranked_member, _) = create_test_user(&db, None).await;
     let (outsider, _) = create_test_user(&db, None).await;
 
     set_test_user_country(&db, member_a, Some(country_id)).await;
     set_test_user_country(&db, member_b, Some(country_id)).await;
-    set_test_user_country(&db, banned_member, Some(country_id)).await;
+    set_test_user_country(&db, semi_unranked_member, Some(country_id)).await;
+    set_test_user_country(&db, unranked_member, Some(country_id)).await;
     set_test_user_country(&db, outsider, Some(other_country)).await;
 
     let shared_level = create_test_level(&db).await;
     let member_a_shared = create_test_record(&db, member_a, shared_level).await;
     let member_b_shared = create_test_record(&db, member_b, shared_level).await;
-    let _banned_shared = create_test_record(&db, banned_member, shared_level).await;
+    let semi_unranked_shared = create_test_record(&db, semi_unranked_member, shared_level).await;
+    let _unranked_shared = create_test_record(&db, unranked_member, shared_level).await;
     let _outsider_shared = create_test_record(&db, outsider, shared_level).await;
 
     let legacy_level = create_test_level(&db).await;
@@ -145,7 +148,8 @@ async fn get_country_includes_completion_counts_and_level_records() {
     create_test_record(&db, member_a, removed_level).await;
 
     set_test_record_verification(&db, member_b_shared, true).await;
-    set_test_user_ban_level(&db, banned_member, 1).await;
+    set_test_user_ban_level(&db, semi_unranked_member, 1).await;
+    set_test_user_ban_level(&db, unranked_member, 2).await;
     set_test_level_status(&db, legacy_level, LevelStatus::Legacy, Some(3)).await;
     set_test_level_status(&db, removed_level, LevelStatus::Removed, None).await;
 
@@ -158,7 +162,7 @@ async fn get_country_includes_completion_counts_and_level_records() {
     let body: serde_json::Value = read_body_json(resp).await;
 
     let shared_record = find_profile_record_for_level(&body, shared_level);
-    assert_eq!(shared_record["completion_count"].as_i64(), Some(2));
+    assert_eq!(shared_record["completion_count"].as_i64(), Some(3));
     assert_eq!(
         find_profile_record_for_level(&body, legacy_level)["completion_count"].as_i64(),
         Some(1)
@@ -172,8 +176,10 @@ async fn get_country_includes_completion_counts_and_level_records() {
     assert!(body.get("members_points").is_none());
 
     let old_time: DateTime<Utc> = "2020-01-01T00:00:00Z".parse().unwrap();
+    let middle_time: DateTime<Utc> = "2020-06-01T00:00:00Z".parse().unwrap();
     let new_time: DateTime<Utc> = "2021-01-01T00:00:00Z".parse().unwrap();
     set_test_record_achieved_at(&db, member_a_shared, old_time).await;
+    set_test_record_achieved_at(&db, semi_unranked_shared, middle_time).await;
     set_test_record_achieved_at(&db, member_b_shared, new_time).await;
 
     let req = test::TestRequest::get()
@@ -184,13 +190,17 @@ async fn get_country_includes_completion_counts_and_level_records() {
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let records: serde_json::Value = read_body_json(resp).await;
     let records = records.as_array().unwrap();
-    assert_eq!(records.len(), 2);
+    assert_eq!(records.len(), 3);
     assert_eq!(
         records[0]["id"].as_str(),
         Some(member_a_shared.to_string().as_str())
     );
     assert_eq!(
         records[1]["id"].as_str(),
+        Some(semi_unranked_shared.to_string().as_str())
+    );
+    assert_eq!(
+        records[2]["id"].as_str(),
         Some(member_b_shared.to_string().as_str())
     );
 }

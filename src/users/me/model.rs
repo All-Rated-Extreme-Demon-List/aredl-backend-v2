@@ -45,7 +45,7 @@ impl User {
             .select((users::ban_level, users::last_country_update))
             .first(conn)?;
 
-        if user.ban_level.is_some() && current_ban_level > 1 {
+        if user.ban_level.is_some() && current_ban_level >= 3 {
             return Err(ApiError::Forbidden("You have been banned from the list."));
         }
 

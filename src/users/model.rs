@@ -211,7 +211,7 @@ impl BaseUser {
     }
 
     pub fn from_base_user_with_ban_level(user: BaseUserWithBanLevel) -> Self {
-        if user.ban_level == 3 {
+        if user.ban_level == 4 {
             BaseUser {
                 id: user.id,
                 username: "-".to_owned(),
@@ -273,7 +273,7 @@ impl User {
             .optional()?;
 
         match user {
-            Some(ban_level) => Ok(ban_level > 1),
+            Some(ban_level) => Ok(ban_level >= 3),
             None => Err(ApiError::NotFound("User not found")),
         }
     }
@@ -396,7 +396,7 @@ impl User {
             .returning(Self::as_select())
             .get_result::<Self>(conn)?;
 
-        if ban_level >= 2 {
+        if ban_level >= 3 {
             // Set user's pending classic submissions to `Denied`
             diesel::update(
                 submissions::table

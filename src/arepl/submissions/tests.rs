@@ -833,7 +833,7 @@ async fn submission_banned_player() {
 
     let (banned, _) = create_test_user(&db, None).await;
 
-    set_test_user_ban_level(&db, banned, 2).await;
+    set_test_user_ban_level(&db, banned, 3).await;
 
     let banned_token =
         create_test_token(banned, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -881,7 +881,7 @@ async fn patch_submission_banned_submitter() {
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, user, &db).await;
 
-    set_test_user_ban_level(&db, user, 2).await;
+    set_test_user_ban_level(&db, user, 3).await;
 
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission}"))

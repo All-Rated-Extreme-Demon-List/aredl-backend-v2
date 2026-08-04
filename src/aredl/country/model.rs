@@ -171,7 +171,7 @@ impl CountryProfileResolved {
                 .filter(country_created_levels::country.eq(country))
                 .inner_join(levels::table.on(levels::id.eq(country_created_levels::level_id)))
                 .inner_join(users::table.on(users::id.eq(country_created_levels::creator_id)))
-                .filter(users::ban_level.ne(3))
+                .filter(users::ban_level.ne(4))
                 .order_by((
                     country_created_levels::order_pos.asc(),
                     users::global_name.asc(),
@@ -204,7 +204,7 @@ impl CountryProfileResolved {
         let published = levels::table
             .inner_join(users::table.on(users::id.eq(levels::publisher_id)))
             .filter(users::country.eq(country))
-            .filter(users::ban_level.ne(3))
+            .filter(users::ban_level.ne(4))
             .order_by(levels::position.asc())
             .select((ExtendedBaseLevel::as_select(), BaseUser::as_select()))
             .load(conn)?
@@ -234,7 +234,7 @@ impl CountryProfileResolved {
             .inner_join(users::table.on(records::submitted_by.eq(users::id)))
             .inner_join(levels::table.on(records::level_id.eq(levels::id)))
             .filter(users::country.eq(country))
-            .filter(users::ban_level.eq(0))
+            .filter(users::ban_level.le(1))
             .filter(levels::status.ne(LevelStatus::Removed))
             .order(records::achieved_at.asc())
             .select((Record::as_select(), ExtendedBaseUser::as_select()))

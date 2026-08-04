@@ -91,7 +91,7 @@ impl LevelResolvedRecordExtended {
                 .filter(records::level_id.eq(level_id))
                 .filter(records::is_verification.eq(false))
                 .inner_join(users::table.on(records::submitted_by.eq(users::id)))
-                .filter(users::ban_level.le(1))
+                .filter(users::ban_level.le(2))
                 .into_boxed();
 
             if let Some(submitter_filter) = &opts.submitter_filter {

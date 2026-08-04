@@ -157,9 +157,10 @@ async fn update(
         | Ban level | Account status |    \n\
         |---|---|    \n\
         | 0 | Normal (No restriction)|    \n\
-        | 1 | Unranked (Does not want to appear on the leaderboards, but is still able to submit records)|    \n\
-        | 2 | List banned (Has been banned from the list. Does not appear on leaderboards, and isn't able to submit records)|    \n\
-        | 3 | Redacted (Hidden users that have been removed from the site for various reasons, but whose account are kept for internal purposes)|    \n\
+        | 1 | Semi-unranked (Does not appear on user leaderboards, but still contributes records to country and clan leaderboards)|    \n\
+        | 2 | Unranked (Does not want to appear on leaderboards, but is still able to submit records)|    \n\
+        | 3 | List banned (Has been banned from the list. Does not appear on leaderboards, and isn't able to submit records)|    \n\
+        | 4 | Redacted (Hidden users that have been removed from the site for various reasons, but whose account are kept for internal purposes)|    \n\
     ",
     tag = "Users",
     params(
@@ -187,7 +188,7 @@ async fn ban(
         let conn = &mut db.connection()?;
         let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
         authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
-        if user.ban_level == 3 {
+        if user.ban_level == 4 {
             authenticated.ensure_has_permission(conn, Permission::UserRedact)?;
         }
         User::ban(conn, &authenticated, user_id, user.into_inner().ban_level)

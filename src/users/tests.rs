@@ -107,7 +107,7 @@ async fn ban_user() {
     let manager_token = create_test_token(manager_user_id, &auth.jwt_encoding_key)
         .expect("Failed to generate token");
 
-    let ban_payload = json!({ "ban_level": 2 });
+    let ban_payload = json!({ "ban_level": 3 });
 
     let req = test::TestRequest::patch()
         .uri(&format!("/users/{user_id}/ban"))
@@ -119,7 +119,7 @@ async fn ban_user() {
     assert!(resp.status().is_success());
 
     let banned_user: serde_json::Value = read_body_json(resp).await;
-    assert_eq!(banned_user["ban_level"], 2);
+    assert_eq!(banned_user["ban_level"], 3);
 
     let req = test::TestRequest::get()
         .uri(&format!("/users?name_filter=%{username}%"))
@@ -129,7 +129,7 @@ async fn ban_user() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
     let users: serde_json::Value = read_body_json(resp).await;
-    assert_eq!(users["data"].as_array().unwrap()[0]["ban_level"], 2);
+    assert_eq!(users["data"].as_array().unwrap()[0]["ban_level"], 3);
 }
 
 #[actix_web::test]
@@ -140,7 +140,7 @@ async fn redact_user_requires_redact_permission() {
     let staff_token =
         create_test_token(staff_user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    let redact_payload = json!({ "ban_level": 3 });
+    let redact_payload = json!({ "ban_level": 4 });
 
     let req = test::TestRequest::patch()
         .uri(&format!("/users/{user_id}/ban"))
@@ -152,7 +152,7 @@ async fn redact_user_requires_redact_permission() {
     assert_eq!(resp.status().as_u16(), 403);
 
     let ban_level = get_test_user(&db, user_id).ban_level;
-    assert_ne!(ban_level, 3);
+    assert_ne!(ban_level, 4);
 }
 
 #[actix_web::test]
@@ -165,7 +165,7 @@ async fn redact_user_succeeds_with_redact_permission() {
     let staff_token =
         create_test_token(staff_user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    let redact_payload = json!({ "ban_level": 3 });
+    let redact_payload = json!({ "ban_level": 4 });
 
     let req = test::TestRequest::patch()
         .uri(&format!("/users/{user_id}/ban"))
@@ -177,7 +177,7 @@ async fn redact_user_succeeds_with_redact_permission() {
     assert!(resp.status().is_success());
 
     let redacted_user: serde_json::Value = read_body_json(resp).await;
-    assert_eq!(redacted_user["ban_level"], 3);
+    assert_eq!(redacted_user["ban_level"], 4);
 }
 
 #[actix_web::test]
@@ -422,11 +422,11 @@ async fn list_users_with_ban_level_filter() {
     let staff_token =
         create_test_token(staff_user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    set_test_user_ban_level(&db, banned_user_id, 2).await;
+    set_test_user_ban_level(&db, banned_user_id, 3).await;
     set_test_user_ban_level(&db, other_user_id, 0).await;
 
     let req = test::TestRequest::get()
-        .uri("/users?ban_level=2")
+        .uri("/users?ban_level=3")
         .insert_header(("Authorization", format!("Bearer {staff_token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -451,11 +451,11 @@ async fn list_users_hides_banned_users_for_unauthenticated_requests() {
     let (banned_user_id, _) = create_test_user(&db, None).await;
     let (other_user_id, _) = create_test_user(&db, None).await;
 
-    set_test_user_ban_level(&db, banned_user_id, 2).await;
+    set_test_user_ban_level(&db, banned_user_id, 3).await;
     set_test_user_ban_level(&db, other_user_id, 0).await;
 
     let req = test::TestRequest::get()
-        .uri("/users?ban_level=2")
+        .uri("/users?ban_level=3")
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());

@@ -28,7 +28,7 @@ impl Bounty {
         let count = bounty_completed::table
             .inner_join(users::table.on(users::id.eq(bounty_completed::user_id)))
             .filter(bounty_completed::bounty_id.eq(self.id))
-            .filter(users::ban_level.le(1))
+            .filter(users::ban_level.le(2))
             .count()
             .get_result(conn)?;
         Ok(count)
@@ -41,7 +41,7 @@ impl Bounty {
         let completions = bounty_completed::table
             .inner_join(users::table.on(users::id.eq(bounty_completed::user_id)))
             .filter(bounty_completed::bounty_id.eq(bounty_id))
-            .filter(users::ban_level.le(1))
+            .filter(users::ban_level.le(2))
             .select((
                 ExtendedBaseUser::as_select(),
                 bounty_completed::completed_at,
@@ -77,7 +77,7 @@ impl Bounty {
             .filter(records::achieved_at.ge(self.start_date))
             .filter(records::achieved_at.le(self.end_date.unwrap_or(Utc::now())))
             .filter(records::submitted_by.ne_all(existing_completions))
-            .filter(users::ban_level.le(1))
+            .filter(users::ban_level.le(2))
             .limit(max_missing_completions)
             .select((records::submitted_by, records::achieved_at))
             .load::<(Uuid, DateTime<Utc>)>(conn)?;

@@ -182,7 +182,7 @@ impl SubmissionPatchUser {
             .select(users::ban_level)
             .first::<i32>(conn)?;
 
-        if submitter_ban >= 2 {
+        if submitter_ban >= 3 {
             return Err(ApiError::Forbidden(
                 "You have been banned from submitting records.",
             ));

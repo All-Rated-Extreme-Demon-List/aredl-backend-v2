@@ -117,18 +117,21 @@ async fn get_clan_includes_completion_counts_and_member_points() {
 
     let (member_a, _) = create_test_user(&db, None).await;
     let (member_b, _) = create_test_user(&db, None).await;
-    let (banned_member, _) = create_test_user(&db, None).await;
+    let (semi_unranked_member, _) = create_test_user(&db, None).await;
+    let (unranked_member, _) = create_test_user(&db, None).await;
     let (outsider, _) = create_test_user(&db, None).await;
 
     let clan_id = create_test_clan(&db).await;
     create_test_clan_member(&db, clan_id, member_a, 0).await;
     create_test_clan_member(&db, clan_id, member_b, 0).await;
-    create_test_clan_member(&db, clan_id, banned_member, 0).await;
+    create_test_clan_member(&db, clan_id, semi_unranked_member, 0).await;
+    create_test_clan_member(&db, clan_id, unranked_member, 0).await;
 
     let shared_level = create_test_level(&db).await;
     let member_a_shared = create_test_record(&db, member_a, shared_level).await;
     let member_b_shared = create_test_record(&db, member_b, shared_level).await;
-    let _banned_shared = create_test_record(&db, banned_member, shared_level).await;
+    let semi_unranked_shared = create_test_record(&db, semi_unranked_member, shared_level).await;
+    let _unranked_shared = create_test_record(&db, unranked_member, shared_level).await;
     let _outsider_shared = create_test_record(&db, outsider, shared_level).await;
 
     let solo_level = create_test_level(&db).await;
@@ -141,7 +144,8 @@ async fn get_clan_includes_completion_counts_and_member_points() {
     create_test_record(&db, member_a, removed_level).await;
 
     set_test_record_verification(&db, member_b_shared, true).await;
-    set_test_user_ban_level(&db, banned_member, 1).await;
+    set_test_user_ban_level(&db, semi_unranked_member, 1).await;
+    set_test_user_ban_level(&db, unranked_member, 2).await;
     set_test_level_status(&db, legacy_level, LevelStatus::Legacy, Some(4)).await;
     set_test_level_status(&db, removed_level, LevelStatus::Removed, None).await;
 
@@ -154,7 +158,7 @@ async fn get_clan_includes_completion_counts_and_member_points() {
     let body: serde_json::Value = read_body_json(resp).await;
 
     let shared_record = find_profile_record_for_level(&body, shared_level);
-    assert_eq!(shared_record["completion_count"].as_i64(), Some(2));
+    assert_eq!(shared_record["completion_count"].as_i64(), Some(3));
 
     let legacy_record = find_profile_record_for_level(&body, legacy_level);
     assert_eq!(legacy_record["completion_count"].as_i64(), Some(1));
@@ -174,25 +178,34 @@ async fn get_clan_includes_completion_counts_and_member_points() {
     assert_eq!(member_a_points["completed_levels"].as_i64(), Some(2));
     assert_float_eq(
         member_a_points["contributed_points"].as_f64().unwrap(),
-        shared_points / 2.0 + solo_points,
+        shared_points / 3.0 + solo_points,
     );
 
     let member_b_points = find_member_points(&body, member_b);
     assert_eq!(member_b_points["completed_levels"].as_i64(), Some(2));
     assert_float_eq(
         member_b_points["contributed_points"].as_f64().unwrap(),
-        shared_points / 2.0,
+        shared_points / 3.0,
+    );
+
+    let semi_unranked_points = find_member_points(&body, semi_unranked_member);
+    assert_eq!(semi_unranked_points["completed_levels"].as_i64(), Some(1));
+    assert_float_eq(
+        semi_unranked_points["contributed_points"].as_f64().unwrap(),
+        shared_points / 3.0,
     );
 
     assert!(!body["members_points"]
         .as_array()
         .unwrap()
         .iter()
-        .any(|entry| entry["member"]["id"].as_str() == Some(&banned_member.to_string())));
+        .any(|entry| entry["member"]["id"].as_str() == Some(&unranked_member.to_string())));
 
     let old_time: DateTime<Utc> = "2020-01-01T00:00:00Z".parse().unwrap();
+    let middle_time: DateTime<Utc> = "2020-06-01T00:00:00Z".parse().unwrap();
     let new_time: DateTime<Utc> = "2021-01-01T00:00:00Z".parse().unwrap();
     set_test_record_achieved_at(&db, member_a_shared, old_time).await;
+    set_test_record_achieved_at(&db, semi_unranked_shared, middle_time).await;
     set_test_record_achieved_at(&db, member_b_shared, new_time).await;
 
     let req = test::TestRequest::get()
@@ -203,13 +216,17 @@ async fn get_clan_includes_completion_counts_and_member_points() {
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let records: serde_json::Value = read_body_json(resp).await;
     let records = records.as_array().unwrap();
-    assert_eq!(records.len(), 2);
+    assert_eq!(records.len(), 3);
     assert_eq!(
         records[0]["id"].as_str(),
         Some(member_a_shared.to_string().as_str())
     );
     assert_eq!(
         records[1]["id"].as_str(),
+        Some(semi_unranked_shared.to_string().as_str())
+    );
+    assert_eq!(
+        records[2]["id"].as_str(),
         Some(member_b_shared.to_string().as_str())
     );
 }
