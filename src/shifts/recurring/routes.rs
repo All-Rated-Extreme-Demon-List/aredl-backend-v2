@@ -3,7 +3,7 @@ use crate::{
     auth::{Authenticated, Permission, UserAuth},
     error_handler::ApiError,
     shifts::{
-        convert_start_hour_to_utc,
+        parse_timezone,
         recurring::{RecurringShift, RecurringShiftInsert, RecurringShiftPatch},
         ResolvedRecurringShift, SelfRecurringShiftInsert,
     },
@@ -59,9 +59,10 @@ async fn create_new_recurring_shift(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&body));
-    let shift =
-        web::block(move || RecurringShift::create(&mut db.connection()?, &body.into_inner()))
-            .await??;
+    let shift = web::block(move || {
+        parse_timezone(&body.timezone)?;
+        RecurringShift::create(&mut db.connection()?, &body.into_inner())
+    }).await??;
     Ok(HttpResponse::Ok().json(shift))
 }
 
@@ -89,32 +90,17 @@ async fn create_own_recurring_shift(
     let shift = web::block(move || {
         let new_shift = body.into_inner();
 
-        let start_hour_in_timezone: u32 = new_shift.start_hour.try_into().map_err(|_foo| {
-            ApiError::BadRequest(
-                "Invalid start hour provided. Please provide a valid hour between 0 and 23.",
-            )
-        })?;
-
-        let timezone = new_shift
-            .timezone
-            .parse::<chrono_tz::Tz>()
-            .map_err(|_foo| {
-                ApiError::BadRequest(
-                    "Invalid timezone provided. Please provide a valid IANA timezone string.",
-                )
-            })?;
-
-        let (start_hour_utc, weekday) =
-            convert_start_hour_to_utc(start_hour_in_timezone, &new_shift.weekday, timezone)?;
+        parse_timezone(&new_shift.timezone)?;
 
         RecurringShift::create(
             &mut db.connection()?,
             &RecurringShiftInsert {
                 user_id: authenticated.user_id,
-                start_hour: start_hour_utc.cast_signed(),
-                weekday,
+                start_hour: new_shift.start_hour,
+                weekday: new_shift.weekday,
                 duration: new_shift.duration,
                 target_count: new_shift.target_count,
+                timezone: new_shift.timezone,
             },
         )
     })
@@ -145,6 +131,9 @@ async fn patch_recurring_shift(
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&body));
     let updated = web::block(move || {
+        if let Some(tz_str) = &body.timezone {
+            parse_timezone(tz_str)?;
+        }
         RecurringShift::patch(&mut db.connection()?, id.into_inner(), &body.into_inner())
     })
     .await??;
