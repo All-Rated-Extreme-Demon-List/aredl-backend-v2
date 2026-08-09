@@ -17,7 +17,7 @@ use {
     },
     actix_http::StatusCode,
     actix_web::test::{self, read_body_json},
-    chrono::NaiveDate,
+    chrono::{NaiveDate, Timelike as _},
     serde_json::json,
 };
 
@@ -150,7 +150,8 @@ async fn create_recurring_shift() {
         "weekday": "Friday",
         "start_hour": 12,
         "duration": 1,
-        "target_count": 20
+        "target_count": 20,
+        "timezone": "UTC"
     });
     let req = test::TestRequest::post()
         .uri("/shifts/recurring")
@@ -169,7 +170,7 @@ async fn list_recurring_shifts() {
     let (user_id, _) = create_test_full_reviewer(&db).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    create_test_recurring_shift(&db, user_id).await;
+    create_test_recurring_shift(&db, user_id, None).await;
     let req = test::TestRequest::get()
         .uri("/shifts/recurring")
         .insert_header(("Authorization", format!("Bearer {token}")))
@@ -193,8 +194,8 @@ async fn list_recurring_shifts_hides_hidden_reviewers_for_non_auditor() {
     let token =
         create_test_token(requester_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    create_test_recurring_shift(&db, hidden_reviewer_id).await;
-    create_test_recurring_shift(&db, visible_reviewer_id).await;
+    create_test_recurring_shift(&db, hidden_reviewer_id, None).await;
+    create_test_recurring_shift(&db, visible_reviewer_id, None).await;
 
     let req = test::TestRequest::get()
         .uri("/shifts/recurring")
@@ -225,7 +226,7 @@ async fn list_recurring_shifts_keeps_hidden_reviewers_for_auditor() {
     add_user_to_role(&db, reviewers_audit_role, requester_id).await;
 
     let (hidden_reviewer_id, _) = create_test_hidden_reviewer(&db).await;
-    create_test_recurring_shift(&db, hidden_reviewer_id).await;
+    create_test_recurring_shift(&db, hidden_reviewer_id, None).await;
 
     let req = test::TestRequest::get()
         .uri("/shifts/recurring")
@@ -266,7 +267,7 @@ async fn patch_recurring_shift() {
     let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let recurring_id = create_test_recurring_shift(&db, user_id).await;
+    let recurring_id = create_test_recurring_shift(&db, user_id, None).await;
     let patch_data = json!({
         "target_count": 42
     });
@@ -287,7 +288,7 @@ async fn delete_recurring_shift() {
     let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let recurring_id = create_test_recurring_shift(&db, user_id).await;
+    let recurring_id = create_test_recurring_shift(&db, user_id, None).await;
     let req = test::TestRequest::delete()
         .uri(&format!("/shifts/recurring/{recurring_id}"))
         .insert_header(("Authorization", format!("Bearer {token}")))
@@ -303,7 +304,7 @@ async fn create_shifts_from_recurring() {
     let (_, db, _, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
 
-    create_test_recurring_shift(&db, user_id).await;
+    create_test_recurring_shift(&db, user_id, None).await;
 
     let friday_date = NaiveDate::from_ymd_opt(2025, 7, 11).unwrap();
     let created_shifts = RecurringShift::create_shifts(&mut db.connection().unwrap(), friday_date)
@@ -333,11 +334,51 @@ async fn create_shifts_from_recurring() {
 }
 
 #[actix_web::test]
+async fn create_shifts_from_recurring_with_timezone() {
+    let (_, db, _, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
+
+    create_test_recurring_shift(&db, user_id, Some("America/New_York".to_owned())).await;
+
+    let friday_date = NaiveDate::from_ymd_opt(2025, 7, 11).unwrap();
+    let created_shifts = RecurringShift::create_shifts(&mut db.connection().unwrap(), friday_date)
+        .expect("Failed to create shifts from recurring template");
+
+    assert_eq!(created_shifts.len(), 1, "Should create one shift");
+    assert_eq!(
+        created_shifts[0].user_id, user_id,
+        "Shift should be assigned to the correct user"
+    );
+    assert_eq!(
+        created_shifts[0].target_count, 20,
+        "Target count should match recurring shift"
+    );
+
+    assert_eq!(
+        created_shifts[0].start_at.hour(),
+        16, // 12 PM in New York is 4 PM UTC
+        "Shift start hour should match recurring shift"
+    );
+
+    let db_shifts = test_shifts_for_user(&db, user_id);
+
+    assert_eq!(db_shifts.len(), 1, "Should have one shift in database");
+    assert_eq!(
+        db_shifts[0].user_id, user_id,
+        "Database shift should be assigned to correct user"
+    );
+    assert_eq!(
+        db_shifts[0].target_count, 20,
+        "Database shift target count should match"
+    );
+}
+
+#[actix_web::test]
 async fn create_shifts_no_duplicates() {
     let (_, db, _, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
 
-    create_test_recurring_shift(&db, user_id).await;
+    create_test_recurring_shift(&db, user_id, None).await;
 
     let friday_date = NaiveDate::from_ymd_opt(2025, 7, 11).unwrap();
 
@@ -370,7 +411,7 @@ async fn create_shifts_wrong_weekday() {
     let (_, db, _, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, Some(Permission::ShiftManage)).await;
 
-    create_test_recurring_shift(&db, user_id).await;
+    create_test_recurring_shift(&db, user_id, None).await;
 
     let monday_date = NaiveDate::from_ymd_opt(2025, 7, 7).unwrap();
 
