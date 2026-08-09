@@ -62,7 +62,8 @@ async fn create_new_recurring_shift(
     let shift = web::block(move || {
         parse_timezone(&body.timezone)?;
         RecurringShift::create(&mut db.connection()?, &body.into_inner())
-    }).await??;
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(shift))
 }
 
