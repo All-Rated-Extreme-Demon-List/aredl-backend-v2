@@ -156,6 +156,8 @@ pub mod public {
             target_count -> Int4,
             created_at -> Timestamptz,
             updated_at -> Timestamptz,
+            #[max_length = 50]
+            timezone -> Varchar,
         }
     }
 
