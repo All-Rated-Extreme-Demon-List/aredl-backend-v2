@@ -35,7 +35,11 @@ pub async fn create_test_shift(
         .expect("Failed to create test shift")
 }
 #[cfg(test)]
-pub async fn create_test_recurring_shift(db: &Arc<DbAppState>, user_id: Uuid) -> Uuid {
+pub async fn create_test_recurring_shift(
+    db: &Arc<DbAppState>,
+    user_id: Uuid,
+    timezone: Option<String>,
+) -> Uuid {
     diesel::insert_into(recurrent_shifts::table)
         .values((
             recurrent_shifts::user_id.eq(user_id),
@@ -43,6 +47,7 @@ pub async fn create_test_recurring_shift(db: &Arc<DbAppState>, user_id: Uuid) ->
             recurrent_shifts::target_count.eq(20),
             recurrent_shifts::duration.eq(1),
             recurrent_shifts::weekday.eq(Weekday::Friday),
+            recurrent_shifts::timezone.eq(timezone.unwrap_or_else(|| "UTC".to_owned())),
         ))
         .returning(recurrent_shifts::id)
         .get_result::<Uuid>(&mut db.connection().unwrap())
