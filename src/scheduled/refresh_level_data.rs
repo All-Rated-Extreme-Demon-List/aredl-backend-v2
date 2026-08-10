@@ -60,7 +60,7 @@ pub async fn start_level_data_refresher(
         }
     });
 
-    let schedule = parse_startup_schedule("GDDL updater schedule", "@hourly")?;
+    let schedule = startup_schedule("LEVEL_DATA_REFRESH_SCHEDULE")?;
 
     task::spawn(async move {
         loop {
