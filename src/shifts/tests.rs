@@ -4,7 +4,7 @@ use {
         auth::{create_test_token, Permission},
         roles::test_utils::{add_user_to_role, create_test_role_with_permission},
         shifts::{
-            recurring::{RecurringShift, parse_timezone},
+            recurring::{parse_timezone, RecurringShift},
             test_utils::{create_test_recurring_shift, create_test_shift, test_shifts_for_user},
         },
         {
@@ -303,11 +303,18 @@ async fn delete_recurring_shift() {
 async fn parse_timezone_from_string() {
     let string = "America/New_York";
     let timezone = parse_timezone(string).expect("Failed to parse timezone");
-    assert_eq!(timezone.name(), string, "Parsed timezone name does not match");
+    assert_eq!(
+        timezone.name(),
+        string,
+        "Parsed timezone name does not match"
+    );
 
     let invalid_string = "Invalid/Timezone";
     let result = parse_timezone(invalid_string);
-    assert!(result.is_err(), "Parsing invalid timezone should return an error");
+    assert!(
+        result.is_err(),
+        "Parsing invalid timezone should return an error"
+    );
 }
 
 #[actix_web::test]
