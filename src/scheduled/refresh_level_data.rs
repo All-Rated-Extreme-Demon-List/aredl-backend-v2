@@ -2,7 +2,7 @@ use crate::app_data::db::DbAppState;
 use crate::error_handler::{ApiError, StartupError};
 use crate::get_secret;
 use crate::providers::ProvidersAppState;
-use crate::scheduled::{parse_startup_schedule, sleep_until_next, startup_schedule};
+use crate::scheduled::{sleep_until_next, startup_schedule};
 use crate::schema::aredl;
 use crate::schema::arepl;
 use chrono::Utc;
