@@ -61,10 +61,6 @@ pub const TIERED_BADGES: &[(&str, &[&str])] = &[
         "global.level_tags.slowpaced",
         &["5", "10", "25", "35", "50"],
     ),
-    (
-        "global.level_tags.precision",
-        &["5", "10", "25", "35", "50"],
-    ),
     ("global.level_tags.xxl", &["5", "10", "25", "35", "50"]),
     ("global.level_tags.19", &["5", "10", "15", "20", "30"]),
     ("global.level_tags.medium", &["5", "10", "15", "20", "30"]),
@@ -122,7 +118,6 @@ pub const LEVEL_TAG_BADGES: &[(&str, &[&str], TagBadgeMode)] = &[
     ("gimmicky", &["Gimmicky"], TagBadgeMode::Or),
     ("flow", &["Flow"], TagBadgeMode::Or),
     ("slowpaced", &["Slow-Paced"], TagBadgeMode::Or),
-    ("precision", &["Precision"], TagBadgeMode::Or),
     ("xxl", &["XXL"], TagBadgeMode::Or),
     ("19", &["1.9", "1.9PS"], TagBadgeMode::Or),
     ("medium", &["Medium"], TagBadgeMode::Or),
@@ -153,7 +148,6 @@ pub const LEVEL_TAG_BADGES: &[(&str, &[&str], TagBadgeMode)] = &[
             "Gimmicky",
             "Flow",
             "Slow-Paced",
-            "Precision",
             "Bossfight",
             "Mirror",
             "Nerve Control",
@@ -197,6 +191,7 @@ pub const NLW_TIERS: &[&str] = &[
     "Catastrophic",
     "Inexorable",
     "Excruciating",
+    "Merciless",
     "Fuck",
 ];
 

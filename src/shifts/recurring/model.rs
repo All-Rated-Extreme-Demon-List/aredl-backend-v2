@@ -7,9 +7,9 @@ use crate::{
     shifts::{ShiftInsert, Weekday},
     users::BaseUser,
 };
-use chrono::{DateTime, NaiveDate, TimeZone as _, Timelike as _, Utc};
+use chrono::{DateTime, NaiveDate, TimeZone as _, Utc};
 use chrono_tz::Tz;
-use diesel::{AsChangeset, Identifiable, Insertable, Queryable};
+use diesel::{pg::Pg, AsChangeset, Identifiable, Insertable, Queryable};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -18,7 +18,7 @@ use diesel::prelude::*;
 #[derive(
     Serialize, Deserialize, Selectable, Debug, Clone, Queryable, Identifiable, AsChangeset, ToSchema,
 )]
-#[diesel(table_name = recurrent_shifts)]
+#[diesel(table_name = recurrent_shifts, check_for_backend(Pg))]
 pub struct RecurringShift {
     /// Internal UUID of the regular shift.
     pub id: Uuid,
@@ -30,6 +30,8 @@ pub struct RecurringShift {
     pub start_hour: i32,
     /// How long this shift should last
     pub duration: i32,
+    /// The timezone this shift is in, as an IANA timezone string (e.g., "America/New_York").
+    pub timezone: String,
     /// The target number of submissions to review for this shift.
     pub target_count: i32,
     /// The timestamp of when this regular shift was created.
@@ -50,6 +52,8 @@ pub struct ResolvedRecurringShift {
     pub start_hour: i32,
     /// How long this shift should last
     pub duration: i32,
+    /// The timezone this shift is in, as an IANA timezone string (e.g., "America/New_York").
+    pub timezone: String,
     /// The target number of submissions to review for this shift.
     pub target_count: i32,
     /// The timestamp of when this regular shift was created.
@@ -69,6 +73,8 @@ pub struct RecurringShiftInsert {
     pub start_hour: i32,
     /// How long this shift should last
     pub duration: i32,
+    /// The timezone this shift is in, as an IANA timezone string (e.g., "America/New_York").
+    pub timezone: String,
     /// The target number of submissions to review for this shift.
     pub target_count: i32,
 }
@@ -95,35 +101,16 @@ pub struct RecurringShiftPatch {
     pub target_count: Option<i32>,
     pub start_hour: Option<i32>,
     pub duration: Option<i32>,
+    pub timezone: Option<String>,
 }
 
-pub fn convert_start_hour_to_utc(
-    start_hour_in_timezone: u32,
-    weekday: &Weekday,
-    timezone: Tz,
-) -> Result<(u32, Weekday), ApiError> {
-    let now = Utc::now();
-    let today = now.date_naive();
-    let today_weekday = Weekday::from(today);
-
-    let days_until_shift = (weekday.clone() as i32 + 7 - today_weekday as i32) % 7;
-    let shift_date = today + chrono::Duration::days(days_until_shift.into());
-
-    let naive_dt = shift_date
-        .and_hms_opt(start_hour_in_timezone, 0, 0)
-        .ok_or_else(|| ApiError::BadRequest("Invalid start hour"))?;
-
-    let local_dt = timezone
-        .from_local_datetime(&naive_dt)
-        .single()
-        .ok_or_else(|| ApiError::BadRequest("Invalid local time for the given timezone"))?;
-
-    let utc_dt = local_dt.with_timezone(&Utc);
-    let new_weekday = Weekday::from(utc_dt.date_naive());
-
-    Ok((utc_dt.hour(), new_weekday))
+pub fn parse_timezone(timezone: &str) -> Result<Tz, ApiError> {
+    timezone.parse::<Tz>().map_err(|_err| {
+        ApiError::BadRequest(
+            "Invalid timezone provided. Please provide a valid IANA timezone string.",
+        )
+    })
 }
-
 impl ResolvedRecurringShift {
     pub fn from_data(recurring_shift_row: (RecurringShift, BaseUser)) -> Self {
         let (recurring_shift, user) = recurring_shift_row;
@@ -133,6 +120,7 @@ impl ResolvedRecurringShift {
             weekday: recurring_shift.weekday,
             start_hour: recurring_shift.start_hour,
             duration: recurring_shift.duration,
+            timezone: recurring_shift.timezone,
             target_count: recurring_shift.target_count,
             created_at: recurring_shift.created_at,
             updated_at: recurring_shift.updated_at,
@@ -172,6 +160,7 @@ impl RecurringShift {
     ) -> Result<Self, ApiError> {
         let inserted = diesel::insert_into(recurrent_shifts::table)
             .values(new_shift)
+            .returning(RecurringShift::as_select())
             .get_result(conn)?;
         Ok(inserted)
     }
@@ -183,12 +172,14 @@ impl RecurringShift {
     ) -> Result<Self, ApiError> {
         let updated = diesel::update(recurrent_shifts::table.filter(recurrent_shifts::id.eq(id)))
             .set(patch)
+            .returning(RecurringShift::as_select())
             .get_result::<RecurringShift>(conn)?;
         Ok(updated)
     }
 
     pub fn delete(conn: &mut DbConnection, id: Uuid) -> Result<Self, ApiError> {
         let deleted = diesel::delete(recurrent_shifts::table.filter(recurrent_shifts::id.eq(id)))
+            .returning(RecurringShift::as_select())
             .get_result::<RecurringShift>(conn)?;
         Ok(deleted)
     }
@@ -200,18 +191,24 @@ impl RecurringShift {
         let today = Weekday::from(date);
 
         let templates: Vec<RecurringShift> = recurrent_shifts::table
-            .filter(recurrent_shifts::weekday.eq(today))
+            .filter(recurrent_shifts::weekday.eq_any(vec![&today, &today.prev(), &today.next()]))
+            .select(RecurringShift::as_select())
             .load(conn)?;
 
         let mut new_shifts = Vec::new();
 
         for template in templates {
+            let timezone = parse_timezone(&template.timezone)?;
             let naive_dt = u32::try_from(template.start_hour)
                 .ok()
                 .and_then(|hour| date.and_hms_opt(hour, 0, 0))
                 .ok_or_else(|| ApiError::InternalServerError("Invalid start hour"))?;
 
-            let start_at: DateTime<Utc> = Utc.from_utc_datetime(&naive_dt);
+            let start_at: DateTime<Utc> = timezone
+                .from_local_datetime(&naive_dt)
+                .single()
+                .ok_or_else(|| ApiError::InternalServerError("Invalid datetime in timezone"))?
+                .with_timezone(&Utc);
 
             let end_at = start_at + chrono::Duration::hours(i64::from(template.duration));
 

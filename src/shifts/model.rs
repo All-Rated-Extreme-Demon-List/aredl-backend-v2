@@ -51,6 +51,32 @@ impl From<NaiveDate> for Weekday {
     }
 }
 
+impl Weekday {
+    pub fn prev(&self) -> Self {
+        match self {
+            Weekday::Monday => Weekday::Sunday,
+            Weekday::Tuesday => Weekday::Monday,
+            Weekday::Wednesday => Weekday::Tuesday,
+            Weekday::Thursday => Weekday::Wednesday,
+            Weekday::Friday => Weekday::Thursday,
+            Weekday::Saturday => Weekday::Friday,
+            Weekday::Sunday => Weekday::Saturday,
+        }
+    }
+
+    pub fn next(&self) -> Self {
+        match self {
+            Weekday::Monday => Weekday::Tuesday,
+            Weekday::Tuesday => Weekday::Wednesday,
+            Weekday::Wednesday => Weekday::Thursday,
+            Weekday::Thursday => Weekday::Friday,
+            Weekday::Friday => Weekday::Saturday,
+            Weekday::Saturday => Weekday::Sunday,
+            Weekday::Sunday => Weekday::Monday,
+        }
+    }
+}
+
 #[derive(
     Serialize, Deserialize, Debug, Selectable, Clone, Queryable, Identifiable, AsChangeset, ToSchema,
 )]
