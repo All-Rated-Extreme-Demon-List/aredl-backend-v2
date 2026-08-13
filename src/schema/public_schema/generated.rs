@@ -224,12 +224,12 @@ pub mod public {
             last_country_update -> Timestamptz,
             ban_level -> Int4,
             discord_avatar -> Nullable<Varchar>,
-            discord_avatar_decoration -> Nullable<Varchar>,
             access_valid_after -> Timestamptz,
             created_at -> Timestamptz,
             background_level -> Nullable<Int4>,
             last_discord_avatar_update -> Nullable<Timestamp>,
             featured_badge_code -> Nullable<Varchar>,
+            discord_avatar_decoration -> Nullable<Varchar>,
         }
     }
 
