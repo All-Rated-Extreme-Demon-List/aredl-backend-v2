@@ -484,12 +484,17 @@ async fn upsert_creates_and_updates_user() {
         placeholder: false,
         country: Some(1),
         discord_avatar: Some("avatar".to_owned()),
+        discord_avatar_decoration: Some("decoration".to_owned()),
         last_discord_avatar_update: Some(Utc::now().naive_utc()),
     };
 
     let created = User::upsert(&mut db.connection().unwrap(), user_upsert).expect("insert");
     assert_eq!(created.username, "new_user");
     assert_eq!(created.discord_id.as_deref(), Some("123"));
+    assert_eq!(
+        created.discord_avatar_decoration.as_deref(),
+        Some("decoration")
+    );
 
     let fetched = get_test_user(&db, created.id);
     assert_eq!(fetched.username, "new_user");
@@ -501,6 +506,7 @@ async fn upsert_creates_and_updates_user() {
         placeholder: false,
         country: Some(2),
         discord_avatar: Some("newavatar".to_owned()),
+        discord_avatar_decoration: Some("newdecoration".to_owned()),
         last_discord_avatar_update: Some(Utc::now().naive_utc()),
     };
 
@@ -509,6 +515,10 @@ async fn upsert_creates_and_updates_user() {
     assert_eq!(updated.username, "updated");
     assert_eq!(updated.country, Some(1));
     assert_eq!(updated.global_name, "New User");
+    assert_eq!(
+        updated.discord_avatar_decoration.as_deref(),
+        Some("newdecoration")
+    );
 }
 
 #[actix_web::test]

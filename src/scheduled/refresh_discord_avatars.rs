@@ -18,8 +18,14 @@ const STALE_AFTER_DAYS: i64 = 14;
 const DEFAULT_DELAY_MS: u64 = 500;
 
 #[derive(Deserialize)]
+struct DiscordAvatarDecorationData {
+    asset: String,
+}
+
+#[derive(Deserialize)]
 struct DiscordUser {
     avatar: Option<String>,
+    avatar_decoration_data: Option<DiscordAvatarDecorationData>,
 }
 
 fn header_i64(headers: &HeaderMap, name: &str) -> Option<i64> {
@@ -177,6 +183,9 @@ pub async fn start_discord_avatars_refresher(
                         diesel::update(users::table.find(user_id))
                             .set((
                                 users::discord_avatar.eq(updated_discord_user.avatar),
+                                users::discord_avatar_decoration.eq(updated_discord_user
+                                    .avatar_decoration_data
+                                    .map(|avatar_decoration_data| avatar_decoration_data.asset)),
                                 users::last_discord_avatar_update.eq(Utc::now().naive_utc()),
                             ))
                             .execute(&mut conn)

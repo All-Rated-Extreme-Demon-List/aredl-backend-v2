@@ -22,11 +22,17 @@ use crate::users::{User, UserUpsert};
 
 use diesel::prelude::*;
 #[derive(Serialize, Deserialize, ToSchema)]
+struct DiscordAvatarDecorationData {
+    pub asset: String,
+}
+
+#[derive(Serialize, Deserialize, ToSchema)]
 struct DiscordUser {
     pub id: String,
     pub username: String,
     pub global_name: Option<String>,
     pub avatar: Option<String>,
+    pub avatar_decoration_data: Option<DiscordAvatarDecorationData>,
     pub banner: Option<String>,
     pub accent_color: Option<i32>,
 }
@@ -40,6 +46,9 @@ impl From<DiscordUser> for UserUpsert {
             placeholder: false,
             country: None,
             discord_avatar: user.avatar,
+            discord_avatar_decoration: user
+                .avatar_decoration_data
+                .map(|avatar_decoration_data| avatar_decoration_data.asset),
             last_discord_avatar_update: Some(Utc::now().naive_utc()),
         }
     }

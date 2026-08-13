@@ -56,6 +56,8 @@ pub struct ExtendedBaseUser {
     pub discord_id: Option<String>,
     /// Discord avatar hash of the user. Updated on every login.
     pub discord_avatar: Option<String>,
+    /// Discord avatar decoration asset of the user. Updated on every login.
+    pub discord_avatar_decoration: Option<String>,
     /// The badge the user has unlocked and chosen to feature on their profile.
     pub featured_badge_code: Option<String>,
 }
@@ -81,6 +83,8 @@ pub struct User {
     pub ban_level: i32,
     /// Discord avatar hash of the user. Updated on every login.
     pub discord_avatar: Option<String>,
+    /// Discord avatar decoration asset of the user. Updated on every login.
+    pub discord_avatar_decoration: Option<String>,
     /// Timestamp of when the user was created.
     pub created_at: DateTime<Utc>,
     // Last time the user's tokens were invalidated.
@@ -101,6 +105,7 @@ pub struct UserUpsert {
     pub placeholder: bool,
     pub country: Option<i32>,
     pub discord_avatar: Option<String>,
+    pub discord_avatar_decoration: Option<String>,
     pub last_discord_avatar_update: Option<NaiveDateTime>,
 }
 
@@ -110,6 +115,7 @@ pub struct UserUpdateOnLogin {
     pub username: String,
     pub discord_id: Option<String>,
     pub discord_avatar: Option<String>,
+    pub discord_avatar_decoration: Option<String>,
     pub last_discord_avatar_update: Option<NaiveDateTime>,
 }
 
@@ -238,6 +244,7 @@ impl ExtendedBaseUser {
             country: None,
             discord_id: None,
             discord_avatar: None,
+            discord_avatar_decoration: None,
             featured_badge_code: None,
         }
     }
@@ -291,6 +298,7 @@ impl User {
                     username: user_upsert.username.clone(),
                     discord_id: user_upsert.discord_id.clone(),
                     discord_avatar: user_upsert.discord_avatar,
+                    discord_avatar_decoration: user_upsert.discord_avatar_decoration,
                     last_discord_avatar_update: Some(Utc::now().naive_utc()),
                 })
                 .returning(Self::as_select())

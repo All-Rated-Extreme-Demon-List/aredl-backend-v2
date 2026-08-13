@@ -453,6 +453,10 @@ async fn discord_callback_returns_auth() {
                     "username": "tester",
                     "global_name": "tester",
                     "avatar": null,
+                    "avatar_decoration_data": {
+                        "asset": "a_test_decoration",
+                        "sku_id": "1144058844004233369"
+                    },
                     "banner": null,
                     "accent_color": null
                 }));
@@ -484,6 +488,7 @@ async fn discord_callback_returns_auth() {
     assert!(body.get("refresh_token").is_some());
     assert_eq!(body["discord_id"], "123");
     assert_eq!(body["username"], "tester");
+    assert_eq!(body["discord_avatar_decoration"], "a_test_decoration");
 }
 
 #[actix_web::test]
