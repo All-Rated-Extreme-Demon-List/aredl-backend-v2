@@ -199,9 +199,19 @@ impl RecurringShift {
 
         for template in templates {
             let timezone = parse_timezone(&template.timezone)?;
+            let local_date = if template.weekday == today.prev() {
+                date.pred_opt()
+                    .ok_or_else(|| ApiError::InternalServerError("Invalid previous date"))?
+            } else if template.weekday == today.next() {
+                date.succ_opt()
+                    .ok_or_else(|| ApiError::InternalServerError("Invalid next date"))?
+            } else {
+                date
+            };
+
             let naive_dt = u32::try_from(template.start_hour)
                 .ok()
-                .and_then(|hour| date.and_hms_opt(hour, 0, 0))
+                .and_then(|hour| local_date.and_hms_opt(hour, 0, 0))
                 .ok_or_else(|| ApiError::InternalServerError("Invalid start hour"))?;
 
             let start_at: DateTime<Utc> = timezone
