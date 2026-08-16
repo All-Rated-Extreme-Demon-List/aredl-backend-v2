@@ -1,7 +1,7 @@
 use url::Url;
 
 use super::{
-    context::{GoogleAuthState, ProviderContext},
+    context::ProviderContext,
     list::{
         bilibili::BiliBiliProvider, gdrive::GoogleDriveProvider, medal::MedalProvider,
         mega::MegaProvider, outplayed::OutplayedProvider, twitch::TwitchProvider,
@@ -11,16 +11,23 @@ use super::{
         ContentDataLocation, ContentMetadata, NormalizedProviderMatch, Provider, ProviderRegistry,
     },
 };
-use crate::{error_handler::ApiError, providers::context::TwitchAuthState};
+use crate::{
+    app_data::db::DbAppState,
+    error_handler::ApiError,
+    providers::context::{
+        discord::new_discord_context, google::new_google_context, patreon::new_patreon_context,
+        twitch::new_twitch_context,
+    },
+};
 
 use std::sync::Arc;
 
-pub struct VideoProvidersAppState {
-    registry: ProviderRegistry,
-    context: ProviderContext,
+pub struct ProvidersAppState {
+    pub registry: ProviderRegistry,
+    pub context: ProviderContext,
 }
 
-impl VideoProvidersAppState {
+impl ProvidersAppState {
     pub fn new(registry: ProviderRegistry, context: ProviderContext) -> Self {
         Self { registry, context }
     }
@@ -32,24 +39,24 @@ impl VideoProvidersAppState {
 
     pub fn validate_is_url(&self, url: &str) -> Result<Url, ApiError> {
         let input = url.trim();
-        if input.chars().any(|char| char.is_whitespace()) {
-            return Err(ApiError::new(400, "Malformed URL"));
+        if input.chars().any(char::is_whitespace) {
+            return Err(ApiError::BadRequest("Malformed URL"));
         }
-        let url = Url::parse(input).map_err(|_| ApiError::new(400, "Malformed URL"))?;
+        let url = Url::parse(input)
+            .map_err(|error| ApiError::BadRequest(format!("Malformed URL: {error}")))?;
         Ok(url)
     }
 
     // completion video enforces a valid url and an allowed provider
     pub fn validate_completion_video_url(&self, url: &str) -> Result<String, ApiError> {
-        let matched = self.parse_url(&url)?;
+        let matched = self.parse_url(url)?;
         let provider = self
             .registry
             .get(matched.provider)
-            .ok_or_else(|| ApiError::new(500, "Provider not registered"))?;
+            .ok_or_else(|| ApiError::InternalServerError("Provider not registered"))?;
 
         if !provider.usage().allowed_for_completion() {
-            return Err(ApiError::new(
-                422,
+            return Err(ApiError::UnprocessableEntity(
                 "This provider is not allowed for this field",
             ));
         }
@@ -60,13 +67,11 @@ impl VideoProvidersAppState {
     // raw footage only enforces a valid url, but if it matches a provider, normalize it
     pub fn validate_raw_footage_url(&self, url: &str) -> Result<String, ApiError> {
         self.validate_is_url(url)?;
-        let matched = self.parse_url(url);
 
-        if matched.is_err() {
-            return Ok(url.to_string());
+        match self.parse_url(url) {
+            Ok(matched) => Ok(matched.normalized_url),
+            Err(_) => Ok(url.to_owned()),
         }
-
-        Ok(matched.unwrap().normalized_url)
     }
 
     pub async fn get_content_location(
@@ -76,7 +81,7 @@ impl VideoProvidersAppState {
         let provider = self
             .registry
             .get(matched.provider)
-            .ok_or_else(|| ApiError::new(500, "Provider not registered"))?;
+            .ok_or_else(|| ApiError::InternalServerError("Provider not registered"))?;
         provider.get_content_location(matched, &self.context).await
     }
 
@@ -87,19 +92,24 @@ impl VideoProvidersAppState {
         let provider = self
             .registry
             .get(matched.provider)
-            .ok_or_else(|| ApiError::new(500, "Provider not registered"))?;
+            .ok_or_else(|| ApiError::InternalServerError("Provider not registered"))?;
         provider.fetch_metadata(matched, &self.context).await
     }
 }
 
-pub async fn init_app_state() -> Arc<VideoProvidersAppState> {
+pub async fn init_app_state(db: Arc<DbAppState>) -> Arc<ProvidersAppState> {
     let http = reqwest::Client::new();
-    let google_state = GoogleAuthState::new().await.map(Arc::new);
-    let twitch_state = TwitchAuthState::new().await.map(Arc::new);
+    let discord_state = new_discord_context().await.map(Arc::new);
+    let google_state = new_google_context().await.map(Arc::new);
+    let patreon_state = new_patreon_context().await.map(Arc::new);
+    let twitch_state = new_twitch_context().await.map(Arc::new);
 
     let context = ProviderContext {
         http,
+        db: Some(db),
+        discord_auth: discord_state,
         google_auth: google_state,
+        patreon_auth: patreon_state,
         twitch_auth: twitch_state,
     };
 
@@ -114,5 +124,5 @@ pub async fn init_app_state() -> Arc<VideoProvidersAppState> {
         Arc::new(MegaProvider) as Arc<dyn Provider>,
     ]);
 
-    Arc::new(VideoProvidersAppState::new(registry, context))
+    Arc::new(ProvidersAppState::new(registry, context))
 }

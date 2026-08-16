@@ -1,6 +1,6 @@
+use crate::app_data::db::DbAppState;
 use crate::auth::{Authenticated, UserAuth};
 use crate::clans::ClanInvite;
-use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::users::me::clan::invites::ClanInviteResolved;
 use actix_web::{get, post, web, HttpResponse};
@@ -55,11 +55,11 @@ async fn accept(
     invite_id: web::Path<Uuid>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let result = web::block(move || {
-        ClanInvite::accept_invite(&mut db.connection()?, *invite_id, authenticated)
+    web::block(move || {
+        ClanInvite::accept_invite(&mut db.connection()?, *invite_id, &authenticated)
     })
     .await??;
-    Ok(HttpResponse::Ok().json(result))
+    Ok(HttpResponse::Ok().json(()))
 }
 
 #[utoipa::path(
@@ -84,11 +84,11 @@ async fn reject(
     invite_id: web::Path<Uuid>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let result = web::block(move || {
-        ClanInvite::reject_invite(&mut db.connection()?, *invite_id, authenticated)
+    web::block(move || {
+        ClanInvite::reject_invite(&mut db.connection()?, *invite_id, &authenticated)
     })
     .await??;
-    Ok(HttpResponse::Ok().json(result))
+    Ok(HttpResponse::Ok().json(()))
 }
 
 #[derive(OpenApi)]

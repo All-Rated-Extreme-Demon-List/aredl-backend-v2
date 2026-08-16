@@ -1,17 +1,15 @@
-use crate::arepl::levels::BaseLevel;
 use crate::app_data::db::DbConnection;
+use crate::arepl::levels::{BaseLevel, LevelStatus};
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::arepl::{levels, position_history};
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
-use diesel::{
-    ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl,
-    SelectableHelper,
-};
+use diesel::Selectable;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug)]
 #[diesel(table_name=position_history, check_for_backend(Pg))]
 pub struct ChangelogEntryData {
@@ -19,8 +17,10 @@ pub struct ChangelogEntryData {
     pub new_position: Option<i32>,
     /// Old position of the level before the action.
     pub old_position: Option<i32>,
-    /// Whether the level is now in legacy after the action or not.
-    pub legacy: Option<bool>,
+    /// Old status of the level before the action. Can be null for the initial entry of a level.
+    pub old_status: Option<LevelStatus>,
+    /// New status of the level after the action.
+    pub new_status: LevelStatus,
     /// Timestamp for when the action was performed.
     pub created_at: DateTime<Utc>,
 }
@@ -40,12 +40,14 @@ pub struct ChangelogEntry {
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub enum ChangelogAction {
+    /// A new level was added to the list but does not have an actual placement yet.
+    Pending,
     /// A new level was placed on the list.
     Placed {
         /// Position the level was placed at.
         new_position: i32,
-        /// Whether the level was placed in the legacy list or not.
-        legacy: bool,
+        /// The status the level was placed into. (Main list or legacy list)
+        status: LevelStatus,
     },
     /// An existing level was raised from one position to another.
     Raised {
@@ -64,7 +66,7 @@ pub enum ChangelogAction {
     /// An existing level was removed from the list.
     Removed {
         /// Position of the level before it was removed.
-        old_position: i32,
+        old_position: Option<i32>,
     },
     /// An existing level was swapped with another level.
     Swapped {
@@ -95,8 +97,10 @@ pub enum ChangelogAction {
         new_position: Option<i32>,
         /// Previous position of the level before the action.
         old_position: Option<i32>,
-        /// Whether the level is in the legacy list after the action or not.
-        legacy: Option<bool>,
+        /// Old status of the level before the action. Can be null for the initial entry of a level.
+        old_status: Option<LevelStatus>,
+        /// New status of the level after the action.
+        new_status: LevelStatus,
     },
 }
 
@@ -140,9 +144,13 @@ impl ChangelogPage {
             )
             .select((
                 ChangelogEntryData::as_select(),
-                level_affected.fields((levels::id, levels::name)),
-                level_above.fields((levels::id, levels::name)).nullable(),
-                level_below.fields((levels::id, levels::name)).nullable(),
+                level_affected.fields(<BaseLevel as Selectable<Pg>>::construct_selection()),
+                level_above
+                    .fields(<BaseLevel as Selectable<Pg>>::construct_selection())
+                    .nullable(),
+                level_below
+                    .fields(<BaseLevel as Selectable<Pg>>::construct_selection())
+                    .nullable(),
             ))
             .load::<(
                 ChangelogEntryData,
@@ -154,7 +162,8 @@ impl ChangelogPage {
         let records_resolved = records
             .into_iter()
             .map(|(entry, affected, above, below)| {
-                let action = ChangelogAction::from_data(&entry, &affected, &above, &below);
+                let action =
+                    ChangelogAction::from_data(&entry, &affected, above.as_ref(), below.as_ref());
                 ChangelogEntry {
                     created_at: entry.created_at,
                     affected_level: affected,
@@ -181,19 +190,31 @@ impl ChangelogAction {
     pub fn from_data(
         entry: &ChangelogEntryData,
         level: &BaseLevel,
-        level_above: &Option<BaseLevel>,
-        level_below: &Option<BaseLevel>,
+        level_above: Option<&BaseLevel>,
+        level_below: Option<&BaseLevel>,
     ) -> Self {
-        match (entry.legacy, entry.new_position, entry.old_position) {
-            (Some(legacy), Some(new_position), None) => Self::Placed {
-                new_position,
-                legacy,
-            },
-            (None, Some(new_position), Some(old_position)) => {
+        match (
+            &entry.old_status,
+            &entry.new_status,
+            entry.new_position,
+            entry.old_position,
+        ) {
+            (_, LevelStatus::Pending, None, _) => Self::Pending,
+            (_, LevelStatus::Removed, _, old_position) => Self::Removed { old_position },
+            (_, LevelStatus::MainList | LevelStatus::Legacy, Some(new_position), None) => {
+                Self::Placed {
+                    new_position,
+                    status: entry.new_status.clone(),
+                }
+            }
+            (Some(old_status), new_status, Some(new_position), Some(old_position))
+                if old_status == new_status =>
+            {
                 let unknown = Self::Unknown {
                     new_position: Some(new_position),
                     old_position: Some(old_position),
-                    legacy: None,
+                    old_status: Some(old_status.clone()),
+                    new_status: new_status.clone(),
                 };
                 match (
                     new_position < old_position,
@@ -201,7 +222,6 @@ impl ChangelogAction {
                     level_above,
                     level_below,
                 ) {
-                    (_, 0, _, _) => unknown,
                     (true, 1, _, Some(other_level)) => Self::Swapped {
                         upper_position: new_position,
                         upper_level: level.clone(),
@@ -212,7 +232,7 @@ impl ChangelogAction {
                         upper_level: other_level.clone(),
                         other_level: other_level.clone(),
                     },
-                    (_, 1, _, _) => unknown,
+                    (_, 1 | 0, _, _) => unknown,
                     (true, _, _, _) => Self::Raised {
                         new_position,
                         old_position,
@@ -223,19 +243,29 @@ impl ChangelogAction {
                     },
                 }
             }
-            (None, None, Some(old_position)) => Self::Removed { old_position },
-            (Some(true), Some(new_position), Some(old_position)) => Self::MovedToLegacy {
+            (
+                Some(LevelStatus::MainList),
+                LevelStatus::Legacy,
+                Some(new_position),
+                Some(old_position),
+            ) => Self::MovedToLegacy {
                 new_position,
                 old_position,
             },
-            (Some(false), Some(new_position), Some(old_position)) => Self::MovedFromLegacy {
+            (
+                Some(LevelStatus::Legacy),
+                LevelStatus::MainList,
+                Some(new_position),
+                Some(old_position),
+            ) => Self::MovedFromLegacy {
                 new_position,
                 old_position,
             },
-            (legacy, new_position, old_position) => Self::Unknown {
+            (old_status, new_status, new_position, old_position) => Self::Unknown {
                 new_position,
                 old_position,
-                legacy,
+                old_status: old_status.clone(),
+                new_status: new_status.clone(),
             },
         }
     }

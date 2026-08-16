@@ -1,27 +1,26 @@
 use crate::app_data::db::DbConnection;
-use crate::auth::{Authenticated, Permission};
+use crate::auth::{permission, Authenticated, Permission};
 use crate::clans::Clan;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::roles::Role;
 use crate::schema::{
-    aredl::submissions, arepl::submissions as plat_submissions, clan_members, clans, permissions,
-    roles, user_roles, users,
+    aredl::submissions, arepl::submissions as plat_submissions, clan_members, clans, roles,
+    user_roles, users,
 };
+use crate::users::badges::UserBadge;
 use crate::{
     aredl::submissions::SubmissionStatus,
     arepl::submissions::SubmissionStatus as PlatSubmissionStatus,
 };
 use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::pg::Pg;
-use diesel::{
-    BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension,
-    PgTextExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper,
-};
 use serde::{Deserialize, Serialize};
+use serde_with::rust::double_option;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Queryable, Selectable, Debug)]
 #[diesel(table_name = users)]
 pub struct BaseUserWithBanLevel {
@@ -31,7 +30,7 @@ pub struct BaseUserWithBanLevel {
     pub ban_level: i32,
 }
 
-#[derive(Debug, Serialize, Deserialize, Queryable, Selectable, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Queryable, Selectable, ToSchema, Clone)]
 #[diesel(table_name=users, check_for_backend(Pg))]
 pub struct BaseUser {
     /// Internal UUID of the user.
@@ -57,9 +56,13 @@ pub struct ExtendedBaseUser {
     pub discord_id: Option<String>,
     /// Discord avatar hash of the user. Updated on every login.
     pub discord_avatar: Option<String>,
+    /// Discord avatar decoration asset of the user. Updated on every login.
+    pub discord_avatar_decoration: Option<String>,
+    /// The badge the user has unlocked and chosen to feature on their profile.
+    pub featured_badge_code: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Queryable, Selectable, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, Queryable, Selectable, ToSchema)]
 #[diesel(table_name=users, check_for_backend(Pg))]
 pub struct User {
     /// Internal UUID of the user.
@@ -80,17 +83,17 @@ pub struct User {
     pub ban_level: i32,
     /// Discord avatar hash of the user. Updated on every login.
     pub discord_avatar: Option<String>,
-    /// Discord banner hash of the user. Updated on every login.
-    pub discord_banner: Option<String>,
-    /// Discord accent color of the user. Updated on every login.
-    pub discord_accent_color: Option<i32>,
+    /// Discord avatar decoration asset of the user. Updated on every login.
+    pub discord_avatar_decoration: Option<String>,
     /// Timestamp of when the user was created.
     pub created_at: DateTime<Utc>,
     // Last time the user's tokens were invalidated.
     #[serde(skip_serializing)]
     pub access_valid_after: DateTime<Utc>,
     /// The level the user has beaten and chosen as their profile background.
-    pub background_level: i32,
+    pub background_level: Option<i32>,
+    /// The badge the user has unlocked and chosen to feature on their profile.
+    pub featured_badge_code: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Insertable, AsChangeset, ToSchema)]
@@ -102,8 +105,7 @@ pub struct UserUpsert {
     pub placeholder: bool,
     pub country: Option<i32>,
     pub discord_avatar: Option<String>,
-    pub discord_banner: Option<String>,
-    pub discord_accent_color: Option<i32>,
+    pub discord_avatar_decoration: Option<String>,
     pub last_discord_avatar_update: Option<NaiveDateTime>,
 }
 
@@ -113,8 +115,7 @@ pub struct UserUpdateOnLogin {
     pub username: String,
     pub discord_id: Option<String>,
     pub discord_avatar: Option<String>,
-    pub discord_banner: Option<String>,
-    pub discord_accent_color: Option<i32>,
+    pub discord_avatar_decoration: Option<String>,
     pub last_discord_avatar_update: Option<NaiveDateTime>,
 }
 
@@ -128,6 +129,8 @@ pub struct UserResolved {
     pub roles: Vec<Role>,
     /// Permissions scopes the user has.
     pub scopes: Vec<String>,
+    /// All unlocked badges for the user.
+    pub badges: Vec<UserBadge>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Insertable, AsChangeset, ToSchema)]
@@ -136,9 +139,11 @@ pub struct UserUpdate {
     /// New global display name of the user.
     pub global_name: Option<String>,
     /// New description of the user.
-    pub description: Option<String>,
+    #[serde(default, with = "double_option")]
+    pub description: Option<Option<String>>,
     /// New country of the user. Uses the ISO 3166-1 numeric country code.
-    pub country: Option<i32>,
+    #[serde(default, with = "double_option")]
+    pub country: Option<Option<i32>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -157,6 +162,7 @@ pub struct PlaceholderOptions {
 pub struct UserListQueryOptions {
     pub name_filter: Option<String>,
     pub placeholder: Option<bool>,
+    pub ban_level: Option<i32>,
 }
 
 #[derive(Serialize, Debug, ToSchema)]
@@ -168,13 +174,18 @@ pub struct UserPage {
 // user filter that matches either by UUID, username, or discord_id
 pub fn user_filter<'a>(input: &'a String) -> users::BoxedQuery<'a, Pg> {
     let mut q = users::table.into_boxed::<Pg>();
+    let uuid_candidate: String = input
+        .chars()
+        .filter(|c| c.is_ascii_hexdigit() || *c == '-')
+        .collect();
 
-    if let Ok(uuid) = Uuid::parse_str(&input) {
+    if let Ok(uuid) = Uuid::parse_str(&uuid_candidate) {
         q = q.filter(users::id.eq(uuid));
     } else {
+        let discord_candidate: String = input.chars().filter(char::is_ascii_digit).collect();
         q = q.filter(
             users::discord_id
-                .eq(Some(input.to_owned()))
+                .eq(Some(discord_candidate))
                 .or(users::username.eq(input)),
         );
     }
@@ -182,28 +193,42 @@ pub fn user_filter<'a>(input: &'a String) -> users::BoxedQuery<'a, Pg> {
     q
 }
 
+// user ilike filter that matches either by partial username or global_name or exact user_filter match
+pub fn user_ilike_filter<'a>(input: &'a String) -> users::BoxedQuery<'a, Pg> {
+    let mut q = users::table.into_boxed::<Pg>();
+    q = q.filter(
+        users::username
+            .ilike(input)
+            .or(users::global_name.ilike(input))
+            .or(users::id.eq_any(user_filter(input).select(users::id))),
+    );
+    q
+}
+
 impl BaseUser {
     pub fn hidden() -> Self {
         BaseUser {
-            id: "00000000-0000-0000-0000-000000000000".parse().unwrap(),
-            username: "Hidden user".to_string(),
-            global_name: "Hidden user".to_string(),
+            id: "00000000-0000-0000-0000-000000000000"
+                .parse()
+                .expect("Constant should not fail"),
+            username: "Hidden user".to_owned(),
+            global_name: "Hidden user".to_owned(),
         }
     }
 
     pub fn from_base_user_with_ban_level(user: BaseUserWithBanLevel) -> Self {
-        if user.ban_level == 3 {
-            return BaseUser {
+        if user.ban_level == 4 {
+            BaseUser {
                 id: user.id,
-                username: "-".to_string(),
-                global_name: "-".to_string(),
-            };
+                username: "-".to_owned(),
+                global_name: "-".to_owned(),
+            }
         } else {
-            return BaseUser {
+            BaseUser {
                 id: user.id,
                 username: user.username,
                 global_name: user.global_name,
-            };
+            }
         }
     }
 }
@@ -211,12 +236,16 @@ impl BaseUser {
 impl ExtendedBaseUser {
     pub fn hidden() -> Self {
         ExtendedBaseUser {
-            id: "00000000-0000-0000-0000-000000000000".parse().unwrap(),
-            username: "Hidden user".to_string(),
-            global_name: "Hidden user".to_string(),
+            id: "00000000-0000-0000-0000-000000000000"
+                .parse()
+                .expect("Constant should not fail"),
+            username: "Hidden user".to_owned(),
+            global_name: "Hidden user".to_owned(),
             country: None,
             discord_id: None,
             discord_avatar: None,
+            discord_avatar_decoration: None,
+            featured_badge_code: None,
         }
     }
 }
@@ -251,8 +280,8 @@ impl User {
             .optional()?;
 
         match user {
-            Some(ban_level) => Ok(ban_level > 1),
-            None => Err(ApiError::new(404, "User not found")),
+            Some(ban_level) => Ok(ban_level >= 3),
+            None => Err(ApiError::NotFound("User not found")),
         }
     }
 
@@ -263,47 +292,51 @@ impl User {
             .first::<Self>(conn)
             .optional()?;
 
-        match existing_user {
-            Some(user) => {
-                let updated_user = diesel::update(users::table.filter(users::id.eq(user.id)))
-                    .set(UserUpdateOnLogin {
-                        username: user_upsert.username.clone(),
-                        discord_id: user_upsert.discord_id.clone(),
-                        discord_avatar: user_upsert.discord_avatar,
-                        discord_banner: user_upsert.discord_banner,
-                        discord_accent_color: user_upsert.discord_accent_color,
-                        last_discord_avatar_update: Some(Utc::now().naive_utc()),
-                    })
-                    .returning(Self::as_select())
-                    .get_result::<Self>(conn)?;
-                return Ok(updated_user);
-            }
-            None => {
-                let user = diesel::insert_into(users::table)
-                    .values(&user_upsert)
-                    .returning(Self::as_select())
-                    .get_result::<Self>(conn)?;
-                return Ok(user);
-            }
+        if let Some(user) = existing_user {
+            let updated_user = diesel::update(users::table.filter(users::id.eq(user.id)))
+                .set(UserUpdateOnLogin {
+                    username: user_upsert.username.clone(),
+                    discord_id: user_upsert.discord_id.clone(),
+                    discord_avatar: user_upsert.discord_avatar,
+                    discord_avatar_decoration: user_upsert.discord_avatar_decoration,
+                    last_discord_avatar_update: Some(Utc::now().naive_utc()),
+                })
+                .returning(Self::as_select())
+                .get_result::<Self>(conn)?;
+            Ok(updated_user)
+        } else {
+            let user = diesel::insert_into(users::table)
+                .values(&user_upsert)
+                .returning(Self::as_select())
+                .get_result::<Self>(conn)?;
+            Ok(user)
         }
     }
 
     pub fn find_all<const D: i64>(
         conn: &mut DbConnection,
         page_query: PageQuery<D>,
-        options: UserListQueryOptions,
+        options: &UserListQueryOptions,
+        authenticated: Option<&Authenticated>,
     ) -> Result<Paginated<UserPage>, ApiError> {
+        let has_permission = authenticated.is_some_and(|auth| {
+            auth.has_permission(conn, Permission::UserBan)
+                .unwrap_or(false)
+        });
         let build_query = || {
             let mut q = users::table.into_boxed::<Pg>();
-            if let Some(ref name_like) = options.name_filter {
-                q = q.filter(
-                    users::global_name.ilike(name_like).or(users::username
-                        .ilike(name_like)
-                        .or(users::id.eq_any(user_filter(name_like).select(users::id)))),
-                );
+            if let Some(name_like) = &options.name_filter {
+                q = q.filter(users::id.eq_any(user_ilike_filter(name_like).select(users::id)));
             }
             if let Some(placeholder) = options.placeholder {
                 q = q.filter(users::placeholder.eq(placeholder));
+            }
+            if let Some(ban_level) = options.ban_level {
+                q = q.filter(users::ban_level.eq(ban_level));
+            }
+
+            if !has_permission {
+                q = q.filter(users::ban_level.eq(0));
             }
             q
         };
@@ -311,7 +344,7 @@ impl User {
         let total_count: i64 = build_query().count().get_result(conn)?;
         let mut q = build_query();
 
-        if let Some(ref name_like) = options.name_filter {
+        if let Some(name_like) = &options.name_filter {
             q = q.order((
                 users::username.eq(name_like).desc(),
                 users::global_name.eq(name_like).desc(),
@@ -351,10 +384,10 @@ impl User {
     pub fn update(
         conn: &mut DbConnection,
         user_id: Uuid,
-        user: UserUpdate,
+        user: &UserUpdate,
     ) -> Result<Self, ApiError> {
         let updated_user = diesel::update(users::table.filter(users::id.eq(user_id)))
-            .set(&user)
+            .set(user)
             .returning(Self::as_select())
             .get_result::<Self>(conn)?;
         Ok(updated_user)
@@ -362,7 +395,7 @@ impl User {
 
     pub fn ban(
         conn: &mut DbConnection,
-        authenticated: Authenticated,
+        authenticated: &Authenticated,
         user_id: Uuid,
         ban_level: i32,
     ) -> Result<User, ApiError> {
@@ -371,7 +404,7 @@ impl User {
             .returning(Self::as_select())
             .get_result::<Self>(conn)?;
 
-        if ban_level >= 2 {
+        if ban_level >= 3 {
             // Set user's pending classic submissions to `Denied`
             diesel::update(
                 submissions::table
@@ -381,7 +414,7 @@ impl User {
             .set((
                 submissions::status.eq(SubmissionStatus::Denied),
                 submissions::reviewer_id.eq(Some(authenticated.user_id)),
-                submissions::reviewer_notes.eq("This player has been list banned."),
+                submissions::reviewer_notes.eq("This submission has been automatically rejected because this player has been list banned."),
             ))
             .execute(conn)?;
 
@@ -394,7 +427,7 @@ impl User {
             .set((
                 plat_submissions::status.eq(PlatSubmissionStatus::Denied),
                 plat_submissions::reviewer_id.eq(Some(authenticated.user_id)),
-                plat_submissions::reviewer_notes.eq("This player has been list banned."),
+                plat_submissions::reviewer_notes.eq("This submission has been automatically rejected because this player has been list banned."),
             ))
             .execute(conn)?;
         }
@@ -416,7 +449,7 @@ impl UserResolved {
     pub fn from_uuid(
         conn: &mut DbConnection,
         uuid: Uuid,
-        authenticated: Option<Authenticated>,
+        authenticated: Option<&Authenticated>,
     ) -> Result<Self, ApiError> {
         let user = User::from_uuid(conn, uuid)?;
         Self::from_user(conn, user, authenticated)
@@ -425,7 +458,7 @@ impl UserResolved {
     pub fn from_str(
         conn: &mut DbConnection,
         user_id: &str,
-        authenticated: Option<Authenticated>,
+        authenticated: Option<&Authenticated>,
     ) -> Result<Self, ApiError> {
         let user = User::from_str(conn, user_id)?;
         Self::from_user(conn, user, authenticated)
@@ -434,7 +467,7 @@ impl UserResolved {
     pub fn from_user(
         conn: &mut DbConnection,
         user: User,
-        authenticated: Option<Authenticated>,
+        authenticated: Option<&Authenticated>,
     ) -> Result<Self, ApiError> {
         let clan = clans::table
             .inner_join(clan_members::table.on(clans::id.eq(clan_members::clan_id)))
@@ -456,34 +489,19 @@ impl UserResolved {
         };
 
         if !can_view_hidden_roles {
-            roles = roles.into_iter().filter(|role| !role.hide).collect();
+            roles.retain(|role| !role.hide);
         }
 
-        let user_privilege_level: i32 = roles
-            .iter()
-            .map(|role| role.privilege_level)
-            .max()
-            .unwrap_or(0);
+        let scopes = permission::get_user_permissions(conn, user.id, !can_view_hidden_roles)?;
 
-        let all_permissions = permissions::table
-            .select((permissions::permission, permissions::privilege_level))
-            .load::<(String, i32)>(conn)?;
+        let badges = UserBadge::find_all(conn, user.id)?;
 
-        let scopes = all_permissions
-            .into_iter()
-            .filter_map(|(permission, privilege_level)| {
-                if user_privilege_level >= privilege_level {
-                    Some(permission)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<String>>();
         Ok(UserResolved {
             user,
             clan,
             roles,
             scopes,
+            badges,
         })
     }
 }

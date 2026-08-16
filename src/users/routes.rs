@@ -4,14 +4,13 @@ use crate::cache_control::CacheController;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::users::{
-    me, merge, names, PlaceholderOptions, User, UserBanUpdate, UserListQueryOptions, UserPage,
-    UserResolved, UserUpdate,
+    badges, me, merge, names, PlaceholderOptions, User, UserBanUpdate, UserListQueryOptions,
+    UserPage, UserResolved, UserUpdate,
 };
 use actix_web::{get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
-use uuid::Uuid;
 
 #[utoipa::path(
     get,
@@ -39,7 +38,7 @@ async fn find(
         UserResolved::from_str(
             &mut db.connection()?,
             id.into_inner().as_str(),
-            authenticated,
+            authenticated.as_ref(),
         )
     })
     .await??;
@@ -61,17 +60,23 @@ async fn find(
         (status = 200, body = Paginated<UserPage>)
     ),
 )]
-#[get("", wrap = "CacheController::public_with_max_age(180)")]
+#[get(
+    "",
+    wrap = "UserAuth::load()",
+    wrap = "CacheController::auth_public_with_max_age(300)"
+)]
 async fn list(
     db: web::Data<Arc<DbAppState>>,
     page_query: web::Query<PageQuery<100>>,
     options: web::Query<UserListQueryOptions>,
+    authenticated: Option<Authenticated>,
 ) -> Result<HttpResponse, ApiError> {
     let result = web::block(move || {
         User::find_all(
             &mut db.connection()?,
             page_query.into_inner(),
-            options.into_inner(),
+            &options.into_inner(),
+            authenticated.as_ref(),
         )
     })
     .await??;
@@ -100,7 +105,7 @@ async fn create_placeholder(
     options: web::Json<PlaceholderOptions>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&options));
+    root_span.record("body", tracing::field::debug(&options));
     let result =
         web::block(move || User::create_placeholder(&mut db.connection()?, options.into_inner()))
             .await??;
@@ -113,7 +118,7 @@ async fn create_placeholder(
     description = "Edit a user's base information. Your privilege level needs to be strictly higher than the one of the user you are trying to edit.",
     tag = "Users",
     params(
-        ("id" = Uuid, description = "The internal UUID of the user")
+        ("id" = String, description = "The internal UUID, username or discord ID of the user")
     ),
     request_body = UserUpdate,
     responses(
@@ -127,16 +132,17 @@ async fn create_placeholder(
 #[patch("/{id}", wrap = "UserAuth::require(Permission::UserModify)")]
 async fn update(
     db: web::Data<Arc<DbAppState>>,
-    id: web::Path<Uuid>,
+    id: web::Path<String>,
     user: web::Json<UserUpdate>,
     authenticated: Authenticated,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&user));
+    root_span.record("body", tracing::field::debug(&user));
     let result = web::block(move || {
         let conn = &mut db.connection()?;
-        authenticated.ensure_has_higher_privilege_than_user(conn, id.clone())?;
-        User::update(conn, id.into_inner(), user.into_inner())
+        let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
+        authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
+        User::update(conn, user_id, &user.into_inner())
     })
     .await??;
 
@@ -151,13 +157,14 @@ async fn update(
         | Ban level | Account status |    \n\
         |---|---|    \n\
         | 0 | Normal (No restriction)|    \n\
-        | 1 | Unranked (Does not want to appear on the leaderboards, but is still able to submit records)|    \n\
-        | 2 | List banned (Has been banned from the list. Does not appear on leaderboards, and isn't able to submit records)|    \n\
-        | 3 | Redacted (Hidden users that have been removed from the site for various reasons, but whose account are kept for internal purposes)|    \n\
+        | 1 | Semi-unranked (Does not appear on user leaderboards, but still contributes records to country and clan leaderboards)|    \n\
+        | 2 | Unranked (Does not want to appear on leaderboards, but is still able to submit records)|    \n\
+        | 3 | List banned (Has been banned from the list. Does not appear on leaderboards, and isn't able to submit records)|    \n\
+        | 4 | Redacted (Hidden users that have been removed from the site for various reasons, but whose account are kept for internal purposes)|    \n\
     ",
     tag = "Users",
     params(
-        ("id" = Uuid, description = "The internal UUID of the user")
+        ("id" = String, description = "The internal UUID, username or discord ID of the user")
     ),
     request_body = UserBanUpdate,
     responses(
@@ -171,24 +178,20 @@ async fn update(
 #[patch("/{id}/ban", wrap = "UserAuth::require(Permission::UserBan)")]
 async fn ban(
     db: web::Data<Arc<DbAppState>>,
-    id: web::Path<Uuid>,
+    id: web::Path<String>,
     user: web::Json<UserBanUpdate>,
     authenticated: Authenticated,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&user));
+    root_span.record("body", tracing::field::debug(&user));
     let result = web::block(move || {
         let conn = &mut db.connection()?;
-        authenticated.ensure_has_higher_privilege_than_user(conn, id.clone())?;
-        if user.ban_level == 3 {
+        let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
+        authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
+        if user.ban_level == 4 {
             authenticated.ensure_has_permission(conn, Permission::UserRedact)?;
         }
-        User::ban(
-            conn,
-            authenticated,
-            id.into_inner(),
-            user.into_inner().ban_level,
-        )
+        User::ban(conn, &authenticated, user_id, user.into_inner().ban_level)
     })
     .await??;
 
@@ -198,6 +201,7 @@ async fn ban(
 #[derive(OpenApi)]
 #[openapi(
     nest(
+        (path = "/{id}/badges", api = badges::ApiDoc),
         (path = "/names", api = names::ApiDoc),
         (path = "/@me", api = me::ApiDoc),
         (path = "/merge", api = merge::ApiDoc),
@@ -222,6 +226,7 @@ pub struct ApiDoc;
 pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/users")
+            .configure(badges::init_routes)
             .configure(me::init_routes)
             .configure(names::init_routes)
             .configure(merge::init_routes)

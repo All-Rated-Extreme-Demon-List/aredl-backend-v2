@@ -1,14 +1,16 @@
 use crate::{
-    aredl, arepl, auth, clans, get_secret, health, notifications, roles, shifts, users, utils,
+    aredl, arepl, auth, clans, get_optional_secret, health, notifications, roles, shifts, users,
+    utils,
 };
 use serde_json::json;
 use utoipa::openapi::extensions::Extensions;
 use utoipa::openapi::path::Operation;
+use utoipa::openapi::schema::Components;
 use utoipa::openapi::security::{ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityScheme};
 use utoipa::openapi::{PathItem, Server};
 use utoipa::{Modify, OpenApi};
-
-const API_DESCRIPTION: &str = r#"
+type JsonValue = serde_json::Value;
+const API_DESCRIPTION: &str = "
 # Welcome to the AREDL API v2 Documentation!
 
 ## Useful Links
@@ -131,7 +133,7 @@ Recognized providers include all providers listed above plus:
 ## Privilege level and Permissions
 Staff endpoints require specific permissions to be accessed.
 
-Each role gives a certain privilege level, and each user's privilege level is the highest one given by one of their roles:
+Each role has a privilege level used for role hierarchy checks, such as deciding whether a staff member can edit a role or affect another user:
 
 | Role | Privilege Level |
 |---|---|
@@ -142,29 +144,8 @@ Each role gives a certain privilege level, and each user's privilege level is th
 | **Developer** | 100 |
 | **Owner** | 110 |
 
-Each permission then requires the user's privilege level to be higher or equal to a certain level:
-
-| Permission | Required Level |
-|---|---|
-| **SubmissionReviewBase** | 10 |
-| **SubmissionReviewFull** | 15 |
-| **RecordModify** | 20 |
-| **UserModify** | 25 |
-| **PlaceholderCreate** | 25 |
-| **PackTierModify** | 40 |
-| **PackModify** | 40 |
-| **UserBan** | 45 |
-| **LevelModify** | 50 |
-| **MergeReview** | 50 |
-| **ClanModify** | 60 |
-| **NotificationsSubscribe** | 70 |
-| **UserRedact** | 75 |
-| **DirectMerge** | 80 |
-| **SubmissionStatusManage** | 80 |
-| **ReviewersAudit** | 85 |
-| **RoleManage** | 85 |
-| **ShiftManage** | 90 |
-"#;
+Permissions are explicit grants on roles. A role can inherit grants from another role and add its own grants on top.
+";
 
 #[derive(OpenApi)]
 #[openapi(
@@ -181,13 +162,12 @@ Each permission then requires the user's privilege level to be higher or equal t
         (path = "/utils", api=utils::ApiDoc),
 	)
 )]
-
 struct MainApiDoc;
 #[derive(OpenApi)]
 #[openapi(
     info(
         title = "AREDL API",
-        version = "2.01",
+        version = "2.2.0",
 
         description = API_DESCRIPTION,
     ),
@@ -204,16 +184,18 @@ struct ServerAddon;
 
 impl Modify for ServerAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
-        let mut server: Server = Default::default();
-        server.url = std::env::var("DOCS_API_SERVER")
-            .unwrap_or_else(|_| format!("http://127.0.0.1:{}", get_secret("PORT")).to_string());
-        server.description = Some("API Server".to_string());
+        let mut server: Server = Server::default();
+        server.url = std::env::var("DOCS_API_SERVER").unwrap_or_else(|_| {
+            let port = get_optional_secret("PORT").unwrap_or_else(|| "8080".to_owned());
+            format!("http://127.0.0.1:{port}")
+        });
+        server.description = Some("API Server".to_owned());
         openapi.servers = Some(vec![server]);
     }
 }
 impl Modify for SecurityAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
-        let components = openapi.components.as_mut().unwrap();
+        let components = openapi.components.get_or_insert_with(Components::default);
         components.add_security_scheme(
             "api_key",
             SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::new("api-key"))),
@@ -240,26 +222,26 @@ impl Modify for SecurityAddon {
 }
 
 impl StaffBadgeAddon {
-    fn create_staff_badge() -> serde_json::Value {
+    fn create_staff_badge() -> JsonValue {
         json!({
             "label": "Staff Only",
             "color": "red"
         })
     }
 
-    fn create_authed_badge() -> serde_json::Value {
+    fn create_authed_badge() -> JsonValue {
         json!({
             "label": "Authed User",
             "color": "orange"
         })
     }
-    fn create_authed_public_badge() -> serde_json::Value {
+    fn create_authed_public_badge() -> JsonValue {
         json!({
             "label": "Authed User / Public",
             "color": "green"
         })
     }
-    fn create_public_badge() -> serde_json::Value {
+    fn create_public_badge() -> JsonValue {
         json!({
             "label": "Public",
             "color": "green"
@@ -270,15 +252,15 @@ impl StaffBadgeAddon {
         let mut badges = Vec::new();
         if let Some(summary) = op.summary.as_mut() {
             if summary.contains("[Staff]") {
-                *summary = summary.replace("[Staff]", "").trim().to_string();
+                summary.clone_from(&summary.replace("[Staff]", "").trim().to_owned());
                 badges.push(Self::create_staff_badge());
             }
             if summary.contains("[AuthPublic]") {
-                *summary = summary.replace("[AuthPublic]", "").trim().to_string();
+                summary.clone_from(&summary.replace("[AuthPublic]", "").trim().to_owned());
                 badges.push(Self::create_authed_public_badge());
             }
             if summary.contains("[Auth]") {
-                *summary = summary.replace("[Auth]", "").trim().to_string();
+                summary.clone_from(&summary.replace("[Auth]", "").trim().to_owned());
                 badges.push(Self::create_authed_badge());
             }
             if badges.is_empty() {
@@ -288,14 +270,14 @@ impl StaffBadgeAddon {
             badges.push(Self::create_public_badge());
         }
         for badge in badges {
-            Self::add_badge_to_operation(op, badge);
+            Self::add_badge_to_operation(op, &badge);
         }
     }
 
-    fn add_badge_to_operation(op: &mut Operation, badge: serde_json::Value) {
-        let extensions = op.extensions.get_or_insert_with(|| Extensions::default());
+    fn add_badge_to_operation(op: &mut Operation, badge: &JsonValue) {
+        let extensions = op.extensions.get_or_insert_with(Extensions::default);
         extensions
-            .entry("x-badges".to_string())
+            .entry("x-badges".to_owned())
             .and_modify(|existing| {
                 if let Some(array) = existing.as_array_mut() {
                     array.push(badge.clone());
@@ -334,7 +316,7 @@ impl StaffBadgeAddon {
 
 impl Modify for StaffBadgeAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
-        for (_path, path_item) in openapi.paths.paths.iter_mut() {
+        for (_path, path_item) in &mut openapi.paths.paths {
             Self::add_badge_to_path_item(path_item);
         }
     }

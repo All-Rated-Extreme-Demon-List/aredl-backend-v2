@@ -2,14 +2,18 @@
 use {
     crate::{
         app_data::db::DbAppState,
-        aredl::{levels::test_utils::create_test_level_with_record, submissions::SubmissionStatus},
+        aredl::{
+            levels::test_utils::create_test_level_with_record, records::Record,
+            submissions::SubmissionStatus,
+        },
         schema::aredl::{records, submissions},
     },
     chrono::{DateTime, Utc},
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
+    diesel::prelude::*,
     std::sync::Arc,
     uuid::Uuid,
 };
+
 #[cfg(test)]
 pub async fn create_test_record(db: &Arc<DbAppState>, user_id: Uuid, level_id: Uuid) -> Uuid {
     let conn = &mut db.connection().unwrap();
@@ -25,11 +29,64 @@ pub async fn create_test_record(db: &Arc<DbAppState>, user_id: Uuid, level_id: U
         .get_result::<Uuid>(conn)
         .expect("Failed to create test aredl record");
 
-    return records::table
+    records::table
         .filter(records::submission_id.eq(submission_id))
         .select(records::id)
         .first::<Uuid>(conn)
-        .expect("Failed to retrieve test aredl record ID");
+        .expect("Failed to retrieve test aredl record ID")
+}
+
+#[cfg(test)]
+pub fn get_test_record(db: &Arc<DbAppState>, record_id: Uuid) -> Record {
+    records::table
+        .filter(records::id.eq(record_id))
+        .select(Record::as_select())
+        .first::<Record>(&mut db.connection().unwrap())
+        .expect("Failed to get test aredl record")
+}
+
+#[cfg(test)]
+pub fn get_test_record_for_level_and_user(
+    db: &Arc<DbAppState>,
+    level_id: Uuid,
+    user_id: Uuid,
+) -> Record {
+    records::table
+        .filter(records::level_id.eq(level_id))
+        .filter(records::submitted_by.eq(user_id))
+        .select(Record::as_select())
+        .first::<Record>(&mut db.connection().unwrap())
+        .expect("Failed to get test aredl record for level and user")
+}
+
+#[cfg(test)]
+pub fn test_records_for_user(db: &Arc<DbAppState>, user_id: Uuid) -> Vec<Record> {
+    records::table
+        .filter(records::submitted_by.eq(user_id))
+        .select(Record::as_select())
+        .get_results::<Record>(&mut db.connection().unwrap())
+        .expect("Failed to collect test aredl records for user")
+}
+
+#[cfg(test)]
+pub fn test_records_for_level(db: &Arc<DbAppState>, level_id: Uuid) -> Vec<Record> {
+    records::table
+        .filter(records::level_id.eq(level_id))
+        .select(Record::as_select())
+        .get_results::<Record>(&mut db.connection().unwrap())
+        .expect("Failed to collect test aredl records for level")
+}
+
+#[cfg(test)]
+pub fn count_test_records_with_achieved_at(
+    db: &Arc<DbAppState>,
+    achieved_at: DateTime<Utc>,
+) -> i64 {
+    records::table
+        .filter(records::achieved_at.eq(achieved_at))
+        .count()
+        .get_result(&mut db.connection().unwrap())
+        .expect("Failed to count test aredl records with achieved_at")
 }
 
 pub async fn create_two_test_records_with_different_timestamps(
@@ -62,4 +119,36 @@ pub async fn create_two_test_records_with_different_timestamps(
         .unwrap();
 
     (record_a, record_b)
+}
+
+#[cfg(test)]
+pub async fn set_test_record_verification(
+    db: &Arc<DbAppState>,
+    record_id: Uuid,
+    is_verification: bool,
+) {
+    diesel::update(records::table.filter(records::id.eq(record_id)))
+        .set(records::is_verification.eq(is_verification))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to update test aredl record verification status");
+}
+
+#[cfg(test)]
+pub async fn set_test_record_mobile(db: &Arc<DbAppState>, record_id: Uuid, mobile: bool) {
+    diesel::update(records::table.filter(records::id.eq(record_id)))
+        .set(records::mobile.eq(mobile))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to update test aredl record mobile flag");
+}
+
+#[cfg(test)]
+pub async fn set_test_record_achieved_at(
+    db: &Arc<DbAppState>,
+    record_id: Uuid,
+    achieved_at: DateTime<Utc>,
+) {
+    diesel::update(records::table.filter(records::id.eq(record_id)))
+        .set(records::achieved_at.eq(achieved_at))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to update test aredl record achieved_at");
 }

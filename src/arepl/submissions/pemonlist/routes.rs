@@ -26,7 +26,7 @@ async fn sync_pemonlist(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let result = web::block(move || {
-        PemonlistPlayer::sync_with_pemonlist(&mut db.connection()?, authenticated)
+        PemonlistPlayer::sync_with_pemonlist(&mut db.connection()?, &authenticated)
     })
     .await??;
     Ok(HttpResponse::Ok().json(result))

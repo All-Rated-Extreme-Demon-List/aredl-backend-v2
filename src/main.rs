@@ -32,13 +32,13 @@ mod utils;
 use crate::app_data::{auth as auth_data, db};
 use crate::cache_control::CacheController;
 use crate::docs::ApiDoc;
+use crate::error_handler::{ConfigError, StartupError};
 use crate::scheduled::{
     data_cleaner::start_data_cleaner, refresh_discord_avatars::start_discord_avatars_refresher,
     refresh_level_data::start_level_data_refresher, refresh_matviews::start_matviews_refresher,
-    shifts_creator::start_recurrent_shift_creator,
+    shifts_creator::start_recurrent_shift_creator, sync_patreon_plus::start_patreon_plus_sync,
 };
 use actix_cors::Cors;
-use actix_governor::GovernorConfigBuilder;
 use actix_http::StatusCode;
 use actix_web::body::MessageBody;
 use actix_web::dev::{ServiceRequest, ServiceResponse};
@@ -47,7 +47,7 @@ use actix_web::Error;
 use actix_web::{web, App, HttpServer};
 use actix_web_prom::PrometheusMetricsBuilder;
 
-use dotenv::dotenv;
+use dotenvy::dotenv;
 use listenfd::ListenFd;
 use notifications::WebsocketNotification;
 use std::env;
@@ -57,12 +57,12 @@ use tracing::Span;
 use tracing_actix_web::{root_span, DefaultRootSpanBuilder, RootSpanBuilder, TracingLogger};
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::EnvFilter;
-use utoipa::OpenApi;
+use utoipa::OpenApi as _;
 use utoipa_rapidoc::RapiDoc;
 
 #[actix_rt::main]
-async fn main() -> std::io::Result<()> {
-    dotenv().ok();
+async fn main() -> Result<(), StartupError> {
+    drop(dotenv());
 
     if cfg!(debug_assertions) {
         tracing_subscriber::fmt()
@@ -94,25 +94,27 @@ async fn main() -> std::io::Result<()> {
         .exclude_status(StatusCode::NOT_FOUND)
         .mask_unmatched_patterns("/unmatched")
         .build()
-        .unwrap();
+        .map_err(|error| StartupError::Init(format!("Failed to start Prometheus: {error}")))?;
 
-    let db_app_state = db::init_app_state();
+    let db_app_state = db::init_app_state()?;
 
-    let auth_app_state = auth_data::init_app_state().await;
+    let auth_app_state = auth_data::init_app_state()?;
 
-    let providers_app_state = providers::init_app_state().await;
+    let providers_app_state = providers::init_app_state(db_app_state.clone()).await;
 
-    db_app_state.run_pending_migrations();
+    db_app_state.run_pending_migrations()?;
 
-    start_matviews_refresher(db_app_state.clone()).await;
+    start_matviews_refresher(db_app_state.clone()).await?;
 
-    start_data_cleaner(db_app_state.clone(), notify_tx.clone()).await;
+    start_data_cleaner(db_app_state.clone(), notify_tx.clone()).await?;
 
-    start_level_data_refresher(db_app_state.clone()).await;
+    start_level_data_refresher(db_app_state.clone(), providers_app_state.clone()).await?;
 
-    start_recurrent_shift_creator(db_app_state.clone(), notify_tx.clone()).await;
+    start_recurrent_shift_creator(db_app_state.clone(), notify_tx.clone()).await?;
 
-    start_discord_avatars_refresher(db_app_state.clone()).await;
+    start_discord_avatars_refresher(db_app_state.clone(), providers_app_state.clone()).await?;
+
+    start_patreon_plus_sync(db_app_state.clone(), providers_app_state.clone()).await?;
 
     let mut listenfd = ListenFd::from_env();
     let mut server = HttpServer::new(move || {
@@ -144,13 +146,6 @@ async fn main() -> std::io::Result<()> {
                 <img style=\"padding: 0.5rem; height: 3rem;\" slot=\"logo\"  src=\"https://aredl.net/assets/logo.webp\"/>
             </rapi-doc></body></html>";
 
-        let _governor_conf = GovernorConfigBuilder::default()
-            .requests_per_minute(100)
-            .burst_size(20)
-            .use_headers()
-            .finish()
-            .expect("invalid governor config");
-
         App::new()
             .wrap(prometheus.clone())
             .service(
@@ -181,16 +176,17 @@ async fn main() -> std::io::Result<()> {
             )
     });
 
-    server = match listenfd.take_tcp_listener(0)? {
-        Some(listener) => server.listen(listener)?,
-        None => {
-            let host = get_secret("HOST");
-            let port = get_secret("PORT");
-            server.bind(format!("{}:{}", host, port))?
-        }
+    server = if let Some(listener) = listenfd.take_tcp_listener(0)? {
+        server.listen(listener)?
+    } else {
+        let host = get_secret("HOST")?;
+        let port = get_secret("PORT")?;
+        server.bind(format!("{host}:{port}"))?
     };
 
-    server.run().await
+    server.run().await?;
+
+    Ok(())
 }
 
 pub struct AppRootSpanBuilder;
@@ -209,32 +205,36 @@ impl RootSpanBuilder for AppRootSpanBuilder {
     }
 }
 
-pub fn get_secret(var_name: &str) -> String {
-    let value = env::var(var_name).expect(&format!("Please set {} in .env", var_name));
+pub fn get_secret(var_name: &str) -> Result<String, ConfigError> {
+    let value = env::var(var_name).map_err(|_err| ConfigError::MissingSecret {
+        name: var_name.to_owned(),
+    })?;
+
     if value.starts_with("/run/secrets/") {
-        fs::read_to_string(value.trim())
-            .expect("Failed to read secret file")
+        Ok(fs::read_to_string(value.trim())
+            .map_err(|source| ConfigError::SecretFileRead {
+                name: var_name.to_owned(),
+                path: value.trim().to_owned(),
+                source,
+            })?
             .trim()
-            .to_string()
+            .to_owned())
     } else {
-        value
+        Ok(value)
     }
 }
 
 pub fn get_optional_secret(var_name: &str) -> Option<String> {
-    let value = match env::var(var_name) {
-        Ok(v) => v,
-        Err(_) => {
-            tracing::warn!("Optional .env {} not set", var_name);
-            return None;
-        }
+    let Ok(value) = env::var(var_name) else {
+        tracing::warn!("Optional .env {} not set", var_name);
+        return None;
     };
     if value.starts_with("/run/secrets/") {
         match fs::read_to_string(value.trim()) {
-            Ok(v) => Some(v.trim().to_string()),
+            Ok(v) => Some(v.trim().to_owned()),
             Err(e) => {
                 tracing::warn!("Failed to read secret file for {}: {}", var_name, e);
-                return None;
+                None
             }
         }
     } else {

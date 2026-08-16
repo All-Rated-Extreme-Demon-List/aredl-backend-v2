@@ -81,7 +81,7 @@ async fn disable(
 async fn get_status_full(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
     let res =
         web::block(move || SubmissionsEnabledFull::get_status(&mut db.connection()?)).await??;
-    return Ok(HttpResponse::Ok().json(res));
+    Ok(HttpResponse::Ok().json(res))
 }
 
 #[utoipa::path(
@@ -100,7 +100,7 @@ async fn get_status_full(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse,
 #[get("", wrap = "CacheController::public_with_max_age(60)")]
 async fn get_status(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
     let res = web::block(move || SubmissionsEnabled::is_enabled(&mut db.connection()?)).await??;
-    return Ok(HttpResponse::Ok().json(res));
+    Ok(HttpResponse::Ok().json(res))
 }
 
 #[utoipa::path(
@@ -123,7 +123,7 @@ async fn get_status(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiE
 async fn get_history(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
     let res =
         web::block(move || SubmissionsEnabledFull::get_statuses(&mut db.connection()?)).await??;
-    return Ok(HttpResponse::Ok().json(res));
+    Ok(HttpResponse::Ok().json(res))
 }
 
 #[derive(OpenApi)]

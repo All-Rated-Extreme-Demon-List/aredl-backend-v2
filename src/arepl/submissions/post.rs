@@ -1,18 +1,18 @@
 use crate::{
     app_data::db::DbConnection,
-    arepl::submissions::{status::SubmissionsEnabled, *},
+    arepl::bounty::Bounty,
+    arepl::levels::LevelStatus,
+    arepl::submissions::{status::SubmissionsEnabled, Submission, SubmissionStatus},
     auth::{Authenticated, Permission},
     error_handler::ApiError,
-    providers::VideoProvidersAppState,
+    providers::ProvidersAppState,
     schema::arepl::{levels, submissions},
-};
-use diesel::{
-    Connection, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Debug, Insertable, ToSchema, Default)]
 #[diesel(table_name=submissions, check_for_backend(Pg))]
 pub struct SubmissionInsert {
@@ -22,8 +22,8 @@ pub struct SubmissionInsert {
     pub level_id: Uuid,
     /// Set to `true` if this completion is on a mobile device.
     pub mobile: bool,
-    /// ID of the LDM used for the record, if any.
-    pub ldm_id: Option<i32>,
+    /// ID of the custom copy used for the record, if any.
+    pub custom_copy_id: Option<i32>,
     /// Completion video URL.
     ///
     /// The provider is enforced and the URL is stored in a standardized canonical form.
@@ -53,7 +53,6 @@ pub struct SubmissionInsert {
 
 #[derive(Serialize, Deserialize, Debug, Insertable, ToSchema, Default)]
 #[diesel(table_name=submissions, check_for_backend(Pg))]
-
 pub struct SubmissionPostMod {
     /// [MOD ONLY] UUID of the user submitting the record.
     pub submitted_by: Option<Uuid>,
@@ -61,8 +60,8 @@ pub struct SubmissionPostMod {
     pub level_id: Uuid,
     /// Set to `true` if this completion is on a mobile device.
     pub mobile: bool,
-    /// ID of the LDM used for the record, if any.
-    pub ldm_id: Option<i32>,
+    /// ID of the custom copy used for the record, if any.
+    pub custom_copy_id: Option<i32>,
     /// Completion video URL.
     ///
     /// The provider is enforced and the URL is stored in a standardized canonical form.
@@ -95,8 +94,8 @@ pub struct SubmissionPostUser {
     pub level_id: Uuid,
     /// Set to `true` if this completion is on a mobile device.
     pub mobile: bool,
-    /// ID of the LDM used for the record, if any.
-    pub ldm_id: Option<i32>,
+    /// ID of the custom copy used for the record, if any.
+    pub custom_copy_id: Option<i32>,
     /// Completion video URL.
     ///
     /// The provider is enforced and the URL is stored in a standardized canonical form.
@@ -121,7 +120,7 @@ impl SubmissionPostMod {
         SubmissionPostUser {
             level_id: self.level_id,
             mobile: self.mobile,
-            ldm_id: self.ldm_id,
+            custom_copy_id: self.custom_copy_id,
             video_url: self.video_url,
             raw_url: self.raw_url,
             mod_menu: self.mod_menu,
@@ -137,17 +136,19 @@ impl SubmissionInsert {
         body: SubmissionPostUser,
         authenticated: &Authenticated,
     ) -> Result<Self, ApiError> {
+        let active_bounties = Bounty::find_active_by_level(conn, body.level_id)?;
         Ok(SubmissionInsert {
             submitted_by: authenticated.user_id,
             level_id: body.level_id,
             mobile: body.mobile,
-            ldm_id: body.ldm_id,
+            custom_copy_id: body.custom_copy_id,
             video_url: body.video_url,
             raw_url: body.raw_url,
             mod_menu: body.mod_menu,
             user_notes: body.user_notes,
             completion_time: body.completion_time,
-            priority: authenticated.is_aredl_plus(conn)?,
+            priority: authenticated.has_permission(conn, Permission::SubmissionPriority)?
+                || !active_bounties.is_empty(),
             status: SubmissionStatus::Pending,
             ..Default::default()
         })
@@ -160,7 +161,7 @@ impl SubmissionInsert {
     ) -> Result<Self, ApiError> {
         let submitted_by = body.submitted_by.unwrap_or(authenticated.user_id);
 
-        if !authenticated.has_permission(conn, Permission::SubmissionReviewFull)?
+        if !authenticated.has_permission(conn, Permission::SubmissionEditNonSelfClaimed)?
             || submitted_by == authenticated.user_id
         {
             return SubmissionInsert::from_user(conn, body.downgrade(), authenticated);
@@ -170,13 +171,13 @@ impl SubmissionInsert {
             submitted_by,
             level_id: body.level_id,
             mobile: body.mobile,
-            ldm_id: body.ldm_id,
+            custom_copy_id: body.custom_copy_id,
             video_url: body.video_url,
             raw_url: body.raw_url,
             mod_menu: body.mod_menu,
             user_notes: body.user_notes,
             completion_time: body.completion_time,
-            priority: authenticated.is_aredl_plus(conn)?,
+            priority: body.priority.unwrap_or(false),
             status: body.status.unwrap_or(SubmissionStatus::Pending),
             reviewer_notes: body.reviewer_notes,
             reviewer_id: Some(authenticated.user_id),
@@ -188,8 +189,8 @@ impl Submission {
     pub fn create(
         conn: &mut DbConnection,
         mut submission_body: SubmissionPostMod,
-        authenticated: Authenticated,
-        providers: &VideoProvidersAppState,
+        authenticated: &Authenticated,
+        providers: &ProvidersAppState,
     ) -> Result<Self, ApiError> {
         submission_body.video_url = providers
             .validate_completion_video_url(&submission_body.video_url)
@@ -209,12 +210,12 @@ impl Submission {
 
         conn.transaction(|connection| -> Result<Self, ApiError> {
             let inserted_submission =
-                SubmissionInsert::from_mod(connection, submission_body, &authenticated)?;
+                SubmissionInsert::from_mod(connection, submission_body, authenticated)?;
 
             if authenticated.user_id == inserted_submission.submitted_by
                 && !(SubmissionsEnabled::is_enabled(connection)?)
             {
-                return Err(ApiError::new(400, "Submissions are currently disabled"));
+                return Err(ApiError::Forbidden("Submissions are currently disabled"));
             }
 
             // check if any submissions exist already
@@ -226,32 +227,33 @@ impl Submission {
                 .optional()?;
 
             if exists_submission.is_some() {
-                return Err(ApiError::new(
-                    409,
+                return Err(ApiError::Conflict(
                     "You already have a submission for this level",
                 ));
             }
 
-            // check that this level exists, is not legacy, and
-            // raw footage is provided for ranks 400+
+            // check that this level exists, accepts submissions, and
+            // raw footage is provided
             let level_info = levels::table
                 .filter(levels::id.eq(inserted_submission.level_id))
-                .select((levels::legacy, levels::position))
-                .first::<(bool, i32)>(connection)
+                .select(levels::status)
+                .first::<LevelStatus>(connection)
                 .optional()?;
 
             match level_info {
-                None => return Err(ApiError::new(404, "Could not find this level")),
-                Some((legacy, pos)) => {
-                    if legacy == true {
-                        return Err(ApiError::new(
-                            400,
+                None => return Err(ApiError::NotFound("Could not find this level")),
+                Some(status) => {
+                    if status == LevelStatus::Legacy {
+                        return Err(ApiError::UnprocessableEntity(
                             "This level is on the legacy list and is not accepting records.",
                         ));
                     }
-                    if pos <= 400 && inserted_submission.raw_url.is_none() {
-                        return Err(ApiError::new(
-                            400,
+                    if status == LevelStatus::Removed {
+                        return Err(ApiError::Gone("This level has been removed from the list."));
+                    }
+
+                    if inserted_submission.raw_url.is_none() {
+                        return Err(ApiError::UnprocessableEntity(
                             "Platformer submissions require raw footage",
                         ));
                     }

@@ -1,13 +1,15 @@
-use crate::arepl::packtiers::BasePackTier;
 use crate::app_data::db::DbConnection;
+use crate::arepl::packtiers::BasePackTier;
 use crate::error_handler::ApiError;
-use crate::schema::arepl::packs;
+use crate::schema::arepl::{completed_packs, packs};
+use crate::schema::users;
+use crate::users::ExtendedBaseUser;
 use diesel::pg::Pg;
-use diesel::{ExpressionMethods, RunQueryDsl};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
 #[diesel(table_name=packs, check_for_backend(Pg))]
 pub struct BasePack {
@@ -75,5 +77,32 @@ impl Pack {
             .filter(packs::id.eq(id))
             .get_result(conn)?;
         Ok(pack)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct CompletedPackVictor {
+    /// User who completed the pack.
+    pub user: ExtendedBaseUser,
+    /// Timestamp when the pack was completed (highest achieved_at for each level record in the pack)
+    pub completed_at: chrono::NaiveDateTime,
+}
+
+impl Pack {
+    pub fn find_victors(
+        conn: &mut DbConnection,
+        pack_id: Uuid,
+    ) -> Result<Vec<CompletedPackVictor>, ApiError> {
+        let victors = completed_packs::table
+            .inner_join(users::table.on(users::id.eq(completed_packs::user_id)))
+            .filter(completed_packs::pack_id.eq(pack_id))
+            .select((completed_packs::completed_at, ExtendedBaseUser::as_select()))
+            .order(completed_packs::completed_at.asc())
+            .load::<(chrono::NaiveDateTime, ExtendedBaseUser)>(conn)?
+            .into_iter()
+            .map(|(completed_at, user)| CompletedPackVictor { user, completed_at })
+            .collect::<Vec<CompletedPackVictor>>();
+
+        Ok(victors)
     }
 }

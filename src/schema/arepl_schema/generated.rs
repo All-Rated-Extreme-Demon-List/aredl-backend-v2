@@ -3,6 +3,14 @@
 pub mod arepl {
     pub mod sql_types {
         #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+        #[diesel(postgres_type(name = "bounty_difficulty"))]
+        pub struct BountyDifficulty;
+
+        #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+        #[diesel(postgres_type(name = "bounty_type"))]
+        pub struct BountyType;
+
+        #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
         #[diesel(postgres_type(name = "custom_id_status", schema = "arepl"))]
         pub struct CustomIdStatus;
 
@@ -11,8 +19,45 @@ pub mod arepl {
         pub struct CustomIdType;
 
         #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+        #[diesel(postgres_type(name = "level_notes_type", schema = "arepl"))]
+        pub struct LevelNotesType;
+
+        #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+        #[diesel(postgres_type(name = "level_status"))]
+        pub struct LevelStatus;
+
+        #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+        #[diesel(postgres_type(name = "level_update_type", schema = "arepl"))]
+        pub struct LevelUpdateType;
+
+        #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
         #[diesel(postgres_type(name = "submission_status"))]
         pub struct SubmissionStatus;
+    }
+
+    diesel::table! {
+        use diesel::sql_types::*;
+        use super::sql_types::BountyType;
+        use super::sql_types::BountyDifficulty;
+
+        arepl.bounties (id) {
+            id -> Uuid,
+            level_id -> Uuid,
+            bounty_type -> BountyType,
+            bounty_difficulty -> BountyDifficulty,
+            start_date -> Timestamptz,
+            end_date -> Nullable<Timestamptz>,
+            target_submissions -> Nullable<Int4>,
+            is_target_public -> Bool,
+        }
+    }
+
+    diesel::table! {
+        arepl.bounty_completed (user_id, bounty_id) {
+            user_id -> Uuid,
+            bounty_id -> Uuid,
+            completed_at -> Timestamptz,
+        }
     }
 
     diesel::table! {
@@ -27,10 +72,10 @@ pub mod arepl {
         use super::sql_types::CustomIdType;
         use super::sql_types::CustomIdStatus;
 
-        arepl.level_ldms (id) {
+        arepl.level_custom_copies (id) {
             id -> Uuid,
             level_id -> Uuid,
-            ldm_id -> Int4,
+            copy_id -> Int4,
             added_by -> Uuid,
             description -> Nullable<Varchar>,
             created_at -> Timestamptz,
@@ -40,13 +85,44 @@ pub mod arepl {
     }
 
     diesel::table! {
+        use diesel::sql_types::*;
+        use super::sql_types::LevelNotesType;
+
+        arepl.level_notes (id) {
+            id -> Uuid,
+            level_id -> Uuid,
+            note -> Text,
+            note_type -> LevelNotesType,
+            timestamp -> Nullable<Timestamptz>,
+            added_by -> Uuid,
+            created_at -> Timestamptz,
+        }
+    }
+
+    diesel::table! {
+        use diesel::sql_types::*;
+        use super::sql_types::LevelUpdateType;
+
+        arepl.level_updates (id) {
+            id -> Uuid,
+            level_id -> Uuid,
+            changelog -> Nullable<Text>,
+            update_type -> LevelUpdateType,
+            timestamp -> Timestamptz,
+            created_at -> Timestamptz,
+        }
+    }
+
+    diesel::table! {
+        use diesel::sql_types::*;
+        use super::sql_types::LevelStatus;
+
         arepl.levels (id) {
             id -> Uuid,
-            position -> Int4,
+            position -> Nullable<Int4>,
             name -> Varchar,
             publisher_id -> Uuid,
             points -> Int4,
-            legacy -> Bool,
             level_id -> Int4,
             two_player -> Bool,
             tags -> Array<Nullable<Text>>,
@@ -56,6 +132,8 @@ pub mod arepl {
             is_edel_pending -> Bool,
             gddl_tier -> Nullable<Float8>,
             nlw_tier -> Nullable<Varchar>,
+            status -> LevelStatus,
+            requires_raw_footage -> Bool,
         }
     }
 
@@ -91,15 +169,19 @@ pub mod arepl {
     }
 
     diesel::table! {
+        use diesel::sql_types::*;
+        use super::sql_types::LevelStatus;
+
         arepl.position_history (i) {
             i -> Int4,
             new_position -> Nullable<Int4>,
             old_position -> Nullable<Int4>,
-            legacy -> Nullable<Bool>,
             affected_level -> Uuid,
             level_above -> Nullable<Uuid>,
             level_below -> Nullable<Uuid>,
             created_at -> Timestamptz,
+            old_status -> Nullable<LevelStatus>,
+            new_status -> LevelStatus,
         }
     }
 
@@ -133,7 +215,7 @@ pub mod arepl {
             user_notes -> Nullable<Text>,
             reviewer_id -> Nullable<Uuid>,
             mobile -> Nullable<Bool>,
-            ldm_id -> Nullable<Int4>,
+            custom_copy_id -> Nullable<Int4>,
             video_url -> Nullable<Varchar>,
             raw_url -> Nullable<Varchar>,
             mod_menu -> Nullable<Varchar>,
@@ -153,7 +235,7 @@ pub mod arepl {
             level_id -> Uuid,
             submitted_by -> Uuid,
             mobile -> Bool,
-            ldm_id -> Nullable<Int4>,
+            custom_copy_id -> Nullable<Int4>,
             video_url -> Varchar,
             raw_url -> Nullable<Varchar>,
             reviewer_id -> Nullable<Uuid>,
@@ -179,13 +261,21 @@ pub mod arepl {
         }
     }
 
-    diesel::joinable!(level_ldms -> levels (level_id));
+    diesel::joinable!(bounties -> levels (level_id));
+    diesel::joinable!(bounty_completed -> bounties (bounty_id));
+    diesel::joinable!(level_custom_copies -> levels (level_id));
+    diesel::joinable!(level_notes -> levels (level_id));
+    diesel::joinable!(level_updates -> levels (level_id));
     diesel::joinable!(records -> submissions (submission_id));
     diesel::joinable!(submission_history -> submissions (submission_id));
 
     diesel::allow_tables_to_appear_in_same_query!(
+        bounties,
+        bounty_completed,
         last_gddl_update,
-        level_ldms,
+        level_custom_copies,
+        level_notes,
+        level_updates,
         levels,
         levels_created,
         pack_levels,

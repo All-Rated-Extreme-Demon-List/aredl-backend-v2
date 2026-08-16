@@ -21,13 +21,37 @@ on:
       db_alias:
         required: true
         type: string
-      discord_redirect_uri:
+      oauth_return_uri_base:
         required: true
         type: string
       auth_callback_allow_localhost:
         required: false
         default: true
         type: boolean
+      matviews_refresh_schedule:
+        required: false
+        default: "0 */10 * * * * *"
+        type: string
+      level_data_refresh_schedule:
+        required: false
+        default: "@daily"
+        type: string
+      discord_avatars_refresh_schedule:
+        required: false
+        default: "@hourly"
+        type: string
+      data_cleaner_schedule:
+        required: false
+        default: "@hourly"
+        type: string
+      recurring_shifts_schedule:
+        required: false
+        default: "@hourly"
+        type: string
+      patreon_sync_schedule:
+        required: false
+        default: ""
+        type: string
         
 
 
@@ -72,8 +96,14 @@ jobs:
             echo "DOCS_API_SERVER=${{ inputs.docs_api_server }}"
             echo "API_NET=${{ inputs.api_net }}"
             echo "DB_ALIAS=${{ inputs.db_alias }}"
-            echo "DISCORD_REDIRECT_URI=${{ inputs.discord_redirect_uri }}"
+            echo "OAUTH_RETURN_URI_BASE=${{ inputs.oauth_return_uri_base }}"
             echo "AUTH_CALLBACK_ALLOW_LOCALHOST=${{ inputs.auth_callback_allow_localhost }}"
+            echo "MATVIEWS_REFRESH_SCHEDULE=${{ inputs.matviews_refresh_schedule }}"
+            echo "LEVEL_DATA_REFRESH_SCHEDULE=${{ inputs.level_data_refresh_schedule }}"
+            echo "DISCORD_AVATARS_REFRESH_SCHEDULE=${{ inputs.discord_avatars_refresh_schedule }}"
+            echo "DATA_CLEANER_SCHEDULE=${{ inputs.data_cleaner_schedule }}"
+            echo "RECURRING_SHIFTS_SCHEDULE=${{ inputs.recurring_shifts_schedule }}"
+            echo "PATREON_SYNC_SCHEDULE=${{ inputs.patreon_sync_schedule }}"
           } >> .env
 
       - name: Check if remote directory exists
@@ -101,8 +131,14 @@ jobs:
             DOCS_API_SERVER='${{ inputs.docs_api_server }}' \
             API_NET='${{ inputs.api_net }}' \
             DB_ALIAS='${{ inputs.db_alias }}' \
-            DISCORD_REDIRECT_URI='${{ inputs.discord_redirect_uri }}' \
+            OAUTH_RETURN_URI_BASE='${{ inputs.oauth_return_uri_base }}' \
             AUTH_CALLBACK_ALLOW_LOCALHOST='${{ inputs.auth_callback_allow_localhost }}' \
+            MATVIEWS_REFRESH_SCHEDULE='${{ inputs.matviews_refresh_schedule }}' \
+            LEVEL_DATA_REFRESH_SCHEDULE='${{ inputs.level_data_refresh_schedule }}' \
+            DISCORD_AVATARS_REFRESH_SCHEDULE='${{ inputs.discord_avatars_refresh_schedule }}' \
+            DATA_CLEANER_SCHEDULE='${{ inputs.data_cleaner_schedule }}' \
+            RECURRING_SHIFTS_SCHEDULE='${{ inputs.recurring_shifts_schedule }}' \
+            PATREON_SYNC_SCHEDULE='${{ inputs.patreon_sync_schedule }}' \
             docker stack deploy \
               --with-registry-auth \
               --compose-file \"\${REMOTE_PATH}/docker-stack.yml\" \

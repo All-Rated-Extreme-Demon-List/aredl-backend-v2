@@ -1,19 +1,19 @@
 #[cfg(test)]
-use std::sync::Arc;
-
-#[cfg(test)]
-use crate::{
-    app_data::db::DbAppState,
-    schema::{roles, user_roles},
+use {
+    crate::{
+        app_data::db::DbAppState,
+        auth::Permission,
+        schema::{role_permissions, roles, user_roles},
+    },
+    diesel::prelude::*,
+    std::collections::HashSet,
+    std::sync::Arc,
+    uuid::Uuid,
 };
-#[cfg(test)]
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
-#[cfg(test)]
-use uuid::Uuid;
 
 #[cfg(test)]
 pub async fn create_test_role(db: &Arc<DbAppState>, privilege_level: i32) -> i32 {
-    let role_name = format!("Test Role {}", privilege_level);
+    let role_name = format!("Test Role {privilege_level}");
     create_test_role_with_desc(db, privilege_level, &role_name).await
 }
 
@@ -31,6 +31,46 @@ pub async fn create_test_role_with_desc(
         .returning(roles::id)
         .get_result::<i32>(&mut db.connection().unwrap())
         .expect("Failed to create test role!")
+}
+
+#[cfg(test)]
+pub async fn create_test_role_with_permission(
+    db: &Arc<DbAppState>,
+    privilege_level: i32,
+    permission: Permission,
+) -> i32 {
+    let role_id = create_test_role(db, privilege_level).await;
+    add_permission_to_role(db, role_id, permission).await;
+    role_id
+}
+
+#[cfg(test)]
+pub async fn create_test_role_inheriting(
+    db: &Arc<DbAppState>,
+    privilege_level: i32,
+    inherits_from_role_id: i32,
+) -> i32 {
+    let role_name = format!("Test Role {privilege_level}");
+    diesel::insert_into(roles::table)
+        .values((
+            roles::role_desc.eq(role_name),
+            roles::privilege_level.eq(privilege_level),
+            roles::inherits_from_role_id.eq(inherits_from_role_id),
+        ))
+        .returning(roles::id)
+        .get_result::<i32>(&mut db.connection().unwrap())
+        .expect("Failed to create inheriting test role!")
+}
+
+#[cfg(test)]
+pub async fn add_permission_to_role(db: &Arc<DbAppState>, role_id: i32, permission: Permission) {
+    diesel::insert_into(role_permissions::table)
+        .values((
+            role_permissions::role_id.eq(role_id),
+            role_permissions::permission.eq(permission.to_string()),
+        ))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to assign permission to role!");
 }
 
 #[cfg(test)]
@@ -83,4 +123,15 @@ pub async fn add_user_to_role(db: &Arc<DbAppState>, role_id: i32, user_id: Uuid)
         ))
         .execute(&mut db.connection().unwrap())
         .expect("Failed to assign role to user!");
+}
+
+#[cfg(test)]
+pub fn users_with_role(db: &Arc<DbAppState>, role_id: i32) -> HashSet<Uuid> {
+    user_roles::table
+        .filter(user_roles::role_id.eq(role_id))
+        .select(user_roles::user_id)
+        .load::<Uuid>(&mut db.connection().unwrap())
+        .expect("Failed to load users with test role")
+        .into_iter()
+        .collect()
 }

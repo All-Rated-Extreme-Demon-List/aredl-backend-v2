@@ -1,12 +1,11 @@
-use crate::arepl::levels::BaseLevel;
 use crate::app_data::db::DbConnection;
+use crate::arepl::levels::BaseLevel;
 use crate::error_handler::ApiError;
 use crate::schema::{arepl::levels, arepl::pack_levels};
-use diesel::{
-    insert_into, Connection, ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl, SelectableHelper,
-};
+use diesel::insert_into;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 impl BaseLevel {
     pub fn pack_add_all(
         conn: &mut DbConnection,
@@ -62,15 +61,11 @@ impl BaseLevel {
         })
     }
 
-    fn add_levels(
-        pack_id: Uuid,
-        levels: &Vec<Uuid>,
-        conn: &mut DbConnection,
-    ) -> Result<(), ApiError> {
+    fn add_levels(pack_id: Uuid, levels: &[Uuid], conn: &mut DbConnection) -> Result<(), ApiError> {
         insert_into(pack_levels::table)
             .values(
                 levels
-                    .into_iter()
+                    .iter()
                     .map(|level| {
                         (
                             pack_levels::pack_id.eq(pack_id),
@@ -85,7 +80,7 @@ impl BaseLevel {
 
     pub fn delete_levels(
         pack_id: Uuid,
-        levels: &Vec<Uuid>,
+        levels: &[Uuid],
         conn: &mut DbConnection,
     ) -> Result<(), ApiError> {
         diesel::delete(

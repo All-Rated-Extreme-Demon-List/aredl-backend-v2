@@ -1,26 +1,31 @@
 use crate::app_data::db::DbConnection;
+use crate::arepl::levels::records::LevelResolvedRecordExtended;
 use crate::arepl::levels::ExtendedBaseLevel;
-use crate::arepl::records::ResolvedRecord;
+use crate::arepl::levels::LevelStatus;
+use crate::arepl::records::{Record, ResolvedRecord};
 use crate::error_handler::ApiError;
 use crate::schema::{
-    arepl::{country_leaderboard, levels, min_placement_country_records},
+    arepl::{
+        country_created_levels, country_leaderboard, levels, min_placement_country_records, records,
+    },
     users,
 };
 use crate::users::{BaseUser, ExtendedBaseUser};
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
-use diesel::{
-    ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
-};
+use indexmap::map::Entry;
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
 #[diesel(table_name=country_leaderboard)]
 pub struct Rank {
     pub rank: i32,
     pub extremes_rank: i32,
+    pub hardest_rank: i32,
     pub level_points: i32,
     pub extremes: i32,
 }
@@ -51,6 +56,15 @@ pub struct CountryProfileRecord {
     pub created_at: DateTime<Utc>,
     /// Timestamp of when the record was last updated.
     pub updated_at: DateTime<Utc>,
+    /// How many member completed the same level.
+    pub completion_count: i64,
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct ResolvedCountryProfileRecord {
+    #[serde(flatten)]
+    pub record: ResolvedRecord,
+    pub completion_count: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
@@ -59,6 +73,23 @@ pub struct ResolvedCountryProfileLevel {
     pub level: ExtendedBaseLevel,
     /// The user who published the level.
     pub publisher: BaseUser,
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct ResolvedCountryProfileCreatedLevel {
+    #[serde(flatten)]
+    pub level: ExtendedBaseLevel,
+    /// Users from this country who are listed as creators for the level.
+    pub creators: Vec<BaseUser>,
+}
+
+#[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
+#[diesel(table_name=country_created_levels, check_for_backend(Pg))]
+pub struct CountryCreatedLevelEntry {
+    pub country: i32,
+    pub level_id: Uuid,
+    pub creator_id: Uuid,
+    pub order_pos: Option<i32>,
 }
 
 impl ResolvedRecord {
@@ -84,14 +115,30 @@ impl ResolvedRecord {
     }
 }
 
+impl ResolvedCountryProfileRecord {
+    pub fn from_country_data(
+        record: CountryProfileRecord,
+        level: ExtendedBaseLevel,
+        user: ExtendedBaseUser,
+    ) -> Self {
+        let completion_count = record.completion_count;
+        Self {
+            record: ResolvedRecord::from_country_data(record, level, user),
+            completion_count,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct CountryProfileResolved {
     /// Country of the profile. Uses the ISO 3166-1 numeric country code.
     pub country: i32,
     /// Rank of the country in the countries leaderboard.
     pub rank: Option<Rank>,
-    /// Records of users from the country.
-    pub records: Vec<ResolvedRecord>,
+    /// Records of users from this country. (Only the country's first victor/verifier)
+    pub records: Vec<ResolvedCountryProfileRecord>,
+    /// Levels created by users from the country.
+    pub created: Vec<ResolvedCountryProfileCreatedLevel>,
     /// Levels published by users from the country.
     pub published: Vec<ResolvedCountryProfileLevel>,
 }
@@ -116,12 +163,50 @@ impl CountryProfileResolved {
             .order_by(levels::position.asc())
             .load::<(CountryProfileRecord, ExtendedBaseUser, ExtendedBaseLevel)>(conn)?
             .into_iter()
-            .map(|(record, user, level)| ResolvedRecord::from_country_data(record, level, user))
+            .map(|(record, user, level)| {
+                ResolvedCountryProfileRecord::from_country_data(record, level, user)
+            })
             .collect();
+
+        let created_rows: Vec<(CountryCreatedLevelEntry, ExtendedBaseLevel, BaseUser)> =
+            country_created_levels::table
+                .filter(country_created_levels::country.eq(country))
+                .inner_join(levels::table.on(levels::id.eq(country_created_levels::level_id)))
+                .inner_join(users::table.on(users::id.eq(country_created_levels::creator_id)))
+                .filter(users::ban_level.ne(4))
+                .order_by((
+                    country_created_levels::order_pos.asc(),
+                    users::global_name.asc(),
+                    users::id.asc(),
+                ))
+                .select((
+                    CountryCreatedLevelEntry::as_select(),
+                    ExtendedBaseLevel::as_select(),
+                    BaseUser::as_select(),
+                ))
+                .load(conn)?;
+
+        let mut created_by_level: IndexMap<Uuid, ResolvedCountryProfileCreatedLevel> =
+            IndexMap::new();
+        for (_, level, user) in created_rows {
+            match created_by_level.entry(level.id) {
+                Entry::Occupied(entry) => {
+                    entry.into_mut().creators.push(user);
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert(ResolvedCountryProfileCreatedLevel {
+                        level,
+                        creators: vec![user],
+                    });
+                }
+            }
+        }
+        let created = created_by_level.into_values().collect();
 
         let published = levels::table
             .inner_join(users::table.on(users::id.eq(levels::publisher_id)))
             .filter(users::country.eq(country))
+            .filter(users::ban_level.ne(4))
             .order_by(levels::position.asc())
             .select((ExtendedBaseLevel::as_select(), BaseUser::as_select()))
             .load(conn)?
@@ -136,7 +221,31 @@ impl CountryProfileResolved {
             country,
             rank,
             records,
+            created,
             published,
         })
+    }
+
+    pub fn find_records_for_level(
+        conn: &mut DbConnection,
+        country: i32,
+        level_id: Uuid,
+    ) -> Result<Vec<LevelResolvedRecordExtended>, ApiError> {
+        records::table
+            .filter(records::level_id.eq(level_id))
+            .inner_join(users::table.on(records::submitted_by.eq(users::id)))
+            .inner_join(levels::table.on(records::level_id.eq(levels::id)))
+            .filter(users::country.eq(country))
+            .filter(users::ban_level.le(1))
+            .filter(levels::status.ne(LevelStatus::Removed))
+            .order(records::achieved_at.asc())
+            .select((Record::as_select(), ExtendedBaseUser::as_select()))
+            .load::<(Record, ExtendedBaseUser)>(conn)
+            .map(|rows| {
+                rows.into_iter()
+                    .map(|(record, user)| LevelResolvedRecordExtended::from_data(record, user))
+                    .collect()
+            })
+            .map_err(ApiError::from)
     }
 }

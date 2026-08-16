@@ -1,20 +1,18 @@
-use crate::auth::Authenticated;
 use crate::app_data::db::DbConnection;
+use crate::auth::Authenticated;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::{clan_invites, clan_members, clans};
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
-use diesel::{
-    ExpressionMethods, OptionalExtension, PgTextExpressionMethods, QueryDsl, RunQueryDsl,
-    SelectableHelper,
-};
 use serde::{Deserialize, Serialize};
+use serde_with::rust::double_option;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use super::members::ClanMemberAdd;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
 #[diesel(table_name=clans, check_for_backend(Pg))]
 pub struct Clan {
@@ -85,7 +83,8 @@ pub struct ClanUpdate {
     /// New short tag of the clan.
     pub tag: Option<String>,
     /// New description of the clan.
-    pub description: Option<String>,
+    #[serde(default, with = "double_option")]
+    pub description: Option<Option<String>>,
 }
 
 #[derive(Serialize, Debug, ToSchema)]
@@ -100,30 +99,31 @@ pub struct ClanListQueryOptions {
 }
 
 impl Clan {
-    pub fn create_empty(conn: &mut DbConnection, clan: ClanCreate) -> Result<Self, ApiError> {
+    pub fn create_empty(conn: &mut DbConnection, clan: &ClanCreate) -> Result<Self, ApiError> {
         if clan.global_name.len() > 100 {
-            return Err(ApiError::new(
-                400,
+            return Err(ApiError::UnprocessableEntity(
                 "The clan name can at most be 100 characters long.",
             ));
         }
 
         if clan.tag.len() > 5 {
-            return Err(ApiError::new(
-                400,
+            return Err(ApiError::UnprocessableEntity(
                 "The clan tag can at most be 5 characters long.",
             ));
         }
 
-        if clan.description.is_some() && clan.description.as_ref().unwrap().len() > 300 {
-            return Err(ApiError::new(
-                400,
+        if clan
+            .description
+            .as_deref()
+            .is_some_and(|description| description.len() > 300)
+        {
+            return Err(ApiError::UnprocessableEntity(
                 "The clan description can at most be 300 characters long.",
             ));
         }
 
         let clan = diesel::insert_into(clans::table)
-            .values(&clan)
+            .values(clan)
             .returning(Self::as_select())
             .get_result::<Self>(conn)?;
         Ok(clan)
@@ -131,8 +131,8 @@ impl Clan {
 
     pub fn create_and_join(
         conn: &mut DbConnection,
-        clan: ClanCreate,
-        authenticated: Authenticated,
+        clan: &ClanCreate,
+        authenticated: &Authenticated,
     ) -> Result<Self, ApiError> {
         let existing_clan_member = clan_members::table
             .filter(clan_members::user_id.eq(authenticated.user_id))
@@ -140,32 +140,33 @@ impl Clan {
             .optional()?;
 
         if existing_clan_member.is_some() {
-            return Err(ApiError::new(400, "You are already in a clan."));
+            return Err(ApiError::Conflict("You are already in a clan."));
         }
 
         if clan.global_name.len() > 100 {
-            return Err(ApiError::new(
-                400,
+            return Err(ApiError::UnprocessableEntity(
                 "The clan name can at most be 100 characters long.",
             ));
         }
 
         if clan.tag.len() > 5 {
-            return Err(ApiError::new(
-                400,
+            return Err(ApiError::UnprocessableEntity(
                 "The clan tag can at most be 5 characters long.",
             ));
         }
 
-        if clan.description.is_some() && clan.description.as_ref().unwrap().len() > 300 {
-            return Err(ApiError::new(
-                400,
+        if clan
+            .description
+            .as_deref()
+            .is_some_and(|description| description.len() > 300)
+        {
+            return Err(ApiError::UnprocessableEntity(
                 "The clan description can at most be 300 characters long.",
             ));
         }
 
         let clan = diesel::insert_into(clans::table)
-            .values(&clan)
+            .values(clan)
             .returning(Self::as_select())
             .get_result::<Self>(conn)?;
 
@@ -187,13 +188,15 @@ impl Clan {
 
     pub fn find<const D: i64>(
         conn: &mut DbConnection,
-        options: ClanListQueryOptions,
+        options: &ClanListQueryOptions,
         page_query: PageQuery<D>,
     ) -> Result<Paginated<ClanPage>, ApiError> {
         let build_query = || {
             let mut q = clans::table.into_boxed::<Pg>();
-            if let Some(ref name_like) = options.name_filter {
-                q = q.filter(clans::global_name.ilike(name_like));
+            if let Some(name_like) = &options.name_filter {
+                q = q
+                    .filter(clans::global_name.ilike(name_like))
+                    .or_filter(clans::tag.ilike(name_like));
             }
             q
         };
@@ -217,31 +220,37 @@ impl Clan {
     pub fn update(
         conn: &mut DbConnection,
         clan_id: Uuid,
-        clan: ClanUpdate,
+        clan: &ClanUpdate,
     ) -> Result<Self, ApiError> {
-        if clan.global_name.is_some() && clan.global_name.as_ref().unwrap().len() > 100 {
-            return Err(ApiError::new(
-                400,
+        if clan
+            .global_name
+            .as_deref()
+            .is_some_and(|global_name| global_name.len() > 100)
+        {
+            return Err(ApiError::UnprocessableEntity(
                 "The clan name can at most be 100 characters long.",
             ));
         }
 
-        if clan.tag.is_some() && clan.tag.as_ref().unwrap().len() > 5 {
-            return Err(ApiError::new(
-                400,
+        if clan.tag.as_deref().is_some_and(|tag| tag.len() > 5) {
+            return Err(ApiError::UnprocessableEntity(
                 "The clan tag can at most be 5 characters long.",
             ));
         }
 
-        if clan.description.is_some() && clan.description.as_ref().unwrap().len() > 300 {
-            return Err(ApiError::new(
-                400,
+        if clan
+            .description
+            .as_ref()
+            .and_then(|description| description.as_deref())
+            .is_some_and(|description| description.len() > 300)
+        {
+            return Err(ApiError::UnprocessableEntity(
                 "The clan description can at most be 300 characters long.",
             ));
         }
 
         let updated_clan = diesel::update(clans::table.filter(clans::id.eq(clan_id)))
-            .set(&clan)
+            .set(clan)
             .returning(Self::as_select())
             .get_result::<Self>(conn)?;
         Ok(updated_clan)

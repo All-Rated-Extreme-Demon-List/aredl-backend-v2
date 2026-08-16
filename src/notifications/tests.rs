@@ -5,6 +5,7 @@ use {
         test_utils::init_test_app,
         users::test_utils::create_test_user,
     },
+    actix_http::StatusCode,
     actix_web::{http::header, test},
     serde_json::json,
 };
@@ -24,7 +25,7 @@ async fn websocket_requires_auth() {
     let (app, _, _, _) = init_test_app().await;
     let req = ws_request("/notifications/websocket").to_request();
     let resp = test::call_service(&app, req).await;
-    assert_eq!(resp.status().as_u16(), 403);
+    assert_eq!(resp.status().as_u16(), StatusCode::UNAUTHORIZED.as_u16());
 }
 
 #[actix_web::test]
@@ -34,11 +35,14 @@ async fn websocket_success() {
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
 
     let req = ws_request("/notifications/websocket")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_eq!(resp.status().as_u16(), 101);
+    assert_eq!(
+        resp.status().as_u16(),
+        StatusCode::SWITCHING_PROTOCOLS.as_u16()
+    );
 }
 
 #[actix_web::test]

@@ -2,7 +2,7 @@
 use {
     crate::{
         app_data::providers::{
-            context::{GoogleAuthState, ProviderContext},
+            context::{google::new_google_context, ProviderContext},
             list::youtube::YouTubeProvider,
             model::{Provider, ProviderRegistry},
         },
@@ -10,22 +10,22 @@ use {
             levels::test_utils::{create_test_level, create_test_level_with_record},
             records::test_utils::{
                 create_test_record, create_two_test_records_with_different_timestamps,
+                set_test_record_mobile, set_test_record_verification,
             },
         },
-        auth::{create_test_token, Permission},
+        auth::{create_test_token, oauth::OAuthProvider, Permission},
         providers::{
             test_utils::{
-                clear_google_env, mock_google_token_endpoint, mock_youtube_videos_endpoint,
-                set_google_env,
+                clear_oauth_env, mock_google_token_endpoint, mock_youtube_videos_endpoint,
+                seed_oauth_token, set_oauth_env,
             },
-            VideoProvidersAppState,
+            ProvidersAppState,
         },
-        schema::aredl::records,
         {test_utils::*, users::test_utils::create_test_user},
     },
+    actix_http::StatusCode,
     actix_web::test::{self, read_body_json},
     chrono::{DateTime, Utc},
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
     httpmock::prelude::*,
     serde_json::json,
     serial_test::serial,
@@ -47,12 +47,13 @@ async fn create_record() {
         "level_id": level.to_string(),
         "video_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
         "is_verification": false,
+        "hide_video": false,
         "raw_url": "https://raw.com"
     });
 
     let req = test::TestRequest::post()
         .uri("/aredl/records")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&record_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -63,7 +64,7 @@ async fn create_record() {
         body["submitted_by"].as_str().unwrap(),
         user_id.to_string().as_str(),
         "Names do not match!"
-    )
+    );
 }
 
 #[actix_web::test]
@@ -80,16 +81,21 @@ async fn create_self_record_fails() {
         "level_id": level.to_string(),
         "video_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
         "is_verification": false,
+        "hide_video": false,
         "raw_url": "https://raw.com"
     });
 
     let req = test::TestRequest::post()
         .uri("/aredl/records")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&record_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(resp, 400, Some("You cannot create records for yourself")).await;
+    assert_error_response!(
+        resp,
+        StatusCode::FORBIDDEN,
+        Some("You cannot create records for yourself"),
+    );
 }
 
 #[actix_web::test]
@@ -103,7 +109,7 @@ async fn get_record_list() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/records")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -127,8 +133,8 @@ async fn update_record() {
         "video_url": "https://updated.com"
     });
     let req = test::TestRequest::patch()
-        .uri(&format!("/aredl/records/{}", record_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/aredl/records/{record_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&update_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -138,7 +144,7 @@ async fn update_record() {
         body["video_url"].as_str().unwrap(),
         update_data["video_url"].as_str().unwrap(),
         "Videos do not match!"
-    )
+    );
 }
 
 #[actix_web::test]
@@ -153,12 +159,16 @@ async fn update_self_record_fails() {
         "video_url": "https://updated.com"
     });
     let req = test::TestRequest::patch()
-        .uri(&format!("/aredl/records/{}", record_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/aredl/records/{record_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&update_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(resp, 400, Some("You cannot update records for yourself")).await;
+    assert_error_response!(
+        resp,
+        StatusCode::FORBIDDEN,
+        Some("You cannot update records for yourself"),
+    );
 }
 
 #[actix_web::test]
@@ -174,7 +184,7 @@ async fn get_own_records() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/records/@me")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -199,7 +209,7 @@ async fn get_own_records() {
         submitter_id,
         user_id.to_string().as_str(),
         "Submitters do not match!"
-    )
+    );
 }
 
 #[actix_web::test]
@@ -210,8 +220,8 @@ async fn delete_record() {
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let (_, record_id) = create_test_level_with_record(&db, user_id).await;
     let req = test::TestRequest::delete()
-        .uri(&format!("/aredl/records/{}", record_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/aredl/records/{record_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -225,17 +235,17 @@ async fn get_one_record() {
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let (_, record_id) = create_test_level_with_record(&db, user_id).await;
     let req = test::TestRequest::get()
-        .uri(&format!("/aredl/records/{}", record_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/aredl/records/{record_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(
-        body["id"].as_str().unwrap().to_string(),
+        body["id"].as_str().unwrap().to_owned(),
         record_id.to_string(),
         "Record IDs do not match!"
-    )
+    );
 }
 
 #[actix_web::test]
@@ -246,14 +256,11 @@ async fn get_records_mobile_filter() {
     let (_, mobile_record) = create_test_level_with_record(&db, user_id).await;
 
     create_test_level_with_record(&db, user_id).await;
-    diesel::update(records::table.filter(records::id.eq(mobile_record)))
-        .set(records::mobile.eq(true))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_record_mobile(&db, mobile_record, true).await;
 
     let req = test::TestRequest::get()
         .uri("/aredl/records?mobile_filter=true")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -270,14 +277,11 @@ async fn get_records_verification_filter() {
     let (_, verification_record) = create_test_level_with_record(&db, user_id).await;
 
     create_test_level_with_record(&db, user_id).await;
-    diesel::update(records::table.filter(records::id.eq(verification_record)))
-        .set(records::is_verification.eq(true))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_record_verification(&db, verification_record, true).await;
 
     let req = test::TestRequest::get()
         .uri("/aredl/records?verification_filter=true")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -296,7 +300,7 @@ async fn get_records_level_filter() {
 
     let req = test::TestRequest::get()
         .uri(&format!("/aredl/records?level_filter={level_one}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -317,7 +321,7 @@ async fn get_records_submitter_filter() {
 
     let req = test::TestRequest::get()
         .uri(&format!("/aredl/records?submitter_filter={submitter_one}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -336,7 +340,7 @@ async fn get_records_sort_oldest_created_at() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/records?per_page=10&sort=OldestCreatedAt")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -347,7 +351,7 @@ async fn get_records_sort_oldest_created_at() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|v| v["id"].as_str().unwrap().to_string())
+        .map(|v| v["id"].as_str().unwrap().to_owned())
         .collect();
     assert!(got.len() >= 2);
     assert_eq!(got[0], older.to_string());
@@ -364,7 +368,7 @@ async fn get_records_sort_newest_created_at() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/records?per_page=10&sort=NewestCreatedAt")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -375,7 +379,7 @@ async fn get_records_sort_newest_created_at() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|v| v["id"].as_str().unwrap().to_string())
+        .map(|v| v["id"].as_str().unwrap().to_owned())
         .collect();
     assert!(got.len() >= 2);
     assert_eq!(got[0], newer.to_string());
@@ -392,7 +396,7 @@ async fn get_records_sort_oldest_achieved_at() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/records?per_page=10&sort=OldestAchievedAt")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -403,7 +407,7 @@ async fn get_records_sort_oldest_achieved_at() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|v| v["id"].as_str().unwrap().to_string())
+        .map(|v| v["id"].as_str().unwrap().to_owned())
         .collect();
     assert!(got.len() >= 2);
     assert_eq!(got[0], older.to_string());
@@ -420,7 +424,7 @@ async fn get_records_sort_newest_achieved_at() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/records?per_page=10&sort=NewestAchievedAt")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -431,7 +435,7 @@ async fn get_records_sort_newest_achieved_at() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|v| v["id"].as_str().unwrap().to_string())
+        .map(|v| v["id"].as_str().unwrap().to_owned())
         .collect();
     assert!(got.len() >= 2);
     assert_eq!(got[0], newer.to_string());
@@ -448,7 +452,7 @@ async fn get_records_sort_oldest_updated_at() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/records?per_page=10&sort=OldestUpdatedAt")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -459,7 +463,7 @@ async fn get_records_sort_oldest_updated_at() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|v| v["id"].as_str().unwrap().to_string())
+        .map(|v| v["id"].as_str().unwrap().to_owned())
         .collect();
     assert!(got.len() >= 2);
     assert_eq!(got[0], older.to_string());
@@ -476,7 +480,7 @@ async fn get_records_sort_newest_updated_at() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/records?per_page=10&sort=NewestUpdatedAt")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -487,7 +491,7 @@ async fn get_records_sort_newest_updated_at() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|v| v["id"].as_str().unwrap().to_string())
+        .map(|v| v["id"].as_str().unwrap().to_owned())
         .collect();
     assert!(got.len() >= 2);
     assert_eq!(got[0], newer.to_string());
@@ -497,30 +501,32 @@ async fn get_records_sort_newest_updated_at() {
 #[actix_web::test]
 #[serial]
 async fn update_timestamp_endpoint_fetches_youtube_published_at() {
-    clear_google_env();
+    clear_oauth_env(OAuthProvider::Google);
     let server = MockServer::start_async().await;
-    set_google_env(&server.base_url());
+    set_oauth_env(OAuthProvider::Google, &server.base_url());
     mock_google_token_endpoint(&server, 3600, "test_access").await;
 
     let yt_mock =
         mock_youtube_videos_endpoint(&server, "xvFZjo5PgG0", "2009-10-25T06:57:33Z").await;
 
-    let google_auth = GoogleAuthState::new()
+    let google_auth = new_google_context()
         .await
-        .expect("Failed to create GoogleAuthState");
+        .expect("Failed to create Google OAuth context");
 
-    std::env::set_var("YOUTUBE_API_BASE_URL", server.base_url());
-
-    let providers_app_state = Arc::new(VideoProvidersAppState::new(
+    let providers_app_state = Arc::new(ProvidersAppState::new(
         ProviderRegistry::new(vec![Arc::new(YouTubeProvider) as Arc<dyn Provider>]),
         ProviderContext {
             http: reqwest::Client::new(),
+            db: None,
+            discord_auth: None,
             google_auth: Some(Arc::new(google_auth)),
+            patreon_auth: None,
             twitch_auth: None,
         },
     ));
 
     let (app, db, auth, _) = init_test_app_with_providers(providers_app_state).await;
+    seed_oauth_token(&db, OAuthProvider::Google, Some("refresh_a"));
 
     let (submitter_id, _) = create_test_user(&db, None).await;
     let (moderator_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
@@ -533,12 +539,13 @@ async fn update_timestamp_endpoint_fetches_youtube_published_at() {
         "level_id": level.to_string(),
         "video_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
         "is_verification": false,
+        "hide_video": false,
         "raw_url": "https://raw.com"
     });
 
     let create_req = test::TestRequest::post()
         .uri("/aredl/records")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&record_data)
         .to_request();
 
@@ -554,8 +561,8 @@ async fn update_timestamp_endpoint_fetches_youtube_published_at() {
         .expect("created record must have id");
 
     let update_req = test::TestRequest::patch()
-        .uri(&format!("/aredl/records/{}/update-timestamp", record_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/aredl/records/{record_id}/update-timestamp"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let update_resp = test::call_service(&app, update_req).await;
@@ -576,6 +583,5 @@ async fn update_timestamp_endpoint_fetches_youtube_published_at() {
     let expected: DateTime<Utc> = "2009-10-25T06:57:33Z".parse().unwrap();
     assert_eq!(got_dt, expected);
 
-    std::env::remove_var("YOUTUBE_API_BASE_URL");
-    clear_google_env();
+    clear_oauth_env(OAuthProvider::Google);
 }

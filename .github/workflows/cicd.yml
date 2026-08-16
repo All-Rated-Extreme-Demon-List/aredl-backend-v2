@@ -11,9 +11,6 @@ env:
   CARGO_TERM_COLOR: always
   TEST_DATABASE_URL: postgres://postgres:password@localhost:5432/aredl_test
   JWT_SECRET: ${{ secrets.JWT_SECRET }}
-  DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
-  DISCORD_CLIENT_SECRET: ${{ secrets.DISCORD_CLIENT_SECRET }}
-  DISCORD_REDIRECT_URI: ${{ secrets.DISCORD_REDIRECT_URI }}
   BUILD_PROFILE: release
 
 jobs:
@@ -167,8 +164,14 @@ jobs:
       docs_api_server: https://api.aredl.net/v2
       api_net: api_net
       db_alias: db_prod
-      discord_redirect_uri: discord_redirect_uri_prod
+      oauth_return_uri_base: oauth_return_uri_base_prod
       auth_callback_allow_localhost: false
+      matviews_refresh_schedule: ${{ vars.MATVIEWS_REFRESH_SCHEDULE || '0 */10 * * * * *' }}
+      level_data_refresh_schedule: ${{ vars.LEVEL_DATA_REFRESH_SCHEDULE || '@daily' }}
+      discord_avatars_refresh_schedule: ${{ vars.DISCORD_AVATARS_REFRESH_SCHEDULE || '@hourly' }}
+      data_cleaner_schedule: ${{ vars.DATA_CLEANER_SCHEDULE || '@hourly' }}
+      recurring_shifts_schedule: ${{ vars.RECURRING_SHIFTS_SCHEDULE || '@hourly' }}
+      patreon_sync_schedule: ${{ vars.PATREON_SYNC_SCHEDULE || '@hourly' }}
     secrets:
       API_HOST: ${{ secrets.API_HOST }}
       API_PORT: ${{ secrets.API_PORT }}
@@ -246,8 +249,13 @@ jobs:
       docs_api_server: https://api.aredl.net/v2dev
       api_net: api_net_dev
       db_alias: db_dev
-      discord_redirect_uri: discord_redirect_uri_dev
+      oauth_return_uri_base: oauth_return_uri_base_dev
       auth_callback_allow_localhost: true
+      matviews_refresh_schedule: ${{ vars.DEV_MATVIEWS_REFRESH_SCHEDULE || vars.MATVIEWS_REFRESH_SCHEDULE || '0 */10 * * * * *' }}
+      level_data_refresh_schedule: ${{ vars.DEV_LEVEL_DATA_REFRESH_SCHEDULE || vars.LEVEL_DATA_REFRESH_SCHEDULE || '@daily' }}
+      discord_avatars_refresh_schedule: ${{ vars.DEV_DISCORD_AVATARS_REFRESH_SCHEDULE || vars.DISCORD_AVATARS_REFRESH_SCHEDULE || '@hourly' }}
+      data_cleaner_schedule: ${{ vars.DEV_DATA_CLEANER_SCHEDULE || vars.DATA_CLEANER_SCHEDULE || '@hourly' }}
+      recurring_shifts_schedule: ${{ vars.DEV_RECURRING_SHIFTS_SCHEDULE || vars.RECURRING_SHIFTS_SCHEDULE || '@hourly' }}
     secrets:
       API_HOST: ${{ secrets.DEV_API_HOST }}
       API_PORT: ${{ secrets.DEV_API_PORT }}

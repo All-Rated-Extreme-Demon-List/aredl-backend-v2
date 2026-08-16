@@ -5,14 +5,14 @@ use utoipa::OpenApi;
 use crate::{
     auth::{Permission, UserAuth},
     error_handler::ApiError,
-    providers::VideoProvidersAppState,
+    providers::ProvidersAppState,
     utils::probe::model::ProbeRequest,
 };
 
-#[post("", wrap = "UserAuth::require(Permission::SubmissionReviewFull)")]
+#[post("", wrap = "UserAuth::require(Permission::SubmissionReview)")]
 pub async fn probe_file(
     req: web::Json<ProbeRequest>,
-    providers_state: web::Data<Arc<VideoProvidersAppState>>,
+    providers_state: web::Data<Arc<ProvidersAppState>>,
 ) -> Result<HttpResponse, ApiError> {
     let providers_state = providers_state.get_ref();
 
@@ -22,8 +22,7 @@ pub async fn probe_file(
         .get_content_location(&matched)
         .await?
         .ok_or_else(|| {
-            ApiError::new(
-                422,
+            ApiError::UnprocessableEntity(
                 "Not supported for this provider yet, or failed to retrieve content location",
             )
         })?

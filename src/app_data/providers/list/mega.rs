@@ -1,10 +1,10 @@
 use async_trait::async_trait;
-use regex::Regex;
 use url::Url;
 
 use crate::providers::model::ProviderMatch;
 
 use super::super::model::{Provider, ProviderId, ProviderUsage};
+use super::super::parse::is_ascii_id;
 
 pub struct MegaProvider;
 
@@ -29,26 +29,23 @@ impl Provider for MegaProvider {
             // /file/<id>#<key>
             let id = path.strip_prefix("file/")?;
             let fragment = url.fragment()?;
-            (id.to_string(), Some(fragment.to_string()))
-        } else if path.starts_with("!") {
+            (id.to_owned(), Some(fragment.to_owned()))
+        } else if path.starts_with('!') {
             // /#!<id>!<key>
             let mut parts = path.trim_start_matches('!').split('!');
             let id = parts.next()?;
             let key = parts.next()?;
-            (id.to_string(), Some(key.to_string()))
+            (id.to_owned(), Some(key.to_owned()))
         } else {
             return None;
         };
 
-        if !Regex::new(r"^[A-Za-z0-9_-]{1,256}$")
-            .unwrap()
-            .is_match(&content_id)
-        {
+        if !is_ascii_id(&content_id, 1, 256) {
             return None;
         }
 
-        if let Some(ref key) = key {
-            if !Regex::new(r"^[A-Za-z0-9_-]{1,256}$").unwrap().is_match(key) {
+        if let Some(key) = &key {
+            if !is_ascii_id(key, 1, 256) {
                 return None;
             }
         }

@@ -34,7 +34,7 @@ async fn set(
     users: web::Json<Vec<Uuid>>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&users));
+    root_span.record("body", tracing::field::debug(&users));
     let users = web::block(move || {
         BaseUser::role_set_all(
             &mut db.connection()?,
@@ -73,7 +73,7 @@ async fn add(
     users: web::Json<Vec<Uuid>>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&users));
+    root_span.record("body", tracing::field::debug(&users));
     let users = web::block(move || {
         BaseUser::role_add_all(
             &mut db.connection()?,
@@ -113,7 +113,7 @@ async fn delete(
     users: web::Json<Vec<Uuid>>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&users));
+    root_span.record("body", tracing::field::debug(&users));
     let users = web::block(move || {
         BaseUser::role_delete_all(
             &mut db.connection()?,

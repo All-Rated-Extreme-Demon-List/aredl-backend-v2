@@ -1,18 +1,15 @@
 #[cfg(test)]
-use std::sync::Arc;
-
-#[cfg(test)]
-use crate::{
-    app_data::db::DbAppState,
-    schema::{recurrent_shifts, shifts},
-    shifts::Weekday,
+use {
+    crate::{
+        app_data::db::DbAppState,
+        schema::{recurrent_shifts, shifts},
+        shifts::{Shift, Weekday},
+    },
+    chrono::Utc,
+    diesel::prelude::*,
+    std::sync::Arc,
+    uuid::Uuid,
 };
-#[cfg(test)]
-use chrono::Utc;
-#[cfg(test)]
-use diesel::{ExpressionMethods, RunQueryDsl};
-#[cfg(test)]
-use uuid::Uuid;
 
 #[cfg(test)]
 pub async fn create_test_shift(
@@ -20,9 +17,10 @@ pub async fn create_test_shift(
     user_id: Uuid,
     should_start_immediately: bool,
 ) -> Uuid {
-    let start_time = match should_start_immediately {
-        true => Utc::now(),
-        false => Utc::now() + chrono::Duration::hours(1),
+    let start_time = if should_start_immediately {
+        Utc::now()
+    } else {
+        Utc::now() + chrono::Duration::hours(1)
     };
 
     diesel::insert_into(shifts::table)
@@ -37,7 +35,11 @@ pub async fn create_test_shift(
         .expect("Failed to create test shift")
 }
 #[cfg(test)]
-pub async fn create_test_recurring_shift(db: &Arc<DbAppState>, user_id: Uuid) -> Uuid {
+pub async fn create_test_recurring_shift(
+    db: &Arc<DbAppState>,
+    user_id: Uuid,
+    timezone: Option<String>,
+) -> Uuid {
     diesel::insert_into(recurrent_shifts::table)
         .values((
             recurrent_shifts::user_id.eq(user_id),
@@ -45,8 +47,33 @@ pub async fn create_test_recurring_shift(db: &Arc<DbAppState>, user_id: Uuid) ->
             recurrent_shifts::target_count.eq(20),
             recurrent_shifts::duration.eq(1),
             recurrent_shifts::weekday.eq(Weekday::Friday),
+            recurrent_shifts::timezone.eq(timezone.unwrap_or_else(|| "UTC".to_owned())),
         ))
         .returning(recurrent_shifts::id)
         .get_result::<Uuid>(&mut db.connection().unwrap())
         .expect("Failed to create test shift")
+}
+
+#[cfg(test)]
+pub async fn set_test_shift_target_count(db: &Arc<DbAppState>, shift_id: Uuid, target_count: i32) {
+    diesel::update(shifts::table.filter(shifts::id.eq(shift_id)))
+        .set(shifts::target_count.eq(target_count))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to set test shift target count");
+}
+
+#[cfg(test)]
+pub fn get_test_shift(db: &Arc<DbAppState>, shift_id: Uuid) -> Shift {
+    shifts::table
+        .find(shift_id)
+        .first(&mut db.connection().unwrap())
+        .expect("Failed to get test shift")
+}
+
+#[cfg(test)]
+pub fn test_shifts_for_user(db: &Arc<DbAppState>, user_id: Uuid) -> Vec<Shift> {
+    shifts::table
+        .filter(shifts::user_id.eq(user_id))
+        .load(&mut db.connection().unwrap())
+        .expect("Failed to load test shifts for user")
 }

@@ -4,10 +4,11 @@ use crate::{
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
     shifts::{
-        recurring, ResolvedShift, Shift, ShiftFilterQuery, ShiftPage, ShiftPatch, ShiftStatus,
+        recurring, ResolvedShift, Shift, ShiftCreate, ShiftFilterQuery, ShiftPage, ShiftPatch,
+        ShiftStatus,
     },
 };
-use actix_web::{delete, get, patch, web, HttpResponse};
+use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
@@ -42,7 +43,7 @@ async fn find_all_shifts(
         ShiftPage::find_all(
             &mut db.connection()?,
             page_query.into_inner(),
-            options.into_inner(),
+            &options.into_inner(),
         )
     })
     .await??;
@@ -66,7 +67,7 @@ async fn find_all_shifts(
         ("api_key" = ["ShiftManage"]),
     ),
 )]
-#[get("/@me", wrap = "UserAuth::require(Permission::SubmissionReviewBase)")]
+#[get("/@me", wrap = "UserAuth::require(Permission::SubmissionReview)")]
 async fn find_all_shifts_me(
     db: web::Data<Arc<DbAppState>>,
     page_query: web::Query<PageQuery<50>>,
@@ -81,6 +82,46 @@ async fn find_all_shifts_me(
     })
     .await??;
     Ok(HttpResponse::Ok().json(shifts))
+}
+
+#[utoipa::path(
+    post,
+    summary = "[Staff]Start a shift now",
+    description = "Starts a new shift immediately.",
+    tag = "Shifts",
+    responses(
+        (status = 200, body = Shift)
+    ),
+	request_body = ShiftCreate,
+    security(
+        ("access_token" = ["SubmissionReview"]),
+        ("api_key" = ["SubmissionReview"]),
+    )
+)]
+#[post("", wrap = "UserAuth::require(Permission::SubmissionReview)")]
+async fn create_shift_now(
+    db: web::Data<Arc<DbAppState>>,
+    authenticated: Authenticated,
+    body: web::Json<ShiftCreate>,
+    root_span: RootSpan,
+) -> Result<HttpResponse, ApiError> {
+    root_span.record("body", tracing::field::debug(&body));
+    let new_shift = web::block(move || {
+        let mut conn = db.connection()?;
+        let data = body.into_inner();
+        // Only admins can create shifts for other users
+        if !authenticated.has_permission(&mut conn, Permission::ShiftManage)?
+            && data.user_id.is_some_and(|id| id != authenticated.user_id)
+        {
+            return Err(ApiError::Forbidden(
+                "You can only create shifts for yourself.",
+            ));
+        }
+        Shift::create(&mut conn, &data, &authenticated)
+    })
+    .await??;
+
+    Ok(HttpResponse::Created().json(new_shift))
 }
 
 #[utoipa::path(
@@ -104,10 +145,11 @@ async fn patch_shift(
     id: web::Path<Uuid>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&body));
-    let updated =
-        web::block(move || Shift::patch(&mut db.connection()?, id.into_inner(), body.into_inner()))
-            .await??;
+    root_span.record("body", tracing::field::debug(&body));
+    let updated = web::block(move || {
+        Shift::patch(&mut db.connection()?, id.into_inner(), &body.into_inner())
+    })
+    .await??;
     Ok(HttpResponse::Created().json(updated))
 }
 
@@ -163,6 +205,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/shifts")
             .configure(recurring::init_routes)
+            .service(create_shift_now)
             .service(find_all_shifts)
             .service(find_all_shifts_me)
             .service(patch_shift)

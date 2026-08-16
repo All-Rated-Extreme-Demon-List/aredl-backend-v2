@@ -13,15 +13,14 @@ use crate::schema::{
     },
     clan_members, clans, roles, user_roles,
 };
+use crate::users::badges::UserBadge;
 use crate::users::User;
 use chrono::{DateTime, Utc};
-use diesel::{
-    ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
-};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
 #[diesel(table_name=user_leaderboard)]
 pub struct Rank {
@@ -31,12 +30,16 @@ pub struct Rank {
     pub raw_rank: i32,
     /// Rank of the user in the global leaderboard, sorted by count of extremes completed.
     pub extremes_rank: i32,
+    /// Rank of the user in the global leaderboard, sorted by hardest completed level position.
+    pub hardest_rank: i32,
     /// Rank of the user in the country leaderboard, sorted by total points (including packs).
     pub country_rank: i32,
     /// Rank of the user in the country leaderboard, sorted by total points (excluding packs).
     pub country_raw_rank: i32,
     /// Rank of the user in the country leaderboard, sorted by count of extremes completed.
     pub country_extremes_rank: i32,
+    /// Rank of the user in the country leaderboard, sorted by hardest completed level position.
+    pub country_hardest_rank: i32,
     /// Total points of the user, including pack points.
     pub total_points: i32,
     /// Pack points of the user.
@@ -60,6 +63,8 @@ pub struct ProfileRecordResolved {
     pub is_verification: bool,
     /// Whether the record's video should be hidden on the website.
     pub hide_video: bool,
+    /// Timestamp of when the record was achieved
+    pub achieved_at: DateTime<Utc>,
     /// Timestamp of when the record was created (first accepted).
     pub created_at: DateTime<Utc>,
     /// Timestamp of when the record was last updated.
@@ -84,6 +89,8 @@ pub struct ProfileResolved {
     pub created: Vec<ExtendedBaseLevel>,
     /// Levels the user has published in game.
     pub published: Vec<ExtendedBaseLevel>,
+    /// All unlocked badges for the user.
+    pub badges: Vec<UserBadge>,
 }
 
 impl ProfileRecordResolved {
@@ -95,6 +102,7 @@ impl ProfileRecordResolved {
             video_url: record.video_url,
             is_verification: record.is_verification,
             hide_video: record.hide_video,
+            achieved_at: record.achieved_at,
             updated_at: record.updated_at,
             created_at: record.created_at,
         }
@@ -130,11 +138,10 @@ impl ProfileResolved {
             .select(Role::as_select())
             .load::<Role>(conn)?;
 
-        if !authenticated
-            .map(|auth| auth.has_permission(conn, Permission::RoleManage))
-            .unwrap_or(Ok(false))?
-        {
-            roles = roles.into_iter().filter(|role| !role.hide).collect();
+        if !authenticated.map_or(Ok(false), |auth| {
+            auth.has_permission(conn, Permission::RoleManage)
+        })? {
+            roles.retain(|role| !role.hide);
         }
 
         let rank = user_leaderboard::table
@@ -190,6 +197,8 @@ impl ProfileResolved {
             .map(|(pack, tier)| PackWithTierResolved { pack, tier })
             .collect::<Vec<_>>();
 
+        let badges = UserBadge::find_all(conn, user.id)?;
+
         Ok(Self {
             user,
             clan,
@@ -199,6 +208,7 @@ impl ProfileResolved {
             records,
             created,
             published,
+            badges,
         })
     }
 }

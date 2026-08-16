@@ -1,14 +1,17 @@
 #[cfg(test)]
 use {
-    crate::arepl::levels::test_utils::create_test_level,
-    crate::arepl::records::test_utils::create_test_record,
+    crate::arepl::levels::test_utils::{create_test_level, set_test_level_gd_id},
+    crate::arepl::records::test_utils::{
+        create_test_record, get_test_record, set_test_record_verification,
+    },
     crate::auth::create_test_token,
-    crate::schema::{arepl::levels, arepl::records, users},
-    crate::{test_utils::*, users::test_utils::create_test_user},
+    crate::{
+        test_utils::*,
+        users::test_utils::{create_test_user, set_test_user_discord_id},
+    },
     actix_web::test::{self, read_body_json},
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
     httpmock::prelude::*,
-    serde_json::json,
+    serde_json::{json, Value},
     serial_test::serial,
 };
 
@@ -45,22 +48,16 @@ async fn sync_pemonlist() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, None).await;
 
-    diesel::update(users::table.filter(users::id.eq(user_id)))
-        .set(users::discord_id.eq(Some("550348841396994048".to_string())))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_user_discord_id(&db, user_id, "550348841396994048").await;
 
     let level_uuid = create_test_level(&db).await;
-    diesel::update(levels::table.filter(levels::id.eq(level_uuid)))
-        .set(levels::level_id.eq(12345))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_level_gd_id(&db, level_uuid, 12345).await;
 
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
 
     let req = test::TestRequest::post()
         .uri("/arepl/submissions/pemonlist/sync")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -71,7 +68,7 @@ async fn sync_pemonlist() {
     let submission = &arr[0];
 
     assert_eq!(
-        submission.get("completion_time").and_then(|v| v.as_i64()),
+        submission.get("completion_time").and_then(Value::as_i64),
         Some(104_405_100),
         "unexpected completion_time: {}",
         submission
@@ -80,15 +77,15 @@ async fn sync_pemonlist() {
     );
 
     assert_eq!(
-        submission.get("mobile").and_then(|v| v.as_bool()),
+        submission.get("mobile").and_then(Value::as_bool),
         Some(false)
     );
     assert_eq!(
-        submission.get("video_url").and_then(|v| v.as_str()),
+        submission.get("video_url").and_then(Value::as_str),
         Some("https://www.youtube.com/watch?v=abcdefghijk")
     );
     assert_eq!(
-        submission.get("status").and_then(|v| v.as_str()),
+        submission.get("status").and_then(Value::as_str),
         Some("Accepted")
     );
 }
@@ -127,36 +124,23 @@ async fn sync_pemonlist_preserves_verification_flag() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, None).await;
 
-    diesel::update(users::table.filter(users::id.eq(user_id)))
-        .set(users::discord_id.eq(Some("550348841396994048".to_string())))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_user_discord_id(&db, user_id, "550348841396994048").await;
 
     let level_uuid = create_test_level(&db).await;
-    diesel::update(levels::table.filter(levels::id.eq(level_uuid)))
-        .set(levels::level_id.eq(54321))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_level_gd_id(&db, level_uuid, 54321).await;
 
     let record_id = create_test_record(&db, user_id, level_uuid).await;
-    diesel::update(records::table.filter(records::id.eq(record_id)))
-        .set(records::is_verification.eq(true))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_record_verification(&db, record_id, true).await;
 
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::post()
         .uri("/arepl/submissions/pemonlist/sync")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
 
-    let is_verification_after: bool = records::table
-        .filter(records::id.eq(record_id))
-        .select(records::is_verification)
-        .first(&mut db.connection().unwrap())
-        .unwrap();
+    let is_verification_after = get_test_record(&db, record_id).is_verification;
     assert!(
         is_verification_after,
         "verification flag should be preserved"

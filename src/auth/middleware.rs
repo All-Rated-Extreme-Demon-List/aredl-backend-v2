@@ -1,7 +1,7 @@
 use actix_http::header;
 use actix_web::body::BoxBody;
 use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
-use actix_web::{web, Error, HttpMessage, HttpRequest, HttpResponse, ResponseError};
+use actix_web::{web, Error, HttpMessage as _, HttpRequest, ResponseError as _};
 use futures_util::future::{ready, LocalBoxFuture, Ready};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -50,7 +50,7 @@ where
     fn new_transform(&self, service: S) -> Self::Future {
         ready(Ok(AuthMiddleware {
             service: Rc::new(service),
-            required_perm: self.required_perm.clone(),
+            required_perm: self.required_perm,
         }))
     }
 }
@@ -63,10 +63,10 @@ pub struct AuthMiddleware<S> {
 impl<S> AuthMiddleware<S> {
     fn error_future(
         http_req: HttpRequest,
-        api_err: ApiError,
+        api_err: &ApiError,
     ) -> LocalBoxFuture<'static, Result<ServiceResponse<BoxBody>, Error>> {
-        let http_res = api_err.error_response().map_into_boxed_body();
-        Box::pin(ready(Ok(ServiceResponse::new(http_req, http_res))))
+        let resp = api_err.error_response().map_into_boxed_body();
+        Box::pin(ready(Ok(ServiceResponse::new(http_req, resp))))
     }
 }
 
@@ -92,14 +92,17 @@ where
         let token = http_req
             .headers()
             .get(header::AUTHORIZATION)
-            .map(|h| h.to_str().unwrap().split_at(7).1.to_string());
+            .and_then(|header| header.to_str().ok())
+            .and_then(|value| value.strip_prefix("Bearer "))
+            .filter(|token| !token.is_empty())
+            .map(str::to_owned);
 
-        if token.is_none() {
+        let Some(token) = token else {
             return if require_auth {
-                Box::pin(ready(Ok(ServiceResponse::new(
+                Self::error_future(
                     http_req,
-                    HttpResponse::Forbidden().reason("Unauthorized").finish(),
-                ))))
+                    &ApiError::Unauthorized("You must be authenticated to access this endpoint"),
+                )
             } else {
                 // auth is not required
                 let fut = self
@@ -110,75 +113,73 @@ where
                     Ok(res)
                 })
             };
-        }
-
-        let app_state = http_req.app_data::<web::Data<Arc<AuthAppState>>>().unwrap();
-
-        let db_state = http_req
-            .app_data::<web::Data<Arc<DbAppState>>>()
-            .unwrap()
-            .clone();
-
-        let token_claims = match decode_token(
-            &token.unwrap(),
-            &app_state.jwt_decoding_key,
-            &["initial", "access"],
-        ) {
-            Ok(claims) => claims,
-            Err(_) => {
-                return Self::error_future(http_req, ApiError::new(403, "Failed to decode token"))
-            }
         };
 
-        let user_claims = match decode_user_claims(&token_claims) {
-            Ok(claims) => claims,
-            Err(_) => {
-                return Self::error_future(
-                    http_req,
-                    ApiError::new(403, "Failed to extract user claims"),
-                )
-            }
+        let Some(app_state) = http_req.app_data::<web::Data<Arc<AuthAppState>>>().cloned() else {
+            return Self::error_future(
+                http_req,
+                &ApiError::InternalServerError("Authentication unavailable"),
+            );
         };
 
-        let conn = &mut db_state.connection().unwrap();
+        let Some(db_state) = http_req.app_data::<web::Data<Arc<DbAppState>>>().cloned() else {
+            return Self::error_future(
+                http_req,
+                &ApiError::InternalServerError("Database unavailable"),
+            );
+        };
 
-        if let Err(_) = check_token_valid(&token_claims, &user_claims, conn) {
-            return Self::error_future(http_req, ApiError::new(403, "Token has been invalidated"));
+        let Ok(token_claims) =
+            decode_token(token, &app_state.jwt_decoding_key, &["initial", "access"])
+        else {
+            return Self::error_future(http_req, &ApiError::Unauthorized("Failed to decode token"));
+        };
+
+        let Ok(user_claims) = decode_user_claims(&token_claims) else {
+            return Self::error_future(
+                http_req,
+                &ApiError::Unauthorized("Failed to extract user claims"),
+            );
+        };
+
+        let mut conn = match db_state.connection() {
+            Ok(conn) => conn,
+            Err(error) => return Self::error_future(http_req, &error),
+        };
+
+        if check_token_valid(&token_claims, &user_claims, &mut conn).is_err() {
+            return Self::error_future(
+                http_req,
+                &ApiError::Unauthorized("Token has been invalidated"),
+            );
         }
 
         let user_id = user_claims.user_id;
 
-        tracing::Span::current().record("user_id", &tracing::field::display(user_id));
+        tracing::Span::current().record("user_id", tracing::field::display(user_id));
 
-        match self.required_perm.clone() {
-            Some(required_perm) => {
-                let has_permission =
-                    permission::check_user_permission(conn, user_id, required_perm.clone());
-                match has_permission {
-                    Ok(permission) => {
-                        if !permission {
-                            return Self::error_future(
-                                http_req,
-                                ApiError::new(
-                                    403,
-                                    format!(
-                                        "You do not have the required permission ({}) to access this endpoint",
-                                        required_perm
-                                    )
-                                    .as_str(),
-                                ),
-                            );
-                        }
-                    }
-                    Err(_) => {
+        if let Some(required_perm) = self.required_perm {
+            let has_permission =
+                permission::check_user_permission(&mut conn, user_id, required_perm);
+            match has_permission {
+                Ok(permission) => {
+                    if !permission {
                         return Self::error_future(
                             http_req,
-                            ApiError::new(403, "Failed to load permissions"),
-                        )
+                            &ApiError::Forbidden(
+                                format!("You do not have the required permission ({required_perm}) to access this endpoint")
+                                .as_str(),
+                            ),
+                        );
                     }
                 }
+                Err(_) => {
+                    return Self::error_future(
+                        http_req,
+                        &ApiError::InternalServerError("Failed to load permissions"),
+                    )
+                }
             }
-            None => {}
         }
 
         http_req.extensions_mut().insert::<UserClaims>(user_claims);

@@ -1,4 +1,5 @@
 mod model;
+mod permissions;
 mod routes;
 pub mod test_utils;
 mod tests;

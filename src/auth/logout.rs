@@ -6,10 +6,10 @@ use crate::schema::users;
 use actix_http::header;
 use actix_web::{post, web, HttpRequest, HttpResponse};
 use chrono::Utc;
-use diesel::prelude::*;
 use std::sync::Arc;
 use utoipa::OpenApi;
 
+use diesel::prelude::*;
 #[utoipa::path(
     post,
 	summary = "[Auth]Logout",
@@ -34,20 +34,17 @@ pub async fn logout_all(
         .headers()
         .get(header::AUTHORIZATION)
         .and_then(|h| h.to_str().ok())
-        .map(|h| h.strip_prefix("Bearer ").unwrap_or("").to_string());
+        .map(|h| h.strip_prefix("Bearer ").unwrap_or("").to_owned());
 
-    if token.is_none() {
-        return Err(ApiError::new(400, "No token provided"));
-    }
+    let Some(token) = token else {
+        return Err(ApiError::Unauthorized("No token provided"));
+    };
 
     web::block(move || {
         let conn = &mut db.connection()?;
 
-        let decoded_token_claims = token::decode_token(
-            token.unwrap(),
-            &data.jwt_decoding_key,
-            &["access", "refresh"],
-        )?;
+        let decoded_token_claims =
+            token::decode_token(token, &data.jwt_decoding_key, &["access", "refresh"])?;
 
         let decoded_user_claims = token::decode_user_claims(&decoded_token_claims)?;
 
@@ -69,5 +66,5 @@ pub async fn logout_all(
 pub struct ApiDoc;
 
 pub fn init_routes(config: &mut web::ServiceConfig) {
-    config.service(web::scope("/auth/logout-all").service(logout_all));
+    config.service(web::scope("/logout-all").service(logout_all));
 }

@@ -1,3 +1,4 @@
+pub mod bounty;
 mod changelog;
 mod clan;
 mod country;

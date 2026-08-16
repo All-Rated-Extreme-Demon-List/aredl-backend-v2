@@ -1,8 +1,8 @@
 use async_trait::async_trait;
-use regex::Regex;
-use reqwest::header::HeaderMap;
+use reqwest::header::{HeaderMap, HeaderValue};
 use url::Url;
 
+use super::super::parse::is_ascii_id;
 use super::super::{
     context::ProviderContext,
     model::{ContentDataLocation, NormalizedProviderMatch, Provider, ProviderId, ProviderUsage},
@@ -44,8 +44,8 @@ impl Provider for GoogleDriveProvider {
         }
 
         let (content_id, is_folder) = match (parts.next(), parts.next(), parts.next()) {
-            (Some("file"), Some("d"), Some(id)) => (id.to_string(), false),
-            (Some("folders"), Some(id), _) => (id.to_string(), true),
+            (Some("file"), Some("d"), Some(id)) => (id.to_owned(), false),
+            (Some("folders"), Some(id), _) => (id.to_owned(), true),
             _ => {
                 // open / uc
                 match url.path() {
@@ -64,10 +64,7 @@ impl Provider for GoogleDriveProvider {
             }
         };
 
-        if !Regex::new(r"^[A-Za-z0-9_-]+$")
-            .unwrap()
-            .is_match(&content_id)
-        {
+        if !is_ascii_id(&content_id, 1, usize::MAX) {
             return None;
         }
 
@@ -75,11 +72,7 @@ impl Provider for GoogleDriveProvider {
             provider: ProviderId::GoogleDrive,
             content_id,
             timestamp: None,
-            other_id: if is_folder {
-                Some("folder".to_string())
-            } else {
-                None
-            },
+            other_id: is_folder.then(|| "folder".to_owned()),
         })
     }
 
@@ -102,22 +95,29 @@ impl Provider for GoogleDriveProvider {
         let google_auth = context
             .google_auth
             .as_ref()
-            .ok_or_else(|| ApiError::new(500, "Google Drive support isn't available"))?;
+            .ok_or_else(|| ApiError::ServiceUnavailable("Google Drive support isn't available"))?;
+        let db = context
+            .db
+            .as_ref()
+            .ok_or_else(|| ApiError::ServiceUnavailable("Google token storage isn't available"))?;
 
         let token = google_auth
-            .get_access_token()
+            .get_access_token(db)
             .await
-            .map_err(|e| ApiError::new(502, &format!("Failed to acquire Drive token: {e}")))?;
+            .map_err(|e| ApiError::BadGateway(format!("Failed to acquire Drive token: {e}")))?;
 
         let url = format!(
-            "https://www.googleapis.com/drive/v3/files/{}?alt=media&supportsAllDrives=true",
+            "{}/drive/v3/files/{}?alt=media&supportsAllDrives=true",
+            google_auth.api_base_uri.trim_end_matches('/'),
             matched.content_id
         );
 
         let mut headers = HeaderMap::new();
         headers.insert(
             "Authorization",
-            reqwest::header::HeaderValue::from_str(&format!("Bearer {}", token)).unwrap(),
+            HeaderValue::from_str(&format!("Bearer {token}")).map_err(|_err| {
+                ApiError::InternalServerError("Invalid Google Drive access token")
+            })?,
         );
 
         Ok(Some(ContentDataLocation { url, headers }))

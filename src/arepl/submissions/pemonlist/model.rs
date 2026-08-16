@@ -1,5 +1,4 @@
 use chrono::Utc;
-use diesel::prelude::*;
 use serde::Deserialize;
 
 use crate::{
@@ -16,6 +15,7 @@ use crate::{
     },
 };
 
+use diesel::prelude::*;
 #[derive(Debug, Deserialize)]
 pub struct PemonlistPlayer {
     records: Vec<PemonlistRecord>,
@@ -49,47 +49,43 @@ enum PemonlistResponse {
 impl PemonlistPlayer {
     pub fn sync_with_pemonlist(
         conn: &mut DbConnection,
-        authenticated: Authenticated,
+        authenticated: &Authenticated,
     ) -> Result<Vec<Submission>, ApiError> {
         let player_discord_id = users::table
             .filter(users::id.eq(authenticated.user_id))
             .select(users::discord_id)
             .first::<Option<String>>(conn)?;
 
-        if player_discord_id.is_none() {
-            return Err(ApiError::new(400, "Given user does not have a discord id"));
-        }
-
-        let player_discord_id = player_discord_id.unwrap();
+        let Some(player_discord_id) = player_discord_id else {
+            return Err(ApiError::UnprocessableEntity(
+                "Given user does not have a discord id",
+            ));
+        };
 
         let client = reqwest::blocking::Client::new();
         let base_url = std::env::var("PEMONLIST_API_URL")
-            .unwrap_or_else(|_| "https://pemonlist.com/api/player".to_string());
+            .unwrap_or_else(|_| "https://pemonlist.com/api/player".to_owned());
         let url = format!("{}/{}", base_url.trim_end_matches('/'), player_discord_id);
         let resp = client
             .get(&url)
             .send()
-            .map_err(|e| ApiError::new(500, &e.to_string()))?;
+            .map_err(|e| ApiError::BadGateway(e.to_string()))?;
 
         let pemonlist_response: PemonlistResponse = resp.json().map_err(|e| {
-            ApiError::new(
-                500,
-                &format!(
-                    "Failed to parse data received from pemonlist: {}",
-                    e.to_string()
-                ),
-            )
+            ApiError::BadGateway(format!("Failed to parse data received from pemonlist: {e}"))
         })?;
 
         let pemonlist_data = match pemonlist_response {
             PemonlistResponse::Err(err) if err.error && err.code == "bad_user" => {
-                return Err(ApiError::new(
-                    404,
-                    &format!("Player {} not found on pemonlist", player_discord_id),
-                ));
+                return Err(ApiError::NotFound(format!(
+                    "Player {player_discord_id} not found on pemonlist"
+                )));
             }
             PemonlistResponse::Err(err) => {
-                return Err(ApiError::new(500, &format!("{}: {})", err.code, err.error)));
+                return Err(ApiError::BadGateway(format!(
+                    "{}: {})",
+                    err.code, err.error
+                )));
             }
             PemonlistResponse::Ok(player) => player,
         };
@@ -103,11 +99,9 @@ impl PemonlistPlayer {
                 .first::<ExtendedBaseLevel>(conn)
                 .optional()?;
 
-            if existing_level.is_none() {
+            let Some(existing_level) = existing_level else {
                 continue;
-            }
-
-            let existing_level = existing_level.unwrap();
+            };
 
             // find existing submission for this user/level in arepl.submissions
             let existing_submission: Option<Submission> = submissions::table
@@ -156,7 +150,7 @@ impl PemonlistPlayer {
                         submissions::submitted_by.eq(authenticated.user_id),
                         submissions::level_id.eq(existing_level.id),
                         submissions::mobile.eq(pemonlist_record.mobile),
-                        submissions::ldm_id.eq::<Option<i32>>(None),
+                        submissions::custom_copy_id.eq::<Option<i32>>(None),
                         submissions::video_url.eq(video_url),
                         submissions::raw_url.eq::<Option<String>>(None),
                         submissions::mod_menu.eq::<Option<String>>(Some(String::from("None"))),
@@ -187,37 +181,36 @@ impl PemonlistPlayer {
         let mut parts = hms.split(':');
         let hours = parts
             .next()
-            .ok_or_else(|| ApiError::new(500, "Malformed hour timestamp"))?;
+            .ok_or_else(|| ApiError::BadGateway("Malformed hour timestamp"))?;
         let minutes = parts
             .next()
-            .ok_or_else(|| ApiError::new(500, "Malformed minute timestamp"))?;
+            .ok_or_else(|| ApiError::BadGateway("Malformed minute timestamp"))?;
         let seconds = parts
             .next()
-            .ok_or_else(|| ApiError::new(500, "Malformed second timestamp"))?;
+            .ok_or_else(|| ApiError::BadGateway("Malformed second timestamp"))?;
         if parts.next().is_some() {
-            return Err(ApiError::new(500, "Malformed formatted_time"));
+            return Err(ApiError::BadGateway("Malformed formatted_time"));
         }
 
         let hours: i64 = hours
             .parse()
-            .map_err(|e| ApiError::new(500, &format!("Failed to parse hours: {e}")))?;
+            .map_err(|e| ApiError::BadGateway(format!("Failed to parse hours: {e}")))?;
         let minutes: i64 = minutes
             .parse()
-            .map_err(|e| ApiError::new(500, &format!("Failed to parse minutes: {e}")))?;
+            .map_err(|e| ApiError::BadGateway(format!("Failed to parse minutes: {e}")))?;
         let seconds: i64 = seconds
             .parse()
-            .map_err(|e| ApiError::new(500, &format!("Failed to parse seconds: {e}")))?;
+            .map_err(|e| ApiError::BadGateway(format!("Failed to parse seconds: {e}")))?;
 
         if hours < 0 || !(0..60).contains(&minutes) || !(0..60).contains(&seconds) {
-            return Err(ApiError::new(
-                500,
+            return Err(ApiError::BadGateway(
                 "Malformed formatted_time (out of range)",
             ));
         }
 
         // normalize fraction to milliseconds
         let milliseconds = {
-            let mut millis = millis.to_string();
+            let mut millis = millis.to_owned();
             if millis.len() > 3 {
                 millis.truncate(3);
             } else {
@@ -227,7 +220,7 @@ impl PemonlistPlayer {
             }
             millis
                 .parse::<i64>()
-                .map_err(|e| ApiError::new(500, &format!("Failed to parse milliseconds: {}", e)))?
+                .map_err(|e| ApiError::BadGateway(format!("Failed to parse milliseconds: {e}")))?
         };
 
         Ok(hours * 3_600_000 + minutes * 60_000 + seconds * 1_000 + milliseconds)

@@ -7,33 +7,13 @@ use crate::{
     users::ExtendedBaseUser,
 };
 use chrono::{DateTime, Utc};
-use diesel::{
-    pg::Pg, sql_types::Bool, BoolExpressionMethods, BoxableExpression, Connection,
-    ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl, Selectable,
-};
+use diesel::{pg::Pg, sql_types::Bool, BoxableExpression, Selectable};
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    sync::{Mutex, OnceLock},
-};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-static CLAIM_PREFER_PRIORITY: OnceLock<Mutex<HashMap<Uuid, bool>>> = OnceLock::new();
-
-fn prefer_priority_next(reviewer_id: Uuid) -> bool {
-    let lock = CLAIM_PREFER_PRIORITY.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut state = lock.lock().expect("claim preference lock poisoned");
-    *state.entry(reviewer_id).or_insert(true)
-}
-
-fn set_prefer_priority_next(reviewer_id: Uuid, prefer_priority: bool) {
-    let lock = CLAIM_PREFER_PRIORITY.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut state = lock.lock().expect("claim preference lock poisoned");
-    state.insert(reviewer_id, prefer_priority);
-}
-
+use diesel::prelude::*;
 #[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq, Default)]
 #[ExistingTypePath = "crate::schema::arepl::sql_types::SubmissionStatus"]
 #[DbValueStyle = "PascalCase"]
@@ -47,6 +27,18 @@ pub enum SubmissionStatus {
     UnderReview,
 }
 
+impl SubmissionStatus {
+    pub fn websocket_type(&self) -> Option<&'static str> {
+        match self {
+            SubmissionStatus::Accepted => Some("SUBMISSION_ACCEPTED"),
+            SubmissionStatus::Denied => Some("SUBMISSION_DENIED"),
+            SubmissionStatus::UnderConsideration => Some("SUBMISSION_UNDER_CONSIDERATION"),
+            SubmissionStatus::UnderReview => Some("SUBMISSION_UNDER_REVIEW"),
+            SubmissionStatus::Claimed | SubmissionStatus::Pending => None,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Queryable, Insertable, Selectable, Debug, ToSchema, Clone)]
 #[diesel(table_name = submissions, check_for_backend(Pg))]
 pub struct Submission {
@@ -58,8 +50,8 @@ pub struct Submission {
     pub submitted_by: Uuid,
     /// Whether the record was completed on mobile or not.
     pub mobile: bool,
-    /// ID of the LDM used for the record, if any.
-    pub ldm_id: Option<i32>,
+    /// ID of the custom copy used for the record, if any.
+    pub custom_copy_id: Option<i32>,
     /// Completion video URL.
     ///
     /// The provider is enforced and the URL is stored in a standardized canonical form.
@@ -105,8 +97,8 @@ pub struct SubmissionResolved {
     pub submitted_by: ExtendedBaseUser,
     /// Whether the record was completed on mobile or not.
     pub mobile: bool,
-    /// ID of the LDM used for the record, if any.
-    pub ldm_id: Option<i32>,
+    /// ID of the custom copy used for the record, if any.
+    pub custom_copy_id: Option<i32>,
     /// Completion video URL.
     ///
     /// The provider is enforced and the URL is stored in a standardized canonical form.
@@ -155,7 +147,7 @@ impl Submission {
     // filters for submissions that can be claimed by the current reviewer
     fn claimable_filter(
         reviewer_id: Uuid,
-        is_full_reviewer: bool,
+        can_claim_raw_footage: bool,
         priority: bool,
     ) -> SubmissionFilter {
         let base = submissions::submitted_by
@@ -163,8 +155,7 @@ impl Submission {
             .ne(reviewer_id)
             .and(submissions::priority.eq(priority));
 
-        // full reviewers can claim any pending submission or URs sent by base reviewers
-        if is_full_reviewer {
+        if can_claim_raw_footage {
             Box::new(
                 base.and(
                     submissions::status
@@ -173,7 +164,6 @@ impl Submission {
                 ),
             )
         } else {
-            // base reviewers can only review pending submissions with no raw footage
             Box::new(
                 base.and(submissions::status.eq(SubmissionStatus::Pending))
                     .and(submissions::raw_url.is_null()),
@@ -185,13 +175,13 @@ impl Submission {
     fn find_next_claimable_id(
         conn: &mut DbConnection,
         reviewer_id: Uuid,
-        is_full_reviewer: bool,
+        can_claim_raw_footage: bool,
         priority: bool,
     ) -> Result<Option<Uuid>, ApiError> {
         let query = submissions::table
             .filter(Self::claimable_filter(
                 reviewer_id,
-                is_full_reviewer,
+                can_claim_raw_footage,
                 priority,
             ))
             .for_update()
@@ -219,37 +209,33 @@ impl Submission {
 
     pub fn claim_highest_priority(
         conn: &mut DbConnection,
-        authenticated: Authenticated,
+        authenticated: &Authenticated,
     ) -> Result<SubmissionResolved, ApiError> {
         conn.transaction(|conn| -> Result<SubmissionResolved, ApiError> {
-            let prefer_priority = prefer_priority_next(authenticated.user_id);
+            let can_claim_raw_footage =
+                authenticated.has_permission(conn, Permission::SubmissionEditWithRawFootage)?;
 
-            let is_full_reviewer =
-                authenticated.has_permission(conn, Permission::SubmissionReviewFull)?;
             let preferred_id = Self::find_next_claimable_id(
                 conn,
                 authenticated.user_id,
-                is_full_reviewer,
-                prefer_priority,
+                can_claim_raw_footage,
+                true,
             )?;
 
-            let (next_id, claimed_priority) = if let Some(id) = preferred_id {
-                (id, prefer_priority)
+            let next_id = if let Some(id) = preferred_id {
+                id
             } else if let Some(id) = Self::find_next_claimable_id(
                 conn,
                 authenticated.user_id,
-                is_full_reviewer,
-                !prefer_priority,
+                can_claim_raw_footage,
+                false,
             )? {
-                (id, !prefer_priority)
+                id
             } else {
-                return Err(ApiError::new(
-                    404,
+                return Err(ApiError::NotFound(
                     "There are no submissions available to claim",
                 ));
             };
-
-            set_prefer_priority_next(authenticated.user_id, !claimed_priority);
 
             diesel::update(submissions::table.filter(submissions::id.eq(next_id)))
                 .set((
@@ -268,14 +254,16 @@ impl Submission {
     pub fn delete(
         conn: &mut DbConnection,
         submission_id: Uuid,
-        authenticated: Authenticated,
+        authenticated: &Authenticated,
     ) -> Result<(), ApiError> {
         conn.transaction(|connection| -> Result<(), ApiError> {
             let mut query = diesel::delete(submissions::table)
                 .filter(submissions::id.eq(submission_id))
                 .into_boxed();
 
-            if !authenticated.has_permission(connection, Permission::SubmissionReviewFull)? {
+            if !authenticated
+                .has_permission(connection, Permission::SubmissionEditNonSelfClaimed)?
+            {
                 query = query
                     .filter(submissions::submitted_by.eq(authenticated.user_id))
                     .filter(submissions::status.eq(SubmissionStatus::Pending));

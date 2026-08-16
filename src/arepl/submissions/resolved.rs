@@ -1,0 +1,297 @@
+use crate::{
+    app_data::db::DbConnection,
+    arepl::{
+        levels::ExtendedBaseLevel,
+        submissions::{Submission, SubmissionResolved, SubmissionStatus},
+    },
+    auth::Authenticated,
+    error_handler::ApiError,
+    page_helper::{PageQuery, Paginated},
+    roles::ReviewerVisibility,
+    schema::{
+        arepl::{levels, submission_history, submissions},
+        users,
+    },
+    users::{user_filter, ExtendedBaseUser},
+};
+use diesel::dsl::{auto_type, AliasedFields, AsSelect, Nullable};
+use diesel::{pg::Pg, Selectable};
+use serde::{Deserialize, Serialize};
+
+use utoipa::ToSchema;
+use uuid::Uuid;
+
+use diesel::prelude::*;
+pub type ResolvedSubmissionRow = (
+    Submission,
+    ExtendedBaseLevel,
+    ExtendedBaseUser,
+    Option<ExtendedBaseUser>,
+);
+
+#[derive(Serialize, Deserialize, ToSchema)]
+pub enum SubmissionsSortField {
+    OldestCreatedAt,
+    NewestCreatedAt,
+    OldestUpdatedAt,
+    NewestUpdatedAt,
+    ShortestCompletionTime,
+    LongestCompletionTime,
+}
+
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct SubmissionQueryOptions {
+    pub status_filter: Option<SubmissionStatus>,
+    pub mobile_filter: Option<bool>,
+    pub level_filter: Option<Uuid>,
+    pub submitter_filter: Option<String>,
+    pub priority_filter: Option<bool>,
+    pub reviewer_filter: Option<String>,
+    pub note_filter: Option<String>,
+    pub sort: Option<SubmissionsSortField>,
+}
+
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct ResolvedSubmissionPage {
+    data: Vec<SubmissionResolved>,
+}
+
+diesel::alias!(users as reviewers: Reviewers);
+
+type ResolvedSubmissionQuerySelection = (
+    AsSelect<Submission, Pg>,
+    AsSelect<ExtendedBaseLevel, Pg>,
+    AsSelect<ExtendedBaseUser, Pg>,
+    Nullable<
+        AliasedFields<Reviewers, <ExtendedBaseUser as diesel::Selectable<Pg>>::SelectExpression>,
+    >,
+);
+
+#[auto_type]
+fn resolve_query<'a>(q: submissions::BoxedQuery<'a, Pg>) -> _ {
+    // annoying type shenanigans to get around Diesel not being able to infer types properly
+    let selection: ResolvedSubmissionQuerySelection = (
+        Submission::as_select(),
+        ExtendedBaseLevel::as_select(),
+        ExtendedBaseUser::as_select(),
+        reviewers
+            .fields(<ExtendedBaseUser as Selectable<Pg>>::construct_selection())
+            .nullable(),
+    );
+
+    q.inner_join(levels::table.on(submissions::level_id.eq(levels::id)))
+        .inner_join(users::table.on(submissions::submitted_by.eq(users::id)))
+        .left_join(
+            reviewers.on(reviewers
+                .field(users::id)
+                .nullable()
+                .eq(submissions::reviewer_id.nullable())),
+        )
+        .select(selection)
+}
+
+impl SubmissionResolved {
+    pub fn from_data(resolved: ResolvedSubmissionRow) -> SubmissionResolved {
+        let (submission, level, submitter, reviewer) = resolved;
+        SubmissionResolved {
+            id: submission.id,
+            level,
+            submitted_by: submitter,
+            mobile: submission.mobile,
+            custom_copy_id: submission.custom_copy_id,
+            video_url: submission.video_url,
+            completion_time: submission.completion_time,
+            raw_url: submission.raw_url,
+            mod_menu: submission.mod_menu,
+            status: submission.status,
+            reviewer,
+            priority: submission.priority,
+            reviewer_notes: submission.reviewer_notes,
+            private_reviewer_notes: submission.private_reviewer_notes,
+            locked: submission.locked,
+            user_notes: submission.user_notes,
+            created_at: submission.created_at,
+            updated_at: submission.updated_at,
+        }
+    }
+
+    pub fn find_one(
+        conn: &mut DbConnection,
+        id: Uuid,
+        authenticated: &Authenticated,
+    ) -> Result<SubmissionResolved, ApiError> {
+        let mut query = submissions::table
+            .filter(submissions::id.eq(id))
+            .into_boxed();
+
+        let visibility = ReviewerVisibility::new(conn, authenticated)?;
+
+        if !visibility.is_reviewer {
+            query = query.filter(submissions::submitted_by.eq(authenticated.user_id));
+        }
+
+        let mut resolved =
+            Self::from_data(resolve_query(query).first::<ResolvedSubmissionRow>(conn)?);
+
+        visibility
+            .should_hide_reviewer(
+                resolved
+                    .reviewer
+                    .as_ref()
+                    .map(|reviewer| reviewer.id)
+                    .as_ref(),
+            )
+            .apply_extended(&mut resolved.reviewer, &mut resolved.private_reviewer_notes);
+
+        Ok(resolved)
+    }
+}
+
+impl ResolvedSubmissionPage {
+    pub fn find_all<const D: i64>(
+        conn: &mut DbConnection,
+        page_query: PageQuery<D>,
+        options: SubmissionQueryOptions,
+        authenticated: &Authenticated,
+    ) -> Result<Paginated<Self>, ApiError> {
+        let visibility = ReviewerVisibility::new(conn, authenticated)?;
+
+        let reviewer_filter_ids = if let Some(reviewer) = &options.reviewer_filter {
+            Some(
+                user_filter(reviewer)
+                    .select(users::id)
+                    .load::<Uuid>(conn)?
+                    .into_iter()
+                    .filter(|id| visibility.can_see_identity(id))
+                    .collect::<Vec<Uuid>>(),
+            )
+        } else {
+            None
+        };
+
+        let build_filtered = || {
+            let mut query = submissions::table.into_boxed::<Pg>();
+
+            if let Some(status) = options.status_filter.clone() {
+                query = query.filter(submissions::status.eq(status));
+            }
+
+            if let Some(mobile) = options.mobile_filter.as_ref().copied() {
+                query = query.filter(submissions::mobile.eq(mobile));
+            }
+
+            if let Some(level) = options.level_filter.as_ref().copied() {
+                query = query.filter(submissions::level_id.eq(level));
+            }
+
+            if let Some(submitter) = &options.submitter_filter {
+                query = query.filter(
+                    submissions::submitted_by.eq_any(user_filter(submitter).select(users::id)),
+                );
+            }
+
+            if let Some(priority) = options.priority_filter {
+                query = query.filter(submissions::priority.eq(priority));
+            }
+
+            if let Some(reviewer_filter_ids) = &reviewer_filter_ids {
+                query = query.filter(submissions::reviewer_id.eq_any(reviewer_filter_ids));
+            }
+
+            if let Some(note_text) = options.note_filter.as_deref() {
+                query =
+                    query.filter(
+                        submissions::id.eq_any(
+                            submission_history::table
+                                .filter(
+                                    submission_history::user_notes
+                                        .ilike(note_text)
+                                        .or(submission_history::reviewer_notes.ilike(note_text))
+                                        .or(submission_history::private_reviewer_notes
+                                            .ilike(note_text)),
+                                )
+                                .select(submission_history::submission_id)
+                                .distinct(),
+                        ),
+                    );
+            }
+            query
+        };
+
+        let mut submissions_query = build_filtered();
+        if let Some(sort_field) = options.sort {
+            match sort_field {
+                SubmissionsSortField::OldestCreatedAt => {
+                    submissions_query = submissions_query.order_by(submissions::created_at.asc());
+                }
+                SubmissionsSortField::NewestCreatedAt => {
+                    submissions_query = submissions_query.order_by(submissions::created_at.desc());
+                }
+                SubmissionsSortField::OldestUpdatedAt => {
+                    submissions_query = submissions_query.order_by(submissions::updated_at.asc());
+                }
+                SubmissionsSortField::NewestUpdatedAt => {
+                    submissions_query = submissions_query.order_by(submissions::updated_at.desc());
+                }
+                SubmissionsSortField::ShortestCompletionTime => {
+                    submissions_query =
+                        submissions_query.order_by(submissions::completion_time.asc());
+                }
+                SubmissionsSortField::LongestCompletionTime => {
+                    submissions_query =
+                        submissions_query.order_by(submissions::completion_time.desc());
+                }
+            }
+        } else {
+            submissions_query = submissions_query.order_by(submissions::created_at.desc());
+        }
+
+        let submissions = resolve_query(
+            submissions_query
+                .limit(page_query.per_page())
+                .offset(page_query.offset()),
+        )
+        .load::<ResolvedSubmissionRow>(conn)?;
+
+        let mut submissions = submissions
+            .into_iter()
+            .map(SubmissionResolved::from_data)
+            .collect::<Vec<_>>();
+
+        let total_count: i64 = build_filtered().count().get_result(conn)?;
+
+        let visibility = ReviewerVisibility::new(conn, authenticated)?;
+
+        for submission in &mut submissions {
+            visibility
+                .should_hide_reviewer(
+                    submission
+                        .reviewer
+                        .as_ref()
+                        .map(|reviewer| reviewer.id)
+                        .as_ref(),
+                )
+                .apply_extended(
+                    &mut submission.reviewer,
+                    &mut submission.private_reviewer_notes,
+                );
+        }
+
+        Ok(Paginated::<Self>::from_data(
+            page_query,
+            total_count,
+            Self { data: submissions },
+        ))
+    }
+
+    pub fn find_own<const D: i64>(
+        conn: &mut DbConnection,
+        page_query: PageQuery<D>,
+        mut options: SubmissionQueryOptions,
+        authenticated: &Authenticated,
+    ) -> Result<Paginated<Self>, ApiError> {
+        options.submitter_filter = Some(authenticated.user_id.to_string());
+        options.reviewer_filter = None;
+        Self::find_all(conn, page_query, options, authenticated)
+    }
+}

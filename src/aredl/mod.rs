@@ -1,3 +1,4 @@
+pub mod bounty;
 mod changelog;
 mod clan;
 mod country;
@@ -10,5 +11,4 @@ pub mod records;
 mod routes;
 mod statistics;
 pub mod submissions;
-
 pub use routes::{init_routes, ApiDoc};

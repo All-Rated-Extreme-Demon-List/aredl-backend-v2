@@ -37,7 +37,7 @@ async fn get_history(
         SubmissionHistoryResolved::by_submission_id(
             &mut db.connection()?,
             id.into_inner(),
-            authenticated,
+            &authenticated,
         )
     })
     .await??;

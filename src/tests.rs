@@ -1,12 +1,12 @@
 #[cfg(test)]
 use {
+    super::*,
     crate::{
         error_handler::ApiError,
         page_helper::{PageQuery, Paginated},
         test_utils::assert_error_response,
     },
-    actix_web::{http::header, test, web, App, HttpResponse},
-    super::*,
+    actix_web::{error::ErrorForbidden, http::header, test, web, App, HttpResponse},
 };
 
 #[test]
@@ -29,6 +29,48 @@ async fn page_query_defaults_and_offset() {
 }
 
 #[test]
+async fn page_query_clamps_invalid_values() {
+    let q = PageQuery::<20> {
+        per_page: Some(0),
+        page: Some(-5),
+    };
+    assert_eq!(q.per_page(), 1);
+    assert_eq!(q.page(), 1);
+    assert_eq!(q.offset(), 0);
+}
+
+#[test]
+async fn page_query_limits_per_page() {
+    let q = PageQuery::<20> {
+        per_page: Some(500),
+        page: Some(2),
+    };
+    assert_eq!(q.per_page(), 100);
+    assert_eq!(q.page(), 2);
+    assert_eq!(q.offset(), 100);
+}
+
+#[test]
+async fn page_query_uses_custom_max_per_page() {
+    let q = PageQuery::<20, 500> {
+        per_page: Some(750),
+        page: Some(2),
+    };
+    assert_eq!(q.per_page(), 500);
+    assert_eq!(q.page(), 2);
+    assert_eq!(q.offset(), 500);
+}
+
+#[test]
+async fn page_query_offset_saturates() {
+    let q = PageQuery::<20> {
+        per_page: Some(100),
+        page: Some(i64::MAX),
+    };
+    assert_eq!(q.offset(), i64::MAX);
+}
+
+#[test]
 async fn page_query_paginated_from_data() {
     let q = PageQuery::<10> {
         per_page: Some(5),
@@ -39,6 +81,20 @@ async fn page_query_paginated_from_data() {
     assert_eq!(paginated.per_page, 5);
     assert_eq!(paginated.pages, 3);
     assert_eq!(paginated.data, vec![1, 2]);
+}
+
+#[test]
+async fn page_query_paginated_handles_empty_count() {
+    let q = PageQuery::<10> {
+        per_page: Some(0),
+        page: Some(0),
+    };
+    let paginated: Paginated<Vec<i32>> = Paginated::from_data(q, 0, vec![]);
+    assert_eq!(paginated.page, 1);
+    assert_eq!(paginated.per_page, 1);
+    assert_eq!(paginated.pages, 0);
+    assert_eq!(paginated.count, 0);
+    assert_eq!(paginated.data, Vec::<i32>::new());
 }
 
 #[actix_web::test]
@@ -87,35 +143,119 @@ async fn cache_control_replaces_existing_header_when_requested() {
     assert_eq!(header_val, "public, max-age=60");
 }
 
+#[actix_web::test]
+async fn cache_control_auth_public_uses_public_cache_without_authorization() {
+    let app = test::init_service(
+        App::new()
+            .wrap(CacheController::auth_public_with_max_age(60))
+            .route("/", web::get().to(|| async { HttpResponse::Ok().finish() })),
+    )
+    .await;
+
+    let resp = test::call_service(&app, test::TestRequest::get().uri("/").to_request()).await;
+    let cache_control = resp
+        .headers()
+        .get(header::CACHE_CONTROL)
+        .unwrap()
+        .to_str()
+        .unwrap();
+    let vary = resp.headers().get(header::VARY).unwrap().to_str().unwrap();
+
+    assert_eq!(cache_control, "public, max-age=60");
+    assert_eq!(vary, "Authorization");
+}
+
+#[actix_web::test]
+async fn cache_control_auth_public_uses_private_cache_with_authorization() {
+    let app = test::init_service(
+        App::new()
+            .wrap(CacheController::auth_public_with_max_age(60))
+            .route("/", web::get().to(|| async { HttpResponse::Ok().finish() })),
+    )
+    .await;
+
+    let resp = test::call_service(
+        &app,
+        test::TestRequest::get()
+            .uri("/")
+            .insert_header((header::AUTHORIZATION, "Bearer test-token"))
+            .to_request(),
+    )
+    .await;
+    let cache_control = resp
+        .headers()
+        .get(header::CACHE_CONTROL)
+        .unwrap()
+        .to_str()
+        .unwrap();
+    let vary = resp.headers().get(header::VARY).unwrap().to_str().unwrap();
+
+    assert_eq!(cache_control, "private, max-age=60");
+    assert_eq!(vary, "Authorization");
+}
+
 #[test]
 async fn error_handler_api_error_new_and_display() {
-    let err = ApiError::new(404, "Not found");
-    assert_eq!(err.error_status_code, 404);
+    let err = ApiError::NotFound("Not found");
+    assert_eq!(err.error_status_code, StatusCode::NOT_FOUND.as_u16());
     assert_eq!(err.to_string(), "Not found");
+}
+
+#[test]
+async fn error_handler_api_error_named_status_and_display() {
+    let err = ApiError::Forbidden("Forbidden");
+    assert_eq!(err.error_status_code, StatusCode::FORBIDDEN.as_u16());
+    assert_eq!(err.to_string(), "Forbidden");
+}
+
+#[test]
+async fn error_handler_converts_actix_error_helpers() {
+    let err = ApiError::from(ErrorForbidden("Forbidden"));
+    assert_eq!(err.error_status_code, StatusCode::FORBIDDEN.as_u16());
+    assert_eq!(err.to_string(), "Forbidden");
 }
 
 #[actix_web::test]
 async fn error_handler_client_error_response_preserves_message() {
+    let app =
+        test::init_service(App::new().route(
+            "/",
+            web::get().to(|| async {
+                Err::<HttpResponse, ApiError>(ApiError::BadRequest("bad request"))
+            }),
+        ))
+        .await;
+
+    let resp = test::call_service(&app, test::TestRequest::get().uri("/").to_request()).await;
+    assert_error_response!(resp, StatusCode::BAD_REQUEST, Some("bad request"));
+}
+
+#[actix_web::test]
+async fn error_handler_named_status_response_preserves_client_message() {
     let app = test::init_service(App::new().route(
         "/",
-        web::get().to(|| async {
-            Err::<HttpResponse, ApiError>(ApiError::new(400, "bad request"))
-        }),
+        web::get().to(|| async { Err::<HttpResponse, ApiError>(ApiError::Forbidden("forbidden")) }),
     ))
     .await;
 
     let resp = test::call_service(&app, test::TestRequest::get().uri("/").to_request()).await;
-    assert_error_response(resp, 400, Some("bad request")).await;
+    assert_error_response!(resp, StatusCode::FORBIDDEN, Some("forbidden"));
 }
 
 #[actix_web::test]
 async fn error_handler_server_error_response_masks_message() {
     let app = test::init_service(App::new().route(
         "/",
-        web::get().to(|| async { Err::<HttpResponse, ApiError>(ApiError::new(500, "details")) }),
+        web::get().to(|| async {
+            Err::<HttpResponse, ApiError>(ApiError::InternalServerError("details"))
+        }),
     ))
     .await;
 
     let resp = test::call_service(&app, test::TestRequest::get().uri("/").to_request()).await;
-    assert_error_response(resp, 500, Some("Internal server error")).await;
+    assert_error_response!(
+        resp,
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Some("Internal server error"),
+    );
 }

@@ -1,27 +1,33 @@
 use crate::app_data::db::DbConnection;
+use crate::aredl::levels::records::LevelResolvedRecordExtended;
 use crate::aredl::levels::ExtendedBaseLevel;
-use crate::aredl::records::ResolvedRecord;
+use crate::aredl::levels::LevelStatus;
+use crate::aredl::records::{Record, ResolvedRecord};
 use crate::clans::Clan;
 use crate::error_handler::ApiError;
 use crate::schema::{
-    aredl::{clans_leaderboard, levels, min_placement_clans_records},
+    aredl::{
+        clan_member_points, clans_created_levels, clans_leaderboard, levels,
+        min_placement_clans_records, records,
+    },
     clan_members, clans, users,
 };
 use crate::users::{BaseUser, ExtendedBaseUser};
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
-use diesel::{
-    ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
-};
+use indexmap::map::Entry;
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
 #[diesel(table_name=clans_leaderboard)]
 pub struct Rank {
     pub rank: i32,
     pub extremes_rank: i32,
+    pub hardest_rank: i32,
     pub level_points: i32,
     pub extremes: i32,
 }
@@ -51,6 +57,15 @@ pub struct ClanProfileRecord {
     pub created_at: DateTime<Utc>,
     /// Timestamp of when the record was last updated.
     pub updated_at: DateTime<Utc>,
+    /// How many member completed the same level.
+    pub completion_count: i64,
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct ResolvedClanProfileRecord {
+    #[serde(flatten)]
+    pub record: ResolvedRecord,
+    pub completion_count: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
@@ -59,14 +74,52 @@ pub struct ResolvedClanProfileLevel {
     pub level: ExtendedBaseLevel,
     pub publisher: BaseUser,
 }
+
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct ResolvedClanProfileCreatedLevel {
+    #[serde(flatten)]
+    pub level: ExtendedBaseLevel,
+    /// Users from this clan who are listed as creators for the level.
+    pub creators: Vec<BaseUser>,
+}
+
+#[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
+#[diesel(table_name=clans_created_levels, check_for_backend(Pg))]
+pub struct ClanCreatedLevelEntry {
+    pub clan_id: Uuid,
+    pub level_id: Uuid,
+    pub creator_id: Uuid,
+    pub order_pos: Option<i32>,
+}
+
+#[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
+#[diesel(table_name=clan_member_points, check_for_backend(Pg))]
+pub struct ClanMemberPointsEntry {
+    pub clan_id: Uuid,
+    pub submitted_by: Uuid,
+    pub completed_levels: i64,
+    pub contributed_points: f64,
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct ResolvedClanMemberPoints {
+    pub member: ExtendedBaseUser,
+    pub completed_levels: i64,
+    pub contributed_points: f64,
+}
+
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct ClanProfileResolved {
     /// This profile's clan.
     pub clan: Clan,
     /// Rank of the clan in the clans leaderboard.
     pub rank: Option<Rank>,
-    /// Records of users from this clan.
-    pub records: Vec<ResolvedRecord>,
+    /// Records of users from this clan. (Only the clan's first victor/verifier)
+    pub records: Vec<ResolvedClanProfileRecord>,
+    /// Points contributed by each member of the clan. (For each record, the member's contribution is the level's given points divided by how many clan members completed it)
+    pub members_points: Vec<ResolvedClanMemberPoints>,
+    /// Levels created by users from this clan.
+    pub created: Vec<ResolvedClanProfileCreatedLevel>,
     /// Levels published by users from this clan.
     pub published: Vec<ResolvedClanProfileLevel>,
 }
@@ -89,6 +142,30 @@ impl ResolvedRecord {
             achieved_at: record.achieved_at,
             updated_at: record.updated_at,
             created_at: record.created_at,
+        }
+    }
+}
+
+impl ResolvedClanProfileRecord {
+    pub fn from_clan_data(
+        record: ClanProfileRecord,
+        level: ExtendedBaseLevel,
+        user: ExtendedBaseUser,
+    ) -> Self {
+        let completion_count = record.completion_count;
+        Self {
+            record: ResolvedRecord::from_clan_data(record, level, user),
+            completion_count,
+        }
+    }
+}
+
+impl ResolvedClanMemberPoints {
+    pub fn from_data(entry: &ClanMemberPointsEntry, member: ExtendedBaseUser) -> Self {
+        Self {
+            member,
+            completed_levels: entry.completed_levels,
+            contributed_points: entry.contributed_points,
         }
     }
 }
@@ -118,13 +195,68 @@ impl ClanProfileResolved {
             .order_by(levels::position.asc())
             .load::<(ClanProfileRecord, ExtendedBaseUser, ExtendedBaseLevel)>(conn)?
             .into_iter()
-            .map(|(record, user, level)| ResolvedRecord::from_clan_data(record, level, user))
+            .map(|(record, user, level)| {
+                ResolvedClanProfileRecord::from_clan_data(record, level, user)
+            })
             .collect();
+
+        let members_points = clan_member_points::table
+            .filter(clan_member_points::clan_id.eq(clan_id))
+            .inner_join(users::table.on(users::id.eq(clan_member_points::submitted_by)))
+            .order_by((
+                clan_member_points::contributed_points.desc(),
+                clan_member_points::completed_levels.desc(),
+                users::global_name.asc(),
+                users::id.asc(),
+            ))
+            .select((
+                ClanMemberPointsEntry::as_select(),
+                ExtendedBaseUser::as_select(),
+            ))
+            .load::<(ClanMemberPointsEntry, ExtendedBaseUser)>(conn)?
+            .into_iter()
+            .map(|(entry, member)| ResolvedClanMemberPoints::from_data(&entry, member))
+            .collect();
+
+        let created_rows: Vec<(ClanCreatedLevelEntry, ExtendedBaseLevel, BaseUser)> =
+            clans_created_levels::table
+                .filter(clans_created_levels::clan_id.eq(clan_id))
+                .inner_join(levels::table.on(levels::id.eq(clans_created_levels::level_id)))
+                .inner_join(users::table.on(users::id.eq(clans_created_levels::creator_id)))
+                .filter(users::ban_level.ne(4))
+                .order_by((
+                    clans_created_levels::order_pos.asc(),
+                    users::global_name.asc(),
+                    users::id.asc(),
+                ))
+                .select((
+                    ClanCreatedLevelEntry::as_select(),
+                    ExtendedBaseLevel::as_select(),
+                    BaseUser::as_select(),
+                ))
+                .load(conn)?;
+
+        let mut created_by_level: IndexMap<Uuid, ResolvedClanProfileCreatedLevel> = IndexMap::new();
+        for (_, level, user) in created_rows {
+            match created_by_level.entry(level.id) {
+                Entry::Occupied(entry) => {
+                    entry.into_mut().creators.push(user);
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert(ResolvedClanProfileCreatedLevel {
+                        level,
+                        creators: vec![user],
+                    });
+                }
+            }
+        }
+        let created = created_by_level.into_values().collect();
 
         let published: Vec<ResolvedClanProfileLevel> = levels::table
             .inner_join(users::table.on(users::id.eq(levels::publisher_id)))
             .inner_join(clan_members::table.on(clan_members::user_id.eq(users::id)))
             .filter(clan_members::clan_id.eq(clan_id))
+            .filter(users::ban_level.ne(4))
             .order_by(levels::position.asc())
             .select((ExtendedBaseLevel::as_select(), BaseUser::as_select()))
             .load(conn)?
@@ -139,7 +271,33 @@ impl ClanProfileResolved {
             clan,
             rank,
             records,
+            members_points,
+            created,
             published,
         })
+    }
+
+    pub fn find_records_for_level(
+        conn: &mut DbConnection,
+        clan_id: Uuid,
+        level_id: Uuid,
+    ) -> Result<Vec<LevelResolvedRecordExtended>, ApiError> {
+        records::table
+            .filter(records::level_id.eq(level_id))
+            .inner_join(users::table.on(records::submitted_by.eq(users::id)))
+            .inner_join(levels::table.on(records::level_id.eq(levels::id)))
+            .inner_join(clan_members::table.on(clan_members::user_id.eq(records::submitted_by)))
+            .filter(clan_members::clan_id.eq(clan_id))
+            .filter(users::ban_level.le(1))
+            .filter(levels::status.ne(LevelStatus::Removed))
+            .order(records::achieved_at.asc())
+            .select((Record::as_select(), ExtendedBaseUser::as_select()))
+            .load::<(Record, ExtendedBaseUser)>(conn)
+            .map(|rows| {
+                rows.into_iter()
+                    .map(|(record, user)| LevelResolvedRecordExtended::from_data(record, user))
+                    .collect()
+            })
+            .map_err(ApiError::from)
     }
 }

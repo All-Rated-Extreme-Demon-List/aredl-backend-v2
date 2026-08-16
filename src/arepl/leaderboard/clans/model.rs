@@ -1,7 +1,7 @@
+use crate::app_data::db::DbConnection;
 use crate::arepl::leaderboard::LeaderboardOrder;
 use crate::arepl::levels::BaseLevel;
 use crate::clans::Clan;
-use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::scheduled::refresh_matviews::MatviewRefreshLog;
@@ -11,19 +11,17 @@ use crate::schema::{
 };
 use chrono::Utc;
 use diesel::pg::Pg;
-use diesel::{
-    ExpressionMethods, JoinOnDsl, NullableExpressionMethods, PgTextExpressionMethods, QueryDsl,
-    RunQueryDsl, SelectableHelper,
-};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Selectable, Queryable, Debug, ToSchema)]
 #[diesel(table_name=clans_leaderboard, check_for_backend(Pg))]
 pub struct ClansLeaderboardEntry {
     pub rank: i32,
     pub extremes_rank: i32,
+    pub hardest_rank: i32,
     pub clan_id: Uuid,
     pub level_points: i32,
     pub members_count: i32,
@@ -37,6 +35,8 @@ pub struct ClansLeaderboardEntryResolved {
     pub rank: i32,
     /// Rank of the clan, sorted by count of extremes completed.
     pub extremes_rank: i32,
+    /// Rank of the clan, sorted by hardest completed level position.
+    pub hardest_rank: i32,
     /// This entry's clan id.
     pub clan: Clan,
     /// Total points of the country.
@@ -75,8 +75,10 @@ impl ClansLeaderboardPage {
                 .left_join(levels::table.on(clans_leaderboard::hardest.eq(levels::id.nullable())))
                 .into_boxed::<Pg>();
 
-            if let Some(ref filter) = options.name_filter {
-                q = q.filter(clans::global_name.ilike(filter));
+            if let Some(filter) = &options.name_filter {
+                q = q
+                    .filter(clans::global_name.ilike(filter))
+                    .or_filter(clans::tag.ilike(filter));
             }
 
             q
@@ -87,14 +89,14 @@ impl ClansLeaderboardPage {
         let mut query = build_filtered_query();
 
         match options.order.unwrap_or(LeaderboardOrder::TotalPoints) {
-            LeaderboardOrder::TotalPoints => {
+            LeaderboardOrder::TotalPoints | LeaderboardOrder::RawPoints => {
                 query = query.order(clans_leaderboard::rank.asc());
             }
             LeaderboardOrder::ExtremeCount => {
                 query = query.order(clans_leaderboard::extremes_rank.asc());
             }
-            LeaderboardOrder::RawPoints => {
-                query = query.order(clans_leaderboard::rank.asc());
+            LeaderboardOrder::Hardest => {
+                query = query.order(clans_leaderboard::hardest_rank.asc());
             }
         }
 
@@ -106,7 +108,7 @@ impl ClansLeaderboardPage {
             .select((
                 ClansLeaderboardEntry::as_select(),
                 Clan::as_select(),
-                (levels::id, levels::name).nullable(),
+                Option::<BaseLevel>::as_select(),
             ))
             .load(conn)?;
 
@@ -115,6 +117,7 @@ impl ClansLeaderboardPage {
             .map(|(entry, clan, hardest)| ClansLeaderboardEntryResolved {
                 rank: entry.rank,
                 extremes_rank: entry.extremes_rank,
+                hardest_rank: entry.hardest_rank,
                 clan,
                 level_points: entry.level_points,
                 members_count: entry.members_count,

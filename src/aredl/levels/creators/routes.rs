@@ -1,7 +1,7 @@
+use crate::app_data::db::DbAppState;
 use crate::aredl::levels::id_resolver::resolve_level_id;
 use crate::auth::{Permission, UserAuth};
 use crate::cache_control::CacheController;
-use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::users::BaseUser;
 use actix_web::{delete, get, patch, post, web, HttpResponse};
@@ -59,7 +59,7 @@ async fn set(
     creators: web::Json<Vec<Uuid>>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&creators));
+    root_span.record("body", tracing::field::debug(&creators));
     let creators = web::block(move || {
         let conn = &mut db.connection()?;
         let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
@@ -92,11 +92,11 @@ async fn add(
     creators: web::Json<Vec<Uuid>>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&creators));
+    root_span.record("body", tracing::field::debug(&creators));
     let creators = web::block(move || {
         let conn = &mut db.connection()?;
         let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
-        BaseUser::aredl_add_all_creators(conn, level_id, creators.into_inner())
+        BaseUser::aredl_add_all_creators(conn, level_id, &creators.into_inner())
     })
     .await??;
     Ok(HttpResponse::Ok().json(creators))
@@ -125,11 +125,11 @@ async fn delete(
     creators: web::Json<Vec<Uuid>>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&creators));
+    root_span.record("body", tracing::field::debug(&creators));
     let creators = web::block(move || {
         let conn = &mut db.connection()?;
         let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
-        BaseUser::aredl_delete_all_creators(conn, level_id, creators.into_inner())
+        BaseUser::aredl_delete_all_creators(conn, level_id, &creators.into_inner())
     })
     .await??;
     Ok(HttpResponse::Ok().json(creators))

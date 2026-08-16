@@ -7,6 +7,10 @@ pub mod public {
         pub struct NotificationType;
 
         #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+        #[diesel(postgres_type(name = "oauth_provider"))]
+        pub struct OauthProvider;
+
+        #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
         #[diesel(postgres_type(name = "shift_status"))]
         pub struct ShiftStatus;
 
@@ -93,17 +97,48 @@ pub mod public {
     }
 
     diesel::table! {
+        use diesel::sql_types::*;
+        use super::sql_types::OauthProvider;
+
+        oauth_connected_accounts (id) {
+            id -> Uuid,
+            user_id -> Uuid,
+            provider -> OauthProvider,
+            provider_user_id -> Text,
+            provider_user_name -> Nullable<Text>,
+            created_at -> Timestamptz,
+        }
+    }
+
+    diesel::table! {
+        use diesel::sql_types::*;
+        use super::sql_types::OauthProvider;
+
         oauth_requests (csrf_state) {
             csrf_state -> Varchar,
-            pkce_verifier -> Varchar,
+            pkce_verifier -> Nullable<Varchar>,
             callback -> Nullable<Varchar>,
             created_at -> Nullable<Timestamptz>,
+            provider -> OauthProvider,
+            user_id -> Nullable<Uuid>,
+        }
+    }
+
+    diesel::table! {
+        use diesel::sql_types::*;
+        use super::sql_types::OauthProvider;
+
+        oauth_tokens (provider) {
+            provider -> OauthProvider,
+            access_token -> Nullable<Text>,
+            refresh_token -> Nullable<Text>,
+            expires_at -> Nullable<Timestamptz>,
+            updated_at -> Timestamptz,
         }
     }
 
     diesel::table! {
         permissions (permission) {
-            privilege_level -> Int4,
             permission -> Varchar,
         }
     }
@@ -121,6 +156,15 @@ pub mod public {
             target_count -> Int4,
             created_at -> Timestamptz,
             updated_at -> Timestamptz,
+            #[max_length = 50]
+            timezone -> Varchar,
+        }
+    }
+
+    diesel::table! {
+        role_permissions (role_id, permission) {
+            role_id -> Int4,
+            permission -> Varchar,
         }
     }
 
@@ -130,6 +174,7 @@ pub mod public {
             privilege_level -> Int4,
             role_desc -> Varchar,
             hide -> Bool,
+            inherits_from_role_id -> Nullable<Int4>,
         }
     }
 
@@ -147,6 +192,15 @@ pub mod public {
             status -> ShiftStatus,
             created_at -> Timestamptz,
             updated_at -> Timestamptz,
+        }
+    }
+
+    diesel::table! {
+        user_badges (user_id, badge_code) {
+            user_id -> Uuid,
+            badge_code -> Varchar,
+            unlocked_at -> Timestamptz,
+            description -> Nullable<Varchar>,
         }
     }
 
@@ -170,12 +224,12 @@ pub mod public {
             last_country_update -> Timestamptz,
             ban_level -> Int4,
             discord_avatar -> Nullable<Varchar>,
-            discord_banner -> Nullable<Varchar>,
-            discord_accent_color -> Nullable<Int4>,
             access_valid_after -> Timestamptz,
             created_at -> Timestamptz,
-            background_level -> Int4,
+            background_level -> Nullable<Int4>,
             last_discord_avatar_update -> Nullable<Timestamp>,
+            featured_badge_code -> Nullable<Varchar>,
+            discord_avatar_decoration -> Nullable<Varchar>,
         }
     }
 
@@ -184,6 +238,11 @@ pub mod public {
     diesel::joinable!(clan_members -> users (user_id));
     diesel::joinable!(merge_logs -> users (primary_user));
     diesel::joinable!(notifications -> users (user_id));
+    diesel::joinable!(oauth_connected_accounts -> users (user_id));
+    diesel::joinable!(oauth_requests -> users (user_id));
+    diesel::joinable!(role_permissions -> permissions (permission));
+    diesel::joinable!(role_permissions -> roles (role_id));
+    diesel::joinable!(user_badges -> users (user_id));
     diesel::joinable!(user_roles -> roles (role_id));
     diesel::joinable!(user_roles -> users (user_id));
 
@@ -195,11 +254,15 @@ pub mod public {
         merge_logs,
         merge_requests,
         notifications,
+        oauth_connected_accounts,
         oauth_requests,
+        oauth_tokens,
         permissions,
         recurrent_shifts,
+        role_permissions,
         roles,
         shifts,
+        user_badges,
         user_roles,
         users,
     );

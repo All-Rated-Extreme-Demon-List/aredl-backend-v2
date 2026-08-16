@@ -1,25 +1,24 @@
 use crate::{
     app_data::db::DbConnection,
-    auth::{Authenticated, Permission},
+    auth::Authenticated,
     error_handler::ApiError,
-    roles::RoleResolved,
+    roles::ReviewerVisibility,
     schema::{recurrent_shifts, shifts, users},
     shifts::{ShiftInsert, Weekday},
     users::BaseUser,
 };
-use chrono::{DateTime, Datelike, NaiveDate, TimeZone, Utc};
-use diesel::{
-    AsChangeset, ExpressionMethods, Identifiable, Insertable, JoinOnDsl, QueryDsl, Queryable,
-    RunQueryDsl, SelectableHelper,
-};
+use chrono::{DateTime, NaiveDate, TimeZone as _, Utc};
+use chrono_tz::Tz;
+use diesel::{pg::Pg, AsChangeset, Identifiable, Insertable, Queryable};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(
     Serialize, Deserialize, Selectable, Debug, Clone, Queryable, Identifiable, AsChangeset, ToSchema,
 )]
-#[diesel(table_name = recurrent_shifts)]
+#[diesel(table_name = recurrent_shifts, check_for_backend(Pg))]
 pub struct RecurringShift {
     /// Internal UUID of the regular shift.
     pub id: Uuid,
@@ -31,6 +30,8 @@ pub struct RecurringShift {
     pub start_hour: i32,
     /// How long this shift should last
     pub duration: i32,
+    /// The timezone this shift is in, as an IANA timezone string (e.g., "America/New_York").
+    pub timezone: String,
     /// The target number of submissions to review for this shift.
     pub target_count: i32,
     /// The timestamp of when this regular shift was created.
@@ -51,6 +52,8 @@ pub struct ResolvedRecurringShift {
     pub start_hour: i32,
     /// How long this shift should last
     pub duration: i32,
+    /// The timezone this shift is in, as an IANA timezone string (e.g., "America/New_York").
+    pub timezone: String,
     /// The target number of submissions to review for this shift.
     pub target_count: i32,
     /// The timestamp of when this regular shift was created.
@@ -70,6 +73,22 @@ pub struct RecurringShiftInsert {
     pub start_hour: i32,
     /// How long this shift should last
     pub duration: i32,
+    /// The timezone this shift is in, as an IANA timezone string (e.g., "America/New_York").
+    pub timezone: String,
+    /// The target number of submissions to review for this shift.
+    pub target_count: i32,
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct SelfRecurringShiftInsert {
+    /// The day of the week this shift is assigned at.
+    pub weekday: Weekday,
+    /// The start time of the shift on the assigned day.
+    pub start_hour: i32,
+    /// The timezone this user is in, as an IANA timezone string (e.g., "America/New_York").
+    pub timezone: String,
+    /// How long this shift should last, in hours.
+    pub duration: i32,
     /// The target number of submissions to review for this shift.
     pub target_count: i32,
 }
@@ -82,8 +101,16 @@ pub struct RecurringShiftPatch {
     pub target_count: Option<i32>,
     pub start_hour: Option<i32>,
     pub duration: Option<i32>,
+    pub timezone: Option<String>,
 }
 
+pub fn parse_timezone(timezone: &str) -> Result<Tz, ApiError> {
+    timezone.parse::<Tz>().map_err(|_err| {
+        ApiError::BadRequest(
+            "Invalid timezone provided. Please provide a valid IANA timezone string.",
+        )
+    })
+}
 impl ResolvedRecurringShift {
     pub fn from_data(recurring_shift_row: (RecurringShift, BaseUser)) -> Self {
         let (recurring_shift, user) = recurring_shift_row;
@@ -93,6 +120,7 @@ impl ResolvedRecurringShift {
             weekday: recurring_shift.weekday,
             start_hour: recurring_shift.start_hour,
             duration: recurring_shift.duration,
+            timezone: recurring_shift.timezone,
             target_count: recurring_shift.target_count,
             created_at: recurring_shift.created_at,
             updated_at: recurring_shift.updated_at,
@@ -117,10 +145,9 @@ impl ResolvedRecurringShift {
             .map(ResolvedRecurringShift::from_data)
             .collect::<Vec<_>>();
 
-        if !authenticated.has_permission(conn, Permission::ReviewersAudit)? {
-            let base_reviewers = RoleResolved::find_all_base_reviewers(conn)?.base_reviewers;
-            result.retain(|shift| !base_reviewers.contains(&shift.user.id));
-        }
+        let visibility = ReviewerVisibility::new(conn, authenticated)?;
+
+        result.retain(|shift| visibility.can_see_identity(&shift.user.id));
 
         Ok(result)
     }
@@ -129,10 +156,11 @@ impl ResolvedRecurringShift {
 impl RecurringShift {
     pub fn create(
         conn: &mut DbConnection,
-        new_shift: RecurringShiftInsert,
+        new_shift: &RecurringShiftInsert,
     ) -> Result<Self, ApiError> {
         let inserted = diesel::insert_into(recurrent_shifts::table)
-            .values(&new_shift)
+            .values(new_shift)
+            .returning(RecurringShift::as_select())
             .get_result(conn)?;
         Ok(inserted)
     }
@@ -140,16 +168,18 @@ impl RecurringShift {
     pub fn patch(
         conn: &mut DbConnection,
         id: Uuid,
-        patch: RecurringShiftPatch,
+        patch: &RecurringShiftPatch,
     ) -> Result<Self, ApiError> {
         let updated = diesel::update(recurrent_shifts::table.filter(recurrent_shifts::id.eq(id)))
-            .set(&patch)
+            .set(patch)
+            .returning(RecurringShift::as_select())
             .get_result::<RecurringShift>(conn)?;
         Ok(updated)
     }
 
     pub fn delete(conn: &mut DbConnection, id: Uuid) -> Result<Self, ApiError> {
         let deleted = diesel::delete(recurrent_shifts::table.filter(recurrent_shifts::id.eq(id)))
+            .returning(RecurringShift::as_select())
             .get_result::<RecurringShift>(conn)?;
         Ok(deleted)
     }
@@ -158,30 +188,29 @@ impl RecurringShift {
         conn: &mut DbConnection,
         date: NaiveDate,
     ) -> Result<Vec<ShiftInsert>, ApiError> {
-        let today = match date.weekday().number_from_monday() {
-            1 => Weekday::Monday,
-            2 => Weekday::Tuesday,
-            3 => Weekday::Wednesday,
-            4 => Weekday::Thursday,
-            5 => Weekday::Friday,
-            6 => Weekday::Saturday,
-            7 => Weekday::Sunday,
-            _ => unreachable!(),
-        };
+        let today = Weekday::from(date);
 
         let templates: Vec<RecurringShift> = recurrent_shifts::table
-            .filter(recurrent_shifts::weekday.eq(today))
+            .filter(recurrent_shifts::weekday.eq_any(vec![&today, &today.prev(), &today.next()]))
+            .select(RecurringShift::as_select())
             .load(conn)?;
 
         let mut new_shifts = Vec::new();
 
         for template in templates {
-            let naive_dt = date
-                .and_hms_opt(template.start_hour as u32, 0, 0)
-                .ok_or_else(|| ApiError::new(400, "invalid start_hour".into()))?;
-            let start_at: DateTime<Utc> = Utc.from_utc_datetime(&naive_dt);
+            let timezone = parse_timezone(&template.timezone)?;
+            let naive_dt = u32::try_from(template.start_hour)
+                .ok()
+                .and_then(|hour| date.and_hms_opt(hour, 0, 0))
+                .ok_or_else(|| ApiError::InternalServerError("Invalid start hour"))?;
 
-            let end_at = start_at + chrono::Duration::hours(template.duration as i64);
+            let start_at: DateTime<Utc> = timezone
+                .from_local_datetime(&naive_dt)
+                .single()
+                .ok_or_else(|| ApiError::InternalServerError("Invalid datetime in timezone"))?
+                .with_timezone(&Utc);
+
+            let end_at = start_at + chrono::Duration::hours(i64::from(template.duration));
 
             let exists: i64 = shifts::table
                 .filter(shifts::user_id.eq(template.user_id))

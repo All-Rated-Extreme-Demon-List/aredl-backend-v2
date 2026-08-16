@@ -2,13 +2,16 @@
 use {
     crate::{
         auth::create_test_token,
-        clans::test_utils::{create_test_clan, create_test_clan_invite, create_test_clan_member},
-        schema::{clan_invites, clan_members, notifications},
+        clans::test_utils::{
+            count_test_clan_invites_for_user, count_test_clan_members, create_test_clan,
+            create_test_clan_invite, create_test_clan_member,
+        },
         test_utils::init_test_app,
-        users::test_utils::create_test_user,
+        users::{
+            me::notifications::test_utils::count_test_notifications, test_utils::create_test_user,
+        },
     },
     actix_web::test::{self, read_body_json},
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl},
 };
 #[actix_web::test]
 async fn list_invites() {
@@ -23,7 +26,7 @@ async fn list_invites() {
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::get()
         .uri("/users/@me/clan/invites")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -47,32 +50,19 @@ async fn accept_invite() {
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::post()
         .uri(&format!("/users/@me/clan/invites/{invite_id}/accept"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let member_count: i64 = clan_members::table
-        .filter(clan_members::clan_id.eq(clan_id))
-        .filter(clan_members::user_id.eq(user_id))
-        .count()
-        .get_result(&mut db.connection().unwrap())
-        .unwrap();
+    let member_count = count_test_clan_members(&db, clan_id, user_id);
     assert_eq!(member_count, 1);
 
-    let invite_count: i64 = clan_invites::table
-        .filter(clan_invites::user_id.eq(user_id))
-        .count()
-        .get_result(&mut db.connection().unwrap())
-        .unwrap();
+    let invite_count = count_test_clan_invites_for_user(&db, user_id);
     assert_eq!(invite_count, 0);
 
-    let notif_count: i64 = notifications::table
-        .filter(notifications::user_id.eq(owner_id))
-        .count()
-        .get_result(&mut db.connection().unwrap())
-        .unwrap();
+    let notif_count = count_test_notifications(&db, owner_id);
     assert_eq!(notif_count, 1);
 }
 
@@ -89,25 +79,16 @@ async fn reject_invite() {
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::post()
         .uri(&format!("/users/@me/clan/invites/{invite_id}/reject"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let invite_count: i64 = clan_invites::table
-        .filter(clan_invites::user_id.eq(user_id))
-        .count()
-        .get_result(&mut db.connection().unwrap())
-        .unwrap();
+    let invite_count = count_test_clan_invites_for_user(&db, user_id);
     assert_eq!(invite_count, 0);
 
-    let member_count: i64 = clan_members::table
-        .filter(clan_members::clan_id.eq(clan_id))
-        .filter(clan_members::user_id.eq(user_id))
-        .count()
-        .get_result(&mut db.connection().unwrap())
-        .unwrap();
+    let member_count = count_test_clan_members(&db, clan_id, user_id);
     assert_eq!(member_count, 0);
 }
 
@@ -124,18 +105,13 @@ async fn leave_clan() {
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::post()
         .uri("/users/@me/clan/leave")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let member_count: i64 = clan_members::table
-        .filter(clan_members::clan_id.eq(clan_id))
-        .filter(clan_members::user_id.eq(user_id))
-        .count()
-        .get_result(&mut db.connection().unwrap())
-        .unwrap();
+    let member_count = count_test_clan_members(&db, clan_id, user_id);
     assert_eq!(member_count, 0);
 }
 
@@ -147,7 +123,7 @@ async fn leave_clan_not_member() {
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::post()
         .uri("/users/@me/clan/leave")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -165,11 +141,11 @@ async fn leave_clan_owner_forbidden() {
     let token = create_test_token(owner_id, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::post()
         .uri("/users/@me/clan/leave")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_eq!(resp.status().as_u16(), 403);
+    assert_eq!(resp.status().as_u16(), 409);
 }
 
 #[actix_web::test]
@@ -186,7 +162,7 @@ async fn accept_invite_not_mine() {
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::post()
         .uri(&format!("/users/@me/clan/invites/{invite_id}/accept"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -207,7 +183,7 @@ async fn reject_invite_not_mine() {
     let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
     let req = test::TestRequest::post()
         .uri(&format!("/users/@me/clan/invites/{invite_id}/reject"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;

@@ -1,6 +1,6 @@
+use crate::app_data::db::DbConnection;
 use crate::aredl::leaderboard::LeaderboardOrder;
 use crate::aredl::levels::BaseLevel;
-use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::scheduled::refresh_matviews::MatviewRefreshLog;
@@ -10,19 +10,17 @@ use crate::schema::{
 };
 use chrono::Utc;
 use diesel::pg::Pg;
-use diesel::{
-    ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl,
-    SelectableHelper,
-};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Selectable, Queryable, Debug, ToSchema)]
 #[diesel(table_name=country_leaderboard, check_for_backend(Pg))]
 pub struct CountryLeaderboardEntry {
     pub rank: i32,
     pub extremes_rank: i32,
+    pub hardest_rank: i32,
     pub country: i32,
     pub level_points: i32,
     pub members_count: i32,
@@ -36,6 +34,8 @@ pub struct CountryLeaderboardEntryResolved {
     pub rank: i32,
     /// Rank of the country, sorted by count of extremes completed.
     pub extremes_rank: i32,
+    /// Rank of the country, sorted by hardest completed level position.
+    pub hardest_rank: i32,
     /// This entry's country. Uses the ISO 3166-1 numeric country code.
     pub country: i32,
     /// Total points of the country.
@@ -78,19 +78,25 @@ impl CountryLeaderboardPage {
         let mut query = build_query();
 
         match options.order.unwrap_or(LeaderboardOrder::TotalPoints) {
-            LeaderboardOrder::TotalPoints => query = query.order(country_leaderboard::rank.asc()),
-            LeaderboardOrder::ExtremeCount => {
-                query = query.order(country_leaderboard::extremes_rank.asc())
+            LeaderboardOrder::TotalPoints | LeaderboardOrder::RawPoints => {
+                query = query.order(country_leaderboard::rank.asc());
             }
-            LeaderboardOrder::RawPoints => query = query.order(country_leaderboard::rank.asc()),
+            LeaderboardOrder::ExtremeCount => {
+                query = query.order(country_leaderboard::extremes_rank.asc());
+            }
+            LeaderboardOrder::Hardest => {
+                query = query.order(country_leaderboard::hardest_rank.asc());
+            }
         }
+
+        query = query.then_order_by(country_leaderboard::country.asc());
 
         let raw_entries: Vec<(CountryLeaderboardEntry, Option<BaseLevel>)> = query
             .limit(page_query.per_page())
             .offset(page_query.offset())
             .select((
                 CountryLeaderboardEntry::as_select(),
-                (levels::id, levels::name).nullable(),
+                Option::<BaseLevel>::as_select(),
             ))
             .load(conn)?;
 
@@ -99,6 +105,7 @@ impl CountryLeaderboardPage {
             .map(|(entry, hardest)| CountryLeaderboardEntryResolved {
                 rank: entry.rank,
                 extremes_rank: entry.extremes_rank,
+                hardest_rank: entry.hardest_rank,
                 country: entry.country,
                 level_points: entry.level_points,
                 members_count: entry.members_count,

@@ -5,14 +5,11 @@ use crate::{
     schema::{arepl::levels, arepl::record_totals},
 };
 use diesel::pg::Pg;
-use diesel::{
-    ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl,
-    SelectableHelper,
-};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema, Clone)]
 #[diesel(table_name = record_totals, check_for_backend(Pg))]
 pub struct LevelTotalRecordsRow {

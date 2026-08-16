@@ -90,13 +90,11 @@ impl ProviderRegistry {
 
     pub fn match_url(&self, url: &Url) -> Result<NormalizedProviderMatch, ApiError> {
         for provider in self.providers.values() {
-            match provider.parse_url(url)? {
-                Some(matched) => return Ok(matched),
-                None => continue,
+            if let Some(matched) = provider.parse_url(url)? {
+                return Ok(matched);
             }
         }
-        Err(ApiError::new(
-            422,
+        Err(ApiError::UnprocessableEntity(
             "URL does not match any known supported providers. Please refer to our guidelines for a list of supported websites.",
         ))
     }
@@ -114,12 +112,11 @@ pub trait Provider: Send + Sync {
     fn match_url(&self, url: &Url) -> Option<ProviderMatch>;
 
     fn parse_url(&self, url: &Url) -> Result<Option<NormalizedProviderMatch>, ApiError> {
-        let host = match url.host_str() {
-            Some(h) => h,
-            None => return Ok(None),
+        let Some(host) = url.host_str() else {
+            return Ok(None);
         };
 
-        if !self.hosts().is_empty() && !self.hosts().iter().any(|&h| h == host) {
+        if !self.hosts().is_empty() && !self.hosts().contains(&host) {
             return Ok(None);
         }
 
@@ -163,9 +160,9 @@ impl ContentDataLocation {
         let end = start
             .checked_add(len)
             .and_then(|v| v.checked_sub(1))
-            .ok_or_else(|| ApiError::new(500, "Invalid range parameters"))?;
+            .ok_or_else(|| ApiError::InternalServerError("Invalid range parameters"))?;
 
-        let range = format!("bytes={}-{}", start, end);
+        let range = format!("bytes={start}-{end}");
 
         let response = client
             .get(&self.url)
@@ -173,20 +170,19 @@ impl ContentDataLocation {
             .header(header::RANGE, range)
             .send()
             .await
-            .map_err(|e| ApiError::new(502, &format!("Failed to request file range: {e}")))?;
+            .map_err(|e| ApiError::BadGateway(format!("Failed to request file range: {e}")))?;
 
         if !response.status().is_success() && response.status() != StatusCode::PARTIAL_CONTENT {
             let status = response.status();
-            return Err(ApiError::new(
-                status.as_u16(),
-                &format!("Failed to request file range: {status}"),
-            ));
+            return Err(ApiError::BadGateway(format!(
+                "Failed to request file range: {status}"
+            )));
         }
 
         let bytes = response
             .bytes()
             .await
-            .map_err(|e| ApiError::new(500, &format!("Failed to read file bytes: {e}")))?;
+            .map_err(|e| ApiError::BadGateway(format!("Failed to read file bytes: {e}")))?;
 
         Ok(bytes.to_vec())
     }

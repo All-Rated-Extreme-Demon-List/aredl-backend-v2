@@ -1,9 +1,10 @@
 use crate::app_data::db::DbAppState;
 use crate::auth::{Authenticated, UserAuth};
 use crate::error_handler::ApiError;
+use crate::users::badges::UserBadge;
 use crate::users::me::{clan, notifications, UserMeUpdate};
 use crate::users::{User, UserResolved};
-use actix_web::{get, patch, web, HttpResponse};
+use actix_web::{get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
@@ -30,7 +31,7 @@ async fn find(
         UserResolved::from_uuid(
             &mut db.connection()?,
             authenticated.user_id,
-            Some(authenticated),
+            Some(&authenticated),
         )
     })
     .await??;
@@ -58,16 +59,44 @@ async fn update(
     user: web::Json<UserMeUpdate>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&user));
+    root_span.record("body", tracing::field::debug(&user));
     let user = web::block(move || {
         User::update_me(
             &mut db.connection()?,
             authenticated.user_id,
-            user.into_inner(),
+            &user.into_inner(),
         )
     })
     .await??;
     Ok(HttpResponse::Ok().json(user))
+}
+
+#[utoipa::path(
+    post,
+    summary = "[Auth]Synchronize my badges",
+    description = "Recalculate newly unlocked badges for the authenticated user.",
+    tag = "Users - Me",
+    responses(
+        (status = 200, body = [UserBadge])
+    ),
+    security(
+        ("access_token" = []),
+        ("api_key" = []),
+    )
+)]
+#[post("/sync", wrap = "UserAuth::load()")]
+async fn sync(
+    db: web::Data<Arc<DbAppState>>,
+    authenticated: Authenticated,
+) -> Result<HttpResponse, ApiError> {
+    let badges = web::block(move || {
+        let conn = &mut db.connection()?;
+        UserBadge::update_user_badges(conn, authenticated.user_id)?;
+        UserBadge::find_all(conn, authenticated.user_id)
+    })
+    .await??;
+
+    Ok(HttpResponse::Ok().json(badges))
 }
 
 #[derive(OpenApi)]
@@ -83,6 +112,7 @@ async fn update(
         )
     ),
     paths(
+        sync,
         find,
         update,
     )
@@ -94,6 +124,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
         web::scope("/@me")
             .configure(clan::init_routes)
             .configure(notifications::init_routes)
+            .service(sync)
             .service(find)
             .service(update),
     );

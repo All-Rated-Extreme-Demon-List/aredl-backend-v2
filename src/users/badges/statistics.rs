@@ -1,0 +1,592 @@
+use std::collections::{HashMap, HashSet};
+
+use uuid::Uuid;
+
+use crate::{
+    app_data::db::DbConnection,
+    aredl::bounty::BountyType as ClassicBountyType,
+    aredl::levels::LevelStatus as ClassicLevelStatus,
+    arepl::bounty::BountyType as PlatformerBountyType,
+    arepl::levels::LevelStatus as PlatformerLevelStatus,
+    error_handler::ApiError,
+    schema::{
+        aredl::{self, completed_packs as classic_completed_packs},
+        arepl::{self, completed_packs as platformer_completed_packs},
+    },
+};
+
+use diesel::prelude::*;
+#[derive(Debug)]
+pub struct UserStatistics {
+    pub classic: UserListStatistics,
+    pub platformer: UserListStatistics,
+    pub global: UserListStatistics,
+}
+
+#[derive(Debug, Clone)]
+pub struct UserListStatistics {
+    pub levels_records: Vec<BadgeLevelStatistics>,
+    pub created_levels: Vec<BadgeCreatedLevelStatistics>,
+    pub packs: Vec<BadgePackStatistics>,
+    pub level_tag_counts: HashMap<String, i64>,
+    pub bounty_counts: HashMap<String, i64>,
+    pub leaderboard_rank: Option<i32>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BadgeLevelStatistics {
+    pub scope: &'static str,
+    pub id: Uuid,
+    pub name: String,
+    pub position: Option<i32>,
+    pub level_id: i32,
+    pub two_player: bool,
+    pub publisher_id: Uuid,
+    pub edel_enjoyment: Option<f64>,
+    pub nlw_tier: Option<String>,
+    pub is_verification: bool,
+    pub is_first_victor: bool,
+    pub is_fastest_time: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct BadgeCreatedLevelStatistics {
+    pub scope: &'static str,
+    pub id: Uuid,
+    pub name: String,
+    pub position: Option<i32>,
+    pub publisher_id: Uuid,
+}
+
+#[derive(Debug, Clone)]
+pub struct BadgePackStatistics {
+    pub scope: &'static str,
+    pub id: Uuid,
+    pub name: String,
+    pub tier_name: String,
+}
+
+impl UserStatistics {
+    pub fn load(conn: &mut DbConnection, user_id: Uuid) -> Result<Self, ApiError> {
+        let classic = UserListStatistics::load_classic(conn, user_id)?;
+        let platformer = UserListStatistics::load_platformer(conn, user_id)?;
+
+        Ok(Self {
+            global: UserListStatistics::combine(&classic, &platformer),
+            classic,
+            platformer,
+        })
+    }
+}
+
+impl UserListStatistics {
+    fn load_classic(conn: &mut DbConnection, user_id: Uuid) -> Result<Self, ApiError> {
+        let leaderboard_rank = aredl::user_leaderboard::table
+            .filter(aredl::user_leaderboard::user_id.eq(user_id))
+            .select(aredl::user_leaderboard::rank)
+            .first::<i32>(conn)
+            .optional()?;
+
+        let first_victor_level_ids = aredl::records::table
+            .inner_join(aredl::levels::table.on(aredl::levels::id.eq(aredl::records::level_id)))
+            .filter(
+                aredl::levels::status
+                    .eq(ClassicLevelStatus::MainList)
+                    .or(aredl::levels::status.eq(ClassicLevelStatus::Pending)),
+            )
+            .filter(aredl::records::is_verification.eq(false))
+            .distinct_on(aredl::records::level_id)
+            .order_by((
+                aredl::records::level_id.asc(),
+                aredl::records::achieved_at.asc(),
+                aredl::records::created_at.asc(),
+                aredl::records::id.asc(),
+            ))
+            .select((aredl::records::level_id, aredl::records::submitted_by))
+            .load::<(Uuid, Uuid)>(conn)?
+            .into_iter()
+            .filter_map(|(level_id, submitted_by)| (submitted_by == user_id).then_some(level_id))
+            .collect::<HashSet<_>>();
+
+        let levels_records = aredl::records::table
+            .inner_join(aredl::levels::table.on(aredl::levels::id.eq(aredl::records::level_id)))
+            .filter(aredl::records::submitted_by.eq(user_id))
+            .filter(
+                aredl::levels::status
+                    .eq(ClassicLevelStatus::MainList)
+                    .or(aredl::levels::status.eq(ClassicLevelStatus::Pending)),
+            )
+            .order(aredl::levels::position.asc())
+            .select((
+                aredl::levels::id,
+                aredl::levels::name,
+                aredl::levels::position,
+                aredl::levels::level_id,
+                aredl::levels::two_player,
+                aredl::levels::publisher_id,
+                aredl::levels::edel_enjoyment,
+                aredl::levels::nlw_tier,
+                aredl::records::is_verification,
+            ))
+            .load::<(
+                Uuid,
+                String,
+                Option<i32>,
+                i32,
+                bool,
+                Uuid,
+                Option<f64>,
+                Option<String>,
+                bool,
+            )>(conn)?
+            .into_iter()
+            .map(
+                |(
+                    id,
+                    name,
+                    position,
+                    level_id,
+                    two_player,
+                    publisher_id,
+                    edel_enjoyment,
+                    nlw_tier,
+                    is_verification,
+                )| BadgeLevelStatistics {
+                    scope: "classic",
+                    id,
+                    name,
+                    position,
+                    level_id,
+                    two_player,
+                    publisher_id,
+                    edel_enjoyment,
+                    nlw_tier,
+                    is_verification,
+                    is_first_victor: first_victor_level_ids.contains(&id),
+                    is_fastest_time: false,
+                },
+            )
+            .collect::<Vec<_>>();
+
+        let packs = classic_completed_packs::table
+            .inner_join(
+                aredl::packs::table.on(aredl::packs::id.eq(classic_completed_packs::pack_id)),
+            )
+            .inner_join(aredl::pack_tiers::table.on(aredl::pack_tiers::id.eq(aredl::packs::tier)))
+            .filter(classic_completed_packs::user_id.eq(user_id))
+            .order(aredl::pack_tiers::placement.asc())
+            .select((
+                aredl::packs::id,
+                aredl::packs::name,
+                aredl::pack_tiers::name,
+            ))
+            .load::<(Uuid, String, String)>(conn)?
+            .into_iter()
+            .map(|(id, name, tier_name)| BadgePackStatistics {
+                scope: "classic",
+                id,
+                name,
+                tier_name,
+            })
+            .collect::<Vec<_>>();
+
+        let mut created_levels = aredl::levels::table
+            .inner_join(
+                aredl::levels_created::table
+                    .on(aredl::levels_created::level_id.eq(aredl::levels::id)),
+            )
+            .filter(aredl::levels_created::user_id.eq(user_id))
+            .filter(aredl::levels::status.ne(ClassicLevelStatus::Removed))
+            .order(aredl::levels::position.asc())
+            .select((
+                aredl::levels::id,
+                aredl::levels::name,
+                aredl::levels::position,
+                aredl::levels::publisher_id,
+            ))
+            .distinct()
+            .load::<(Uuid, String, Option<i32>, Uuid)>(conn)?
+            .into_iter()
+            .map(
+                |(id, name, position, publisher_id)| BadgeCreatedLevelStatistics {
+                    scope: "classic",
+                    id,
+                    name,
+                    position,
+                    publisher_id,
+                },
+            )
+            .collect::<Vec<_>>();
+
+        let published_levels = aredl::levels::table
+            .filter(aredl::levels::publisher_id.eq(user_id))
+            .filter(aredl::levels::status.ne(ClassicLevelStatus::Removed))
+            .order(aredl::levels::position.asc())
+            .select((
+                aredl::levels::id,
+                aredl::levels::name,
+                aredl::levels::position,
+                aredl::levels::publisher_id,
+            ))
+            .load::<(Uuid, String, Option<i32>, Uuid)>(conn)?
+            .into_iter()
+            .map(
+                |(id, name, position, publisher_id)| BadgeCreatedLevelStatistics {
+                    scope: "classic",
+                    id,
+                    name,
+                    position,
+                    publisher_id,
+                },
+            );
+
+        created_levels.extend(published_levels);
+        created_levels.sort_by(|left, right| {
+            left.position
+                .unwrap_or(i32::MAX)
+                .cmp(&right.position.unwrap_or(i32::MAX))
+        });
+        created_levels.dedup_by_key(|level| (level.id, level.publisher_id));
+
+        let completed_level_tags = aredl::records::table
+            .inner_join(aredl::levels::table.on(aredl::levels::id.eq(aredl::records::level_id)))
+            .filter(aredl::records::submitted_by.eq(user_id))
+            .filter(
+                aredl::levels::status
+                    .eq(ClassicLevelStatus::MainList)
+                    .or(aredl::levels::status.eq(ClassicLevelStatus::Pending)),
+            )
+            .select((aredl::records::level_id, aredl::levels::tags))
+            .distinct()
+            .load::<(Uuid, Vec<Option<String>>)>(conn)?;
+
+        let level_tag_counts = Self::count_level_tags(completed_level_tags);
+        let bounty_counts = Self::count_classic_bounties(conn, user_id)?;
+
+        Ok(Self {
+            levels_records,
+            created_levels,
+            packs,
+            level_tag_counts,
+            bounty_counts,
+            leaderboard_rank,
+        })
+    }
+
+    fn load_platformer(conn: &mut DbConnection, user_id: Uuid) -> Result<Self, ApiError> {
+        let fastest_time_level_ids = arepl::records::table
+            .inner_join(arepl::levels::table.on(arepl::levels::id.eq(arepl::records::level_id)))
+            .filter(
+                arepl::levels::status
+                    .eq(PlatformerLevelStatus::MainList)
+                    .or(arepl::levels::status.eq(PlatformerLevelStatus::Pending)),
+            )
+            .filter(arepl::records::is_verification.eq(false))
+            .distinct_on(arepl::records::level_id)
+            .order_by((
+                arepl::records::level_id.asc(),
+                arepl::records::completion_time.asc(),
+                arepl::records::achieved_at.asc(),
+                arepl::records::id.asc(),
+            ))
+            .select((arepl::records::level_id, arepl::records::submitted_by))
+            .load::<(Uuid, Uuid)>(conn)?
+            .into_iter()
+            .filter_map(|(level_id, submitted_by)| (submitted_by == user_id).then_some(level_id))
+            .collect::<HashSet<_>>();
+
+        let first_victor_level_ids = arepl::records::table
+            .inner_join(arepl::levels::table.on(arepl::levels::id.eq(arepl::records::level_id)))
+            .filter(
+                arepl::levels::status
+                    .eq(PlatformerLevelStatus::MainList)
+                    .or(arepl::levels::status.eq(PlatformerLevelStatus::Pending)),
+            )
+            .filter(arepl::records::is_verification.eq(false))
+            .distinct_on(arepl::records::level_id)
+            .order_by((
+                arepl::records::level_id.asc(),
+                arepl::records::achieved_at.asc(),
+                arepl::records::created_at.asc(),
+                arepl::records::id.asc(),
+            ))
+            .select((arepl::records::level_id, arepl::records::submitted_by))
+            .load::<(Uuid, Uuid)>(conn)?
+            .into_iter()
+            .filter_map(|(level_id, submitted_by)| (submitted_by == user_id).then_some(level_id))
+            .collect::<HashSet<_>>();
+
+        let levels_records = arepl::records::table
+            .inner_join(arepl::levels::table.on(arepl::levels::id.eq(arepl::records::level_id)))
+            .filter(arepl::records::submitted_by.eq(user_id))
+            .filter(
+                arepl::levels::status
+                    .eq(PlatformerLevelStatus::MainList)
+                    .or(arepl::levels::status.eq(PlatformerLevelStatus::Pending)),
+            )
+            .order(arepl::levels::position.asc())
+            .select((
+                arepl::levels::id,
+                arepl::levels::name,
+                arepl::levels::position,
+                arepl::levels::level_id,
+                arepl::levels::two_player,
+                arepl::levels::publisher_id,
+                arepl::levels::edel_enjoyment,
+                arepl::levels::nlw_tier,
+                arepl::records::is_verification,
+            ))
+            .load::<(
+                Uuid,
+                String,
+                Option<i32>,
+                i32,
+                bool,
+                Uuid,
+                Option<f64>,
+                Option<String>,
+                bool,
+            )>(conn)?
+            .into_iter()
+            .map(
+                |(
+                    id,
+                    name,
+                    position,
+                    level_id,
+                    two_player,
+                    publisher_id,
+                    edel_enjoyment,
+                    nlw_tier,
+                    is_verification,
+                )| BadgeLevelStatistics {
+                    scope: "platformer",
+                    id,
+                    name,
+                    position,
+                    level_id,
+                    two_player,
+                    publisher_id,
+                    edel_enjoyment,
+                    nlw_tier,
+                    is_verification,
+                    is_first_victor: first_victor_level_ids.contains(&id),
+                    is_fastest_time: fastest_time_level_ids.contains(&id),
+                },
+            )
+            .collect::<Vec<_>>();
+
+        let packs = platformer_completed_packs::table
+            .inner_join(
+                arepl::packs::table.on(arepl::packs::id.eq(platformer_completed_packs::pack_id)),
+            )
+            .inner_join(arepl::pack_tiers::table.on(arepl::pack_tiers::id.eq(arepl::packs::tier)))
+            .filter(platformer_completed_packs::user_id.eq(user_id))
+            .order(arepl::pack_tiers::placement.asc())
+            .select((
+                arepl::packs::id,
+                arepl::packs::name,
+                arepl::pack_tiers::name,
+            ))
+            .load::<(Uuid, String, String)>(conn)?
+            .into_iter()
+            .map(|(id, name, tier_name)| BadgePackStatistics {
+                scope: "platformer",
+                id,
+                name,
+                tier_name,
+            })
+            .collect::<Vec<_>>();
+
+        let mut created_levels = arepl::levels::table
+            .inner_join(
+                arepl::levels_created::table
+                    .on(arepl::levels_created::level_id.eq(arepl::levels::id)),
+            )
+            .filter(arepl::levels_created::user_id.eq(user_id))
+            .filter(arepl::levels::status.ne(PlatformerLevelStatus::Removed))
+            .order(arepl::levels::position.asc())
+            .select((
+                arepl::levels::id,
+                arepl::levels::name,
+                arepl::levels::position,
+                arepl::levels::publisher_id,
+            ))
+            .distinct()
+            .load::<(Uuid, String, Option<i32>, Uuid)>(conn)?
+            .into_iter()
+            .map(
+                |(id, name, position, publisher_id)| BadgeCreatedLevelStatistics {
+                    scope: "platformer",
+                    id,
+                    name,
+                    position,
+                    publisher_id,
+                },
+            )
+            .collect::<Vec<_>>();
+
+        let published_levels = arepl::levels::table
+            .filter(arepl::levels::publisher_id.eq(user_id))
+            .filter(arepl::levels::status.ne(PlatformerLevelStatus::Removed))
+            .order(arepl::levels::position.asc())
+            .select((
+                arepl::levels::id,
+                arepl::levels::name,
+                arepl::levels::position,
+                arepl::levels::publisher_id,
+            ))
+            .load::<(Uuid, String, Option<i32>, Uuid)>(conn)?
+            .into_iter()
+            .map(
+                |(id, name, position, publisher_id)| BadgeCreatedLevelStatistics {
+                    scope: "platformer",
+                    id,
+                    name,
+                    position,
+                    publisher_id,
+                },
+            );
+
+        created_levels.extend(published_levels);
+        created_levels.sort_by(|left, right| {
+            left.position
+                .unwrap_or(i32::MAX)
+                .cmp(&right.position.unwrap_or(i32::MAX))
+        });
+        created_levels.dedup_by_key(|level| (level.id, level.publisher_id));
+
+        let completed_level_tags = arepl::records::table
+            .inner_join(arepl::levels::table.on(arepl::levels::id.eq(arepl::records::level_id)))
+            .filter(arepl::records::submitted_by.eq(user_id))
+            .filter(
+                arepl::levels::status
+                    .eq(PlatformerLevelStatus::MainList)
+                    .or(arepl::levels::status.eq(PlatformerLevelStatus::Pending)),
+            )
+            .select((arepl::records::level_id, arepl::levels::tags))
+            .distinct()
+            .load::<(Uuid, Vec<Option<String>>)>(conn)?;
+
+        let level_tag_counts = Self::count_level_tags(completed_level_tags);
+        let bounty_counts = Self::count_platformer_bounties(conn, user_id)?;
+
+        Ok(Self {
+            levels_records,
+            created_levels,
+            packs,
+            level_tag_counts,
+            bounty_counts,
+            leaderboard_rank: None,
+        })
+    }
+
+    fn count_classic_bounties(
+        conn: &mut DbConnection,
+        user_id: Uuid,
+    ) -> Result<HashMap<String, i64>, ApiError> {
+        let mut counts = HashMap::new();
+        for (bounty_type, key) in [
+            (ClassicBountyType::Bounty, "bounty"),
+            (ClassicBountyType::Weekly, "weekly"),
+            (ClassicBountyType::Monthly, "monthly"),
+            (ClassicBountyType::Event, "event"),
+        ] {
+            let count = aredl::bounty_completed::table
+                .inner_join(
+                    aredl::bounties::table
+                        .on(aredl::bounties::id.eq(aredl::bounty_completed::bounty_id)),
+                )
+                .filter(aredl::bounty_completed::user_id.eq(user_id))
+                .filter(aredl::bounties::bounty_type.eq(bounty_type))
+                .count()
+                .get_result::<i64>(conn)?;
+            counts.insert(key.to_owned(), count);
+        }
+        Ok(counts)
+    }
+
+    fn count_platformer_bounties(
+        conn: &mut DbConnection,
+        user_id: Uuid,
+    ) -> Result<HashMap<String, i64>, ApiError> {
+        let mut counts = HashMap::new();
+        for (bounty_type, key) in [
+            (PlatformerBountyType::Bounty, "bounty"),
+            (PlatformerBountyType::Weekly, "weekly"),
+            (PlatformerBountyType::Monthly, "monthly"),
+            (PlatformerBountyType::Event, "event"),
+        ] {
+            let count = arepl::bounty_completed::table
+                .inner_join(
+                    arepl::bounties::table
+                        .on(arepl::bounties::id.eq(arepl::bounty_completed::bounty_id)),
+                )
+                .filter(arepl::bounty_completed::user_id.eq(user_id))
+                .filter(arepl::bounties::bounty_type.eq(bounty_type))
+                .count()
+                .get_result::<i64>(conn)?;
+            counts.insert(key.to_owned(), count);
+        }
+        Ok(counts)
+    }
+
+    fn count_level_tags(
+        completed_level_tags: Vec<(Uuid, Vec<Option<String>>)>,
+    ) -> HashMap<String, i64> {
+        let mut level_tag_counts = HashMap::new();
+        for (_, tags) in completed_level_tags {
+            for tag in tags.into_iter().flatten() {
+                *level_tag_counts.entry(tag).or_insert(0) += 1;
+            }
+        }
+        level_tag_counts
+    }
+
+    fn combine(classic: &Self, platformer: &Self) -> Self {
+        let mut levels_records = classic.levels_records.clone();
+        levels_records.extend(platformer.levels_records.clone());
+        levels_records.sort_by(|left, right| {
+            left.position
+                .unwrap_or(i32::MAX)
+                .cmp(&right.position.unwrap_or(i32::MAX))
+                .then(right.is_verification.cmp(&left.is_verification))
+                .then(left.scope.cmp(right.scope))
+                .then(left.name.cmp(&right.name))
+        });
+        levels_records.dedup_by_key(|level| (level.scope, level.id));
+
+        let mut created_levels = classic.created_levels.clone();
+        created_levels.extend(platformer.created_levels.clone());
+        created_levels.sort_by(|left, right| {
+            left.position
+                .unwrap_or(i32::MAX)
+                .cmp(&right.position.unwrap_or(i32::MAX))
+                .then(left.scope.cmp(right.scope))
+                .then(left.name.cmp(&right.name))
+        });
+        created_levels.dedup_by_key(|level| (level.scope, level.id));
+
+        let mut packs = classic.packs.clone();
+        packs.extend(platformer.packs.clone());
+
+        let mut level_tag_counts = classic.level_tag_counts.clone();
+        for (tag, count) in &platformer.level_tag_counts {
+            *level_tag_counts.entry(tag.clone()).or_insert(0) += count;
+        }
+
+        let mut bounty_counts = classic.bounty_counts.clone();
+        for (bounty_type, count) in &platformer.bounty_counts {
+            *bounty_counts.entry(bounty_type.clone()).or_insert(0) += count;
+        }
+
+        Self {
+            levels_records,
+            created_levels,
+            packs,
+            level_tag_counts,
+            bounty_counts,
+            leaderboard_rank: None,
+        }
+    }
+}

@@ -6,6 +6,7 @@ use {
         test_utils::{assert_error_response, init_test_app},
         users::test_utils::create_test_user,
     },
+    actix_http::StatusCode,
     actix_web::test::{self, read_body_json},
     serde_json::json,
 };
@@ -23,7 +24,7 @@ async fn enable_submissions() {
 
     let req = test::TestRequest::post()
         .uri("/aredl/submissions/status/enable")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -32,28 +33,27 @@ async fn enable_submissions() {
     let status = SubmissionsEnabled::is_enabled(&mut db.connection().unwrap())
         .expect("Failed to get submission status");
 
-    assert_eq!(status, true)
+    assert!(status);
 }
 
 #[actix_web::test]
-async fn submission_status_routes_reject_base_reviewer_without_status_manage() {
+async fn enable_submissions_rejects_reviewer_without_status_manage() {
     let (app, db, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
     let req = test::TestRequest::post()
         .uri("/aredl/submissions/status/enable")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
 
-    assert_error_response(
+    assert_error_response!(
         resp,
-        403,
+        StatusCode::FORBIDDEN,
         Some("You do not have the required permission (submission_status_manage) to access this endpoint"),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -66,7 +66,7 @@ async fn disable_submissions() {
 
     let req = test::TestRequest::post()
         .uri("/aredl/submissions/status/disable")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -75,7 +75,7 @@ async fn disable_submissions() {
     let status = SubmissionsEnabled::is_enabled(&mut db.connection().unwrap())
         .expect("Failed to get submission status");
 
-    assert_eq!(status, false);
+    assert!(!status);
 
     let level_id = create_test_level(&db).await;
 
@@ -89,11 +89,15 @@ async fn disable_submissions() {
     let req = test::TestRequest::post()
         .uri("/aredl/submissions/")
         .set_json(data)
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_error_response(resp, 400, Some("Submissions are currently disabled")).await;
+    assert_error_response!(
+        resp,
+        StatusCode::FORBIDDEN,
+        Some("Submissions are currently disabled"),
+    );
 }
 
 #[actix_web::test]
@@ -109,28 +113,28 @@ async fn get_submission_status() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/submissions/status/")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let status: serde_json::Value = read_body_json(resp).await;
 
-    assert_eq!(status.as_bool().unwrap(), false);
+    assert!(!status.as_bool().unwrap());
 
     SubmissionsEnabled::enable(&mut db.connection().unwrap(), user_id)
         .expect("Failed to temporarily disable submissions");
 
     let req = test::TestRequest::get()
         .uri("/aredl/submissions/status/")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let status: serde_json::Value = read_body_json(resp).await;
 
-    assert_eq!(status.as_bool().unwrap(), true);
+    assert!(status.as_bool().unwrap());
 }
 
 #[actix_web::test]
@@ -146,7 +150,7 @@ async fn get_submission_status_full() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/submissions/status/full")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -154,7 +158,7 @@ async fn get_submission_status_full() {
     let body: serde_json::Value = read_body_json(resp).await;
 
     assert_eq!(body["moderator"]["id"], user_id.to_string());
-    assert_eq!(body["enabled"], false);
+    assert!(!body["enabled"].as_bool().unwrap());
 }
 
 #[actix_web::test]
@@ -172,18 +176,18 @@ async fn get_submission_status_history() {
 
     let req = test::TestRequest::get()
         .uri("/aredl/submissions/status/history")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let body: serde_json::Value = read_body_json(resp).await;
 
-    assert_eq!(body[0]["enabled"], true);
-    assert_eq!(body[1]["enabled"], false);
+    assert!(body[0]["enabled"].as_bool().unwrap());
+    assert!(!body[1]["enabled"].as_bool().unwrap());
     assert!(body
         .as_array()
         .unwrap()
         .iter()
-        .all(|s| s["moderator"]["id"] == user_id.to_string()))
+        .all(|s| s["moderator"]["id"] == user_id.to_string()));
 }

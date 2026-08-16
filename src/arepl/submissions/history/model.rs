@@ -1,21 +1,19 @@
 use crate::{
     app_data::db::DbConnection,
     arepl::submissions::SubmissionStatus,
-    auth::{Authenticated, Permission},
+    auth::Authenticated,
     error_handler::ApiError,
-    roles::RoleResolved,
+    roles::ReviewerVisibility,
     schema::{arepl::submission_history, users},
     users::BaseUser,
 };
 use chrono::{DateTime, Utc};
-use diesel::{
-    pg::Pg, ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl,
-    Selectable, SelectableHelper,
-};
+use diesel::{pg::Pg, Selectable};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Debug, Serialize, Deserialize, Queryable, Insertable, Selectable, ToSchema)]
 #[diesel(table_name = submission_history, check_for_backend(Pg))]
 pub struct SubmissionHistory {
@@ -26,7 +24,7 @@ pub struct SubmissionHistory {
     pub video_url: Option<String>,
     pub raw_url: Option<String>,
     pub mobile: Option<bool>,
-    pub ldm_id: Option<i32>,
+    pub custom_copy_id: Option<i32>,
     pub mod_menu: Option<String>,
     pub completion_time: Option<i64>,
     pub user_notes: Option<String>,
@@ -45,7 +43,7 @@ pub struct SubmissionHistoryResolved {
     pub video_url: Option<String>,
     pub raw_url: Option<String>,
     pub mobile: Option<bool>,
-    pub ldm_id: Option<i32>,
+    pub custom_copy_id: Option<i32>,
     pub mod_menu: Option<String>,
     pub completion_time: Option<i64>,
     pub user_notes: Option<String>,
@@ -71,7 +69,7 @@ impl SubmissionHistoryResolved {
             video_url: history.video_url,
             raw_url: history.raw_url,
             mobile: history.mobile,
-            ldm_id: history.ldm_id,
+            custom_copy_id: history.custom_copy_id,
             mod_menu: history.mod_menu,
             completion_time: history.completion_time,
             private_reviewer_notes: history.private_reviewer_notes,
@@ -82,7 +80,7 @@ impl SubmissionHistoryResolved {
     pub fn by_submission_id(
         conn: &mut DbConnection,
         id: Uuid,
-        authenticated: Authenticated,
+        authenticated: &Authenticated,
     ) -> Result<Vec<SubmissionHistoryResolved>, ApiError> {
         let history = submission_history::table
             .filter(submission_history::submission_id.eq(id))
@@ -100,23 +98,18 @@ impl SubmissionHistoryResolved {
             .map(SubmissionHistoryResolved::from_data)
             .collect::<Vec<_>>();
 
-        let base_reviewers = RoleResolved::find_all_base_reviewers(conn)?.base_reviewers;
+        let visibility = ReviewerVisibility::new(conn, authenticated)?;
 
-        if !authenticated.has_permission(conn, Permission::SubmissionReviewFull)? {
-            resolved_history.iter_mut().for_each(|h| {
-                h.reviewer = None;
-                h.private_reviewer_notes = None;
-            });
-        }
-
-        if !authenticated.has_permission(conn, Permission::ReviewersAudit)? {
-            resolved_history.iter_mut().for_each(|h| {
-                if let Some(ref reviewer) = h.reviewer {
-                    if base_reviewers.contains(&reviewer.id) {
-                        h.reviewer = Some(BaseUser::hidden());
-                    }
-                }
-            });
+        for history in &mut resolved_history {
+            visibility
+                .should_hide_reviewer(
+                    history
+                        .reviewer
+                        .as_ref()
+                        .map(|reviewer| reviewer.id)
+                        .as_ref(),
+                )
+                .apply_base(&mut history.reviewer, &mut history.private_reviewer_notes);
         }
 
         Ok(resolved_history)

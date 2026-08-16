@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use actix_web::{get, web, Error, HttpRequest, HttpResponse};
 use actix_ws::{handle, Message};
-use futures_util::StreamExt;
+use futures_util::StreamExt as _;
 use tokio::{sync::broadcast, time::interval};
 use utoipa::OpenApi;
 
@@ -43,23 +43,57 @@ async fn notifications_websocket(
         loop {
             tokio::select! {
                 _ = heartbeat.tick() => {
-                    let _ = session.ping(&[]).await;
+                     if session.ping(&[]).await.is_err() {
+                    break;
+                }
                 }
 
-                Some(Ok(msg)) = msg_stream.next() => {
-                    match msg {
-                        Message::Ping(p)    => { let _ = session.pong(&p).await; }
-                        Message::Pong(_)    => {  }
-                        Message::Close(c)   => { let _ = session.close(c).await; break; }
-                        _                   => {  }
+               message = msg_stream.next() => {
+                match message {
+                    Some(Ok(Message::Ping(payload))) => {
+                        if session.pong(&payload).await.is_err() {
+                            break;
+                        }
                     }
-                }
-                Ok(note) = rx.recv() => {
-                    if let Ok(text) = serde_json::to_string(&note) {
-                        let _ = session.text(text).await;
+                    Some(Ok(Message::Close(reason))) => {
+                        if let Err(error) = session.close(reason).await {
+                            tracing::debug!("Failed to close WebSocket session: {error}");
+                        }
+                        break;
                     }
+                    Some(Ok(Message::Pong(_) | _))  => {}
+                    Some(Err(error)) => {
+                        tracing::debug!("WebSocket protocol error: {error}");
+                        break;
+                    }
+                    None => break,
                 }
-                else => break,
+            }
+            notification = rx.recv() => {
+                match notification {
+                    Ok(notification) => {
+                        let text = match serde_json::to_string(&notification) {
+                            Ok(text) => text,
+                            Err(error) => {
+                                tracing::error!(
+                                    "failed to serialize WebSocket notification: {error}"
+                                );
+                                continue;
+                            }
+                        };
+
+                        if session.text(text).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                        tracing::warn!(
+                            "WebSocket subscriber skipped {skipped} notifications"
+                        );
+                    }
+                    Err(broadcast::error::RecvError::Closed) => break,
+                }
+                }
             }
         }
     });

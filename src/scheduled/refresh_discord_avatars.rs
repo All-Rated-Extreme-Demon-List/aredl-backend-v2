@@ -1,25 +1,31 @@
 use crate::app_data::db::DbAppState;
+use crate::error_handler::{ApiError, StartupError};
 use crate::get_secret;
+use crate::providers::ProvidersAppState;
+use crate::scheduled::{sleep_until_next, startup_schedule};
 use crate::schema::users;
 use chrono::Utc;
-use cron::Schedule;
-use diesel::PgSortExpressionMethods;
-use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl, RunQueryDsl};
 use reqwest::header::{HeaderMap, AUTHORIZATION};
 use reqwest::StatusCode;
 use serde::Deserialize;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::task;
 
+use diesel::prelude::*;
 const BATCH_LIMIT: i64 = 200;
 const STALE_AFTER_DAYS: i64 = 14;
 const DEFAULT_DELAY_MS: u64 = 500;
 
 #[derive(Deserialize)]
+struct DiscordAvatarDecorationData {
+    asset: String,
+}
+
+#[derive(Deserialize)]
 struct DiscordUser {
     avatar: Option<String>,
+    avatar_decoration_data: Option<DiscordAvatarDecorationData>,
 }
 
 fn header_i64(headers: &HeaderMap, name: &str) -> Option<i64> {
@@ -30,57 +36,69 @@ fn header_f64(headers: &HeaderMap, name: &str) -> Option<f64> {
 }
 
 async fn sleep_for_ratelimit(headers: &HeaderMap, default_sleep_ms: u64) {
-    if let Some(remaining) = header_i64(headers, "x-ratelimit-remaining") {
-        if remaining <= 1 {
-            if let Some(reset_after) = header_f64(headers, "x-ratelimit-reset-after") {
-                let sleep_ms = (reset_after * 1000.0) as u64 + 50;
-                tokio::time::sleep(Duration::from_millis(sleep_ms)).await;
-                return;
-            }
+    let default_sleep = Duration::from_millis(default_sleep_ms);
+    let sleep_duration = match (
+        header_i64(headers, "x-ratelimit-remaining"),
+        header_f64(headers, "x-ratelimit-reset-after"),
+    ) {
+        (Some(remaining), Some(reset_after)) if remaining <= 1 => {
+            Duration::try_from_secs_f64(reset_after).map_or(default_sleep, |duration| {
+                duration.saturating_add(Duration::from_millis(50))
+            })
         }
-    }
-    tokio::time::sleep(Duration::from_millis(default_sleep_ms)).await;
+        _ => default_sleep,
+    };
+
+    tokio::time::sleep(sleep_duration).await;
 }
 
-pub async fn start_discord_avatars_refresher(db: Arc<DbAppState>) {
-    let schedule = Schedule::from_str(&get_secret("DISCORD_AVATARS_REFRESH_SCHEDULE")).unwrap();
-    let schedule = Arc::new(schedule);
+pub async fn start_discord_avatars_refresher(
+    db: Arc<DbAppState>,
+    providers: Arc<ProvidersAppState>,
+) -> Result<(), StartupError> {
+    let schedule = startup_schedule("DISCORD_AVATARS_REFRESH_SCHEDULE")?;
 
-    let discord_base =
-        std::env::var("DISCORD_BASE_URL").unwrap_or_else(|_| "https://discord.com".to_string());
+    let discord_base = providers.context.discord_auth.as_ref().map_or_else(
+        || "https://discord.com".to_owned(),
+        |discord_auth| discord_auth.api_base_uri.clone(),
+    );
 
     let client = reqwest::Client::builder()
         .user_agent("AredlBackend/2.0 (+https://api.aredl.net)")
         .build()
-        .expect("Failed to build reqwest client");
+        .map_err(|error| {
+            StartupError::Init(format!(
+                "Failed to start Discord avatar refresh HTTP client: {error}"
+            ))
+        })?;
 
-    let discord_bot_token = get_secret("DISCORD_BOT_TOKEN");
+    let discord_bot_token = get_secret("DISCORD_BOT_TOKEN")?;
 
     task::spawn(async move {
         loop {
             tracing::info!("Refreshing discord avatars");
 
-            let conn = &mut match db.connection() {
-                Ok(c) => c,
-                Err(e) => {
-                    tracing::error!("DB connection failed: {e}");
+            let users_to_refresh = match db.connection().and_then(|mut conn| {
+                users::table
+                    .filter(users::discord_id.is_not_null())
+                    .filter(users::last_discord_avatar_update.is_null().or(
+                        users::last_discord_avatar_update.lt(
+                            (Utc::now() - chrono::Duration::days(STALE_AFTER_DAYS)).naive_utc(),
+                        ),
+                    ))
+                    .order(users::last_discord_avatar_update.asc().nulls_first())
+                    .limit(BATCH_LIMIT)
+                    .select((users::id, users::discord_id))
+                    .load::<(uuid::Uuid, Option<String>)>(&mut conn)
+                    .map_err(ApiError::from)
+            }) {
+                Ok(users) => users,
+                Err(error) => {
+                    tracing::error!("Failed to load users for avatar refresh: {error}");
+                    sleep_until_next(&schedule).await;
                     continue;
                 }
             };
-
-            let users_to_refresh = users::table
-                .filter(users::discord_id.is_not_null())
-                .filter(
-                    users::last_discord_avatar_update
-                        .is_null()
-                        .or(users::last_discord_avatar_update
-                        .lt((Utc::now() - chrono::Duration::days(STALE_AFTER_DAYS)).naive_utc())),
-                )
-                .order(users::last_discord_avatar_update.asc().nulls_first())
-                .limit(BATCH_LIMIT)
-                .select((users::id, users::discord_id))
-                .load::<(uuid::Uuid, Option<String>)>(conn)
-                .expect("Failed to load users for avatar refresh");
 
             if users_to_refresh.is_empty() {
                 tracing::info!("No stale user avatars to refresh");
@@ -92,10 +110,10 @@ pub async fn start_discord_avatars_refresher(db: Arc<DbAppState>) {
                         continue;
                     };
 
-                    let url = format!("{}/api/v10/users/{}", discord_base, discord_id);
+                    let url = format!("{discord_base}/api/v10/users/{discord_id}");
                     let resp = match client
                         .get(&url)
-                        .header(AUTHORIZATION, format!("Bot {}", discord_bot_token))
+                        .header(AUTHORIZATION, format!("Bot {discord_bot_token}"))
                         .send()
                         .await
                     {
@@ -112,21 +130,27 @@ pub async fn start_discord_avatars_refresher(db: Arc<DbAppState>) {
                     };
 
                     if resp.status() == StatusCode::TOO_MANY_REQUESTS {
-                        if let Ok(value) = resp.json::<serde_json::Value>().await {
-                            if let Some(retry_after_s) =
-                                value.get("retry_after").and_then(|v| v.as_f64())
-                            {
-                                let retry_after_ms = (retry_after_s * 1000.0) as u64;
+                        let retry_after = match resp.json::<serde_json::Value>().await {
+                            Ok(value) => value
+                                .get("retry_after")
+                                .and_then(serde_json::Value::as_f64)
+                                .and_then(|seconds| Duration::try_from_secs_f64(seconds).ok())
+                                .map(|duration| duration.saturating_add(Duration::from_millis(50))),
+                            Err(error) => {
                                 tracing::warn!(
-                                    "Rate limited by discord: waiting for {} ms",
-                                    retry_after_ms
+                                    "Failed to parse Discord rate-limit response: {error}"
                                 );
-                                tokio::time::sleep(Duration::from_millis(retry_after_ms)).await;
-                                continue;
+                                None
                             }
-                        } else {
-                            tokio::time::sleep(Duration::from_millis(DEFAULT_DELAY_MS)).await;
                         }
+                        .unwrap_or(Duration::from_millis(DEFAULT_DELAY_MS));
+
+                        tracing::warn!(
+                            "Rate limited by Discord: waiting for {} ms",
+                            retry_after.as_millis()
+                        );
+
+                        tokio::time::sleep(retry_after).await;
                         continue;
                     }
 
@@ -155,13 +179,18 @@ pub async fn start_discord_avatars_refresher(db: Arc<DbAppState>) {
                         }
                     };
 
-                    match diesel::update(users::table.find(user_id))
-                        .set((
-                            users::discord_avatar.eq(updated_discord_user.avatar),
-                            users::last_discord_avatar_update.eq(Utc::now().naive_utc()),
-                        ))
-                        .execute(conn)
-                    {
+                    match db.connection().and_then(|mut conn| {
+                        diesel::update(users::table.find(user_id))
+                            .set((
+                                users::discord_avatar.eq(updated_discord_user.avatar),
+                                users::discord_avatar_decoration.eq(updated_discord_user
+                                    .avatar_decoration_data
+                                    .map(|avatar_decoration_data| avatar_decoration_data.asset)),
+                                users::last_discord_avatar_update.eq(Utc::now().naive_utc()),
+                            ))
+                            .execute(&mut conn)
+                            .map_err(ApiError::from)
+                    }) {
                         Ok(_) => {}
                         Err(e) => {
                             tracing::warn!(
@@ -176,11 +205,9 @@ pub async fn start_discord_avatars_refresher(db: Arc<DbAppState>) {
                 }
             }
 
-            let now = Utc::now();
-            let next = schedule.upcoming(Utc).next().unwrap();
-            let duration = next - now;
-
-            tokio::time::sleep(Duration::from_secs(duration.num_seconds() as u64)).await;
+            sleep_until_next(&schedule).await;
         }
     });
+
+    Ok(())
 }

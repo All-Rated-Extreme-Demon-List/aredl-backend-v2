@@ -1,12 +1,17 @@
-use crate::error_handler::ApiError;
+use crate::auth::Permission;
+use crate::error_handler::{ApiError, StartupError};
 use crate::get_secret;
+use crate::schema::permissions;
+use diesel::prelude::*;
 use diesel::r2d2::ConnectionManager;
-use diesel::{r2d2, PgConnection};
-use diesel_migrations::{EmbeddedMigrations, MigrationHarness};
+use diesel_migrations::{EmbeddedMigrations, MigrationHarness as _};
 use std::sync::Arc;
-
+use strum::IntoEnumIterator as _;
 #[cfg(test)]
-use std::sync::Once;
+use {
+    diesel::{r2d2, PgConnection},
+    std::sync::Once,
+};
 
 type Pool = r2d2::Pool<ConnectionManager<PgConnection>>;
 pub type DbConnection = r2d2::PooledConnection<ConnectionManager<PgConnection>>;
@@ -21,30 +26,49 @@ impl DbAppState {
     pub fn connection(&self) -> Result<DbConnection, ApiError> {
         self.pool
             .get()
-            .map_err(|e| ApiError::new(500, &format!("Failed to get db connection: {}", e)))
+            .map_err(|e| ApiError::InternalServerError(format!("Failed to get db connection: {e}")))
     }
 
-    pub fn run_pending_migrations(&self) {
-        self.connection()
-            .unwrap()
-            .run_pending_migrations(MIGRATIONS)
-            .expect("Failed to run pending migrations!");
+    pub fn run_pending_migrations(&self) -> Result<(), StartupError> {
+        let mut conn = self.connection()?;
+
+        conn.run_pending_migrations(MIGRATIONS).map_err(|error| {
+            StartupError::Init(format!("Failed to run database migrations: {error}"))
+        })?;
+
+        seed_permissions(&mut conn)?;
+
+        Ok(())
     }
 }
 
-pub fn init_app_state() -> Arc<DbAppState> {
+fn seed_permissions(conn: &mut PgConnection) -> Result<(), StartupError> {
+    diesel::insert_into(permissions::table)
+        .values(
+            Permission::iter()
+                .map(|permission| permissions::permission.eq(permission.to_string()))
+                .collect::<Vec<_>>(),
+        )
+        .on_conflict_do_nothing()
+        .execute(conn)
+        .map_err(|error| StartupError::Init(format!("Failed to seed permissions: {error}")))?;
+
+    Ok(())
+}
+
+pub fn init_app_state() -> Result<Arc<DbAppState>, StartupError> {
     let db_url = format!(
         "postgres://{}:{}@db:5432/aredl",
-        get_secret("POSTGRES_USER"),
-        get_secret("POSTGRES_PASSWORD")
+        get_secret("POSTGRES_USER")?,
+        get_secret("POSTGRES_PASSWORD")?
     );
     let manager = ConnectionManager::<PgConnection>::new(db_url);
     let pool = Pool::builder()
         .test_on_check_out(true)
         .build(manager)
-        .expect("Failed to create db pool");
+        .map_err(|error| StartupError::Init(format!("Failed to start database pool: {error}")))?;
 
-    Arc::new(DbAppState { pool })
+    Ok(Arc::new(DbAppState { pool }))
 }
 
 #[cfg(test)]
@@ -53,10 +77,6 @@ static INIT_DB: Once = Once::new();
 #[cfg(test)]
 fn init_test_db_schema_and_seed() {
     INIT_DB.call_once(|| {
-        use diesel::{Connection, RunQueryDsl};
-
-        use crate::schema::permissions;
-
         let test_db_url =
             std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL must be set");
 
@@ -68,44 +88,7 @@ fn init_test_db_schema_and_seed() {
         conn.run_pending_migrations(MIGRATIONS)
             .expect("Failed to run migrations");
 
-        let permissions_data = vec![
-            ("submission_review_base", 10),
-            ("edit_non_claimed_submissions", 11),
-            ("submission_review_full", 15),
-            ("record_modify", 20),
-            ("placeholder_create", 25),
-            ("user_modify", 25),
-            ("pack_tier_modify", 40),
-            ("pack_modify", 40),
-            ("user_ban", 45),
-            ("merge_review", 50),
-            ("level_modify", 50),
-            ("clan_modify", 60),
-            ("notifications_subscribe", 70),
-            ("user_redact", 75),
-            ("direct_merge", 80),
-            ("submission_status_manage", 80),
-            ("reviewers_audit", 85),
-            ("role_manage", 85),
-            ("shift_manage", 90),
-        ];
-
-        diesel::insert_into(permissions::table)
-            .values(
-                permissions_data
-                    .iter()
-                    .map(|(permission, privilege_level)| {
-                        use diesel::ExpressionMethods;
-
-                        (
-                            permissions::permission.eq(*permission),
-                            permissions::privilege_level.eq(*privilege_level),
-                        )
-                    })
-                    .collect::<Vec<_>>(),
-            )
-            .execute(&mut conn)
-            .expect("Failed to insert permissions");
+        seed_permissions(&mut conn).expect("Failed to insert permissions");
     });
 }
 
@@ -118,7 +101,7 @@ pub fn init_test_db_state() -> Arc<DbAppState> {
     let test_db_url = std::env::var("TEST_DATABASE_URL")
         .expect("TEST_DATABASE_URL must be set for running tests");
 
-    let manager = ConnectionManager::<PgConnection>::new(test_db_url.clone());
+    let manager = ConnectionManager::<PgConnection>::new(test_db_url);
     let pool = r2d2::Pool::builder()
         .test_on_check_out(true)
         .max_size(1)

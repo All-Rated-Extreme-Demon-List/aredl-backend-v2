@@ -1,19 +1,17 @@
 #[cfg(test)]
-use std::sync::Arc;
-
-#[cfg(test)]
-use crate::app_data::db::DbAppState;
-use crate::schema::aredl::position_history;
-use chrono::Utc;
-use diesel::{ExpressionMethods, RunQueryDsl};
-use uuid::Uuid;
+use {
+    crate::app_data::db::DbAppState, crate::aredl::levels::LevelStatus,
+    crate::schema::aredl::position_history, chrono::Utc, diesel::prelude::*, std::sync::Arc,
+    uuid::Uuid,
+};
 
 #[cfg(test)]
 pub fn insert_history_entry(
     db: &Arc<DbAppState>,
     new_position: Option<i32>,
     old_position: Option<i32>,
-    legacy: Option<bool>,
+    old_status: Option<LevelStatus>,
+    new_status: LevelStatus,
     affected_level: Uuid,
     level_above: Option<Uuid>,
     level_below: Option<Uuid>,
@@ -22,7 +20,8 @@ pub fn insert_history_entry(
         .values((
             position_history::new_position.eq(new_position),
             position_history::old_position.eq(old_position),
-            position_history::legacy.eq(legacy),
+            position_history::old_status.eq(old_status),
+            position_history::new_status.eq(new_status),
             position_history::affected_level.eq(affected_level),
             position_history::level_above.eq(level_above),
             position_history::level_below.eq(level_below),

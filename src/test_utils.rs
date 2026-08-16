@@ -3,9 +3,9 @@ use crate::app_data::{
     db::DbAppState,
     providers::init_app_state as providers_init_app_state,
 };
+use actix_http::{Request, StatusCode};
 #[cfg(test)]
-use crate::providers::VideoProvidersAppState;
-use actix_http::Request;
+use {crate::providers::ProvidersAppState, tokio::sync::broadcast::Sender};
 
 use actix_web::{
     body::BoxBody,
@@ -76,17 +76,17 @@ pub async fn init_test_app() -> (
     impl Service<Request, Response = ServiceResponse<BoxBody>, Error = Error>,
     Arc<DbAppState>,
     Arc<AuthAppState>,
-    tokio::sync::broadcast::Sender<crate::notifications::WebsocketNotification>,
+    Sender<WebsocketNotification>,
 ) {
-    dotenv::dotenv().ok();
+    drop(dotenvy::dotenv());
 
-    let auth_app_state = auth_init_app_state().await;
+    let auth_app_state = auth_init_app_state().expect("Failed to initialize auth test state");
 
     let (notify_tx, _notify_rx) = broadcast::channel::<WebsocketNotification>(100);
 
     let db_app_state = init_test_db_state();
 
-    let providers_app_state = providers_init_app_state().await;
+    let providers_app_state = providers_init_app_state(db_app_state.clone()).await;
 
     let app = test::init_service(
         App::new()
@@ -114,20 +114,27 @@ pub async fn init_test_app() -> (
 
 #[cfg(test)]
 pub async fn init_test_app_with_providers(
-    providers_app_state: Arc<VideoProvidersAppState>,
+    providers_app_state: Arc<ProvidersAppState>,
 ) -> (
     impl Service<Request, Response = ServiceResponse<BoxBody>, Error = Error>,
     Arc<DbAppState>,
     Arc<AuthAppState>,
-    tokio::sync::broadcast::Sender<crate::notifications::WebsocketNotification>,
+    Sender<WebsocketNotification>,
 ) {
-    dotenv::dotenv().ok();
+    drop(dotenvy::dotenv());
 
-    let auth_app_state = auth_init_app_state().await;
+    let auth_app_state = auth_init_app_state().expect("Failed to initialize auth test state");
 
     let (notify_tx, _notify_rx) = broadcast::channel::<WebsocketNotification>(100);
 
     let db_app_state = init_test_db_state();
+    let providers_app_state = match Arc::try_unwrap(providers_app_state) {
+        Ok(mut providers_app_state) => {
+            providers_app_state.context.db = Some(db_app_state.clone());
+            Arc::new(providers_app_state)
+        }
+        Err(providers_app_state) => providers_app_state,
+    };
 
     let app = test::init_service(
         App::new()
@@ -153,11 +160,11 @@ pub async fn init_test_app_with_providers(
     (app, db_app_state, auth_app_state, notify_tx)
 }
 
-pub async fn assert_error_response(
+pub async fn check_error_response(
     resp: ServiceResponse<BoxBody>,
-    expected_status: u16,
+    expected_status: StatusCode,
     expected_message: Option<&str>,
-) {
+) -> Result<(), String> {
     let actual_status = resp.status().as_u16();
     let body_bytes = test::read_body(resp).await;
     let body_text = String::from_utf8_lossy(&body_bytes).to_string();
@@ -170,16 +177,36 @@ pub async fn assert_error_response(
 
     let actual_message = message_from_json.unwrap_or(body_text.as_str());
 
-    assert_eq!(
-        actual_status, expected_status,
-        "Unexpected status. message={}",
-        actual_message
-    );
+    if actual_status != expected_status.as_u16() {
+        return Err(format!(
+            "Unexpected status.\nexpected: {}\nactual: {}\nmessage: {}",
+            expected_status.as_u16(),
+            actual_status,
+            actual_message
+        ));
+    }
 
     if let Some(expected_message) = expected_message {
-        assert_eq!(
-            actual_message, expected_message,
-            "Unexpected error message."
-        );
+        if actual_message != expected_message {
+            return Err(format!(
+                "Unexpected error message.\nexpected: {expected_message:?}\nactual: {actual_message:?}"
+            ));
+        }
     }
+
+    Ok(())
 }
+
+#[macro_export]
+macro_rules! assert_error_response {
+    ($resp:expr, $expected_status:expr, $expected_message:expr $(,)?) => {{
+        match $crate::test_utils::check_error_response($resp, $expected_status, $expected_message)
+            .await
+        {
+            Ok(()) => {}
+            Err(message) => panic!("{message}"),
+        }
+    }};
+}
+
+pub use crate::assert_error_response;

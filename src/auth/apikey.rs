@@ -51,17 +51,17 @@ pub async fn create_api_key(
         .headers()
         .get(header::AUTHORIZATION)
         .and_then(|h| h.to_str().ok())
-        .map(|h| h.strip_prefix("Bearer ").unwrap_or("").to_string());
+        .map(|h| h.strip_prefix("Bearer ").unwrap_or("").to_owned());
 
-    if access_token.is_none() {
-        return Err(ApiError::new(400, "No token provided"));
-    }
+    let Some(access_token) = access_token else {
+        return Err(ApiError::Unauthorized("No token provided"));
+    };
 
     let lifetime_minutes = options.lifetime_minutes;
 
     let response = web::block(move || {
         let decoded_token_claims =
-            token::decode_token(access_token.unwrap(), &data.jwt_decoding_key, &["access"])?;
+            token::decode_token(access_token, &data.jwt_decoding_key, &["access"])?;
 
         let decoded_user_claims = token::decode_user_claims(&decoded_token_claims)?;
 
@@ -76,15 +76,14 @@ pub async fn create_api_key(
         let lifetime = Duration::minutes(lifetime_minutes);
 
         if lifetime > Duration::days(365) {
-            return Err(ApiError::new(
-                400,
+            return Err(ApiError::UnprocessableEntity(
                 "API key lifetime cannot exceed 1 year (525600 minutes)",
             ));
         }
 
         let (api_key, expires) = token::create_token(
-            UserClaims {
-                user_id: user_id,
+            &UserClaims {
+                user_id,
                 is_api_key: true,
             },
             &data.jwt_encoding_key,
@@ -104,5 +103,5 @@ pub async fn create_api_key(
 pub struct ApiDoc;
 
 pub fn init_routes(config: &mut web::ServiceConfig) {
-    config.service(web::scope("/auth/api-key").service(create_api_key));
+    config.service(web::scope("/api-key").service(create_api_key));
 }

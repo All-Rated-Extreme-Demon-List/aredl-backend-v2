@@ -25,7 +25,7 @@ async fn create_pack_tier() {
 
     let req = test::TestRequest::post()
         .uri("/aredl/pack-tiers")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&tier_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -36,7 +36,7 @@ async fn create_pack_tier() {
         body["name"].as_str().unwrap(),
         "Test Tier",
         "Names do not match!"
-    )
+    );
 }
 
 #[actix_web::test]
@@ -60,8 +60,8 @@ async fn update_pack_tier() {
         "name": "Updated Tier Name"
     });
     let req = test::TestRequest::patch()
-        .uri(&format!("/aredl/pack-tiers/{}", tier_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/aredl/pack-tiers/{tier_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&update_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -72,7 +72,7 @@ async fn update_pack_tier() {
         body["name"].as_str().unwrap(),
         "Updated Tier Name",
         "Names do not match!"
-    )
+    );
 }
 
 #[actix_web::test]
@@ -83,8 +83,8 @@ async fn delete_pack_tier() {
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let tier_id = create_test_pack_tier(&db).await;
     let req = test::TestRequest::delete()
-        .uri(&format!("/aredl/pack-tiers/{}", tier_id))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/aredl/pack-tiers/{tier_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());

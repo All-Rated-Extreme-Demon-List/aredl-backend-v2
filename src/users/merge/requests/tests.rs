@@ -1,17 +1,22 @@
 #[cfg(test)]
 use {
     crate::{
-        aredl::{levels::test_utils::create_test_level_with_record, records::Record},
+        aredl::{
+            levels::test_utils::create_test_level_with_record,
+            records::test_utils::test_records_for_user,
+        },
         auth::{create_test_token, Permission},
-        schema::{aredl::records, merge_requests},
         test_utils::*,
         users::{
-            merge::requests::test_utils::create_test_merge_req,
+            merge::requests::test_utils::{
+                create_test_merge_req, get_test_merge_request, get_test_merge_request_optional,
+                set_test_merge_request_claimed, set_test_merge_request_rejected,
+            },
             test_utils::{create_test_placeholder_user, create_test_user},
         },
     },
+    actix_http::StatusCode,
     actix_web::test::{self, read_body_json},
-    diesel::{dsl::exists, select, ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper},
     serde_json::json,
 };
 
@@ -30,7 +35,7 @@ async fn create_merge_request() {
 
     let req = test::TestRequest::post()
         .uri("/users/merge/requests")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&req_data)
         .to_request();
 
@@ -40,23 +45,21 @@ async fn create_merge_request() {
     let body: serde_json::Value = read_body_json(resp).await;
 
     assert_eq!(
-        body["secondary_user"].as_str().unwrap().to_string(),
+        body["secondary_user"].as_str().unwrap().to_owned(),
         user_2_id.to_string(),
         "Secondary users do not match!"
     );
     assert_eq!(
-        body["primary_user"].as_str().unwrap().to_string(),
+        body["primary_user"].as_str().unwrap().to_owned(),
         user_1_id.to_string(),
         "Primary users do not match!"
     );
-    assert_eq!(
-        body["is_rejected"].as_bool().unwrap(),
-        false,
+    assert!(
+        !body["is_rejected"].as_bool().unwrap(),
         "Request is rejected!"
     );
-    assert_eq!(
-        body["is_claimed"].as_bool().unwrap(),
-        false,
+    assert!(
+        !body["is_claimed"].as_bool().unwrap(),
         "Request is claimed!"
     );
 }
@@ -78,17 +81,13 @@ async fn accept_merge_request() {
 
     let req = test::TestRequest::post()
         .uri(format!("/users/merge/requests/{merge}/accept").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let res = test::call_service(&app, req).await;
     assert!(res.status().is_success(), "status is {}", res.status());
 
-    let records = records::table
-        .filter(records::submitted_by.eq(user_1_id))
-        .select(Record::as_select())
-        .get_results::<Record>(&mut db.connection().unwrap())
-        .expect("Failed to collect records!");
+    let records = test_records_for_user(&db, user_1_id);
 
     assert_eq!(records.len(), 2, "User does not have exactly 2 records!");
     assert!(
@@ -100,13 +99,9 @@ async fn accept_merge_request() {
         "Did not return second record!"
     );
 
-    let merge_exists = select(exists(
-        merge_requests::table.filter(merge_requests::id.eq(merge)),
-    ))
-    .get_result::<bool>(&mut db.connection().unwrap())
-    .expect("Failed to check for merge!");
+    let merge_exists = get_test_merge_request_optional(&db, merge).is_some();
 
-    assert_ne!(merge_exists, true, "Merge request exists!")
+    assert!(!merge_exists, "Merge request exists!");
 }
 
 #[actix_web::test]
@@ -115,7 +110,7 @@ async fn reject_merge_request() {
 
     let (user_1_id, _) = create_test_user(&db, None).await;
     let (user_2_id, _) = create_test_placeholder_user(&db).await;
-    let (mod_id, _) = create_test_user(&db, Some(Permission::DirectMerge)).await;
+    let (mod_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
     let token =
         create_test_token(mod_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -126,26 +121,21 @@ async fn reject_merge_request() {
 
     let req = test::TestRequest::post()
         .uri(format!("/users/merge/requests/{merge}/reject").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let res = test::call_service(&app, req).await;
     assert!(res.status().is_success(), "status is {}", res.status());
     let body: serde_json::Value = read_body_json(res).await;
 
-    let records = records::table
-        .filter(records::submitted_by.eq(user_1_id))
-        .count()
-        .get_result::<i64>(&mut db.connection().unwrap())
-        .expect("Failed to get records!");
+    let records = test_records_for_user(&db, user_1_id).len();
 
-    assert_eq!(records, 1, "User does not have exactly 2 records!");
+    assert_eq!(records, 1, "User does not have exactly 1 record!");
 
-    assert_eq!(
+    assert!(
         body["is_rejected"].as_bool().unwrap(),
-        true,
         "Request is not marked as rejected!"
-    )
+    );
 }
 
 #[actix_web::test]
@@ -162,12 +152,16 @@ async fn create_merge_request_rejects_self_merge() {
 
     let req = test::TestRequest::post()
         .uri("/users/merge/requests")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&req_data)
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_error_response(resp, 400, Some("You cannot merge your account with itself.")).await;
+    assert_error_response!(
+        resp,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        Some("You cannot merge your account with itself."),
+    );
 }
 
 #[actix_web::test]
@@ -184,12 +178,16 @@ async fn create_merge_request_rejects_unknown_user() {
 
     let req = test::TestRequest::post()
         .uri("/users/merge/requests")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&req_data)
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_error_response(resp, 404, Some("The secondary user does not exist.")).await;
+    assert_error_response!(
+        resp,
+        StatusCode::NOT_FOUND,
+        Some("The secondary user does not exist."),
+    );
 }
 
 #[actix_web::test]
@@ -207,17 +205,16 @@ async fn create_merge_request_rejects_non_placeholder_user() {
 
     let req = test::TestRequest::post()
         .uri("/users/merge/requests")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&req_data)
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
-        400,
+        StatusCode::CONFLICT,
         Some("You can only submit merge requests for placeholder users. To merge your account with a user that is already linked to another discord account, please make a support post on our discord server."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -237,17 +234,16 @@ async fn create_merge_request_rejects_duplicate_submission() {
 
     let req = test::TestRequest::post()
         .uri("/users/merge/requests")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&req_data)
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
-        409,
+        StatusCode::CONFLICT,
         Some("You already submitted a merge request for your account. Please wait until it's either accepted or denied before submitting a new one."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -264,7 +260,7 @@ async fn list_merge_requests() {
 
     let req = test::TestRequest::get()
         .uri("/users/merge/requests")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -291,7 +287,7 @@ async fn find_merge_request() {
 
     let req = test::TestRequest::get()
         .uri(&format!("/users/merge/requests/{merge}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -314,15 +310,11 @@ async fn list_merge_requests_filter_is_claimed() {
     let claimed_merge = create_test_merge_req(&db, user_1_id, user_2_id).await;
     let unclaimed_merge = create_test_merge_req(&db, user_3_id, user_2_id).await;
 
-    diesel::update(merge_requests::table)
-        .filter(merge_requests::id.eq(claimed_merge))
-        .set(merge_requests::is_claimed.eq(true))
-        .execute(&mut db.connection().unwrap())
-        .expect("Failed to claim merge request");
+    set_test_merge_request_claimed(&db, claimed_merge, true);
 
     let req = test::TestRequest::get()
         .uri("/users/merge/requests?claimed_filter=true")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -333,7 +325,7 @@ async fn list_merge_requests_filter_is_claimed() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|row| row["id"].as_str().unwrap().to_string())
+        .map(|row| row["id"].as_str().unwrap().to_owned())
         .collect();
     assert!(ids.contains(&claimed_merge.to_string()));
     assert!(!ids.contains(&unclaimed_merge.to_string()));
@@ -353,15 +345,11 @@ async fn list_merge_requests_filter_is_rejected() {
     let rejected_merge = create_test_merge_req(&db, user_1_id, user_2_id).await;
     let pending_merge = create_test_merge_req(&db, user_3_id, user_2_id).await;
 
-    diesel::update(merge_requests::table)
-        .filter(merge_requests::id.eq(rejected_merge))
-        .set(merge_requests::is_rejected.eq(true))
-        .execute(&mut db.connection().unwrap())
-        .expect("Failed to reject merge request");
+    set_test_merge_request_rejected(&db, rejected_merge, true);
 
     let req = test::TestRequest::get()
         .uri("/users/merge/requests?rejected_filter=true")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -372,7 +360,7 @@ async fn list_merge_requests_filter_is_rejected() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|row| row["id"].as_str().unwrap().to_string())
+        .map(|row| row["id"].as_str().unwrap().to_owned())
         .collect();
     assert!(ids.contains(&rejected_merge.to_string()));
     assert!(!ids.contains(&pending_merge.to_string()));
@@ -394,11 +382,8 @@ async fn list_merge_requests_filter_user() {
     let other_merge = create_test_merge_req(&db, user_3_id, user_4_id).await;
 
     let req = test::TestRequest::get()
-        .uri(&format!(
-            "/users/merge/requests?user_filter={}",
-            user_1_name
-        ))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri(&format!("/users/merge/requests?user_filter={user_1_name}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -409,7 +394,7 @@ async fn list_merge_requests_filter_user() {
         .as_array()
         .unwrap()
         .iter()
-        .map(|row| row["id"].as_str().unwrap().to_string())
+        .map(|row| row["id"].as_str().unwrap().to_owned())
         .collect();
     assert!(ids.contains(&matching_merge.to_string()));
     assert!(!ids.contains(&other_merge.to_string()));
@@ -431,7 +416,7 @@ async fn claim_merge_request() {
 
     let req = test::TestRequest::get()
         .uri("/users/merge/requests/claim")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -446,15 +431,15 @@ async fn claim_merge_request() {
 
 #[actix_web::test]
 async fn claim_merge_request_when_none_exist() {
-    let (app, _db, auth, _) = init_test_app().await;
+    let (app, db, auth, _) = init_test_app().await;
 
-    let (mod_id, _) = create_test_user(&_db, Some(Permission::MergeReview)).await;
+    let (mod_id, _) = create_test_user(&db, Some(Permission::MergeReview)).await;
     let token =
         create_test_token(mod_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
     let req = test::TestRequest::get()
         .uri("/users/merge/requests/claim")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -476,24 +461,16 @@ async fn unclaim_merge_request() {
 
     let merge = create_test_merge_req(&db, user_1_id, user_2_id).await;
 
-    diesel::update(merge_requests::table)
-        .filter(merge_requests::id.eq(merge))
-        .set(merge_requests::is_claimed.eq(true))
-        .execute(&mut db.connection().unwrap())
-        .expect("Failed to claim merge request");
+    set_test_merge_request_claimed(&db, merge, true);
 
     let req = test::TestRequest::post()
         .uri(&format!("/users/merge/requests/{merge}/unclaim"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
 
-    let claimed: bool = merge_requests::table
-        .filter(merge_requests::id.eq(merge))
-        .select(merge_requests::is_claimed)
-        .first(&mut db.connection().unwrap())
-        .expect("Failed to fetch merge request");
+    let claimed = get_test_merge_request(&db, merge).is_claimed;
     assert!(!claimed, "Request should be unclaimed");
 }

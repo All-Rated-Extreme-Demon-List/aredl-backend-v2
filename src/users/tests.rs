@@ -1,16 +1,21 @@
 #[cfg(test)]
 use {
+    crate::users::test_utils::create_test_placeholder_user,
     crate::{
         auth::{create_test_token, Permission},
-        diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper},
-        roles::test_utils::{add_user_to_role, create_test_hidden_role, create_test_role},
-        schema::users,
+        roles::test_utils::{
+            add_permission_to_role, add_user_to_role, create_test_hidden_role, create_test_role,
+        },
         test_utils::{assert_error_response, init_test_app},
         users::{
-            test_utils::{create_test_user, get_permission_privilege_level},
+            test_utils::{
+                create_test_user, create_test_user_with_permissions, get_test_user,
+                set_test_user_ban_level, set_test_user_discord_id,
+            },
             User, UserUpsert,
         },
     },
+    actix_http::StatusCode,
     actix_web::test::{self, read_body_json},
     chrono::Utc,
     serde_json::json,
@@ -30,7 +35,7 @@ async fn create_placeholder_user() {
 
     let req = test::TestRequest::post()
         .uri("/users/placeholders")
-        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .insert_header(("Authorization", format!("Bearer {staff_token}")))
         .set_json(&placeholder_payload)
         .to_request();
 
@@ -44,8 +49,8 @@ async fn create_placeholder_user() {
 #[actix_web::test]
 async fn update_user_info() {
     let (app, db, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&db, Some(Permission::UserModify)).await;
-    let (staff_user_id, _) = create_test_user(&db, Some(Permission::UserBan)).await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let (staff_user_id, _) = create_test_user(&db, Some(Permission::UserModify)).await;
     let staff_token =
         create_test_token(staff_user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -55,8 +60,8 @@ async fn update_user_info() {
     });
 
     let req = test::TestRequest::patch()
-        .uri(&format!("/users/{}", user_id))
-        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .uri(&format!("/users/{user_id}"))
+        .insert_header(("Authorization", format!("Bearer {staff_token}")))
         .set_json(&update_payload)
         .to_request();
 
@@ -69,7 +74,7 @@ async fn update_user_info() {
 }
 
 #[actix_web::test]
-async fn update_user_info_less_privilege() {
+async fn update_user_info_rejects_editing_user_with_same_or_higher_privilege() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, Some(Permission::UserModify)).await;
     let user_token =
@@ -82,8 +87,8 @@ async fn update_user_info_less_privilege() {
     });
 
     let req = test::TestRequest::patch()
-        .uri(&format!("/users/{}", staff_user_id))
-        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .uri(&format!("/users/{staff_user_id}"))
+        .insert_header(("Authorization", format!("Bearer {user_token}")))
         .set_json(&update_payload)
         .to_request();
 
@@ -96,14 +101,17 @@ async fn ban_user() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, username) = create_test_user(&db, None).await;
     let (staff_user_id, _) = create_test_user(&db, Some(Permission::UserBan)).await;
+    let (manager_user_id, _) = create_test_user(&db, Some(Permission::UserBan)).await;
     let staff_token =
         create_test_token(staff_user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let manager_token = create_test_token(manager_user_id, &auth.jwt_encoding_key)
+        .expect("Failed to generate token");
 
-    let ban_payload = json!({ "ban_level": 2 });
+    let ban_payload = json!({ "ban_level": 3 });
 
     let req = test::TestRequest::patch()
-        .uri(&format!("/users/{}/ban", user_id))
-        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .uri(&format!("/users/{user_id}/ban"))
+        .insert_header(("Authorization", format!("Bearer {staff_token}")))
         .set_json(&ban_payload)
         .to_request();
 
@@ -111,16 +119,17 @@ async fn ban_user() {
     assert!(resp.status().is_success());
 
     let banned_user: serde_json::Value = read_body_json(resp).await;
-    assert_eq!(banned_user["ban_level"], 2);
+    assert_eq!(banned_user["ban_level"], 3);
 
     let req = test::TestRequest::get()
-        .uri(&format!("/users?name_filter=%{}%", username))
+        .uri(&format!("/users?name_filter=%{username}%"))
+        .insert_header(("Authorization", format!("Bearer {manager_token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
     let users: serde_json::Value = read_body_json(resp).await;
-    assert_eq!(users["data"].as_array().unwrap()[0]["ban_level"], 2);
+    assert_eq!(users["data"].as_array().unwrap()[0]["ban_level"], 3);
 }
 
 #[actix_web::test]
@@ -131,38 +140,36 @@ async fn redact_user_requires_redact_permission() {
     let staff_token =
         create_test_token(staff_user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    let redact_payload = json!({ "ban_level": 3 });
+    let redact_payload = json!({ "ban_level": 4 });
 
     let req = test::TestRequest::patch()
-        .uri(&format!("/users/{}/ban", user_id))
-        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .uri(&format!("/users/{user_id}/ban"))
+        .insert_header(("Authorization", format!("Bearer {staff_token}")))
         .set_json(&redact_payload)
         .to_request();
 
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status().as_u16(), 403);
 
-    let ban_level = users::table
-        .filter(users::id.eq(user_id))
-        .select(users::ban_level)
-        .first::<i32>(&mut db.connection().unwrap())
-        .expect("Failed to read user ban_level");
-    assert_ne!(ban_level, 3);
+    let ban_level = get_test_user(&db, user_id).ban_level;
+    assert_ne!(ban_level, 4);
 }
 
 #[actix_web::test]
 async fn redact_user_succeeds_with_redact_permission() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, None).await;
-    let (staff_user_id, _) = create_test_user(&db, Some(Permission::UserRedact)).await;
+    let (staff_user_id, _) =
+        create_test_user_with_permissions(&db, &[Permission::UserBan, Permission::UserRedact])
+            .await;
     let staff_token =
         create_test_token(staff_user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    let redact_payload = json!({ "ban_level": 3 });
+    let redact_payload = json!({ "ban_level": 4 });
 
     let req = test::TestRequest::patch()
-        .uri(&format!("/users/{}/ban", user_id))
-        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .uri(&format!("/users/{user_id}/ban"))
+        .insert_header(("Authorization", format!("Bearer {staff_token}")))
         .set_json(&redact_payload)
         .to_request();
 
@@ -170,7 +177,7 @@ async fn redact_user_succeeds_with_redact_permission() {
     assert!(resp.status().is_success());
 
     let redacted_user: serde_json::Value = read_body_json(resp).await;
-    assert_eq!(redacted_user["ban_level"], 3);
+    assert_eq!(redacted_user["ban_level"], 4);
 }
 
 #[actix_web::test]
@@ -179,7 +186,7 @@ async fn find_user() {
     let (user_id, username) = create_test_user(&db, None).await;
 
     let req = test::TestRequest::get()
-        .uri(&format!("/users/{}", user_id))
+        .uri(&format!("/users/{user_id}"))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -195,13 +202,10 @@ async fn find_user_by_discord_id() {
     let (user_id, username) = create_test_user(&db, None).await;
     let discord_id = "1234567890";
 
-    diesel::update(users::table.filter(users::id.eq(user_id)))
-        .set(users::discord_id.eq(Some(discord_id)))
-        .execute(&mut db.connection().unwrap())
-        .expect("Failed to update discord id");
+    set_test_user_discord_id(&db, user_id, discord_id).await;
 
     let req = test::TestRequest::get()
-        .uri(&format!("/users/{}", discord_id))
+        .uri(&format!("/users/{discord_id}"))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -219,11 +223,8 @@ async fn find_user_hides_hidden_roles_and_hidden_scopes_except_for_role_manage()
     let (manager_requester, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
 
     let visible_role_id = create_test_role(&db, 1).await;
-    let hidden_role_id = create_test_hidden_role(
-        &db,
-        get_permission_privilege_level(&db, Permission::SubmissionReviewBase),
-    )
-    .await;
+    let hidden_role_id = create_test_hidden_role(&db, 0).await;
+    add_permission_to_role(&db, hidden_role_id, Permission::SubmissionReview).await;
 
     add_user_to_role(&db, visible_role_id, target_user).await;
     add_user_to_role(&db, hidden_role_id, target_user).await;
@@ -248,7 +249,7 @@ async fn find_user_hides_hidden_roles_and_hidden_scopes_except_for_role_manage()
             "Visible role should be present in user response"
         );
         assert!(
-            !scopes.iter().any(|scope| scope == "submission_review_base"),
+            !scopes.iter().any(|scope| scope == "submission_review"),
             "Hidden-role-derived scope should not be present in user response"
         );
     };
@@ -266,13 +267,13 @@ async fn find_user_hides_hidden_roles_and_hidden_scopes_except_for_role_manage()
             "Hidden role should be present for role_manage users"
         );
         assert!(
-            scopes.iter().any(|scope| scope == "submission_review_base"),
+            scopes.iter().any(|scope| scope == "submission_review"),
             "Hidden-role-derived scope should be present for role_manage users"
         );
     };
 
     let anon_req = test::TestRequest::get()
-        .uri(&format!("/users/{}", target_user))
+        .uri(&format!("/users/{target_user}"))
         .to_request();
     let anon_resp = test::call_service(&app, anon_req).await;
     assert!(anon_resp.status().is_success());
@@ -280,8 +281,8 @@ async fn find_user_hides_hidden_roles_and_hidden_scopes_except_for_role_manage()
     assert_hidden_data_is_not_exposed(&anon_body);
 
     let normal_req = test::TestRequest::get()
-        .uri(&format!("/users/{}", target_user))
-        .insert_header(("Authorization", format!("Bearer {}", normal_token)))
+        .uri(&format!("/users/{target_user}"))
+        .insert_header(("Authorization", format!("Bearer {normal_token}")))
         .to_request();
     let normal_resp = test::call_service(&app, normal_req).await;
     assert!(normal_resp.status().is_success());
@@ -289,8 +290,8 @@ async fn find_user_hides_hidden_roles_and_hidden_scopes_except_for_role_manage()
     assert_hidden_data_is_not_exposed(&normal_body);
 
     let manager_req = test::TestRequest::get()
-        .uri(&format!("/users/{}", target_user))
-        .insert_header(("Authorization", format!("Bearer {}", manager_token)))
+        .uri(&format!("/users/{target_user}"))
+        .insert_header(("Authorization", format!("Bearer {manager_token}")))
         .to_request();
     let manager_resp = test::call_service(&app, manager_req).await;
     assert!(manager_resp.status().is_success());
@@ -313,7 +314,7 @@ async fn list_users() {
     assert!(users["data"].as_array().unwrap().len() >= 2);
 
     let req = test::TestRequest::get()
-        .uri(&format!("/users?name_filter=%{}%", username))
+        .uri(&format!("/users?name_filter=%{username}%"))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -328,10 +329,10 @@ async fn list_users() {
 }
 
 #[actix_web::test]
-async fn user_character_limit() {
+async fn user_display_name_limit_applies_to_self_update() {
     let (app, db, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&db, Some(Permission::UserModify)).await;
-    let (staff_user_id, _) = create_test_user(&db, Some(Permission::UserBan)).await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let (staff_user_id, _) = create_test_user(&db, Some(Permission::UserModify)).await;
     let user_token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let staff_token =
@@ -342,8 +343,8 @@ async fn user_character_limit() {
     });
 
     let req = test::TestRequest::patch()
-        .uri(&format!("/users/{}", user_id))
-        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .uri(&format!("/users/{user_id}"))
+        .insert_header(("Authorization", format!("Bearer {staff_token}")))
         .set_json(&update_payload)
         .to_request();
 
@@ -352,24 +353,23 @@ async fn user_character_limit() {
 
     let req = test::TestRequest::patch()
         .uri("/users/@me")
-        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .insert_header(("Authorization", format!("Bearer {user_token}")))
         .set_json(&update_payload)
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
-        400,
+        StatusCode::BAD_REQUEST,
         Some("The display name can at most be 35 characters long."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
 async fn list_users_with_filters() {
     let (app, db, _, _) = init_test_app().await;
     let (_, name) = create_test_user(&db, None).await;
-    let (placeholder_id, _) = crate::users::test_utils::create_test_placeholder_user(&db).await;
+    let (placeholder_id, _) = create_test_placeholder_user(&db).await;
 
     let req = test::TestRequest::get()
         .uri("/users?placeholder=true")
@@ -384,7 +384,7 @@ async fn list_users_with_filters() {
         .any(|u| u["id"] == placeholder_id.to_string()));
 
     let req = test::TestRequest::get()
-        .uri(&format!("/users?name_filter=%{}%&per_page=1&page=1", name))
+        .uri(&format!("/users?name_filter=%{name}%&per_page=1&page=1"))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -393,41 +393,120 @@ async fn list_users_with_filters() {
 }
 
 #[actix_web::test]
+async fn list_users_with_discord_id_filter() {
+    let (app, db, _, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let discord_id = "1234567890";
+
+    set_test_user_discord_id(&db, user_id, discord_id).await;
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/users?name_filter=%25{discord_id}%25"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    let users: serde_json::Value = read_body_json(resp).await;
+    assert!(users["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|user| user["id"] == user_id.to_string()));
+}
+
+#[actix_web::test]
+async fn list_users_with_ban_level_filter() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (banned_user_id, _) = create_test_user(&db, None).await;
+    let (other_user_id, _) = create_test_user(&db, None).await;
+    let (staff_user_id, _) = create_test_user(&db, Some(Permission::UserBan)).await;
+    let staff_token =
+        create_test_token(staff_user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+
+    set_test_user_ban_level(&db, banned_user_id, 3).await;
+    set_test_user_ban_level(&db, other_user_id, 0).await;
+
+    let req = test::TestRequest::get()
+        .uri("/users?ban_level=3")
+        .insert_header(("Authorization", format!("Bearer {staff_token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    let users: serde_json::Value = read_body_json(resp).await;
+
+    assert!(users["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|user| user["id"] == banned_user_id.to_string()));
+    assert!(!users["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|user| user["id"] == other_user_id.to_string()));
+}
+
+#[actix_web::test]
+async fn list_users_hides_banned_users_for_unauthenticated_requests() {
+    let (app, db, _, _) = init_test_app().await;
+    let (banned_user_id, _) = create_test_user(&db, None).await;
+    let (other_user_id, _) = create_test_user(&db, None).await;
+
+    set_test_user_ban_level(&db, banned_user_id, 3).await;
+    set_test_user_ban_level(&db, other_user_id, 0).await;
+
+    let req = test::TestRequest::get()
+        .uri("/users?ban_level=3")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    let users: serde_json::Value = read_body_json(resp).await;
+
+    assert!(!users["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|user| user["id"] == banned_user_id.to_string()));
+    assert!(!users["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|user| user["id"] == other_user_id.to_string()));
+}
+
+#[actix_web::test]
 async fn upsert_creates_and_updates_user() {
     let (_, db, _, _) = init_test_app().await;
 
     let user_upsert = UserUpsert {
-        username: "new_user".to_string(),
-        global_name: "New User".to_string(),
-        discord_id: Some("123".to_string()),
+        username: "new_user".to_owned(),
+        global_name: "New User".to_owned(),
+        discord_id: Some("123".to_owned()),
         placeholder: false,
         country: Some(1),
-        discord_avatar: Some("avatar".to_string()),
-        discord_banner: None,
-        discord_accent_color: None,
+        discord_avatar: Some("avatar".to_owned()),
+        discord_avatar_decoration: Some("decoration".to_owned()),
         last_discord_avatar_update: Some(Utc::now().naive_utc()),
     };
 
     let created = User::upsert(&mut db.connection().unwrap(), user_upsert).expect("insert");
     assert_eq!(created.username, "new_user");
     assert_eq!(created.discord_id.as_deref(), Some("123"));
+    assert_eq!(
+        created.discord_avatar_decoration.as_deref(),
+        Some("decoration")
+    );
 
-    let fetched = users::table
-        .filter(users::id.eq(created.id))
-        .select(User::as_select())
-        .first::<User>(&mut db.connection().unwrap())
-        .unwrap();
+    let fetched = get_test_user(&db, created.id);
     assert_eq!(fetched.username, "new_user");
 
     let update_upsert = UserUpsert {
-        username: "updated".to_string(),
-        global_name: "Updated".to_string(),
-        discord_id: Some("123".to_string()),
+        username: "updated".to_owned(),
+        global_name: "Updated".to_owned(),
+        discord_id: Some("123".to_owned()),
         placeholder: false,
         country: Some(2),
-        discord_avatar: Some("newavatar".to_string()),
-        discord_banner: Some("banner".to_string()),
-        discord_accent_color: Some(5),
+        discord_avatar: Some("newavatar".to_owned()),
+        discord_avatar_decoration: Some("newdecoration".to_owned()),
         last_discord_avatar_update: Some(Utc::now().naive_utc()),
     };
 
@@ -436,6 +515,10 @@ async fn upsert_creates_and_updates_user() {
     assert_eq!(updated.username, "updated");
     assert_eq!(updated.country, Some(1));
     assert_eq!(updated.global_name, "New User");
+    assert_eq!(
+        updated.discord_avatar_decoration.as_deref(),
+        Some("newdecoration")
+    );
 }
 
 #[actix_web::test]
@@ -452,7 +535,7 @@ async fn placeholder_random_username() {
 
     let req = test::TestRequest::post()
         .uri("/users/placeholders")
-        .insert_header(("Authorization", format!("Bearer {}", staff_token)))
+        .insert_header(("Authorization", format!("Bearer {staff_token}")))
         .set_json(&placeholder_payload)
         .to_request();
 

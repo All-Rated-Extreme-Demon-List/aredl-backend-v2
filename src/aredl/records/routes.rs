@@ -4,7 +4,7 @@ use crate::aredl::records::{Record, RecordsQueryOptions, ResolvedRecord, Resolve
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
-use crate::providers::VideoProvidersAppState;
+use crate::providers::ProvidersAppState;
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
@@ -55,9 +55,9 @@ async fn create(
     authenticated: Authenticated,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&record));
+    root_span.record("body", tracing::field::debug(&record));
     let record = web::block(move || {
-        Record::create(&mut db.connection()?, record.into_inner(), authenticated)
+        Record::create(&mut db.connection()?, &record.into_inner(), &authenticated)
     })
     .await??;
     Ok(HttpResponse::Ok().json(record))
@@ -88,13 +88,13 @@ async fn update(
     authenticated: Authenticated,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&record));
+    root_span.record("body", tracing::field::debug(&record));
     let record = web::block(move || {
         Record::update(
             &mut db.connection()?,
             id.into_inner(),
-            record.into_inner(),
-            authenticated,
+            &record.into_inner(),
+            &authenticated,
         )
     })
     .await??;
@@ -124,10 +124,9 @@ async fn update(
 async fn update_timestamp(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
-    providers: web::Data<Arc<VideoProvidersAppState>>,
+    providers: web::Data<Arc<ProvidersAppState>>,
 ) -> Result<HttpResponse, ApiError> {
-    let record =
-        Record::update_timestamp(db, Some(id.into_inner()), None, providers.get_ref()).await?;
+    let record = Record::update_timestamp(db, id.into_inner(), providers.get_ref()).await?;
     Ok(HttpResponse::Ok().json(record))
 }
 
@@ -153,10 +152,9 @@ async fn delete(
     id: web::Path<Uuid>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let record =
-        web::block(move || Record::delete(&mut db.connection()?, id.into_inner(), authenticated))
-            .await??;
-    Ok(HttpResponse::Ok().json(record))
+    web::block(move || Record::delete(&mut db.connection()?, id.into_inner(), &authenticated))
+        .await??;
+    Ok(HttpResponse::Ok().json(()))
 }
 
 #[utoipa::path(
@@ -189,7 +187,7 @@ async fn find_all(
         ResolvedRecord::find_all(
             &mut db.connection()?,
             page_query.into_inner(),
-            options.into_inner(),
+            &options.into_inner(),
         )
     })
     .await??;
@@ -223,7 +221,7 @@ async fn find_me(
         ResolvedRecord::find_all(
             &mut db.connection()?,
             page_query.into_inner(),
-            RecordsQueryOptions {
+            &RecordsQueryOptions {
                 level_filter: None,
                 mobile_filter: None,
                 verification_filter: None,

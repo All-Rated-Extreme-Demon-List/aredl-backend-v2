@@ -1,7 +1,7 @@
+use crate::app_data::db::DbAppState;
 use crate::arepl::profile::ProfileResolved;
 use crate::auth::{Authenticated, UserAuth};
 use crate::cache_control::CacheController;
-use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
 use actix_web::{get, web, HttpResponse};
 use std::sync::Arc;

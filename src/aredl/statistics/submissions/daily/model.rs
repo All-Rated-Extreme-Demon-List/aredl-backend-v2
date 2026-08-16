@@ -1,23 +1,21 @@
 use crate::app_data::db::DbConnection;
-use crate::auth::{Authenticated, Permission};
+use crate::aredl::statistics::submissions::daily::routes::LeaderboardQuery;
+use crate::auth::Authenticated;
 use crate::page_helper::{PageQuery, Paginated};
+use crate::roles::ReviewerVisibility;
 use crate::{
     error_handler::ApiError,
-    roles::RoleResolved,
     schema::{aredl::submission_stats, users},
     users::{BaseUser, ExtendedBaseUser},
 };
 use chrono::NaiveDate;
 use diesel::pg::Pg;
-use diesel::{
-    ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl,
-    SelectableHelper,
-};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema, Clone)]
 #[diesel(table_name = submission_stats, check_for_backend(Pg))]
 pub struct DailyStats {
@@ -54,7 +52,7 @@ pub struct DailyStatsPage {
 }
 
 impl ResolvedDailyStats {
-    pub fn from_stats_and_user(stats: DailyStats, user: Option<BaseUser>) -> Self {
+    pub fn from_stats_and_user(stats: &DailyStats, user: Option<BaseUser>) -> Self {
         Self {
             date: stats.day,
             moderator: user,
@@ -65,17 +63,19 @@ impl ResolvedDailyStats {
         }
     }
 }
+
 impl DailyStatsPage {
-    pub fn find<const D: i64>(
+    pub fn find<const D: i64, const M: i64>(
         conn: &mut DbConnection,
-        page_query: PageQuery<D>,
+        page_query: PageQuery<D, M>,
         reviewer_id: Option<Uuid>,
         authenticated: &Authenticated,
     ) -> Result<Paginated<Self>, ApiError> {
+        let visibility = ReviewerVisibility::new(conn, authenticated)?;
+
         if let Some(filter) = reviewer_id.as_ref() {
-            if !authenticated.has_permission(conn, Permission::ReviewersAudit)? {
-                let reviewer_sets = RoleResolved::find_all_base_reviewers(conn)?;
-                if reviewer_sets.base_reviewers.contains(filter) {
+            if !visibility.can_see_stats(*filter, false) {
+                {
                     return Ok(Paginated::from_data(
                         page_query,
                         0,
@@ -90,7 +90,7 @@ impl DailyStatsPage {
                 .left_join(users::table.on(users::id.nullable().eq(submission_stats::reviewer_id)))
                 .into_boxed::<Pg>();
 
-            if let Some(ref filter) = reviewer_id {
+            if let Some(filter) = &reviewer_id {
                 q = q.filter(submission_stats::reviewer_id.eq(filter));
             } else {
                 q = q.filter(submission_stats::reviewer_id.is_null());
@@ -113,7 +113,7 @@ impl DailyStatsPage {
             Self {
                 data: data
                     .into_iter()
-                    .map(|(stats, user)| ResolvedDailyStats::from_stats_and_user(stats, user))
+                    .map(|(stats, user)| ResolvedDailyStats::from_stats_and_user(&stats, user))
                     .collect(),
             },
         ))
@@ -122,32 +122,46 @@ impl DailyStatsPage {
 
 pub fn stats_mod_leaderboard(
     conn: &mut DbConnection,
-    since: Option<NaiveDate>,
-    only_active: bool,
-    include_base_reviewers: bool,
+    options: &LeaderboardQuery,
+    authenticated: &Authenticated,
 ) -> Result<Vec<ResolvedLeaderboardRow>, ApiError> {
+    let visibility = ReviewerVisibility::new(conn, authenticated)?;
+
     let mut query = submission_stats::table
         .inner_join(users::table.on(users::id.nullable().eq(submission_stats::reviewer_id)))
         .select((DailyStats::as_select(), ExtendedBaseUser::as_select()))
+        .filter(
+            submission_stats::accepted
+                .gt(0)
+                .or(submission_stats::denied.gt(0))
+                .or(submission_stats::under_consideration.gt(0)),
+        )
         .into_boxed::<Pg>();
 
-    if let Some(date) = since {
+    if let Some(date) = options.since {
         query = query.filter(submission_stats::day.ge(date));
     }
 
-    let all_rows: Vec<(DailyStats, ExtendedBaseUser)> = query.load(conn)?;
-    let reviewer_sets = RoleResolved::find_all_base_reviewers(conn)?;
+    if let Some(date) = options.until {
+        query = query.filter(submission_stats::day.le(date));
+    }
 
-    let rows = all_rows.into_iter().filter_map(|(stats, user)| {
-        if reviewer_sets.full_reviewers.contains(&user.id) {
-            Some((stats, user))
-        } else if reviewer_sets.base_reviewers.contains(&user.id) {
-            include_base_reviewers.then_some((stats, user))
-        } else if only_active {
-            None
-        } else {
-            Some((stats, user))
+    if let Some(reviewer_id) = options.reviewer_id {
+        query = query.filter(submission_stats::reviewer_id.eq(reviewer_id));
+    }
+
+    if !visibility.can_see_other_stats {
+        query = query.filter(submission_stats::reviewer_id.eq(authenticated.user_id));
+    }
+
+    let all_rows: Vec<(DailyStats, ExtendedBaseUser)> = query.load(conn)?;
+
+    let rows = all_rows.into_iter().filter(|(_, user)| {
+        if options.only_active.unwrap_or(false) && !visibility.is_reviewer(user.id) {
+            return false;
         }
+
+        visibility.can_see_stats(user.id, !options.include_hidden_reviewers.unwrap_or(false))
     });
 
     let acc: HashMap<Uuid, ResolvedLeaderboardRow> =
@@ -173,7 +187,7 @@ pub fn stats_mod_leaderboard(
             });
 
     let mut leaderboard = acc.into_values().collect::<Vec<_>>();
-    leaderboard.sort_unstable_by(|a, b| b.total.cmp(&a.total));
+    leaderboard.sort_unstable_by_key(|b| std::cmp::Reverse(b.total));
 
     Ok(leaderboard)
 }

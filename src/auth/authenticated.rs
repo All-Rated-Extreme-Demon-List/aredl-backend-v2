@@ -3,18 +3,15 @@ use crate::auth::token::UserClaims;
 use crate::auth::{permission, Permission};
 use crate::clans::ClanMember;
 use crate::error_handler::ApiError;
-use crate::roles::Role;
-use crate::schema::{clan_members, roles, user_roles};
+use crate::schema::clan_members;
 use crate::users::User;
 use actix_web::dev::Payload;
-use actix_web::{FromRequest, HttpMessage, HttpRequest};
-use diesel::{
-    ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
-};
+use actix_web::{FromRequest, HttpMessage as _, HttpRequest};
 use serde::{Deserialize, Serialize};
 use std::future::{ready, Ready};
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Authenticated(UserClaims);
 
@@ -27,7 +24,7 @@ impl FromRequest for Authenticated {
 
         let result = match value {
             Some(claims) => Ok(Authenticated(claims)),
-            None => Err(ApiError::new(401, "Authentication error")),
+            None => Err(ApiError::Unauthorized("Authentication error")),
         };
 
         ready(result)
@@ -37,10 +34,7 @@ impl FromRequest for Authenticated {
 impl Authenticated {
     pub fn ensure_not_banned(&self, conn: &mut DbConnection) -> Result<(), ApiError> {
         if User::is_banned(self.user_id, conn)? {
-            return Err(ApiError::new(
-                403,
-                "You have been banned from the list.".into(),
-            ));
+            return Err(ApiError::Forbidden("You have been banned from the list."));
         }
         Ok(())
     }
@@ -50,14 +44,10 @@ impl Authenticated {
         conn: &mut DbConnection,
         permission: Permission,
     ) -> Result<(), ApiError> {
-        if !self.has_permission(conn, permission.clone())? {
-            return Err(ApiError::new(
-                403,
-                &format!(
-                    "You do not have the required permission ({}) to perform this action",
-                    permission
-                ),
-            ));
+        if !self.has_permission(conn, permission)? {
+            return Err(ApiError::Forbidden(format!(
+                "You do not have the required permission ({permission}) to perform this action"
+            )));
         }
         Ok(())
     }
@@ -67,12 +57,13 @@ impl Authenticated {
         conn: &mut DbConnection,
         target_user_id: Uuid,
     ) -> Result<(), ApiError> {
-        let acting_user_privilege = permission::get_privilege_level(conn, self.user_id)?;
-        let target_user_privilege = permission::get_privilege_level(conn, target_user_id)?;
+        let acting_user_privilege =
+            permission::get_highest_role_privilege_level(conn, self.user_id);
+        let target_user_privilege =
+            permission::get_highest_role_privilege_level(conn, target_user_id);
 
         if acting_user_privilege <= target_user_privilege {
-            return Err(ApiError::new(
-                403,
+            return Err(ApiError::Forbidden(
                 "You do not have sufficient privilege to affect this user.",
             ));
         }
@@ -84,9 +75,9 @@ impl Authenticated {
         &self,
         conn: &mut DbConnection,
         required_privilege: i32,
-    ) -> Result<bool, ApiError> {
-        let user_privilege = permission::get_privilege_level(conn, self.user_id)?;
-        Ok(user_privilege > required_privilege)
+    ) -> bool {
+        let user_privilege = permission::get_highest_role_privilege_level(conn, self.user_id);
+        user_privilege > required_privilege
     }
 
     pub fn has_permission(
@@ -95,6 +86,10 @@ impl Authenticated {
         permission: Permission,
     ) -> Result<bool, ApiError> {
         permission::check_user_permission(conn, self.user_id, permission)
+    }
+
+    pub fn get_permissions(&self, conn: &mut DbConnection) -> Result<Vec<String>, ApiError> {
+        permission::get_user_permissions(conn, self.user_id, false)
     }
 
     pub fn ensure_has_clan_permission(
@@ -111,10 +106,9 @@ impl Authenticated {
             .optional()?;
 
         let has_permission = self.has_permission(conn, Permission::ClanModify)?;
-        if (member.is_none() || member.unwrap().role < clan_role_level) && !has_permission {
-            return Err(ApiError::new(
-                403,
-                "You do not have the required permission to perform this action".into(),
+        if member.is_none_or(|member| member.role < clan_role_level) && !has_permission {
+            return Err(ApiError::Forbidden(
+                "You do not have the required permission to perform this action",
             ));
         }
 
@@ -134,23 +128,11 @@ impl Authenticated {
             .first::<ClanMember>(conn)
             .optional()?;
 
-        if member.is_some() {
-            self.ensure_has_clan_permission(conn, clan_id, member.unwrap().role)?;
+        if let Some(member) = member {
+            self.ensure_has_clan_permission(conn, clan_id, member.role)?;
         }
 
         Ok(())
-    }
-
-    pub fn is_aredl_plus(&self, conn: &mut DbConnection) -> Result<bool, ApiError> {
-        let roles = user_roles::table
-            .inner_join(roles::table.on(user_roles::role_id.eq(roles::id)))
-            .filter(user_roles::user_id.eq(self.user_id))
-            .select(Role::as_select())
-            .load::<Role>(conn)?;
-
-        let has_role = roles.iter().any(|role| role.role_desc == "plus");
-
-        Ok(has_role)
     }
 }
 

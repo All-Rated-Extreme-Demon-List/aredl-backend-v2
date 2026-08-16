@@ -3,46 +3,50 @@ use crate::aredl::levels::Level as AredlLevel;
 use crate::arepl::levels::Level as AreplLevel;
 use crate::error_handler::ApiError;
 use crate::schema::{aredl, arepl, users};
+use crate::users::badges::UserBadge;
 use crate::users::User;
 use chrono::{DateTime, Utc};
 use diesel::dsl::now;
-use diesel::{
-    ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl, SelectableHelper,
-};
 use serde::{Deserialize, Serialize};
+use serde_with::rust::double_option;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, AsChangeset, Debug, ToSchema)]
 #[diesel(table_name = users, check_for_backend(Pg))]
 pub struct UserMeUpdate {
     /// Your new display name.
     pub global_name: Option<String>,
     /// Your new description.
-    pub description: Option<String>,
+    #[serde(default, with = "double_option")]
+    pub description: Option<Option<String>>,
     /// Your new country. Uses the ISO 3166-1 numeric country code. Has a 90-day cooldown.
-    pub country: Option<i32>,
+    #[serde(default, with = "double_option")]
+    pub country: Option<Option<i32>>,
     /// Your new ban level.
     pub ban_level: Option<i32>,
-    /// Your new background level. Must be the GD level ID of a level you have beaten. Can be a classic or platformer level. If the ID is 0, it will be reset to default (uses the hardest beaten level)
-    pub background_level: Option<i32>,
+    /// Your new background level. Must be the GD level ID of a level you have beaten. Can be a classic or platformer level. If null, it will be reset to default (uses the hardest beaten level)
+    #[serde(default, with = "double_option")]
+    pub background_level: Option<Option<i32>>,
+    /// Your new featured badge code.
+    #[serde(default, with = "double_option")]
+    pub featured_badge_code: Option<Option<String>>,
 }
 
 impl User {
     pub fn update_me(
         conn: &mut DbConnection,
         id: Uuid,
-        user: UserMeUpdate,
+        user: &UserMeUpdate,
     ) -> Result<User, ApiError> {
         let (current_ban_level, last_country_update): (i32, DateTime<Utc>) = users::table
             .filter(users::id.eq(id))
             .select((users::ban_level, users::last_country_update))
             .first(conn)?;
 
-        if user.ban_level.is_some() {
-            if current_ban_level > 1 {
-                return Err(ApiError::new(403, "You have been banned from the list."));
-            }
+        if user.ban_level.is_some() && current_ban_level >= 3 {
+            return Err(ApiError::Forbidden("You have been banned from the list."));
         }
 
         if user.country.is_some() {
@@ -50,64 +54,68 @@ impl User {
             let current_time = Utc::now();
             if current_time < next_allowed_change {
                 let remaining = next_allowed_change - current_time;
-                return Err(ApiError::new(400, &format!(
+                return Err(ApiError::BadRequest(format!(
                     "You have recently changed your country, please wait {} days and {} hours before changing it again.",
                     remaining.num_days(), remaining.num_hours() % 24)));
             }
         }
 
-        if user.global_name.is_some() {
-            if user.global_name.as_ref().unwrap().len() > 35 {
-                return Err(ApiError::new(
-                    400,
-                    "The display name can at most be 35 characters long.",
+        if user
+            .global_name
+            .as_deref()
+            .is_some_and(|global_name| global_name.len() > 35)
+        {
+            return Err(ApiError::BadRequest(
+                "The display name can at most be 35 characters long.",
+            ));
+        }
+
+        if user
+            .description
+            .as_ref()
+            .and_then(|description| description.as_deref())
+            .is_some_and(|description| description.len() > 300)
+        {
+            return Err(ApiError::BadRequest(
+                "The description can at most be 300 characters long.",
+            ));
+        }
+
+        if let Some(Some(background_level)) = user.background_level {
+            let beaten_aredl_level: Option<AredlLevel> = aredl::records::table
+                .filter(aredl::records::submitted_by.eq(id))
+                .inner_join(aredl::levels::table.on(aredl::levels::id.eq(aredl::records::level_id)))
+                .filter(aredl::levels::level_id.eq(background_level))
+                .select(AredlLevel::as_select())
+                .get_result(conn)
+                .optional()?;
+
+            let beaten_arepl_level: Option<AreplLevel> = arepl::records::table
+                .filter(arepl::records::submitted_by.eq(id))
+                .inner_join(arepl::levels::table.on(arepl::levels::id.eq(arepl::records::level_id)))
+                .filter(arepl::levels::level_id.eq(background_level))
+                .select(AreplLevel::as_select())
+                .get_result(conn)
+                .optional()?;
+
+            if beaten_aredl_level.is_none() && beaten_arepl_level.is_none() {
+                return Err(ApiError::BadRequest(
+                    "You have not beaten the selected level.",
                 ));
             }
         }
 
-        if user.description.is_some() {
-            if user.description.as_ref().unwrap().len() > 300 {
-                return Err(ApiError::new(
-                    400,
-                    "The description can at most be 300 characters long.",
+        if let Some(Some(code)) = &user.featured_badge_code {
+            if !UserBadge::has_code(conn, id, code)? {
+                return Err(ApiError::BadRequest(
+                    "You have not unlocked the selected badge.",
                 ));
-            }
-        }
-
-        if user.background_level.is_some() {
-            if user.background_level.unwrap() != 0 {
-                let beaten_aredl_level: Option<AredlLevel> = aredl::records::table
-                    .filter(aredl::records::submitted_by.eq(id))
-                    .inner_join(
-                        aredl::levels::table.on(aredl::levels::id.eq(aredl::records::level_id)),
-                    )
-                    .filter(aredl::levels::level_id.eq(user.background_level.unwrap()))
-                    .select(AredlLevel::as_select())
-                    .get_result(conn)
-                    .optional()?;
-
-                let beaten_arepl_level: Option<AreplLevel> = arepl::records::table
-                    .filter(arepl::records::submitted_by.eq(id))
-                    .inner_join(
-                        arepl::levels::table.on(arepl::levels::id.eq(arepl::records::level_id)),
-                    )
-                    .filter(arepl::levels::level_id.eq(user.background_level.unwrap()))
-                    .select(AreplLevel::as_select())
-                    .get_result(conn)
-                    .optional()?;
-
-                if beaten_aredl_level.is_none() && beaten_arepl_level.is_none() {
-                    return Err(ApiError::new(
-                        400,
-                        "You have not beaten the selected level.",
-                    ));
-                }
             }
         }
 
         let result = diesel::update(users::table.filter(users::id.eq(id)))
             .set((
-                &user,
+                user,
                 user.country.map(|_| users::last_country_update.eq(now)),
             ))
             .returning(User::as_select())

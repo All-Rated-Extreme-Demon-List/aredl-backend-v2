@@ -1,7 +1,7 @@
 use crate::app_data::db::DbAppState;
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::error_handler::ApiError;
-use crate::roles::{users, Role, RoleCreate, RoleResolved, RoleUpdate};
+use crate::roles::{permissions, users, Role, RoleCreate, RoleResolved, RoleUpdate};
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
@@ -43,9 +43,9 @@ async fn create(
     authenticated: Authenticated,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&role));
+    root_span.record("body", tracing::field::debug(&role));
     let role =
-        web::block(move || Role::create(&mut db.connection()?, authenticated, role.into_inner()))
+        web::block(move || Role::create(&mut db.connection()?, &authenticated, role.into_inner()))
             .await??;
     Ok(HttpResponse::Ok().json(role))
 }
@@ -75,11 +75,11 @@ async fn update(
     role: web::Json<RoleUpdate>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&role));
+    root_span.record("body", tracing::field::debug(&role));
     let role = web::block(move || {
         Role::update(
             &mut db.connection()?,
-            authenticated,
+            &authenticated,
             id.into_inner(),
             role.into_inner(),
         )
@@ -111,7 +111,7 @@ async fn delete(
     id: web::Path<i32>,
 ) -> Result<HttpResponse, ApiError> {
     let role =
-        web::block(move || Role::delete(&mut db.connection()?, authenticated, id.into_inner()))
+        web::block(move || Role::delete(&mut db.connection()?, &authenticated, id.into_inner()))
             .await??;
     Ok(HttpResponse::Ok().json(role))
 }
@@ -122,6 +122,7 @@ async fn delete(
         (name = "Roles", description = "Internal endpoints to manage staff roles. Only available to developers and owners.")
     ),
     nest(
+        (path = "/{id}/permissions", api = permissions::ApiDoc),
         (path = "/{id}/users", api = users::ApiDoc)
     ),
     components(
@@ -147,6 +148,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .service(create)
             .service(update)
             .service(delete)
+            .configure(permissions::init_routes)
             .configure(users::init_routes),
     );
 }

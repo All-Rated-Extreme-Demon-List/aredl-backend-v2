@@ -1,8 +1,6 @@
 use chrono::{DateTime, Utc};
 use diesel::dsl::now;
 use diesel::pg::Pg;
-use diesel::prelude::*;
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -15,6 +13,7 @@ use crate::users::me::notifications::{Notification, NotificationType};
 use crate::users::merge::merge_users;
 use crate::users::{user_filter, BaseUser};
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Debug, ToSchema, Insertable, AsChangeset)]
 #[diesel(table_name = merge_requests, check_for_backend(Pg))]
 pub struct MergeRequestUpsert {
@@ -105,7 +104,7 @@ impl MergeRequestPage {
     pub fn find_all<const D: i64>(
         conn: &mut DbConnection,
         page_query: PageQuery<D>,
-        options: MergeRequestQueryOptions,
+        options: &MergeRequestQueryOptions,
     ) -> Result<Paginated<Self>, ApiError> {
         let users2 = alias!(users as users2);
         let build_filtered = || {
@@ -126,7 +125,7 @@ impl MergeRequestPage {
                 q = q.filter(merge_requests::is_rejected.eq(rejected));
             }
 
-            if let Some(ref user) = options.user_filter {
+            if let Some(user) = &options.user_filter {
                 q = q.filter(
                     merge_requests::primary_user
                         .eq_any(user_filter(user).select(users::id))
@@ -165,11 +164,10 @@ impl MergeRequestPage {
 }
 
 impl MergeRequest {
-    pub fn upsert(conn: &mut DbConnection, request: MergeRequestUpsert) -> Result<Self, ApiError> {
+    pub fn upsert(conn: &mut DbConnection, request: &MergeRequestUpsert) -> Result<Self, ApiError> {
         if request.primary_user == request.secondary_user {
-            return Err(ApiError::new(
-                400,
-                "You cannot merge your account with itself.".into(),
+            return Err(ApiError::UnprocessableEntity(
+                "You cannot merge your account with itself.",
             ));
         }
 
@@ -181,13 +179,10 @@ impl MergeRequest {
 
         if let Some((_user_id, is_placeholder)) = secondary_user_data {
             if !is_placeholder {
-                return Err(ApiError::new(400, "You can only submit merge requests for placeholder users. To merge your account with a user that is already linked to another discord account, please make a support post on our discord server.".into()));
+                return Err(ApiError::Conflict("You can only submit merge requests for placeholder users. To merge your account with a user that is already linked to another discord account, please make a support post on our discord server."));
             }
         } else {
-            return Err(ApiError::new(
-                404,
-                "The secondary user does not exist.".into(),
-            ));
+            return Err(ApiError::NotFound("The secondary user does not exist."));
         }
 
         let existing_request = merge_requests::table
@@ -198,21 +193,21 @@ impl MergeRequest {
 
         if let Some(existing) = existing_request {
             if !existing.is_rejected {
-                return Err(ApiError::new(409,
-					"You already submitted a merge request for your account. Please wait until it's either accepted or denied before submitting a new one.".into(),
+                return Err(ApiError::Conflict(
+					"You already submitted a merge request for your account. Please wait until it's either accepted or denied before submitting a new one.",
 				));
             }
         }
 
         let changes = (
-            &request,
+            request,
             merge_requests::is_rejected.eq(false),
             merge_requests::is_claimed.eq(false),
             merge_requests::updated_at.eq(now),
         );
 
         let new_request = diesel::insert_into(merge_requests::table)
-            .values(&request)
+            .values(request)
             .on_conflict(merge_requests::primary_user)
             .do_update()
             .set(changes)
@@ -233,13 +228,13 @@ impl MergeRequest {
             .first::<Uuid>(conn)
             .optional()?;
 
-        if next_id.is_none() {
+        let Some(next_id) = next_id else {
             return Ok(None);
-        }
+        };
 
         let result = diesel::update(merge_requests::table)
             .set(merge_requests::is_claimed.eq(true))
-            .filter(merge_requests::id.eq(next_id.unwrap()))
+            .filter(merge_requests::id.eq(next_id))
             .returning(Self::as_select())
             .get_result::<Self>(conn)
             .optional()?;
@@ -269,7 +264,7 @@ impl MergeRequest {
         Notification::create(
             conn,
             merge_request.primary_user,
-            "Your merge request has been accepted!".to_string(),
+            "Your merge request has been accepted!".to_owned(),
             NotificationType::Success,
         )?;
 
@@ -289,7 +284,7 @@ impl MergeRequest {
         Notification::create(
             conn,
             result.primary_user,
-            "Your merge request has been rejected.".to_string(),
+            "Your merge request has been rejected.".to_owned(),
             NotificationType::Failure,
         )?;
         Ok(result)

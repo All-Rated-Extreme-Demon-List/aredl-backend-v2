@@ -1,20 +1,19 @@
 use crate::{
     app_data::db::DbConnection,
+    auth::Authenticated,
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
     schema::{shifts, users},
     users::ExtendedBaseUser,
 };
-use chrono::{DateTime, Utc};
-use diesel::{
-    pg::Pg, AsChangeset, ExpressionMethods, Identifiable, JoinOnDsl, QueryDsl, Queryable,
-    RunQueryDsl, SelectableHelper,
-};
+use chrono::{DateTime, Datelike as _, NaiveDate, Timelike as _, Utc, Weekday as ChronoWeekday};
+use diesel::{pg::Pg, AsChangeset, Identifiable, Queryable};
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq)]
 #[ExistingTypePath = "crate::schema::sql_types::ShiftStatus"]
 #[DbValueStyle = "PascalCase"]
@@ -22,6 +21,7 @@ pub enum ShiftStatus {
     Running,
     Completed,
     Expired,
+    Excused,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, PartialEq)]
@@ -35,6 +35,46 @@ pub enum Weekday {
     Friday,
     Saturday,
     Sunday,
+}
+
+impl From<NaiveDate> for Weekday {
+    fn from(date: NaiveDate) -> Self {
+        match date.weekday() {
+            ChronoWeekday::Mon => Weekday::Monday,
+            ChronoWeekday::Tue => Weekday::Tuesday,
+            ChronoWeekday::Wed => Weekday::Wednesday,
+            ChronoWeekday::Thu => Weekday::Thursday,
+            ChronoWeekday::Fri => Weekday::Friday,
+            ChronoWeekday::Sat => Weekday::Saturday,
+            ChronoWeekday::Sun => Weekday::Sunday,
+        }
+    }
+}
+
+impl Weekday {
+    pub fn prev(&self) -> Self {
+        match self {
+            Weekday::Monday => Weekday::Sunday,
+            Weekday::Tuesday => Weekday::Monday,
+            Weekday::Wednesday => Weekday::Tuesday,
+            Weekday::Thursday => Weekday::Wednesday,
+            Weekday::Friday => Weekday::Thursday,
+            Weekday::Saturday => Weekday::Friday,
+            Weekday::Sunday => Weekday::Saturday,
+        }
+    }
+
+    pub fn next(&self) -> Self {
+        match self {
+            Weekday::Monday => Weekday::Tuesday,
+            Weekday::Tuesday => Weekday::Wednesday,
+            Weekday::Wednesday => Weekday::Thursday,
+            Weekday::Thursday => Weekday::Friday,
+            Weekday::Friday => Weekday::Saturday,
+            Weekday::Saturday => Weekday::Sunday,
+            Weekday::Sunday => Weekday::Monday,
+        }
+    }
 }
 
 #[derive(
@@ -112,10 +152,40 @@ pub struct ShiftInsert {
     pub end_at: DateTime<Utc>,
 }
 
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct ShiftCreate {
+    pub user_id: Option<Uuid>,
+    pub target_count: i32,
+    pub length: i32,
+}
+
 impl Shift {
-    pub fn patch(conn: &mut DbConnection, id: Uuid, patch: ShiftPatch) -> Result<Self, ApiError> {
+    pub fn create(
+        conn: &mut DbConnection,
+        new_shift: &ShiftCreate,
+        authenticated: &Authenticated,
+    ) -> Result<Self, ApiError> {
+        let mut end_at = Utc::now().with_second(0).expect("Constant should not fail")
+            + chrono::Duration::hours(new_shift.length.into());
+        if end_at.minute() != 0 {
+            end_at = end_at.with_minute(0).expect("Constant should not fail")
+                + chrono::Duration::hours(1);
+        }
+
+        let created = diesel::insert_into(shifts::table)
+            .values((
+                shifts::user_id.eq(new_shift.user_id.unwrap_or(authenticated.user_id)),
+                shifts::target_count.eq(new_shift.target_count),
+                shifts::start_at.eq(Utc::now()),
+                shifts::end_at.eq(end_at),
+            ))
+            .get_result::<Shift>(conn)?;
+        Ok(created)
+    }
+
+    pub fn patch(conn: &mut DbConnection, id: Uuid, patch: &ShiftPatch) -> Result<Self, ApiError> {
         let updated = diesel::update(shifts::table.filter(shifts::id.eq(id)))
-            .set(&patch)
+            .set(patch)
             .get_result::<Shift>(conn)?;
         Ok(updated)
     }
@@ -181,7 +251,7 @@ impl ShiftPage {
     pub fn find_all<const D: i64>(
         conn: &mut DbConnection,
         page_query: PageQuery<D>,
-        options: ShiftFilterQuery,
+        options: &ShiftFilterQuery,
     ) -> Result<Paginated<ShiftPage>, ApiError> {
         let build_filtered = || {
             let mut q = shifts::table.into_boxed::<Pg>();

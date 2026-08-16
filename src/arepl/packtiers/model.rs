@@ -5,15 +5,12 @@ use crate::schema::{
     arepl::levels, arepl::pack_levels, arepl::pack_tiers, arepl::packs_points, arepl::records,
 };
 use diesel::pg::Pg;
-use diesel::{
-    BelongingToDsl, BoolExpressionMethods, ExpressionMethods, GroupedBy, JoinOnDsl,
-    NullableExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper,
-};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Identifiable, Selectable, Queryable, Debug, ToSchema)]
 #[diesel(table_name=pack_tiers, check_for_backend(Pg))]
 pub struct BasePackTier {
@@ -142,9 +139,11 @@ impl PackTierResolved {
                     // It will be Some(true) if user has completed the level and Some(false) otherwise.
                     // That's because None is used for non-authenticated queries.
                     .into_iter()
-                    .map(|(uuid, pack_level, completed)| {
-                        (uuid, pack_level, Some(completed.is_some()))
-                    })
+                    .map(
+                        |(uuid, pack_level, completed): (Uuid, ExtendedBaseLevel, Option<Uuid>)| {
+                            (uuid, pack_level, Some(completed.is_some()))
+                        },
+                    )
                     .collect::<Vec<_>>()
             }
             None => levels_base_query
@@ -161,7 +160,7 @@ impl PackTierResolved {
         for (uuid, pack_level, completed_by_user) in pack_levels {
             pack_levels_map
                 .entry(uuid)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(PackLevelResolved {
                     pack_level,
                     completed_by_user,
@@ -182,7 +181,7 @@ impl PackTierResolved {
                         id: pack.id,
                         name: pack.name,
                         points: pack.points,
-                        levels: pack_levels_map.remove(&pack.id).unwrap_or_else(Vec::new),
+                        levels: pack_levels_map.remove(&pack.id).unwrap_or_default(),
                     })
                     .collect::<Vec<_>>(),
             })

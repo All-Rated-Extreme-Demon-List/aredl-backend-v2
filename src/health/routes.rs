@@ -1,12 +1,12 @@
 use actix_web::web;
 use actix_web::{get, HttpResponse};
-use diesel::RunQueryDsl;
 use std::sync::Arc;
 use utoipa::OpenApi;
 
 use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
 
+use diesel::prelude::*;
 #[utoipa::path(
     get,
     responses(
@@ -20,13 +20,15 @@ async fn healthz(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiErro
     let result = web::block(move || {
         diesel::sql_query("SELECT 1")
             .execute(&mut db.connection()?)
-            .map_err(|error| ApiError::new(503, &format!("DB healthcheck failed: {}", error)))
+            .map_err(|error| {
+                ApiError::ServiceUnavailable(format!("DB healthcheck failed: {error}"))
+            })
     })
     .await;
 
     match result {
         Ok(Ok(_)) => Ok(HttpResponse::Ok().finish()),
-        _ => Err(ApiError::new(503, "Service unavailable")),
+        _ => Err(ApiError::ServiceUnavailable("Service unavailable")),
     }
 }
 

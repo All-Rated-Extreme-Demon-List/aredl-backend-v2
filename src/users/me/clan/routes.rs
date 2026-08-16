@@ -1,6 +1,6 @@
+use crate::app_data::db::DbAppState;
 use crate::auth::{Authenticated, UserAuth};
 use crate::clans::Clan;
-use crate::app_data::db::DbAppState;
 use crate::error_handler::ApiError;
 use crate::users::me::clan::invites;
 use actix_web::{post, web, HttpResponse};
@@ -25,9 +25,8 @@ async fn leave(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let result =
-        web::block(move || Clan::leave(&mut db.connection()?, authenticated.user_id)).await??;
-    Ok(HttpResponse::Ok().json(result))
+    web::block(move || Clan::leave(&mut db.connection()?, authenticated.user_id)).await??;
+    Ok(HttpResponse::Ok().json(()))
 }
 
 #[derive(OpenApi)]

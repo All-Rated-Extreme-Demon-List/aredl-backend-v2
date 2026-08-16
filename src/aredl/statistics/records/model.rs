@@ -1,18 +1,15 @@
-use crate::aredl::levels::ExtendedBaseLevel;
 use crate::app_data::db::DbConnection;
+use crate::aredl::levels::ExtendedBaseLevel;
 use crate::{
     error_handler::ApiError,
     schema::{aredl::levels, aredl::record_totals},
 };
 use diesel::pg::Pg;
-use diesel::{
-    ExpressionMethods, JoinOnDsl, NullableExpressionMethods, QueryDsl, RunQueryDsl,
-    SelectableHelper,
-};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema, Clone)]
 #[diesel(table_name = record_totals, check_for_backend(Pg))]
 pub struct LevelTotalRecordsRow {

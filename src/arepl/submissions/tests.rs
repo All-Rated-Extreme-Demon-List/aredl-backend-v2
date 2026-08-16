@@ -1,36 +1,52 @@
 #[cfg(test)]
 use {
+    crate::users::test_utils::create_test_user_with_priority_submissions,
     crate::{
         arepl::{
-            levels::test_utils::create_test_level,
+            bounty::test_utils::create_test_bounty,
+            levels::{
+                test_utils::{create_test_level, set_test_level_status},
+                LevelStatus,
+            },
+            records::test_utils::{get_test_record, get_test_record_for_level_and_user},
             submissions::{
-                history::SubmissionHistory, status::SubmissionsEnabled,
-                test_utils::create_test_submission, Submission, SubmissionStatus,
+                status::SubmissionsEnabled,
+                test_utils::{
+                    create_priority_queue_order_test_submissions,
+                    create_regular_queue_order_test_submissions, create_test_submission,
+                    create_two_test_submissions_with_different_timestamps, get_test_submission,
+                    get_test_submission_optional, latest_test_submission_history,
+                    set_test_submission_raw_url, set_test_submission_raw_url_status_and_reviewer,
+                    set_test_submission_reviewer, set_test_submission_reviewer_with_private_notes,
+                    set_test_submission_status, set_test_submissions_raw_url,
+                },
+                SubmissionStatus,
             },
         },
-        auth::{create_test_token, Permission},
+        auth::{create_test_token, oauth::OAuthProvider, Permission},
         providers::{
-            context::{GoogleAuthState, ProviderContext},
+            context::{google::new_google_context, ProviderContext},
             list::youtube::YouTubeProvider,
             model::{Provider, ProviderRegistry},
             test_utils::{
-                clear_google_env, mock_google_token_endpoint, mock_youtube_videos_endpoint,
-                set_google_env,
+                clear_oauth_env, mock_google_token_endpoint, mock_youtube_videos_endpoint,
+                seed_oauth_token, set_oauth_env,
             },
-            VideoProvidersAppState,
+            ProvidersAppState,
         },
-        roles::test_utils::{add_user_to_role, create_test_role_with_desc},
-        schema::{
-            arepl::{levels, records, submission_history, submissions},
-            shifts, users,
+        shifts::{
+            test_utils::{create_test_shift, get_test_shift, set_test_shift_target_count},
+            ShiftStatus,
         },
-        shifts::{test_utils::create_test_shift, ShiftStatus},
         test_utils::*,
-        users::test_utils::create_test_user,
+        users::test_utils::{
+            create_test_auditor, create_test_full_reviewer, create_test_hidden_reviewer,
+            create_test_user, create_test_user_with_permissions, set_test_user_ban_level,
+        },
     },
+    actix_http::StatusCode,
     actix_web::test::{self, read_body_json},
-    chrono::{DateTime, Utc},
-    diesel::{ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper},
+    chrono::{DateTime, Duration as ChronoDuration, Utc},
     httpmock::prelude::*,
     serde_json::json,
     serial_test::serial,
@@ -38,6 +54,450 @@ use {
     tokio::time::{sleep, timeout, Duration},
     uuid::Uuid,
 };
+
+#[actix_web::test]
+async fn resolved_find_me_and_filters() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user, _) = create_test_user(&db, None).await;
+    let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
+    let level = create_test_level(&db).await;
+    let submission = create_test_submission(level, user, &db).await;
+    let req = test::TestRequest::get()
+        .uri("/arepl/submissions/@me?status_filter=Pending")
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["data"].as_array().unwrap().len(), 1);
+    assert_eq!(body["data"][0]["id"], submission.to_string());
+}
+
+#[actix_web::test]
+async fn resolved_find_one_hides_other_users_submission() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user1, _) = create_test_user(&db, None).await;
+    let (user2, _) = create_test_user(&db, None).await;
+    let token2 = create_test_token(user2, &auth.jwt_encoding_key).unwrap();
+    let level = create_test_level(&db).await;
+    let submission = create_test_submission(level, user1, &db).await;
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/arepl/submissions/{submission}"))
+        .insert_header(("Authorization", format!("Bearer {token2}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_error_response!(resp, StatusCode::NOT_FOUND, Some("Not found"));
+}
+
+#[actix_web::test]
+async fn resolved_find_all_allows_submission_reviewer() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (mod_user, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
+    let token = create_test_token(mod_user, &auth.jwt_encoding_key).unwrap();
+    let level = create_test_level(&db).await;
+    create_test_submission(level, mod_user, &db).await;
+
+    let req = test::TestRequest::get()
+        .uri("/arepl/submissions")
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+}
+
+#[actix_web::test]
+async fn resolved_find_all_without_review_permission_forbidden() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user, _) = create_test_user(&db, None).await;
+    let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
+
+    let req = test::TestRequest::get()
+        .uri("/arepl/submissions")
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+
+    assert_error_response!(
+        resp,
+        StatusCode::FORBIDDEN,
+        Some("You do not have the required permission (submission_review) to access this endpoint"),
+    );
+}
+
+#[actix_web::test]
+async fn resolved_find_all_reviewer_filter_hides_hidden_reviewer_for_non_auditor() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (owner, _) = create_test_user(&db, None).await;
+    let (hidden_reviewer, _) = create_test_hidden_reviewer(&db).await;
+    let (visible_non_auditor, _) = create_test_full_reviewer(&db).await;
+
+    let token = create_test_token(visible_non_auditor, &auth.jwt_encoding_key).unwrap();
+
+    let level = create_test_level(&db).await;
+    let submission = create_test_submission(level, owner, &db).await;
+
+    set_test_submission_reviewer(&db, submission, Some(hidden_reviewer));
+
+    let req = test::TestRequest::get()
+        .uri(format!("/arepl/submissions?reviewer_filter={hidden_reviewer}").as_str())
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["data"].as_array().unwrap().len(), 0);
+}
+
+#[actix_web::test]
+async fn resolved_find_all_redacts_hidden_reviewer_for_visible_reviewer() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (owner, _) = create_test_user(&db, None).await;
+    let (hidden_reviewer, _) = create_test_hidden_reviewer(&db).await;
+    let (visible_non_auditor, _) = create_test_full_reviewer(&db).await;
+
+    let visible_token = create_test_token(visible_non_auditor, &auth.jwt_encoding_key).unwrap();
+
+    let level = create_test_level(&db).await;
+    let submission = create_test_submission(level, owner, &db).await;
+
+    set_test_submission_reviewer(&db, submission, Some(hidden_reviewer));
+
+    let req = test::TestRequest::get()
+        .uri("/arepl/submissions")
+        .insert_header(("Authorization", format!("Bearer {visible_token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+
+    let body: serde_json::Value = read_body_json(resp).await;
+    let entry = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["id"] == submission.to_string())
+        .unwrap();
+    assert_eq!(
+        entry["reviewer"]["id"],
+        "00000000-0000-0000-0000-000000000000"
+    );
+    assert_eq!(entry["reviewer"]["username"], "Hidden user");
+}
+
+#[actix_web::test]
+async fn resolved_find_all_allows_auditor_to_filter_and_see_hidden_reviewer() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (owner, _) = create_test_user(&db, None).await;
+    let (hidden_reviewer, _) = create_test_hidden_reviewer(&db).await;
+    let (auditor, _) = create_test_auditor(&db).await;
+
+    let auditor_token = create_test_token(auditor, &auth.jwt_encoding_key).unwrap();
+
+    let level = create_test_level(&db).await;
+    let submission = create_test_submission(level, owner, &db).await;
+
+    set_test_submission_reviewer(&db, submission, Some(hidden_reviewer));
+
+    let req = test::TestRequest::get()
+        .uri(format!("/arepl/submissions?reviewer_filter={hidden_reviewer}").as_str())
+        .insert_header(("Authorization", format!("Bearer {auditor_token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+
+    let body: serde_json::Value = read_body_json(resp).await;
+    let entry = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["id"] == submission.to_string())
+        .unwrap();
+    assert_eq!(entry["reviewer"]["id"], hidden_reviewer.to_string());
+}
+
+#[actix_web::test]
+async fn resolved_find_own() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user, _) = create_test_user(&db, None).await;
+    let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
+    let level = create_test_level(&db).await;
+    let submission = create_test_submission(level, user, &db).await;
+
+    let req = test::TestRequest::get()
+        .uri("/arepl/submissions/@me")
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success());
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert!(body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|s| s["id"] == submission.to_string()));
+}
+
+#[actix_web::test]
+async fn resolved_find_one_hides_visible_reviewer_private_notes_from_hidden_reviewer() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (owner, _) = create_test_user(&db, None).await;
+    let (visible_reviewer, _) = create_test_full_reviewer(&db).await;
+    let (hidden_reviewer, _) = create_test_hidden_reviewer(&db).await;
+    let visible_token = create_test_token(visible_reviewer, &auth.jwt_encoding_key).unwrap();
+    let hidden_token = create_test_token(hidden_reviewer, &auth.jwt_encoding_key).unwrap();
+
+    let level = create_test_level(&db).await;
+    let submission = create_test_submission(level, owner, &db).await;
+
+    let patch_req = test::TestRequest::patch()
+        .uri(&format!("/arepl/submissions/{submission}"))
+        .insert_header(("Authorization", format!("Bearer {visible_token}")))
+        .set_json(serde_json::json!({
+            "status": "UnderConsideration",
+            "reviewer_notes": "public note",
+            "private_reviewer_notes": "private note"
+        }))
+        .to_request();
+    let patch_resp = test::call_service(&app, patch_req).await;
+    assert!(
+        patch_resp.status().is_success(),
+        "status is {}",
+        patch_resp.status()
+    );
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/arepl/submissions/{submission}"))
+        .insert_header(("Authorization", format!("Bearer {hidden_token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+    let body: serde_json::Value = read_body_json(resp).await;
+
+    assert_eq!(body["id"], submission.to_string());
+    assert_eq!(body["reviewer_notes"], "public note");
+    assert_eq!(
+        body["reviewer"]["id"],
+        "00000000-0000-0000-0000-000000000000"
+    );
+    assert_eq!(body["reviewer"]["username"], "Hidden user");
+    assert!(body.get("private_reviewer_notes").is_none());
+}
+
+#[actix_web::test]
+async fn resolved_find_one_hides_hidden_reviewer_for_non_auditor_but_not_for_auditor() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (owner, _) = create_test_user(&db, None).await;
+    let (hidden_reviewer, _) = create_test_hidden_reviewer(&db).await;
+    let (visible_non_auditor, _) = create_test_full_reviewer(&db).await;
+    let (auditor, _) = create_test_auditor(&db).await;
+
+    let visible_token = create_test_token(visible_non_auditor, &auth.jwt_encoding_key).unwrap();
+    let auditor_token = create_test_token(auditor, &auth.jwt_encoding_key).unwrap();
+
+    let level = create_test_level(&db).await;
+    let submission = create_test_submission(level, owner, &db).await;
+
+    set_test_submission_reviewer_with_private_notes(
+        &db,
+        submission,
+        Some(hidden_reviewer),
+        Some("private"),
+    );
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/arepl/submissions/{submission}"))
+        .insert_header(("Authorization", format!("Bearer {visible_token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(
+        body["reviewer"]["id"],
+        "00000000-0000-0000-0000-000000000000"
+    );
+    assert_eq!(body["reviewer"]["username"], "Hidden user");
+    assert_eq!(body["private_reviewer_notes"], "private");
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/arepl/submissions/{submission}"))
+        .insert_header(("Authorization", format!("Bearer {auditor_token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["reviewer"]["id"], hidden_reviewer.to_string());
+}
+
+#[actix_web::test]
+async fn resolved_find_all_sort_oldest_created_at() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (mod_user, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
+    let token = create_test_token(mod_user, &auth.jwt_encoding_key).unwrap();
+
+    let (older, newer) = create_two_test_submissions_with_different_timestamps(&db, mod_user).await;
+
+    let req = test::TestRequest::get()
+        .uri("/arepl/submissions?per_page=10&sort=OldestCreatedAt")
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+
+    let body: serde_json::Value = read_body_json(resp).await;
+    let got: Vec<String> = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["id"].as_str().unwrap().to_owned())
+        .collect();
+
+    assert!(got.len() >= 2);
+    assert_eq!(got[0], older.to_string());
+    assert_eq!(got[1], newer.to_string());
+}
+
+#[actix_web::test]
+async fn resolved_find_all_sort_newest_created_at() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (mod_user, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
+    let token = create_test_token(mod_user, &auth.jwt_encoding_key).unwrap();
+
+    let (older, newer) = create_two_test_submissions_with_different_timestamps(&db, mod_user).await;
+
+    let req = test::TestRequest::get()
+        .uri("/arepl/submissions?per_page=10&sort=NewestCreatedAt")
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+
+    let body: serde_json::Value = read_body_json(resp).await;
+    let got: Vec<String> = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["id"].as_str().unwrap().to_owned())
+        .collect();
+
+    assert!(got.len() >= 2);
+    assert_eq!(got[0], newer.to_string());
+    assert_eq!(got[1], older.to_string());
+}
+
+#[actix_web::test]
+async fn resolved_find_all_sort_oldest_updated_at() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (mod_user, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
+    let token = create_test_token(mod_user, &auth.jwt_encoding_key).unwrap();
+
+    let (older, newer) = create_two_test_submissions_with_different_timestamps(&db, mod_user).await;
+
+    let req = test::TestRequest::get()
+        .uri("/arepl/submissions?per_page=10&sort=OldestUpdatedAt")
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+
+    let body: serde_json::Value = read_body_json(resp).await;
+    let got: Vec<String> = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["id"].as_str().unwrap().to_owned())
+        .collect();
+
+    assert!(got.len() >= 2);
+    assert_eq!(got[0], older.to_string());
+    assert_eq!(got[1], newer.to_string());
+}
+
+#[actix_web::test]
+async fn resolved_find_all_sort_newest_updated_at() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (mod_user, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
+    let token = create_test_token(mod_user, &auth.jwt_encoding_key).unwrap();
+
+    let (older, newer) = create_two_test_submissions_with_different_timestamps(&db, mod_user).await;
+
+    let req = test::TestRequest::get()
+        .uri("/arepl/submissions?per_page=10&sort=NewestUpdatedAt")
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+
+    let body: serde_json::Value = read_body_json(resp).await;
+    let got: Vec<String> = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["id"].as_str().unwrap().to_owned())
+        .collect();
+
+    assert!(got.len() >= 2);
+    assert_eq!(got[0], newer.to_string());
+    assert_eq!(got[1], older.to_string());
+}
+
+#[actix_web::test]
+async fn resolved_find_all_sort_shortest_completion_time() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (mod_user, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
+    let token = create_test_token(mod_user, &auth.jwt_encoding_key).unwrap();
+
+    let (slower, faster) =
+        create_two_test_submissions_with_different_timestamps(&db, mod_user).await;
+
+    let req = test::TestRequest::get()
+        .uri("/arepl/submissions?per_page=10&sort=ShortestCompletionTime")
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+
+    let body: serde_json::Value = read_body_json(resp).await;
+    let got: Vec<String> = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["id"].as_str().unwrap().to_owned())
+        .collect();
+
+    assert!(got.len() >= 2);
+    assert_eq!(got[0], faster.to_string());
+    assert_eq!(got[1], slower.to_string());
+}
+
+#[actix_web::test]
+async fn resolved_find_all_sort_longest_completion_time() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (mod_user, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
+    let token = create_test_token(mod_user, &auth.jwt_encoding_key).unwrap();
+
+    let (slower, faster) =
+        create_two_test_submissions_with_different_timestamps(&db, mod_user).await;
+
+    let req = test::TestRequest::get()
+        .uri("/arepl/submissions?per_page=10&sort=LongestCompletionTime")
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+
+    let body: serde_json::Value = read_body_json(resp).await;
+    let got: Vec<String> = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v["id"].as_str().unwrap().to_owned())
+        .collect();
+
+    assert!(got.len() >= 2);
+    assert_eq!(got[0], slower.to_string());
+    assert_eq!(got[1], faster.to_string());
+}
 
 #[actix_web::test]
 async fn create_submission() {
@@ -58,7 +518,7 @@ async fn create_submission() {
 
     let req = test::TestRequest::post()
         .uri("/arepl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&submission_data)
         .to_request();
 
@@ -67,10 +527,10 @@ async fn create_submission() {
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(
-        body["submitted_by"].as_str().unwrap().to_string(),
+        body["submitted_by"].as_str().unwrap().to_owned(),
         user_id.to_string(),
         "Submitters do not match!"
-    )
+    );
 }
 
 #[actix_web::test]
@@ -91,17 +551,16 @@ async fn submission_without_raw() {
 
     let req = test::TestRequest::post()
         .uri("/arepl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&submission_data)
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
-        400,
+        StatusCode::UNPROCESSABLE_ENTITY,
         Some("Platformer submissions require raw footage"),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -124,7 +583,7 @@ async fn submission_malformed_url() {
 
     let req = test::TestRequest::post()
         .uri("/arepl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&submission_data)
         .to_request();
 
@@ -141,19 +600,22 @@ async fn submission_malformed_url() {
 
     let req = test::TestRequest::post()
         .uri("/arepl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&submission_data)
         .to_request();
 
     let resp2 = test::call_service(&app, req).await;
 
-    assert_error_response(
+    assert_error_response!(
         resp,
-        400,
-        Some("Invalid completion video URL: Malformed URL"),
-    )
-    .await;
-    assert_error_response(resp2, 400, Some("Invalid raw footage URL: Malformed URL")).await;
+        StatusCode::BAD_REQUEST,
+        Some("Invalid completion video URL: Malformed URL: relative URL without a base"),
+    );
+    assert_error_response!(
+        resp2,
+        StatusCode::BAD_REQUEST,
+        Some("Invalid raw footage URL: Malformed URL: relative URL without a base"),
+    );
 }
 
 #[actix_web::test]
@@ -168,7 +630,7 @@ async fn submission_edit_no_perms() {
     let token_2 =
         create_test_token(user_id_2, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    let (user_id_mod, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (user_id_mod, _) = create_test_full_reviewer(&db).await;
     let token_mod =
         create_test_token(user_id_mod, &auth.jwt_encoding_key).expect("Failed to generate token");
 
@@ -182,8 +644,8 @@ async fn submission_edit_no_perms() {
 
     // edit own submission
     let edit_req_own = test::TestRequest::patch()
-        .uri(&format!("/arepl/submissions/{}", submission_id).to_string())
-        .insert_header(("Authorization", format!("Bearer {}", token_1)))
+        .uri(&format!("/arepl/submissions/{submission_id}"))
+        .insert_header(("Authorization", format!("Bearer {token_1}")))
         .set_json(&submission_edit_json)
         .to_request();
 
@@ -196,23 +658,22 @@ async fn submission_edit_no_perms() {
 
     // edit other submission
     let edit_req_other = test::TestRequest::patch()
-        .uri(&format!("/arepl/submissions/{}", submission_id).to_string())
-        .insert_header(("Authorization", format!("Bearer {}", token_2)))
+        .uri(&format!("/arepl/submissions/{submission_id}"))
+        .insert_header(("Authorization", format!("Bearer {token_2}")))
         .set_json(&submission_edit_json)
         .to_request();
 
     let resp_edit_other = test::call_service(&app, edit_req_other).await;
-    assert_error_response(
+    assert_error_response!(
         resp_edit_other,
-        403,
+        StatusCode::FORBIDDEN,
         Some("You can only edit your own submissions."),
-    )
-    .await;
+    );
 
     // edit other submission as mod
     let edit_req_mod = test::TestRequest::patch()
-        .uri(&format!("/arepl/submissions/{}", submission_id).to_string())
-        .insert_header(("Authorization", format!("Bearer {}", token_mod)))
+        .uri(&format!("/arepl/submissions/{submission_id}"))
+        .insert_header(("Authorization", format!("Bearer {token_mod}")))
         .set_json(&submission_edit_json)
         .to_request();
 
@@ -229,11 +690,8 @@ async fn submission_aredlplus_boost() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&db, None).await;
-    let (user_id_2, _) = create_test_user(&db, None).await;
-    let (user_id_mod, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
-
-    let role_id = create_test_role_with_desc(&db, 5, "plus").await;
-    add_user_to_role(&db, role_id, user_id_2).await;
+    let (user_id_2, _) = create_test_user_with_priority_submissions(&db).await;
+    let (user_id_mod, _) = create_test_full_reviewer(&db).await;
 
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -254,7 +712,7 @@ async fn submission_aredlplus_boost() {
 
     let req = test::TestRequest::post()
         .uri("/arepl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&submission_data)
         .to_request();
 
@@ -270,7 +728,7 @@ async fn submission_aredlplus_boost() {
 
     let req = test::TestRequest::post()
         .uri("/arepl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", token2)))
+        .insert_header(("Authorization", format!("Bearer {token2}")))
         .set_json(&submission_data)
         .to_request();
 
@@ -284,20 +742,18 @@ async fn submission_aredlplus_boost() {
     let submission2: serde_json::Value =
         serde_json::from_slice(&resp_body).expect("Failed to parse response body");
 
-    assert_eq!(
-        submission1["priority"].as_bool().unwrap(),
-        false,
+    assert!(
+        !submission1["priority"].as_bool().unwrap(),
         "Priority field for user 1 is not false as expected"
     );
-    assert_eq!(
+    assert!(
         submission2["priority"].as_bool().unwrap(),
-        true,
         "Priority field for user 2 is not true as expected"
     );
 
     let claim_req = test::TestRequest::get()
         .uri("/arepl/submissions/claim")
-        .insert_header(("Authorization", format!("Bearer {}", token_mod)))
+        .insert_header(("Authorization", format!("Bearer {token_mod}")))
         .to_request();
 
     let claim_resp = test::call_service(&app, claim_req).await;
@@ -312,7 +768,7 @@ async fn submission_aredlplus_boost() {
     // next claim should alternate to a non-priority submission when available.
     let claim_req = test::TestRequest::get()
         .uri("/arepl/submissions/claim")
-        .insert_header(("Authorization", format!("Bearer {}", token_mod)))
+        .insert_header(("Authorization", format!("Bearer {token_mod}")))
         .to_request();
 
     let claim_resp = test::call_service(&app, claim_req).await;
@@ -322,7 +778,48 @@ async fn submission_aredlplus_boost() {
         claim_resp.status()
     );
     let body: serde_json::Value = read_body_json(claim_resp).await;
-    assert_eq!(body["id"], submission1["id"])
+    assert_eq!(body["id"], submission1["id"]);
+}
+
+#[actix_web::test]
+async fn submission_for_active_bounty_is_priority_for_non_plus_user() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
+    let level_id = create_test_level(&db).await;
+    create_test_bounty(
+        &db,
+        level_id,
+        Utc::now() - ChronoDuration::days(1),
+        Some(Utc::now() + ChronoDuration::days(1)),
+        None,
+        true,
+    );
+
+    let submission_data = json!({
+        "level_id": level_id,
+        "video_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
+        "raw_url": "https://youtube.com/watch?v=xvFZjo5PgG0",
+        "completion_time": 1000,
+        "mobile": false
+    });
+
+    let resp = test::call_service(
+        &app,
+        test::TestRequest::post()
+            .uri("/arepl/submissions")
+            .insert_header(("Authorization", format!("Bearer {token}")))
+            .set_json(&submission_data)
+            .to_request(),
+    )
+    .await;
+    assert!(
+        resp.status().is_success(),
+        "submission status is {}",
+        resp.status()
+    );
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert!(body["priority"].as_bool().unwrap());
 }
 
 #[actix_web::test]
@@ -336,11 +833,7 @@ async fn submission_banned_player() {
 
     let (banned, _) = create_test_user(&db, None).await;
 
-    diesel::update(users::table)
-        .filter(users::id.eq(banned))
-        .set(users::ban_level.eq(2))
-        .execute(&mut db.connection().unwrap())
-        .expect("Failed to ban user!");
+    set_test_user_ban_level(&db, banned, 3).await;
 
     let banned_token =
         create_test_token(banned, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -355,7 +848,7 @@ async fn submission_banned_player() {
 
     let req_1 = test::TestRequest::post()
         .uri("/arepl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", not_banned_token)))
+        .insert_header(("Authorization", format!("Bearer {not_banned_token}")))
         .set_json(&submission_data)
         .to_request();
 
@@ -368,12 +861,16 @@ async fn submission_banned_player() {
 
     let req_2 = test::TestRequest::post()
         .uri("/arepl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", banned_token)))
+        .insert_header(("Authorization", format!("Bearer {banned_token}")))
         .set_json(&submission_data)
         .to_request();
 
     let resp_2 = test::call_service(&app, req_2).await;
-    assert_error_response(resp_2, 403, Some("You have been banned from the list.")).await;
+    assert_error_response!(
+        resp_2,
+        StatusCode::FORBIDDEN,
+        Some("You have been banned from the list."),
+    );
 }
 
 #[actix_web::test]
@@ -384,24 +881,19 @@ async fn patch_submission_banned_submitter() {
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, user, &db).await;
 
-    diesel::update(users::table)
-        .filter(users::id.eq(user))
-        .set(users::ban_level.eq(2))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_user_ban_level(&db, user, 3).await;
 
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"video_url": "https://www.youtube.com/watch?v=banupdate11"}))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!({"video_url": "https://www.youtube.com/watch?v=banupdate11"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
-        403,
+        StatusCode::FORBIDDEN,
         Some("You have been banned from submitting records."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -411,24 +903,20 @@ async fn patch_submission_legacy_level_rejected() {
     let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
     let level = create_test_level(&db).await;
 
-    diesel::update(levels::table.filter(levels::id.eq(level)))
-        .set(levels::legacy.eq(true))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_level_status(&db, level, LevelStatus::Legacy, Some(1)).await;
 
     let submission = create_test_submission(level, user, &db).await;
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"raw_url": "https://www.youtube.com/watch?v=rawupdate11"}))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!({"raw_url": "https://www.youtube.com/watch?v=rawupdate11"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
-        400,
+        StatusCode::UNPROCESSABLE_ENTITY,
         Some("This level is on the legacy list and is not accepting records!"),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -439,23 +927,19 @@ async fn patch_submission_under_review_rejected() {
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, user, &db).await;
 
-    diesel::update(submissions::table.filter(submissions::id.eq(submission)))
-        .set(submissions::status.eq(SubmissionStatus::Claimed))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_submission_status(&db, submission, SubmissionStatus::Claimed);
 
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"video_url": "https://www.youtube.com/watch?v=reviewed111"}))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!({"video_url": "https://www.youtube.com/watch?v=reviewed111"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
-        409,
+        StatusCode::CONFLICT,
         Some("This submission is currently being reviewed and cannot be edited."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -466,31 +950,27 @@ async fn patch_resubmission_closed() {
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, user, &db).await;
 
-    diesel::update(submissions::table.filter(submissions::id.eq(submission)))
-        .set(submissions::status.eq(SubmissionStatus::Accepted))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_submission_status(&db, submission, SubmissionStatus::Accepted);
 
     SubmissionsEnabled::disable(&mut db.connection().unwrap(), user).unwrap();
 
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"video_url": "https://www.youtube.com/watch?v=closed11111"}))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!({"video_url": "https://www.youtube.com/watch?v=closed11111"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
-        400,
+        StatusCode::BAD_REQUEST,
         Some("Submissions are currently closed. You can only edit pending submissions."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
-async fn patch_submission_mod_invalid_urls() {
+async fn patch_submission_reviewer_patch_rejects_invalid_urls() {
     let (app, db, auth, _) = init_test_app().await;
-    let (moderator, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (moderator, _) = create_test_full_reviewer(&db).await;
     let (user, _) = create_test_user(&db, None).await;
     let token = create_test_token(moderator, &auth.jwt_encoding_key).unwrap();
     let level = create_test_level(&db).await;
@@ -498,38 +978,41 @@ async fn patch_submission_mod_invalid_urls() {
 
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"video_url": "not a url"}))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!({"video_url": "not a url"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
-        400,
+        StatusCode::BAD_REQUEST,
         Some("Invalid completion video URL: Malformed URL"),
-    )
-    .await;
+    );
 
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"raw_url": "not a url"}))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!({"raw_url": "not a url"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(resp, 400, Some("Invalid raw footage URL: Malformed URL")).await;
+    assert_error_response!(
+        resp,
+        StatusCode::BAD_REQUEST,
+        Some("Invalid raw footage URL: Malformed URL"),
+    );
 }
 
 #[actix_web::test]
 async fn patch_submission_mod_downgrades_for_own_submission() {
     let (app, db, auth, _) = init_test_app().await;
-    let (moderator, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (moderator, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let token = create_test_token(moderator, &auth.jwt_encoding_key).unwrap();
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, moderator, &db).await;
 
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!({
             "video_url": "https://www.youtube.com/watch?v=selfupdate1",
             "status": "Accepted",
             "reviewer_notes": "should be ignored",
@@ -538,11 +1021,7 @@ async fn patch_submission_mod_downgrades_for_own_submission() {
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let stored = submissions::table
-        .find(submission)
-        .select(Submission::as_select())
-        .first::<Submission>(&mut db.connection().unwrap())
-        .expect("Failed to fetch submission");
+    let stored = get_test_submission(&db, submission);
 
     assert_eq!(stored.status, SubmissionStatus::Pending);
     assert!(stored.reviewer_notes.is_none());
@@ -551,7 +1030,7 @@ async fn patch_submission_mod_downgrades_for_own_submission() {
 async fn delete_submission() {
     let (app, db, auth, _) = init_test_app().await;
 
-    let (user_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let level_id = create_test_level(&db).await;
@@ -560,7 +1039,7 @@ async fn delete_submission() {
 
     let req = test::TestRequest::delete()
         .uri(format!("/arepl/submissions/{submission}").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -600,12 +1079,13 @@ async fn get_submission_queue() {
 
     let req = test::TestRequest::get()
         .uri(&format!("/arepl/submissions/{submission}/queue"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
     let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(body["position"].as_i64().unwrap(), 1);
+    assert!(!body["priority"].as_bool().unwrap());
 }
 
 #[actix_web::test]
@@ -613,38 +1093,12 @@ async fn priority_submission_queue_position_uses_updated_at() {
     let (app, db, auth, _) = init_test_app().await;
     let (user, _) = create_test_user(&db, None).await;
     let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
-    let level_a = create_test_level(&db).await;
-    let level_b = create_test_level(&db).await;
-
-    let older_created = create_test_submission(level_a, user, &db).await;
-    let newer_created = create_test_submission(level_b, user, &db).await;
-
-    let early_created: DateTime<Utc> = "2020-01-01T00:00:00Z".parse().unwrap();
-    let late_created: DateTime<Utc> = "2021-01-01T00:00:00Z".parse().unwrap();
-    let early_updated: DateTime<Utc> = "2022-01-01T00:00:00Z".parse().unwrap();
-    let late_updated: DateTime<Utc> = "2020-06-01T00:00:00Z".parse().unwrap();
-
-    diesel::update(submissions::table.filter(submissions::id.eq(newer_created)))
-        .set((
-            submissions::priority.eq(true),
-            submissions::created_at.eq(late_created),
-            submissions::updated_at.eq(late_updated),
-        ))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
-
-    diesel::update(submissions::table.filter(submissions::id.eq(older_created)))
-        .set((
-            submissions::priority.eq(true),
-            submissions::created_at.eq(early_created),
-            submissions::updated_at.eq(early_updated),
-        ))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    let (_older_created, newer_created) =
+        create_priority_queue_order_test_submissions(&db, user).await;
 
     let req = test::TestRequest::get()
         .uri(&format!("/arepl/submissions/{newer_created}/queue"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -658,36 +1112,12 @@ async fn regular_submission_queue_position_still_uses_created_at() {
     let (app, db, auth, _) = init_test_app().await;
     let (user, _) = create_test_user(&db, None).await;
     let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
-    let level_a = create_test_level(&db).await;
-    let level_b = create_test_level(&db).await;
-
-    let older_created = create_test_submission(level_a, user, &db).await;
-    let newer_created = create_test_submission(level_b, user, &db).await;
-
-    let early_created: DateTime<Utc> = "2020-01-01T00:00:00Z".parse().unwrap();
-    let late_created: DateTime<Utc> = "2021-01-01T00:00:00Z".parse().unwrap();
-    let early_updated: DateTime<Utc> = "2022-01-01T00:00:00Z".parse().unwrap();
-    let late_updated: DateTime<Utc> = "2020-06-01T00:00:00Z".parse().unwrap();
-
-    diesel::update(submissions::table.filter(submissions::id.eq(older_created)))
-        .set((
-            submissions::created_at.eq(early_created),
-            submissions::updated_at.eq(early_updated),
-        ))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
-
-    diesel::update(submissions::table.filter(submissions::id.eq(newer_created)))
-        .set((
-            submissions::created_at.eq(late_created),
-            submissions::updated_at.eq(late_updated),
-        ))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    let (older_created, _newer_created) =
+        create_regular_queue_order_test_submissions(&db, user).await;
 
     let req = test::TestRequest::get()
         .uri(&format!("/arepl/submissions/{older_created}/queue"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -699,41 +1129,15 @@ async fn regular_submission_queue_position_still_uses_created_at() {
 #[actix_web::test]
 async fn claim_priority_submission_uses_updated_at() {
     let (app, db, auth, _) = init_test_app().await;
-    let (full_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (visible_reviewer, _) = create_test_full_reviewer(&db).await;
     let (submitter, _) = create_test_user(&db, None).await;
-    let token = create_test_token(full_reviewer, &auth.jwt_encoding_key).unwrap();
-    let level_a = create_test_level(&db).await;
-    let level_b = create_test_level(&db).await;
-
-    let older_created = create_test_submission(level_a, submitter, &db).await;
-    let newer_created = create_test_submission(level_b, submitter, &db).await;
-
-    let early_created: DateTime<Utc> = "2020-01-01T00:00:00Z".parse().unwrap();
-    let late_created: DateTime<Utc> = "2021-01-01T00:00:00Z".parse().unwrap();
-    let early_updated: DateTime<Utc> = "2022-01-01T00:00:00Z".parse().unwrap();
-    let late_updated: DateTime<Utc> = "2020-06-01T00:00:00Z".parse().unwrap();
-
-    diesel::update(submissions::table.filter(submissions::id.eq(newer_created)))
-        .set((
-            submissions::priority.eq(true),
-            submissions::created_at.eq(late_created),
-            submissions::updated_at.eq(late_updated),
-        ))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
-
-    diesel::update(submissions::table.filter(submissions::id.eq(older_created)))
-        .set((
-            submissions::priority.eq(true),
-            submissions::created_at.eq(early_created),
-            submissions::updated_at.eq(early_updated),
-        ))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    let token = create_test_token(visible_reviewer, &auth.jwt_encoding_key).unwrap();
+    let (_older_created, newer_created) =
+        create_priority_queue_order_test_submissions(&db, submitter).await;
 
     let req = test::TestRequest::get()
         .uri("/arepl/submissions/claim")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -743,11 +1147,11 @@ async fn claim_priority_submission_uses_updated_at() {
 }
 
 #[actix_web::test]
-async fn claim_submission_base_reviewer_skips_raw_submissions() {
+async fn claim_submission_without_raw_footage_permission_skips_raw_submissions() {
     let (app, db, auth, _) = init_test_app().await;
-    let (base_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
+    let (reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let (submitter, _) = create_test_user(&db, None).await;
-    let token = create_test_token(base_reviewer, &auth.jwt_encoding_key).unwrap();
+    let token = create_test_token(reviewer, &auth.jwt_encoding_key).unwrap();
 
     let raw_level = create_test_level(&db).await;
     let non_raw_level = create_test_level(&db).await;
@@ -755,14 +1159,11 @@ async fn claim_submission_base_reviewer_skips_raw_submissions() {
     let _raw_submission = create_test_submission(raw_level, submitter, &db).await;
     let non_raw_submission = create_test_submission(non_raw_level, submitter, &db).await;
 
-    diesel::update(submissions::table.filter(submissions::id.eq(non_raw_submission)))
-        .set(submissions::raw_url.eq::<Option<String>>(None))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_submission_raw_url(&db, non_raw_submission, None);
 
     let req = test::TestRequest::get()
         .uri("/arepl/submissions/claim")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -772,42 +1173,49 @@ async fn claim_submission_base_reviewer_skips_raw_submissions() {
 }
 
 #[actix_web::test]
-async fn claim_submission_base_reviewer_no_claimable_submissions() {
+async fn claim_submission_without_raw_footage_permission_returns_not_found_when_only_raw_available()
+{
     let (app, db, auth, _) = init_test_app().await;
-    let (base_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
+    let (reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let (submitter, _) = create_test_user(&db, None).await;
-    let token = create_test_token(base_reviewer, &auth.jwt_encoding_key).unwrap();
+    let token = create_test_token(reviewer, &auth.jwt_encoding_key).unwrap();
 
     let level = create_test_level(&db).await;
     create_test_submission(level, submitter, &db).await;
 
     let req = test::TestRequest::get()
         .uri("/arepl/submissions/claim")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
 
-    assert_error_response(
+    assert_error_response!(
         resp,
-        404,
+        StatusCode::NOT_FOUND,
         Some("There are no submissions available to claim"),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
-async fn claim_submission_full_reviewer_can_claim_raw_submission() {
+async fn claim_submission_raw_claim_reviewer_can_claim_raw_submission() {
     let (app, db, auth, _) = init_test_app().await;
-    let (full_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (raw_claim_reviewer, _) = create_test_user_with_permissions(
+        &db,
+        &[
+            Permission::SubmissionReview,
+            Permission::SubmissionEditWithRawFootage,
+        ],
+    )
+    .await;
     let (submitter, _) = create_test_user(&db, None).await;
-    let token = create_test_token(full_reviewer, &auth.jwt_encoding_key).unwrap();
+    let token = create_test_token(raw_claim_reviewer, &auth.jwt_encoding_key).unwrap();
 
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, submitter, &db).await;
 
     let req = test::TestRequest::get()
         .uri("/arepl/submissions/claim")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -817,142 +1225,137 @@ async fn claim_submission_full_reviewer_can_claim_raw_submission() {
 }
 
 #[actix_web::test]
-async fn patch_submission_base_reviewer_cannot_edit_other_raw_submission() {
+async fn patch_submission_without_raw_footage_permission_cannot_edit_unclaimed_raw_submission() {
     let (app, db, auth, _) = init_test_app().await;
-    let (base_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
+    let (reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let (submitter, _) = create_test_user(&db, None).await;
-    let token = create_test_token(base_reviewer, &auth.jwt_encoding_key).unwrap();
+    let token = create_test_token(reviewer, &auth.jwt_encoding_key).unwrap();
 
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, submitter, &db).await;
 
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"reviewer_notes": "Cannot review raw as base"}))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!({"reviewer_notes": "Cannot review unclaimed raw footage"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
 
-    assert_error_response(
+    assert_error_response!(
         resp,
-        403,
+        StatusCode::FORBIDDEN,
         Some("You do not have permission to edit this submission."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
-async fn patch_submission_base_reviewer_cannot_edit_other_under_consideration_submission() {
+async fn patch_submission_requires_claim_or_non_self_claimed_edit_permission_for_unclaimed_under_consideration_submission(
+) {
     let (app, db, auth, _) = init_test_app().await;
-    let (base_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
+    let (reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let (submitter, _) = create_test_user(&db, None).await;
-    let token = create_test_token(base_reviewer, &auth.jwt_encoding_key).unwrap();
+    let token = create_test_token(reviewer, &auth.jwt_encoding_key).unwrap();
 
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, submitter, &db).await;
 
-    diesel::update(submissions::table.filter(submissions::id.eq(submission)))
-        .set((
-            submissions::raw_url.eq::<Option<String>>(None),
-            submissions::status.eq(SubmissionStatus::UnderConsideration),
-        ))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_submission_raw_url_status_and_reviewer(
+        &db,
+        submission,
+        None,
+        SubmissionStatus::UnderConsideration,
+        None,
+    );
 
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"reviewer_notes": "Cannot edit UC as base"}))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!({"reviewer_notes": "Cannot edit unclaimed under consideration submission"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
 
-    assert_error_response(
+    assert_error_response!(
         resp,
-        403,
+        StatusCode::FORBIDDEN,
         Some("You do not have permission to edit this submission."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
-async fn patch_submission_base_reviewer_can_edit_claimed_submission_without_raw() {
+async fn patch_submission_assigned_reviewer_can_edit_claimed_submission_without_raw() {
     let (app, db, auth, _) = init_test_app().await;
-    let (base_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
+    let (reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let (submitter, _) = create_test_user(&db, None).await;
-    let token = create_test_token(base_reviewer, &auth.jwt_encoding_key).unwrap();
+    let token = create_test_token(reviewer, &auth.jwt_encoding_key).unwrap();
 
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, submitter, &db).await;
 
-    diesel::update(submissions::table.filter(submissions::id.eq(submission)))
-        .set((
-            submissions::raw_url.eq::<Option<String>>(None),
-            submissions::status.eq(SubmissionStatus::Claimed),
-            submissions::reviewer_id.eq::<Option<Uuid>>(Some(base_reviewer)),
-        ))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_submission_raw_url_status_and_reviewer(
+        &db,
+        submission,
+        None,
+        SubmissionStatus::Claimed,
+        Some(reviewer),
+    );
 
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"reviewer_notes": "Reviewed by base"}))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!({"reviewer_notes": "Reviewed by assigned reviewer"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let stored = submissions::table
-        .find(submission)
-        .select(Submission::as_select())
-        .first::<Submission>(&mut db.connection().unwrap())
-        .expect("Failed to fetch submission");
+    let stored = get_test_submission(&db, submission);
 
-    assert_eq!(stored.reviewer_id, Some(base_reviewer));
-    assert_eq!(stored.reviewer_notes.as_deref(), Some("Reviewed by base"));
+    assert_eq!(stored.reviewer_id, Some(reviewer));
+    assert_eq!(
+        stored.reviewer_notes.as_deref(),
+        Some("Reviewed by assigned reviewer")
+    );
 }
 
 #[actix_web::test]
-async fn patch_submission_base_reviewer_cannot_edit_claimed_submission_assigned_to_other_reviewer()
-{
+async fn patch_submission_requires_non_self_claimed_edit_permission_when_assigned_to_another_reviewer(
+) {
     let (app, db, auth, _) = init_test_app().await;
-    let (base_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
-    let (other_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
+    let (reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
+    let (other_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let (submitter, _) = create_test_user(&db, None).await;
-    let token = create_test_token(base_reviewer, &auth.jwt_encoding_key).unwrap();
+    let token = create_test_token(reviewer, &auth.jwt_encoding_key).unwrap();
 
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, submitter, &db).await;
 
-    diesel::update(submissions::table.filter(submissions::id.eq(submission)))
-        .set((
-            submissions::raw_url.eq::<Option<String>>(None),
-            submissions::status.eq(SubmissionStatus::Claimed),
-            submissions::reviewer_id.eq::<Option<Uuid>>(Some(other_reviewer)),
-        ))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_submission_raw_url_status_and_reviewer(
+        &db,
+        submission,
+        None,
+        SubmissionStatus::Claimed,
+        Some(other_reviewer),
+    );
 
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"reviewer_notes": "Cannot edit others' claimed submissions"}))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!({"reviewer_notes": "Cannot edit others' claimed submissions"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
 
-    assert_error_response(
+    assert_error_response!(
         resp,
-        403,
+        StatusCode::FORBIDDEN,
         Some("You do not have permission to edit this submission."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
-async fn create_submission_base_reviewer_cannot_override_submitted_by() {
+async fn create_submission_without_non_self_claimed_permission_cannot_override_submitted_by() {
     let (app, db, auth, _) = init_test_app().await;
-    let (base_reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
+    let (reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let (other_user, _) = create_test_user(&db, None).await;
-    let token = create_test_token(base_reviewer, &auth.jwt_encoding_key).unwrap();
+    let token = create_test_token(reviewer, &auth.jwt_encoding_key).unwrap();
     let level_id = create_test_level(&db).await;
 
     let submission_data = json!({
@@ -966,18 +1369,18 @@ async fn create_submission_base_reviewer_cannot_override_submitted_by() {
 
     let req = test::TestRequest::post()
         .uri("/arepl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&submission_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
 
     let body: serde_json::Value = read_body_json(resp).await;
-    assert_eq!(body["submitted_by"], base_reviewer.to_string());
+    assert_eq!(body["submitted_by"], reviewer.to_string());
 }
 
 #[actix_web::test]
-async fn patch_submission_no_changes() {
+async fn patch_submission_user_patch_requires_changes() {
     let (app, db, auth, _) = init_test_app().await;
     let (user, _) = create_test_user(&db, None).await;
     let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
@@ -986,58 +1389,69 @@ async fn patch_submission_no_changes() {
 
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({}))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!({}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(resp, 400, Some("No changes were provided!")).await;
-}
-
-#[actix_web::test]
-async fn patch_submission_invalid_urls() {
-    let (app, db, auth, _) = init_test_app().await;
-    let (user, _) = create_test_user(&db, None).await;
-    let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
-    let level = create_test_level(&db).await;
-    let submission = create_test_submission(level, user, &db).await;
-
-    let req = test::TestRequest::patch()
-        .uri(&format!("/arepl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"video_url":"not a url"}))
-        .to_request();
-    let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
-        400,
-        Some("Invalid completion video URL: Malformed URL"),
-    )
-    .await;
-
-    let req = test::TestRequest::patch()
-        .uri(&format!("/arepl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"raw_url":"not a url"}))
-        .to_request();
-    let resp = test::call_service(&app, req).await;
-    assert_error_response(resp, 400, Some("Invalid raw footage URL: Malformed URL")).await;
+        StatusCode::BAD_REQUEST,
+        Some("No changes were provided!"),
+    );
 }
 
 #[actix_web::test]
-async fn patch_submission_mod_no_changes() {
+async fn patch_submission_user_patch_rejects_invalid_urls() {
     let (app, db, auth, _) = init_test_app().await;
-    let (moderator, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (user, _) = create_test_user(&db, None).await;
+    let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
+    let level = create_test_level(&db).await;
+    let submission = create_test_submission(level, user, &db).await;
+
+    let req = test::TestRequest::patch()
+        .uri(&format!("/arepl/submissions/{submission}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!({"video_url":"not a url"}))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_error_response!(
+        resp,
+        StatusCode::BAD_REQUEST,
+        Some("Invalid completion video URL: Malformed URL"),
+    );
+
+    let req = test::TestRequest::patch()
+        .uri(&format!("/arepl/submissions/{submission}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!({"raw_url":"not a url"}))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_error_response!(
+        resp,
+        StatusCode::BAD_REQUEST,
+        Some("Invalid raw footage URL: Malformed URL"),
+    );
+}
+
+#[actix_web::test]
+async fn patch_submission_reviewer_patch_requires_changes() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (moderator, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let token = create_test_token(moderator, &auth.jwt_encoding_key).unwrap();
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, moderator, &db).await;
 
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({}))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!({}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(resp, 400, Some("No changes were provided!")).await;
+    assert_error_response!(
+        resp,
+        StatusCode::BAD_REQUEST,
+        Some("No changes were provided!"),
+    );
 }
 
 #[actix_web::test]
@@ -1057,7 +1471,7 @@ async fn post_submission_duplicate_level() {
 
     let req = test::TestRequest::post()
         .uri("/arepl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&submission_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -1065,16 +1479,15 @@ async fn post_submission_duplicate_level() {
 
     let req = test::TestRequest::post()
         .uri("/arepl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&submission_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
-        409,
+        StatusCode::CONFLICT,
         Some("You already have a submission for this level"),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -1084,10 +1497,7 @@ async fn post_submission_legacy_level_rejected() {
     let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
     let level = create_test_level(&db).await;
 
-    diesel::update(levels::table.filter(levels::id.eq(level)))
-        .set(levels::legacy.eq(true))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_level_status(&db, level, LevelStatus::Legacy, Some(1)).await;
 
     let submission_data = json!({
         "level_id": level,
@@ -1099,16 +1509,15 @@ async fn post_submission_legacy_level_rejected() {
 
     let req = test::TestRequest::post()
         .uri("/arepl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&submission_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
-        400,
+        StatusCode::UNPROCESSABLE_ENTITY,
         Some("This level is on the legacy list and is not accepting records."),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
@@ -1127,11 +1536,15 @@ async fn post_submission_level_missing() {
 
     let req = test::TestRequest::post()
         .uri("/arepl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&submission_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(resp, 404, Some("Could not find this level")).await;
+    assert_error_response!(
+        resp,
+        StatusCode::NOT_FOUND,
+        Some("Could not find this level"),
+    );
 }
 
 #[actix_web::test]
@@ -1152,12 +1565,16 @@ async fn post_submission_closed() {
     SubmissionsEnabled::disable(&mut db.connection().unwrap(), user).unwrap();
 
     let req = test::TestRequest::post()
-        .uri(&format!("/arepl/submissions"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .uri("/arepl/submissions")
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&submission_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert_error_response(resp, 400, Some("Submissions are currently disabled")).await;
+    assert_error_response!(
+        resp,
+        StatusCode::FORBIDDEN,
+        Some("Submissions are currently disabled"),
+    );
 }
 
 #[actix_web::test]
@@ -1170,16 +1587,12 @@ async fn delete_submission_requires_ownership_without_review_permission() {
 
     let req = test::TestRequest::delete()
         .uri(&format!("/arepl/submissions/{owner_submission}"))
-        .insert_header(("Authorization", format!("Bearer {}", other_token)))
+        .insert_header(("Authorization", format!("Bearer {other_token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let still_exists = submissions::table
-        .find(owner_submission)
-        .select(submissions::id)
-        .first::<Uuid>(&mut db.connection().unwrap())
-        .is_ok();
+    let still_exists = get_test_submission_optional(&db, owner_submission).is_some();
     assert!(still_exists);
 }
 
@@ -1188,7 +1601,7 @@ async fn accept_submission() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&db, None).await;
-    let (moderator_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (moderator_id, _) = create_test_full_reviewer(&db).await;
     let token =
         create_test_token(moderator_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let level_id = create_test_level(&db).await;
@@ -1199,7 +1612,7 @@ async fn accept_submission() {
 
     let req = test::TestRequest::patch()
         .uri(format!("/arepl/submissions/{submission}").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&accept_data)
         .to_request();
 
@@ -1210,18 +1623,9 @@ async fn accept_submission() {
         resp.status()
     );
 
-    records::table
-        .filter(records::level_id.eq(level_id))
-        .filter(records::submitted_by.eq(user_id))
-        .select(records::id)
-        .first::<Uuid>(&mut db.connection().unwrap())
-        .expect("Failed to get new record!");
+    get_test_record_for_level_and_user(&db, level_id, user_id);
 
-    let accepted_submission = submissions::table
-        .filter(submissions::id.eq(submission))
-        .select(Submission::as_select())
-        .first::<Submission>(&mut db.connection().unwrap())
-        .expect("Failed to get accepted submission!");
+    let accepted_submission = get_test_submission(&db, submission);
 
     assert_eq!(
         accepted_submission.status,
@@ -1235,12 +1639,7 @@ async fn accept_submission() {
         "Reviewer notes do not match!"
     );
 
-    let history_entry = submission_history::table
-        .filter(submission_history::submission_id.eq(submission))
-        .order(submission_history::timestamp.desc())
-        .select(SubmissionHistory::as_select())
-        .first::<SubmissionHistory>(&mut db.connection().unwrap())
-        .expect("Failed to get submission history!");
+    let history_entry = latest_test_submission_history(&db, submission);
 
     assert_eq!(
         history_entry.status,
@@ -1260,7 +1659,7 @@ async fn deny_submission() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&db, None).await;
-    let (moderator_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (moderator_id, _) = create_test_full_reviewer(&db).await;
     let token =
         create_test_token(moderator_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let level_id = create_test_level(&db).await;
@@ -1271,7 +1670,7 @@ async fn deny_submission() {
 
     let req = test::TestRequest::patch()
         .uri(format!("/arepl/submissions/{submission}").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&deny_data)
         .to_request();
 
@@ -1282,11 +1681,7 @@ async fn deny_submission() {
         resp.status()
     );
 
-    let denied_submission = submissions::table
-        .filter(submissions::id.eq(submission))
-        .select(Submission::as_select())
-        .first::<Submission>(&mut db.connection().unwrap())
-        .expect("Failed to get denied submission!");
+    let denied_submission = get_test_submission(&db, submission);
     assert_eq!(
         denied_submission.status,
         SubmissionStatus::Denied,
@@ -1299,12 +1694,7 @@ async fn deny_submission() {
         "Reviewer notes do not match!"
     );
 
-    let history_entry = submission_history::table
-        .filter(submission_history::submission_id.eq(submission))
-        .order(submission_history::timestamp.desc())
-        .select(SubmissionHistory::as_select())
-        .first::<SubmissionHistory>(&mut db.connection().unwrap())
-        .expect("Failed to get submission history!");
+    let history_entry = latest_test_submission_history(&db, submission);
 
     assert_eq!(
         history_entry.status,
@@ -1324,7 +1714,7 @@ async fn submission_under_consideration() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&db, None).await;
-    let (moderator_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (moderator_id, _) = create_test_full_reviewer(&db).await;
     let token =
         create_test_token(moderator_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let level_id = create_test_level(&db).await;
@@ -1335,7 +1725,7 @@ async fn submission_under_consideration() {
 
     let req = test::TestRequest::patch()
         .uri(format!("/arepl/submissions/{submission}").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .set_json(&under_consideration_data)
         .to_request();
 
@@ -1346,11 +1736,7 @@ async fn submission_under_consideration() {
         resp.status()
     );
 
-    let uc_submission = submissions::table
-        .filter(submissions::id.eq(submission))
-        .select(Submission::as_select())
-        .first::<Submission>(&mut db.connection().unwrap())
-        .expect("Failed to get UC submission!");
+    let uc_submission = get_test_submission(&db, submission);
 
     assert_eq!(
         uc_submission.status,
@@ -1364,12 +1750,7 @@ async fn submission_under_consideration() {
         "Reviewer notes do not match!"
     );
 
-    let history_entry = submission_history::table
-        .filter(submission_history::submission_id.eq(submission))
-        .order(submission_history::timestamp.desc())
-        .select(SubmissionHistory::as_select())
-        .first::<SubmissionHistory>(&mut db.connection().unwrap())
-        .expect("Failed to get submission history!");
+    let history_entry = latest_test_submission_history(&db, submission);
 
     assert_eq!(
         history_entry.status,
@@ -1389,7 +1770,7 @@ async fn submission_under_review_sends_websocket_notification() {
     let (app, db, auth, notify_tx) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&db, None).await;
-    let (moderator_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (moderator_id, _) = create_test_full_reviewer(&db).await;
     let token =
         create_test_token(moderator_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let level_id = create_test_level(&db).await;
@@ -1398,8 +1779,8 @@ async fn submission_under_review_sends_websocket_notification() {
 
     let req = test::TestRequest::patch()
         .uri(format!("/arepl/submissions/{submission}").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"status": "UnderReview"}))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!({"status": "UnderReview"}))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -1415,8 +1796,14 @@ async fn submission_under_review_sends_websocket_notification() {
         .expect("Failed to receive websocket notification");
 
     assert_eq!(notification.notification_type, "SUBMISSION_UNDER_REVIEW");
-    assert_eq!(notification.data["id"].as_str().unwrap(), submission.to_string());
-    assert_eq!(notification.data["reviewer_id"].as_str().unwrap(), moderator_id.to_string());
+    assert_eq!(
+        notification.data["id"].as_str().unwrap(),
+        submission.to_string()
+    );
+    assert_eq!(
+        notification.data["reviewer_id"].as_str().unwrap(),
+        moderator_id.to_string()
+    );
 }
 
 #[actix_web::test]
@@ -1424,7 +1811,7 @@ async fn cannot_edit_after_submission_locked() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (user_id, _) = create_test_user(&db, None).await;
-    let (moderator_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (moderator_id, _) = create_test_full_reviewer(&db).await;
     let user_token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let moderator_token =
@@ -1437,7 +1824,7 @@ async fn cannot_edit_after_submission_locked() {
 
     let lock_req = test::TestRequest::patch()
         .uri(format!("/arepl/submissions/{submission}").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", moderator_token)))
+        .insert_header(("Authorization", format!("Bearer {moderator_token}")))
         .set_json(&locked_data)
         .to_request();
 
@@ -1452,24 +1839,23 @@ async fn cannot_edit_after_submission_locked() {
 
     let edit_req = test::TestRequest::patch()
         .uri(format!("/arepl/submissions/{submission}").as_str())
-        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .insert_header(("Authorization", format!("Bearer {user_token}")))
         .set_json(&edit_data)
         .to_request();
 
     let resp = test::call_service(&app, edit_req).await;
-    assert_error_response(
+    assert_error_response!(
         resp,
-        403,
+        StatusCode::FORBIDDEN,
         Some("This submission has been locked and cannot be edited"),
-    )
-    .await;
+    );
 }
 
 #[actix_web::test]
 async fn increment_shift() {
     let (app, db, auth, _) = init_test_app().await;
     let (submitter_id, _) = create_test_user(&db, None).await;
-    let (mod_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (mod_id, _) = create_test_full_reviewer(&db).await;
     let token_mod = create_test_token(mod_id, &auth.jwt_encoding_key).unwrap();
     let shift_id = create_test_shift(&db, mod_id, true).await;
     let level = create_test_level(&db).await;
@@ -1477,27 +1863,23 @@ async fn increment_shift() {
 
     let req = test::TestRequest::get()
         .uri("/arepl/submissions/claim")
-        .insert_header(("Authorization", format!("Bearer {}", token_mod)))
+        .insert_header(("Authorization", format!("Bearer {token_mod}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
     let body: serde_json::Value = read_body_json(resp).await;
-    let sub_id = body["id"].as_str().unwrap().to_string();
+    let sub_id = body["id"].as_str().unwrap().to_owned();
 
     let accept_data = json!({"status": "Accepted", "reviewer_notes":"ok"});
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{sub_id}"))
-        .insert_header(("Authorization", format!("Bearer {}", token_mod)))
+        .insert_header(("Authorization", format!("Bearer {token_mod}")))
         .set_json(&accept_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let count: i32 = shifts::table
-        .find(shift_id)
-        .select(shifts::completed_count)
-        .first(&mut db.connection().unwrap())
-        .unwrap();
+    let count = get_test_shift(&db, shift_id).completed_count;
     assert_eq!(count, 1);
 }
 
@@ -1505,19 +1887,16 @@ async fn increment_shift() {
 async fn shift_completes() {
     let (app, db, auth, _) = init_test_app().await;
     let (submitter_id, _) = create_test_user(&db, None).await;
-    let (mod_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (mod_id, _) = create_test_full_reviewer(&db).await;
     let token = create_test_token(mod_id, &auth.jwt_encoding_key).unwrap();
     let shift_id = create_test_shift(&db, mod_id, true).await;
-    diesel::update(shifts::table.filter(shifts::id.eq(shift_id)))
-        .set(shifts::target_count.eq(1))
-        .execute(&mut db.connection().unwrap())
-        .unwrap();
+    set_test_shift_target_count(&db, shift_id, 1).await;
     let level = create_test_level(&db).await;
     create_test_submission(level, submitter_id, &db).await;
 
     let req = test::TestRequest::get()
         .uri("/arepl/submissions/claim")
-        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
@@ -1526,17 +1905,13 @@ async fn shift_completes() {
 
     let req = test::TestRequest::patch()
         .uri(&format!("/arepl/submissions/{sub_id}"))
-        .insert_header(("Authorization", format!("Bearer {}", token)))
-        .set_json(&json!({"status": "Accepted"}))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!({"status": "Accepted"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
 
-    let status: ShiftStatus = shifts::table
-        .find(shift_id)
-        .select(shifts::status)
-        .first(&mut db.connection().unwrap())
-        .unwrap();
+    let status = get_test_shift(&db, shift_id).status;
     assert_eq!(status, ShiftStatus::Completed);
 }
 
@@ -1544,7 +1919,7 @@ async fn shift_completes() {
 async fn reviewer_submission_can_set_reviewer_fields_for_other_users() {
     let (app, db, auth, _) = init_test_app().await;
 
-    let (reviewer_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (reviewer_id, _) = create_test_full_reviewer(&db).await;
     let (other_user_id, _) = create_test_user(&db, None).await;
     let reviewer_token =
         create_test_token(reviewer_id, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -1565,7 +1940,7 @@ async fn reviewer_submission_can_set_reviewer_fields_for_other_users() {
 
     let other_req = test::TestRequest::post()
         .uri("/arepl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", reviewer_token)))
+        .insert_header(("Authorization", format!("Bearer {reviewer_token}")))
         .set_json(&other_submission)
         .to_request();
 
@@ -1580,11 +1955,7 @@ async fn reviewer_submission_can_set_reviewer_fields_for_other_users() {
     let other_submission_id = Uuid::parse_str(other_body["id"].as_str().unwrap())
         .expect("Response missing submission id");
 
-    let stored_other_submission = submissions::table
-        .find(other_submission_id)
-        .select(Submission::as_select())
-        .first::<Submission>(&mut db.connection().unwrap())
-        .expect("Failed to fetch stored submission");
+    let stored_other_submission = get_test_submission(&db, other_submission_id);
 
     assert_eq!(
         stored_other_submission.status,
@@ -1609,7 +1980,7 @@ async fn reviewer_submission_can_set_reviewer_fields_for_other_users() {
 
     let reviewer_req = test::TestRequest::post()
         .uri("/arepl/submissions")
-        .insert_header(("Authorization", format!("Bearer {}", reviewer_token)))
+        .insert_header(("Authorization", format!("Bearer {reviewer_token}")))
         .set_json(&reviewer_submission)
         .to_request();
 
@@ -1624,11 +1995,7 @@ async fn reviewer_submission_can_set_reviewer_fields_for_other_users() {
     let reviewer_submission_id = Uuid::parse_str(reviewer_body["id"].as_str().unwrap())
         .expect("Response missing reviewer submission id");
 
-    let stored_reviewer_submission = submissions::table
-        .find(reviewer_submission_id)
-        .select(Submission::as_select())
-        .first::<Submission>(&mut db.connection().unwrap())
-        .expect("Failed to fetch reviewer submission");
+    let stored_reviewer_submission = get_test_submission(&db, reviewer_submission_id);
 
     assert_eq!(
         stored_reviewer_submission.status,
@@ -1644,36 +2011,38 @@ async fn reviewer_submission_can_set_reviewer_fields_for_other_users() {
 #[actix_web::test]
 #[serial]
 async fn accept_submission_triggers_record_timestamp_fetch_from_youtube() {
-    clear_google_env();
+    clear_oauth_env(OAuthProvider::Google);
 
     let server = MockServer::start_async().await;
-    set_google_env(&server.base_url());
+    set_oauth_env(OAuthProvider::Google, &server.base_url());
     mock_google_token_endpoint(&server, 3600, "test_access").await;
 
     let yt_mock =
         mock_youtube_videos_endpoint(&server, "xvFZjo5PgG0", "2009-10-25T06:57:33Z").await;
 
-    let google_auth = GoogleAuthState::new()
+    let google_auth = new_google_context()
         .await
-        .expect("Failed to create GoogleAuthState");
+        .expect("Failed to create Google OAuth context");
 
-    std::env::set_var("YOUTUBE_API_BASE_URL", server.base_url());
-
-    let providers_app_state = Arc::new(VideoProvidersAppState::new(
+    let providers_app_state = Arc::new(ProvidersAppState::new(
         ProviderRegistry::new(vec![Arc::new(YouTubeProvider) as Arc<dyn Provider>]),
         ProviderContext {
             http: reqwest::Client::new(),
+            db: None,
+            discord_auth: None,
             google_auth: Some(Arc::new(google_auth)),
+            patreon_auth: None,
             twitch_auth: None,
         },
     ));
 
     let (app, db, auth, _) = init_test_app_with_providers(providers_app_state).await;
+    seed_oauth_token(&db, OAuthProvider::Google, Some("refresh_a"));
 
     let (submitter_id, _) = create_test_user(&db, None).await;
     let submitter_token = create_test_token(submitter_id, &auth.jwt_encoding_key).unwrap();
 
-    let (moderator_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewFull)).await;
+    let (moderator_id, _) = create_test_full_reviewer(&db).await;
     let moderator_token = create_test_token(moderator_id, &auth.jwt_encoding_key).unwrap();
 
     let level_id = create_test_level(&db).await;
@@ -1690,7 +2059,7 @@ async fn accept_submission_triggers_record_timestamp_fetch_from_youtube() {
         &app,
         actix_web::test::TestRequest::post()
             .uri("/arepl/submissions")
-            .insert_header(("Authorization", format!("Bearer {}", submitter_token)))
+            .insert_header(("Authorization", format!("Bearer {submitter_token}")))
             .set_json(&submission_data)
             .to_request(),
     )
@@ -1711,8 +2080,8 @@ async fn accept_submission_triggers_record_timestamp_fetch_from_youtube() {
     let accept_data = json!({ "status": "Accepted", "reviewer_notes": "ok" });
 
     let accept_req = actix_web::test::TestRequest::patch()
-        .uri(&format!("/arepl/submissions/{}", submission_id))
-        .insert_header(("Authorization", format!("Bearer {}", moderator_token)))
+        .uri(&format!("/arepl/submissions/{submission_id}"))
+        .insert_header(("Authorization", format!("Bearer {moderator_token}")))
         .set_json(&accept_data)
         .to_request();
 
@@ -1723,15 +2092,8 @@ async fn accept_submission_triggers_record_timestamp_fetch_from_youtube() {
         accept_resp.status()
     );
 
-    let (record_id, created_at): (Uuid, DateTime<Utc>) = {
-        let mut conn = db.connection().unwrap();
-        records::table
-            .filter(records::level_id.eq(level_id))
-            .filter(records::submitted_by.eq(submitter_id))
-            .select((records::id, records::created_at))
-            .first(&mut conn)
-            .expect("record should be created on accept")
-    };
+    let record = get_test_record_for_level_and_user(&db, level_id, submitter_id);
+    let created_at = record.created_at;
 
     let expected: DateTime<Utc> = "2009-10-25T06:57:33Z".parse().unwrap();
 
@@ -1739,14 +2101,7 @@ async fn accept_submission_triggers_record_timestamp_fetch_from_youtube() {
     let mut ok = false;
 
     for _ in 0..40 {
-        let achieved_at: DateTime<Utc> = {
-            let mut conn = db.connection().unwrap();
-            records::table
-                .filter(records::id.eq(record_id))
-                .select(records::achieved_at)
-                .first(&mut conn)
-                .unwrap()
-        };
+        let achieved_at = get_test_record(&db, record.id).achieved_at;
 
         last_seen = Some(achieved_at);
 
@@ -1760,87 +2115,63 @@ async fn accept_submission_triggers_record_timestamp_fetch_from_youtube() {
 
     assert!(
         ok,
-        "achieved_at never updated to expected value; created_at={}, last_seen={:?}",
-        created_at, last_seen
+        "achieved_at never updated to expected value; created_at={created_at}, last_seen={last_seen:?}"
     );
 
     assert_eq!(yt_mock.calls_async().await, 1);
 
-    std::env::remove_var("YOUTUBE_API_BASE_URL");
-
-    clear_google_env();
+    clear_oauth_env(OAuthProvider::Google);
 }
 
 #[actix_web::test]
-async fn patch_submission_mod_patch_non_claimed() {
+async fn patch_submission_requires_claim_or_non_self_claimed_edit_permission() {
     let (app, db, auth, _) = init_test_app().await;
 
     let (submitter_id, _) = create_test_user(&db, None).await;
-    let (mod_id, _) = create_test_user(&db, Some(Permission::SubmissionReviewBase)).await;
+    let (mod_id, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let mod_token =
         create_test_token(mod_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    let (elevated_id, _) = create_test_user(&db, Some(Permission::EditNonClaimedSubmissions)).await;
+    let (elevated_id, _) = create_test_full_reviewer(&db).await;
     let elevated_token =
         create_test_token(elevated_id, &auth.jwt_encoding_key).expect("Failed to generate token");
-    
+
     let level_1 = create_test_level(&db).await;
     let level_2 = create_test_level(&db).await;
 
     let submission_1 = create_test_submission(level_1, submitter_id, &db).await;
     let submission_2 = create_test_submission(level_2, submitter_id, &db).await;
 
-    // Remove the raw URL from the test submissions
-    diesel::update(submissions::table.filter(submissions::id.eq_any(vec![submission_1, submission_2])))
-        .set(submissions::raw_url.eq(Option::<String>::None))
-        .execute(&mut db.connection().unwrap())
-        .expect("Failed to remove raw_urls");
+    set_test_submissions_raw_url(&db, vec![submission_1, submission_2], None);
 
-    
     let patch_data = json!({
         "status": "Accepted"
     });
-    
-    // Ensure the base reviewer cannot accept this submission while it is not claimed
+
     let req = test::TestRequest::patch()
-        .uri(&format!("/arepl/submissions/{}", submission_1))
-        .insert_header(("Authorization", format!("Bearer {}", mod_token)))
+        .uri(&format!("/arepl/submissions/{submission_1}"))
+        .insert_header(("Authorization", format!("Bearer {mod_token}")))
         .set_json(&patch_data)
         .to_request();
 
     let resp = test::call_service(&app, req).await;
 
-    assert_error_response(resp, 403, Some("You do not have permission to edit this submission.")).await;
+    assert_error_response!(
+        resp,
+        StatusCode::FORBIDDEN,
+        Some("You do not have permission to edit this submission."),
+    );
 
-    // Claim the submission
-    diesel::update(submissions::table.filter(submissions::id.eq(submission_1)))
-        .set((
-            submissions::status.eq(SubmissionStatus::Claimed),
-            submissions::reviewer_id.eq(mod_id)
-        ))
-        .returning(Submission::as_select())
-        .get_result::<Submission>(&mut db.connection().unwrap())
-        .expect("failed to claim submission");
+    set_test_submission_raw_url_status_and_reviewer(
+        &db,
+        submission_1,
+        None,
+        SubmissionStatus::Claimed,
+        Some(mod_id),
+    );
 
-    // Retry accepting
     let req = test::TestRequest::patch()
-        .uri(&format!("/arepl/submissions/{}", submission_1))
-        .insert_header(("Authorization", format!("Bearer {}", mod_token)))
-        .set_json(&patch_data)
-        .to_request();
-
-    let resp = test::call_service(&app, req).await;
-
-    assert!(resp.status().is_success(), "status is {}", resp.status());
-
-    let body: serde_json::Value = read_body_json(resp).await;
-
-    assert_eq!(body["status"], "Accepted");
-    
-
-    // Ensure a user with the EditNonClaimedSubmissions permission can accept a submission that is not claimed
-    let req = test::TestRequest::patch()
-        .uri(&format!("/arepl/submissions/{}", submission_2))
-        .insert_header(("Authorization", format!("Bearer {}", elevated_token)))
+        .uri(&format!("/arepl/submissions/{submission_1}"))
+        .insert_header(("Authorization", format!("Bearer {mod_token}")))
         .set_json(&patch_data)
         .to_request();
 
@@ -1852,4 +2183,17 @@ async fn patch_submission_mod_patch_non_claimed() {
 
     assert_eq!(body["status"], "Accepted");
 
+    let req = test::TestRequest::patch()
+        .uri(&format!("/arepl/submissions/{submission_2}"))
+        .insert_header(("Authorization", format!("Bearer {elevated_token}")))
+        .set_json(&patch_data)
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+
+    let body: serde_json::Value = read_body_json(resp).await;
+
+    assert_eq!(body["status"], "Accepted");
 }

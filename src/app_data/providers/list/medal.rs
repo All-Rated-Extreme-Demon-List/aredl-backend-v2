@@ -1,11 +1,11 @@
 use async_trait::async_trait;
-use chrono::{DateTime, TimeZone, Utc};
-use regex::Regex;
+use chrono::{DateTime, Utc};
 use serde_json::Value;
 use url::Url;
 
 use crate::{error_handler::ApiError, providers::model::ProviderMatch};
 
+use super::super::parse::is_ascii_id;
 use super::super::{
     context::ProviderContext,
     model::{ContentMetadata, NormalizedProviderMatch, Provider, ProviderId, ProviderUsage},
@@ -57,16 +57,13 @@ impl Provider for MedalProvider {
             _ => None,
         }?;
 
-        if !Regex::new(r"^[A-Za-z0-9_-]{1,128}$")
-            .unwrap()
-            .is_match(content_id)
-        {
+        if !is_ascii_id(content_id, 1, 128) {
             return None;
         }
 
         Some(ProviderMatch {
             provider: ProviderId::Medal,
-            content_id: content_id.to_string(),
+            content_id: content_id.to_owned(),
             timestamp: None,
             other_id: None,
         })
@@ -82,7 +79,7 @@ impl Provider for MedalProvider {
         context: &ProviderContext,
     ) -> Result<Option<ContentMetadata>, ApiError> {
         let medal_base = std::env::var("MEDAL_API_BASE_URL")
-            .unwrap_or_else(|_| "https://medal.tv/api".to_string());
+            .unwrap_or_else(|_| "https://medal.tv/api".to_owned());
 
         let url = format!("{}/content/{}", medal_base, matched.content_id);
 
@@ -91,31 +88,24 @@ impl Provider for MedalProvider {
             .get(&url)
             .send()
             .await
-            .map_err(|e| ApiError::new(502, &format!("Medal API error: {e}")))?;
+            .map_err(|e| ApiError::BadGateway(format!("Medal API error: {e}")))?;
 
         if !response.status().is_success() {
-            return Err(ApiError::new(
-                response.status().as_u16(),
-                "Medal API returned non-success",
-            ));
+            return Err(ApiError::BadGateway("Medal API returned non-success"));
         }
 
         let json: Value = response
             .json()
             .await
-            .map_err(|e| ApiError::new(500, &format!("Failed to parse Medal response: {e}")))?;
+            .map_err(|e| ApiError::BadGateway(format!("Failed to parse Medal response: {e}")))?;
 
-        let created_ms = json.get("created").and_then(|v| v.as_i64()).or_else(|| {
-            json.get("created")
-                .and_then(|v| v.as_u64())
-                .map(|u| u as i64)
+        let created_ms = json.get("created").and_then(Value::as_i64).or_else(|| {
+            let value = json.get("created").and_then(Value::as_u64)?;
+            i64::try_from(value).ok()
         });
 
-        let published_at: Option<DateTime<Utc>> = created_ms.and_then(|ms| {
-            let secs = ms / 1000;
-            let nsec = ((ms % 1000) * 1_000_000) as u32;
-            Utc.timestamp_opt(secs, nsec).single()
-        });
+        let published_at: Option<DateTime<Utc>> =
+            created_ms.and_then(DateTime::<Utc>::from_timestamp_millis);
 
         if published_at.is_none() {
             return Ok(None);

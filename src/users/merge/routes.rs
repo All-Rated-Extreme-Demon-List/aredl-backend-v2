@@ -43,8 +43,8 @@ async fn direct_merge(
     options: web::Json<DirectMergeOptions>,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", &tracing::field::debug(&options));
-    let result = web::block(move || {
+    root_span.record("body", tracing::field::debug(&options));
+    web::block(move || {
         merge_users(
             &mut db.connection()?,
             options.primary_user,
@@ -52,7 +52,7 @@ async fn direct_merge(
         )
     })
     .await??;
-    Ok(HttpResponse::Ok().json(result))
+    Ok(HttpResponse::Ok().json(()))
 }
 
 #[utoipa::path(
