@@ -35,8 +35,10 @@ impl HistoryEvent {
             (_, true, true, true) => Self::MovedUp,
             (_, true, true, false) => Self::MovedDown,
             (_, true, false, _) => Self::Placed,
-            (_, false, _, false) => Self::OtherPlaced,
-            (_, false, _, true) => Self::OtherRemoved,
+            (_, false, true, false) => Self::OtherMovedUp,
+            (_, false, true, true) => Self::OtherMovedDown,
+            (_, false, false, false) => Self::OtherPlaced,
+            (_, false, false, true) => Self::OtherRemoved,
         }
     }
 }
