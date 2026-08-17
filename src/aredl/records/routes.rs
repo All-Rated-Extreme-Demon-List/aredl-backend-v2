@@ -1,7 +1,12 @@
 use crate::app_data::db::DbAppState;
+use crate::aredl::levels::id_resolver::resolve_level_id;
 use crate::aredl::records::model::{RecordInsert, RecordPatch};
-use crate::aredl::records::{Record, RecordsQueryOptions, ResolvedRecord, ResolvedRecordPage};
+use crate::aredl::records::{
+    MutualVictors, MutualVictorsQuery, Record, RecordsQueryOptions, ResolvedRecord,
+    ResolvedRecordPage,
+};
 use crate::auth::{Authenticated, Permission, UserAuth};
+use crate::cache_control::CacheController;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::providers::ProvidersAppState;
@@ -159,6 +164,40 @@ async fn delete(
 
 #[utoipa::path(
     get,
+    summary = "List mutual victors",
+    description = "List users who have records on both levels",
+    tag = "AREDL - Records",
+    params(
+        ("level_id" = String, Query, description = "First level ID (internal UUID, GD ID, or position)"),
+        ("other_level_id" = String, Query, description = "Second level ID (internal UUID, GD ID, or position)"),
+        ("high_extremes" = Option<bool>, Query, description = "Whether to show only users with more than 50 records"),
+    ),
+    responses(
+        (status = 200, body = MutualVictors)
+    ),
+)]
+#[get(
+    "/mutual-victors",
+    wrap = "UserAuth::require(Permission::RecordModify)",
+    wrap = "CacheController::public_with_max_age(900)"
+)]
+async fn mutual_victors(
+    db: web::Data<Arc<DbAppState>>,
+    query: web::Query<MutualVictorsQuery>,
+) -> Result<HttpResponse, ApiError> {
+    let query = query.into_inner();
+    let victors = web::block(move || {
+        let conn = &mut db.connection()?;
+        let level_id = resolve_level_id(conn, query.level_id.as_str())?;
+        let other_level_id = resolve_level_id(conn, query.other_level_id.as_str())?;
+        MutualVictors::find(conn, level_id, other_level_id, query.high_extremes)
+    })
+    .await??;
+    Ok(HttpResponse::Ok().json(victors))
+}
+
+#[utoipa::path(
+    get,
     summary = "[Staff]List records",
     description = "List a possibly filtered list of all records, with resolved levels and users data",
     tag = "AREDL - Records",
@@ -242,6 +281,7 @@ async fn find_me(
     components(
         schemas(
             Record,
+            MutualVictors,
             RecordPatch,
             ResolvedRecord,
             ResolvedRecordPage
@@ -252,9 +292,10 @@ async fn find_me(
         update,
         delete,
         find,
-        find_all,
-        find_me,
-        update_timestamp,
+            find_all,
+            find_me,
+            mutual_victors,
+            update_timestamp,
     )
 )]
 pub struct ApiDoc;
@@ -268,6 +309,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .service(delete)
             .service(find_all)
             .service(find_me)
+            .service(mutual_victors)
             .service(find),
     );
 }

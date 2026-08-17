@@ -329,6 +329,81 @@ async fn get_records_submitter_filter() {
 }
 
 #[actix_web::test]
+async fn get_mutual_victors() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (authenticated_user, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
+    let token = create_test_token(authenticated_user, &auth.jwt_encoding_key).unwrap();
+    let (mutual_user, _) = create_test_user(&db, None).await;
+    let (only_first_user, _) = create_test_user(&db, None).await;
+    let (only_second_user, _) = create_test_user(&db, None).await;
+    let (verification_only_user, _) = create_test_user(&db, None).await;
+    let (high_extreme_user, _) = create_test_user(&db, None).await;
+    let first_level = create_test_level(&db).await;
+    let second_level = create_test_level(&db).await;
+
+    create_test_record(&db, mutual_user, first_level).await;
+    create_test_record(&db, mutual_user, second_level).await;
+    create_test_record(&db, high_extreme_user, first_level).await;
+    create_test_record(&db, high_extreme_user, second_level).await;
+    create_test_record(&db, only_first_user, first_level).await;
+    create_test_record(&db, only_second_user, second_level).await;
+    create_test_record(&db, verification_only_user, first_level).await;
+    let verification_record = create_test_record(&db, verification_only_user, second_level).await;
+    set_test_record_verification(&db, verification_record, true).await;
+
+    for _ in 0..49 {
+        let level = create_test_level(&db).await;
+        create_test_record(&db, high_extreme_user, level).await;
+    }
+
+    let req = test::TestRequest::get()
+        .uri(&format!(
+            "/arepl/records/mutual-victors?level_id={first_level}&other_level_id={second_level}"
+        ))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["level"]["id"], first_level.to_string());
+    assert_eq!(body["other_level"]["id"], second_level.to_string());
+
+    let mut ids: Vec<String> = body["mutuals"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|user| user["id"].as_str().unwrap().to_owned())
+        .collect();
+    ids.sort();
+    let mut expected = vec![
+        mutual_user.to_string(),
+        verification_only_user.to_string(),
+        high_extreme_user.to_string(),
+    ];
+    expected.sort();
+
+    assert_eq!(ids, expected);
+
+    let req = test::TestRequest::get()
+        .uri(&format!(
+            "/arepl/records/mutual-victors?level_id={first_level}&other_level_id={second_level}&high_extremes=true"
+        ))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+    let body: serde_json::Value = read_body_json(resp).await;
+    let ids: Vec<String> = body["mutuals"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|user| user["id"].as_str().unwrap().to_owned())
+        .collect();
+
+    assert_eq!(ids, vec![high_extreme_user.to_string()]);
+}
+
+#[actix_web::test]
 async fn get_records_sort_oldest_created_at() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;

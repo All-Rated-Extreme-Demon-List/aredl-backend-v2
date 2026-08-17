@@ -14,6 +14,7 @@ use crate::users::badges::UserBadge;
 use crate::users::{user_filter, ExtendedBaseUser};
 use actix_web::web;
 use chrono::{DateTime, Utc};
+use diesel::dsl::count;
 use diesel::pg::Pg;
 use diesel::{Insertable, Selectable};
 use serde::{Deserialize, Serialize};
@@ -153,6 +154,21 @@ pub struct RecordsQueryOptions {
     pub submitter_filter: Option<String>,
     pub sort: Option<RecordSortField>,
 }
+
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct MutualVictorsQuery {
+    pub level_id: String,
+    pub other_level_id: String,
+    pub high_extremes: Option<bool>,
+}
+
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct MutualVictors {
+    pub level: ExtendedBaseLevel,
+    pub other_level: ExtendedBaseLevel,
+    pub mutuals: Vec<ExtendedBaseUser>,
+}
+
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct ResolvedRecordPage {
     data: Vec<ResolvedRecord>,
@@ -351,6 +367,57 @@ impl Record {
                 ))
                 .execute(conn)?;
             Ok(())
+        })
+    }
+}
+
+impl MutualVictors {
+    pub fn find(
+        conn: &mut DbConnection,
+        level_id: Uuid,
+        other_level_id: Uuid,
+        high_extremes: Option<bool>,
+    ) -> Result<Self, ApiError> {
+        let level = levels::table
+            .filter(levels::id.eq(level_id))
+            .select(ExtendedBaseLevel::as_select())
+            .first::<ExtendedBaseLevel>(conn)?;
+        let other_level = levels::table
+            .filter(levels::id.eq(other_level_id))
+            .select(ExtendedBaseLevel::as_select())
+            .first::<ExtendedBaseLevel>(conn)?;
+
+        let other_level_victors = records::table
+            .filter(records::level_id.eq(other_level_id))
+            .select(records::submitted_by)
+            .load::<Uuid>(conn)?;
+
+        let mut mutuals_query = records::table
+            .filter(records::level_id.eq(level_id))
+            .filter(records::submitted_by.eq_any(other_level_victors))
+            .inner_join(users::table.on(records::submitted_by.eq(users::id)))
+            .into_boxed();
+
+        if let Some(true) = high_extremes {
+            let users_high_extremes = records::table
+                .group_by(records::submitted_by)
+                .having(count(records::id).gt(50))
+                .select(records::submitted_by)
+                .load::<Uuid>(conn)?;
+
+            mutuals_query = mutuals_query.filter(records::submitted_by.eq_any(users_high_extremes));
+        }
+
+        let mutuals = mutuals_query
+            .select(ExtendedBaseUser::as_select())
+            .distinct()
+            .order_by(users::username.asc())
+            .load::<ExtendedBaseUser>(conn)?;
+
+        Ok(Self {
+            level,
+            other_level,
+            mutuals,
         })
     }
 }

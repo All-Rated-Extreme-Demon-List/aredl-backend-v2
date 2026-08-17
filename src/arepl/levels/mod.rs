@@ -1,7 +1,7 @@
 mod creators;
 mod custom_copies;
 mod history;
-mod id_resolver;
+pub(crate) mod id_resolver;
 mod model;
 mod notes;
 mod packs;
