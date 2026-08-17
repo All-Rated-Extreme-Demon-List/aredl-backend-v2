@@ -1,0 +1,10 @@
+DROP INDEX IF EXISTS arepl.arepl_submissions_status_idx;
+DROP INDEX IF EXISTS aredl.aredl_submissions_status_idx;
+DROP INDEX IF EXISTS arepl.arepl_user_leaderboard_rank_user_idx;
+DROP INDEX IF EXISTS aredl.aredl_user_leaderboard_rank_user_idx;
+DROP INDEX IF EXISTS arepl.arepl_user_leaderboard_user_id_idx;
+DROP INDEX IF EXISTS aredl.aredl_user_leaderboard_user_id_idx;
+DROP INDEX IF EXISTS public.users_global_name_trgm_idx;
+DROP INDEX IF EXISTS arepl.arepl_levels_position_idx;
+DROP INDEX IF EXISTS aredl.aredl_levels_position_idx;
+DROP INDEX IF EXISTS aredl.aredl_position_history_full_view_affected_ord_idx;
