@@ -31,7 +31,7 @@ impl<T> Paginated<T> {
     ) -> Self {
         Self::from_data_maybe_limit(query, count, data, false)
     }
-    
+
     pub fn from_data_maybe_limit<const D: i64, const M: i64>(
         query: PageQuery<D, M>,
         count: i64,
