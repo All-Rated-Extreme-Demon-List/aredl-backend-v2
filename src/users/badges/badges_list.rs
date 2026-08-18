@@ -90,6 +90,14 @@ pub const SINGLE_BADGES: &[&str] = &[
     "global.verifier",
     "platformer.fastest_time",
 ];
+// used to require having beaten a level after a certain date for it to count for a hardest rank badge (e.g. to avoid getting the top 500 badge for beating Acu when it was top 400)
+//(badge scope, hardest level rank, date after which the record can be counted for this badge")
+pub const HARDEST_LEVEL_BADGE_CUTOFFS: &[(&str, &str, &str)] = &[
+    ("classic", "1000", "2025-01-01T00:00:00Z"),
+    ("classic", "750", "2024-01-01T00:00:00Z"),
+    ("classic", "500", "2023-01-01T00:00:00Z"),
+    ("classic", "250", "2022-01-01T00:00:00Z"),
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TagBadgeMode {

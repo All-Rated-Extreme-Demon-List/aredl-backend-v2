@@ -1,0 +1,9 @@
+DROP VIEW IF EXISTS arepl.badge_level_statistics;
+DROP VIEW IF EXISTS aredl.badge_level_statistics;
+DROP INDEX IF EXISTS arepl.arepl_records_fastest_time_idx;
+DROP INDEX IF EXISTS arepl.arepl_records_first_victor_idx;
+DROP INDEX IF EXISTS aredl.aredl_records_first_victor_idx;
+DROP INDEX IF EXISTS arepl.arepl_position_history_full_view_level_first_placed_idx;
+DROP INDEX IF EXISTS aredl.aredl_position_history_full_view_level_first_placed_idx;
+DROP INDEX IF EXISTS arepl.arepl_position_history_full_view_level_action_idx;
+DROP INDEX IF EXISTS aredl.aredl_position_history_full_view_level_action_idx;

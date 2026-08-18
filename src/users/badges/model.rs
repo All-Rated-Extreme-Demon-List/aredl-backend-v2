@@ -2,7 +2,8 @@ use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::user_badges;
 use crate::users::badges::badges_list::{
-    AvailableBadges, TagBadgeMode, HARDEST_PACK_TIERS, LEVEL_TAG_BADGES, NLW_TIERS,
+    AvailableBadges, TagBadgeMode, HARDEST_LEVEL_BADGE_CUTOFFS, HARDEST_PACK_TIERS,
+    LEVEL_TAG_BADGES, NLW_TIERS,
 };
 use crate::users::badges::statistics::UserStatistics;
 use chrono::{DateTime, Utc};
@@ -243,12 +244,24 @@ impl UserStatistics {
                 }),
             (_, ["hardest_level", threshold]) => {
                 threshold.parse::<i32>().ok().is_some_and(|threshold| {
-                    scope_statistics
-                        .levels_records
+                    let threshold_text = threshold.to_string();
+                    let cutoff = HARDEST_LEVEL_BADGE_CUTOFFS
                         .iter()
-                        .filter_map(|level| level.position)
-                        .min()
-                        .is_some_and(|position| position <= threshold)
+                        .find(|(cutoff_scope, cutoff_threshold, _)| {
+                            *cutoff_scope == *scope && *cutoff_threshold == threshold_text.as_str()
+                        })
+                        .and_then(|(_, _, cutoff)| DateTime::parse_from_rfc3339(cutoff).ok())
+                        .map(|cutoff| cutoff.with_timezone(&Utc));
+
+                    scope_statistics.levels_records.iter().any(|level| {
+                        level
+                            .current_position
+                            .is_some_and(|position| position <= threshold)
+                            || (level.position.is_some_and(|position| position <= threshold)
+                                && cutoff
+                                    .as_ref()
+                                    .is_none_or(|cutoff| level.achieved_at >= *cutoff))
+                    })
                 })
             }
             (_, ["leaderboard_rank", threshold]) => {

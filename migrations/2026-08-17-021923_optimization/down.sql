@@ -1,3 +1,11 @@
+DROP INDEX IF EXISTS arepl.arepl_pack_levels_level_pack_idx;
+DROP INDEX IF EXISTS aredl.aredl_pack_levels_level_pack_idx;
+DROP INDEX IF EXISTS arepl.arepl_levels_created_user_level_idx;
+DROP INDEX IF EXISTS aredl.aredl_levels_created_user_level_idx;
+DROP INDEX IF EXISTS arepl.arepl_records_submitted_by_level_idx;
+DROP INDEX IF EXISTS aredl.aredl_records_submitted_by_level_idx;
+DROP INDEX IF EXISTS arepl.arepl_levels_publisher_position_idx;
+DROP INDEX IF EXISTS aredl.aredl_levels_publisher_position_idx;
 DROP INDEX IF EXISTS arepl.arepl_submissions_status_idx;
 DROP INDEX IF EXISTS aredl.aredl_submissions_status_idx;
 DROP INDEX IF EXISTS arepl.arepl_user_leaderboard_rank_user_idx;

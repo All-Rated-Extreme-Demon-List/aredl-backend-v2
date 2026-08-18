@@ -48,6 +48,26 @@ diesel::joinable!(position_history_full_view -> levels (affected_level));
 diesel::allow_tables_to_appear_in_same_query!(levels, position_history_full_view,);
 
 diesel::table! {
+    aredl.badge_level_statistics (submitted_by, id) {
+        submitted_by -> Uuid,
+        id -> Uuid,
+        name -> Varchar,
+        position -> Nullable<Int4>,
+        current_position -> Nullable<Int4>,
+        level_id -> Int4,
+        two_player -> Bool,
+        publisher_id -> Uuid,
+        edel_enjoyment -> Nullable<Float8>,
+        nlw_tier -> Nullable<Varchar>,
+        tags -> Array<Nullable<Text>>,
+        is_verification -> Bool,
+        achieved_at -> Timestamptz,
+        is_first_victor -> Bool,
+        is_fastest_time -> Bool,
+    }
+}
+
+diesel::table! {
     aredl.packs_points (id) {
         id -> Uuid,
         name -> Varchar,

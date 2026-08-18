@@ -31,3 +31,27 @@ ON aredl.submissions (status);
 
 CREATE INDEX IF NOT EXISTS arepl_submissions_status_idx
 ON arepl.submissions (status);
+
+CREATE INDEX IF NOT EXISTS aredl_levels_publisher_position_idx
+ON aredl.levels (publisher_id, position);
+
+CREATE INDEX IF NOT EXISTS arepl_levels_publisher_position_idx
+ON arepl.levels (publisher_id, position);
+
+CREATE INDEX IF NOT EXISTS aredl_records_submitted_by_level_idx
+ON aredl.records (submitted_by, level_id);
+
+CREATE INDEX IF NOT EXISTS arepl_records_submitted_by_level_idx
+ON arepl.records (submitted_by, level_id);
+
+CREATE INDEX IF NOT EXISTS aredl_levels_created_user_level_idx
+ON aredl.levels_created (user_id, level_id);
+
+CREATE INDEX IF NOT EXISTS arepl_levels_created_user_level_idx
+ON arepl.levels_created (user_id, level_id);
+
+CREATE INDEX IF NOT EXISTS aredl_pack_levels_level_pack_idx
+ON aredl.pack_levels (level_id, pack_id);
+
+CREATE INDEX IF NOT EXISTS arepl_pack_levels_level_pack_idx
+ON arepl.pack_levels (level_id, pack_id);
