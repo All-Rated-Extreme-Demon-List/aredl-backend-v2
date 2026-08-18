@@ -1,6 +1,8 @@
 use crate::app_data::db::DbAppState;
 use crate::aredl::levels::records::{LevelResolvedRecordExtended, LevelResolvedRecordPage};
 use crate::aredl::levels::{id_resolver::resolve_level_id, records::RecordQuery};
+use crate::auth::Authenticated;
+use crate::auth::Permission::LevelModify;
 use crate::cache_control::CacheController;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
@@ -28,15 +30,21 @@ async fn find_all(
     level_id: web::Path<String>,
     page_query: web::Query<PageQuery<20>>,
     opts: web::Query<RecordQuery>,
+    authenticated: Option<Authenticated>,
 ) -> Result<HttpResponse, ApiError> {
     let records = web::block(move || {
         let conn = &mut db.connection()?;
         let level_id = resolve_level_id(conn, level_id.into_inner().as_str())?;
+        let should_ignore_page_limit = match authenticated.as_ref() {
+            Some(auth) => auth.has_permission(conn, LevelModify)?,
+            None => false,
+        };
         LevelResolvedRecordExtended::find_all_by_level(
             conn,
             level_id,
             page_query.into_inner(),
             &opts.into_inner(),
+            should_ignore_page_limit,
         )
     })
     .await??;

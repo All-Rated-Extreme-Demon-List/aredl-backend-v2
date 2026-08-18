@@ -85,6 +85,7 @@ impl LevelResolvedRecordExtended {
         level_id: Uuid,
         page_query: PageQuery<D>,
         opts: &RecordQuery,
+        ignore_page_limit: bool,
     ) -> Result<Paginated<LevelResolvedRecordPage>, ApiError> {
         let build_filtered = |conn: &mut DbConnection| -> Result<_, ApiError> {
             let mut query = records::table
@@ -114,10 +115,12 @@ impl LevelResolvedRecordExtended {
         };
 
         let total_count = build_filtered(conn)?.count().get_result::<i64>(conn)?;
+        let per_page = page_query.per_page_maybe_limit(ignore_page_limit);
+        let offset = page_query.offset_maybe_limit(ignore_page_limit);
 
         let records = build_filtered(conn)?
-            .limit(page_query.per_page())
-            .offset(page_query.offset())
+            .limit(per_page)
+            .offset(offset)
             .order(records::achieved_at.asc())
             .select((Record::as_select(), ExtendedBaseUser::as_select()))
             .load::<(Record, ExtendedBaseUser)>(conn)?;
@@ -127,12 +130,13 @@ impl LevelResolvedRecordExtended {
             .map(|(record, user)| Self::from_data(record, user))
             .collect();
 
-        Ok(Paginated::from_data(
+        Ok(Paginated::from_data_maybe_limit(
             page_query,
             total_count,
             LevelResolvedRecordPage {
                 data: records_resolved,
             },
+            ignore_page_limit,
         ))
     }
 

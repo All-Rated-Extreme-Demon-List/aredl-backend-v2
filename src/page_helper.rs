@@ -29,8 +29,17 @@ impl<T> Paginated<T> {
         count: i64,
         data: T,
     ) -> Self {
+        Self::from_data_maybe_limit(query, count, data, false)
+    }
+    
+    pub fn from_data_maybe_limit<const D: i64, const M: i64>(
+        query: PageQuery<D, M>,
+        count: i64,
+        data: T,
+        ignore_limit: bool,
+    ) -> Self {
         let count = count.max(0);
-        let per_page = query.per_page();
+        let per_page = query.per_page_maybe_limit(ignore_limit);
         let pages = if count == 0 {
             0
         } else {
@@ -48,7 +57,16 @@ impl<T> Paginated<T> {
 
 impl<const D: i64, const M: i64> PageQuery<D, M> {
     pub fn per_page(&self) -> i64 {
-        self.per_page.unwrap_or(D).clamp(1, M)
+        self.per_page_maybe_limit(false)
+    }
+
+    pub fn per_page_maybe_limit(&self, ignore_limit: bool) -> i64 {
+        let requested = self.per_page.unwrap_or(D);
+        if ignore_limit {
+            requested.max(1)
+        } else {
+            requested.clamp(1, M)
+        }
     }
 
     pub fn page(&self) -> i64 {
@@ -56,6 +74,11 @@ impl<const D: i64, const M: i64> PageQuery<D, M> {
     }
 
     pub fn offset(&self) -> i64 {
-        self.per_page().saturating_mul(self.page() - 1)
+        self.offset_maybe_limit(false)
+    }
+
+    pub fn offset_maybe_limit(&self, ignore_limit: bool) -> i64 {
+        self.per_page_maybe_limit(ignore_limit)
+            .saturating_mul(self.page() - 1)
     }
 }

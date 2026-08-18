@@ -62,6 +62,18 @@ async fn page_query_uses_custom_max_per_page() {
 }
 
 #[test]
+async fn page_query_optionally_allows_any_per_page() {
+    let q = PageQuery::<20> {
+        per_page: Some(500),
+        page: Some(2),
+    };
+    assert_eq!(q.per_page_maybe_limit(true), 500);
+    assert_eq!(q.per_page_maybe_limit(false), 100);
+    assert_eq!(q.page(), 2);
+    assert_eq!(q.offset_maybe_limit(true), 500);
+}
+
+#[test]
 async fn page_query_offset_saturates() {
     let q = PageQuery::<20> {
         per_page: Some(100),
