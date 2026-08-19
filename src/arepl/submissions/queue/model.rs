@@ -39,7 +39,7 @@ impl Submission {
     fn queue_position_filter(
         target_priority: bool,
         target_created_at: DateTime<Utc>,
-        target_updated_at: DateTime<Utc>,
+        target_priority_at: DateTime<Utc>,
         target_has_raw_footage: bool,
     ) -> SubmissionFilter {
         let mut base_filter: SubmissionFilter =
@@ -53,7 +53,7 @@ impl Submission {
             Box::new(
                 base_filter
                     .and(submissions::priority.eq(true))
-                    .and(submissions::updated_at.lt(target_updated_at)),
+                    .and(submissions::priority_at.lt(target_priority_at)),
             )
         } else {
             Box::new(
@@ -68,7 +68,7 @@ impl Submission {
         conn: &mut DbConnection,
         submission_id: Uuid,
     ) -> Result<(i64, bool), ApiError> {
-        let (target_priority, target_created_at, target_updated_at, target_has_raw_footage): (
+        let (target_priority, target_created_at, target_priority_at, target_has_raw_footage): (
             bool,
             DateTime<Utc>,
             DateTime<Utc>,
@@ -79,7 +79,7 @@ impl Submission {
             .select((
                 submissions::priority,
                 submissions::created_at,
-                submissions::updated_at,
+                submissions::priority_at,
                 submissions::raw_url.is_not_null(),
             ))
             .first(conn)?;
@@ -89,7 +89,7 @@ impl Submission {
             .filter(Self::queue_position_filter(
                 target_priority,
                 target_created_at,
-                target_updated_at,
+                target_priority_at,
                 target_has_raw_footage,
             ))
             .count()

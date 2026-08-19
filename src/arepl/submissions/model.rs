@@ -73,6 +73,8 @@ pub struct Submission {
     pub reviewer_id: Option<Uuid>,
     /// Whether the record was submitted as a priority record.
     pub priority: bool,
+    /// Timestamp used to order priority submissions in the prio queue.
+    pub priority_at: DateTime<Utc>,
     /// Notes given by the reviewer when reviewing the record.
     pub reviewer_notes: Option<String>,
     /// Private notes given by the reviewer when reviewing the record.
@@ -121,6 +123,8 @@ pub struct SubmissionResolved {
     pub reviewer: Option<ExtendedBaseUser>,
     /// Whether the record was submitted as a priority record.
     pub priority: bool,
+    /// Timestamp used to order priority submissions in the prio queue.
+    pub priority_at: DateTime<Utc>,
     /// Notes given by the reviewer when reviewing the record.
     pub reviewer_notes: Option<String>,
     /// Whether or not this submission has been locked by a staff member
@@ -194,7 +198,7 @@ impl Submission {
 
         let next_id = if priority {
             query
-                .order(submissions::updated_at.asc())
+                .order(submissions::priority_at.asc())
                 .first(conn)
                 .optional()?
         } else {
