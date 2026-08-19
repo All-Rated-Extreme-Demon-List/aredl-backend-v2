@@ -5,7 +5,7 @@ use crate::users::badges::badges_list::{
     AvailableBadges, TagBadgeMode, HARDEST_LEVEL_BADGE_CUTOFFS, HARDEST_PACK_TIERS,
     LEVEL_TAG_BADGES, NLW_TIERS,
 };
-use crate::users::badges::statistics::UserStatistics;
+use crate::users::badges::statistics::{BadgeLevelStatistics, UserListStatistics, UserStatistics};
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::{delete, insert_into, Selectable};
@@ -166,6 +166,15 @@ impl UserBadge {
 }
 
 impl UserStatistics {
+    fn list_statistics(&self, scope: &str) -> Option<&UserListStatistics> {
+        match scope {
+            "classic" => Some(&self.classic),
+            "platformer" => Some(&self.platformer),
+            "global" => Some(&self.global),
+            _ => None,
+        }
+    }
+
     fn get_unlocked_badges(&self) -> HashMap<String, Option<String>> {
         AvailableBadges::get_all()
             .iter()
@@ -181,11 +190,8 @@ impl UserStatistics {
             return false;
         };
 
-        let scope_statistics = match *scope {
-            "classic" => &self.classic,
-            "platformer" => &self.platformer,
-            "global" => &self.global,
-            _ => return false,
+        let Some(scope_statistics) = self.list_statistics(scope) else {
+            return false;
         };
 
         match (*scope, kind) {
@@ -244,24 +250,11 @@ impl UserStatistics {
                 }),
             (_, ["hardest_level", threshold]) => {
                 threshold.parse::<i32>().ok().is_some_and(|threshold| {
-                    let threshold_text = threshold.to_string();
-                    let cutoff = HARDEST_LEVEL_BADGE_CUTOFFS
+                    let cutoff = Self::hardest_level_cutoff(scope, threshold);
+                    scope_statistics
+                        .levels_records
                         .iter()
-                        .find(|(cutoff_scope, cutoff_threshold, _)| {
-                            *cutoff_scope == *scope && *cutoff_threshold == threshold_text.as_str()
-                        })
-                        .and_then(|(_, _, cutoff)| DateTime::parse_from_rfc3339(cutoff).ok())
-                        .map(|cutoff| cutoff.with_timezone(&Utc));
-
-                    scope_statistics.levels_records.iter().any(|level| {
-                        level
-                            .current_position
-                            .is_some_and(|position| position <= threshold)
-                            || (level.position.is_some_and(|position| position <= threshold)
-                                && cutoff
-                                    .as_ref()
-                                    .is_none_or(|cutoff| level.achieved_at >= *cutoff))
-                    })
+                        .any(|level| Self::qualifies_for_hardest_level(level, threshold, cutoff))
                 })
             }
             (_, ["leaderboard_rank", threshold]) => {
@@ -390,17 +383,36 @@ impl UserStatistics {
         let parts = badge_code.split('.').collect::<Vec<_>>();
 
         match parts.as_slice() {
-            ["classic", "hardest_level", _] => self
-                .classic
-                .levels_records
-                .iter()
-                .min_by(|left, right| {
-                    left.position
-                        .unwrap_or(i32::MAX)
-                        .cmp(&right.position.unwrap_or(i32::MAX))
-                        .then(left.name.cmp(&right.name))
-                })
-                .map(|level| level.name.clone()),
+            [scope @ ("classic" | "platformer"), "hardest_level", threshold] => {
+                let threshold = threshold.parse::<i32>().ok()?;
+                let cutoff = Self::hardest_level_cutoff(scope, threshold);
+
+                let level = self
+                    .list_statistics(scope)?
+                    .levels_records
+                    .iter()
+                    .filter(|level| Self::qualifies_for_hardest_level(level, threshold, cutoff))
+                    .min_by(|left, right| {
+                        left.current_position
+                            .or(left.position)
+                            .unwrap_or(i32::MAX)
+                            .cmp(
+                                &right
+                                    .current_position
+                                    .or(right.position)
+                                    .unwrap_or(i32::MAX),
+                            )
+                            .then(left.name.cmp(&right.name))
+                    })?;
+
+                let completed_at = level.achieved_at.format("%Y-%m-%d");
+                let completion_rank = level
+                    .position
+                    .map(|position| format!(" when it was ranked #{position}"))
+                    .unwrap_or_default();
+
+                Some(format!("{} on {completed_at}{completion_rank}", level.name))
+            }
             // description should be the longest list of levels by the same publisher completed by the user
             ["global", "publisher_levels", _] => {
                 let mut publisher_levels = HashMap::new();
@@ -421,50 +433,75 @@ impl UserStatistics {
                     })
                 })?;
 
-                Self::levels_to_text(
+                Self::format_levels_list(
                     levels
                         .into_iter()
-                        .map(|level| (level.position, level.name.as_str()))
-                        .collect(),
+                        .map(|level| (level.position, level.name.as_str())),
                 )
             }
-            ["global", "first_victor"] => Self::levels_to_text(
+            ["global", "first_victor"] => Self::format_levels_list(
                 self.global
                     .levels_records
                     .iter()
                     .filter(|level| level.is_first_victor)
-                    .map(|level| (level.position, level.name.as_str()))
-                    .collect(),
+                    .map(|level| (level.position, level.name.as_str())),
             ),
-            ["platformer", "fastest_time"] => Self::levels_to_text(
+            ["platformer", "fastest_time"] => Self::format_levels_list(
                 self.platformer
                     .levels_records
                     .iter()
                     .filter(|level| level.is_fastest_time)
-                    .map(|level| (level.position, level.name.as_str()))
-                    .collect(),
+                    .map(|level| (level.position, level.name.as_str())),
             ),
-            ["global", "creator"] => Self::levels_to_text(
+            ["global", "creator"] => Self::format_levels_list(
                 self.global
                     .created_levels
                     .iter()
-                    .map(|level| (level.position, level.name.as_str()))
-                    .collect(),
+                    .map(|level| (level.position, level.name.as_str())),
             ),
-            ["global", "verifier"] => Self::levels_to_text(
+            ["global", "verifier"] => Self::format_levels_list(
                 self.global
                     .levels_records
                     .iter()
                     .filter(|level| level.is_verification)
-                    .map(|level| (level.position, level.name.as_str()))
-                    .collect(),
+                    .map(|level| (level.position, level.name.as_str())),
             ),
             _ => None,
         }
     }
 
+    // for the hardest level badge, gets the defined cutoff date for a given tier
+    fn hardest_level_cutoff(scope: &str, threshold: i32) -> Option<DateTime<Utc>> {
+        let threshold = threshold.to_string();
+
+        HARDEST_LEVEL_BADGE_CUTOFFS
+            .iter()
+            .find(|(cutoff_scope, cutoff_threshold, _)| {
+                *cutoff_scope == scope && *cutoff_threshold == threshold
+            })
+            .and_then(|(_, _, cutoff)| DateTime::parse_from_rfc3339(cutoff).ok())
+            .map(|cutoff| cutoff.with_timezone(&Utc))
+    }
+
+    // for the hardest level badge, checks if a level completion can award it
+    fn qualifies_for_hardest_level(
+        level: &BadgeLevelStatistics,
+        threshold: i32,
+        cutoff: Option<DateTime<Utc>>,
+    ) -> bool {
+        level
+            .current_position
+            .is_some_and(|position| position <= threshold)
+            || (level.position.is_some_and(|position| position <= threshold)
+                && cutoff.is_none_or(|cutoff| level.achieved_at >= cutoff))
+    }
+
     // creates a text list of levels names from a list of levels
-    fn levels_to_text(mut levels: Vec<(Option<i32>, &str)>) -> Option<String> {
+    fn format_levels_list<'a>(
+        levels: impl IntoIterator<Item = (Option<i32>, &'a str)>,
+    ) -> Option<String> {
+        let mut levels = levels.into_iter().collect::<Vec<_>>();
+
         if levels.is_empty() {
             return None;
         }
