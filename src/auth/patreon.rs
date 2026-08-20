@@ -4,8 +4,10 @@ use crate::auth::oauth::{exchange_oauth_code, OAuthCallbackQuery, OAuthRequestDa
 use crate::auth::OAuthOptions;
 use crate::auth::{Authenticated, UserAuth};
 use crate::error_handler::ApiError;
+use crate::get_secret;
 use crate::providers::ProvidersAppState;
 use crate::schema::oauth_connected_accounts;
+use crate::utils::patreon::grant_patreon_plus;
 use actix_http::header;
 use actix_web::web::Json;
 use actix_web::{get, post, web, HttpResponse};
@@ -15,6 +17,7 @@ use url::Url;
 use utoipa::{OpenApi, ToSchema};
 
 use diesel::prelude::*;
+
 #[derive(Debug, Serialize, ToSchema)]
 struct PatreonLinkResponse {
     authorize_url: String,
@@ -28,6 +31,8 @@ struct PatreonLinkedResponse {
 #[derive(Debug, Deserialize)]
 struct PatreonIdentityResponse {
     data: PatreonIdentityData,
+    #[serde(default)]
+    included: Vec<PatreonMembership>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -40,6 +45,34 @@ struct PatreonIdentityData {
 struct PatreonIdentityAttributes {
     full_name: Option<String>,
     vanity: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PatreonMembership {
+    #[serde(rename = "type")]
+    resource_type: String,
+    attributes: Option<PatreonMembershipAttributes>,
+    relationships: Option<PatreonMembershipRelationships>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PatreonMembershipAttributes {
+    patron_status: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PatreonMembershipRelationships {
+    campaign: Option<PatreonRelationshipOne>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PatreonRelationshipOne {
+    data: Option<PatreonRelationshipData>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PatreonRelationshipData {
+    id: String,
 }
 
 #[utoipa::path(
@@ -131,12 +164,21 @@ async fn patreon_callback(
         request_data.pkce_verifier.clone(),
     )
     .await?;
-    let patreon_user = fetch_patreon_identity(&access_token, &patreon_auth.api_base_uri).await?;
-    let provider_user_id = patreon_user.data.id;
-    let provider_user_name = patreon_user
-        .data
-        .attributes
-        .and_then(|attributes| attributes.full_name.or(attributes.vanity));
+    let campaign_id = get_secret("PATREON_CAMPAIGN_ID")?;
+    let patreon_user = fetch_patreon_identity(
+        &providers.context.http,
+        &access_token,
+        &patreon_auth.api_base_uri,
+    )
+    .await?;
+
+    if !patreon_user.is_active_member_of(&campaign_id) {
+        return Err(ApiError::Forbidden(
+            "This Patreon account is not a member of the AREDL Patreon. Make sure you are trying to connect the right Patreon account, and that you are subscribed to the correct AREDL Patreon page.",
+        ));
+    }
+    let provider_user_id = patreon_user.data.id.clone();
+    let provider_user_name = patreon_user.provider_user_name();
 
     let provider_user_id_for_db = provider_user_id.clone();
     let provider_user_name_for_db = provider_user_name.clone();
@@ -173,6 +215,8 @@ async fn patreon_callback(
                 ))
                 .execute(conn)?;
 
+            grant_patreon_plus(conn, user_id)?;
+
             Ok::<_, ApiError>(())
         })
     })
@@ -193,24 +237,29 @@ async fn patreon_callback(
 }
 
 async fn fetch_patreon_identity(
+    client: &reqwest::Client,
     access_token: &str,
     patreon_base: &str,
 ) -> Result<PatreonIdentityResponse, ApiError> {
     let url = format!("{patreon_base}/oauth2/v2/identity");
 
-    let response = reqwest::Client::new()
+    let response = client
         .get(url)
         .bearer_auth(access_token)
-        .query(&[("fields[user]", "full_name,vanity")])
+        .query(&[
+            ("include", "memberships,memberships.campaign"),
+            ("fields[user]", "full_name,vanity"),
+            ("fields[member]", "patron_status"),
+        ])
         .send()
         .await
-        .map_err(|e| ApiError::BadGateway(format!("Failed to request patreon identity: {e}")))?;
+        .map_err(|e| ApiError::BadGateway(format!("Failed to request Patreon identity: {e}")))?;
 
     let status = response.status();
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
         return Err(ApiError::BadGateway(format!(
-            "Failed to request patreon identity ({status}): {body}"
+            "Failed to request Patreon identity ({status}): {body}"
         )));
     }
 
@@ -218,8 +267,38 @@ async fn fetch_patreon_identity(
         .json::<PatreonIdentityResponse>()
         .await
         .map_err(|e| {
-            ApiError::BadGateway(format!("Failed to parse patreon identity response: {e}"))
+            ApiError::BadGateway(format!("Failed to parse Patreon identity response: {e}"))
         })
+}
+
+impl PatreonIdentityResponse {
+    fn is_active_member_of(&self, campaign_id: &str) -> bool {
+        self.included
+            .iter()
+            .any(|membership| membership.is_active_member_of(campaign_id))
+    }
+
+    fn provider_user_name(self) -> Option<String> {
+        let attributes = self.data.attributes?;
+        attributes.full_name.or(attributes.vanity)
+    }
+}
+
+impl PatreonMembership {
+    fn is_active_member_of(&self, campaign_id: &str) -> bool {
+        self.resource_type == "member"
+            && self
+                .attributes
+                .as_ref()
+                .and_then(|attributes| attributes.patron_status.as_deref())
+                == Some("active_patron")
+            && self
+                .relationships
+                .as_ref()
+                .and_then(|relationships| relationships.campaign.as_ref())
+                .and_then(|campaign| campaign.data.as_ref())
+                .is_some_and(|campaign| campaign.id == campaign_id)
+    }
 }
 
 #[derive(OpenApi)]

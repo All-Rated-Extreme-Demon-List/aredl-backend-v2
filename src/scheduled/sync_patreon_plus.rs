@@ -1,12 +1,10 @@
 use crate::app_data::db::{DbAppState, DbConnection};
-use crate::aredl::submissions::SubmissionStatus as AredlSubmissionStatus;
-use crate::arepl::submissions::SubmissionStatus as AreplSubmissionStatus;
 use crate::auth::oauth::OAuthProvider;
-use crate::auth::Permission;
 use crate::error_handler::{ApiError, StartupError};
-use crate::providers::{context::backend_oauth::OAuthProviderContext, ProvidersAppState};
+use crate::providers::ProvidersAppState;
 use crate::scheduled::{parse_startup_schedule, sleep_until_next};
-use crate::schema::{aredl, arepl, oauth_connected_accounts, role_permissions_full, user_roles};
+use crate::schema::{oauth_connected_accounts, user_roles};
+use crate::utils::patreon::{patreon_plus_role_id, set_users_submissions_to_priority};
 use crate::{get_optional_secret, get_secret};
 use serde::Deserialize;
 use std::collections::HashSet;
@@ -15,6 +13,20 @@ use tokio::task;
 use uuid::Uuid;
 
 use diesel::prelude::*;
+
+#[derive(Debug, PartialEq)]
+pub struct PatreonPlusSyncResult {
+    pub matched_user_ids: Vec<Uuid>,
+    pub removed_user_count: usize,
+    pub aredl_prioritized_count: usize,
+    pub arepl_prioritized_count: usize,
+}
+
+struct PatreonActiveMembers {
+    total_member_count: usize,
+    active_user_ids: HashSet<String>,
+}
+
 #[derive(Debug, Deserialize)]
 struct PatreonMembersResponse {
     data: Vec<PatreonMember>,
@@ -63,19 +75,6 @@ struct PatreonCursors {
     next: Option<String>,
 }
 
-pub struct PatreonActiveMembers {
-    total_member_count: usize,
-    active_user_ids: HashSet<String>,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct PatreonPlusSyncResult {
-    pub matched_user_ids: Vec<Uuid>,
-    pub removed_user_count: usize,
-    pub aredl_prioritized_count: usize,
-    pub arepl_prioritized_count: usize,
-}
-
 pub async fn start_patreon_plus_sync(
     db: Arc<DbAppState>,
     providers: Arc<ProvidersAppState>,
@@ -106,14 +105,18 @@ pub async fn start_patreon_plus_sync(
         loop {
             tracing::info!("Syncing Patreon AREDL+ users");
 
-            let active_members = fetch_active_patreon_user_ids(
-                &client,
-                &db,
-                &patreon_auth,
-                &patreon_base,
-                &campaign_id,
-            )
-            .await;
+            let active_members = match patreon_auth.get_access_token(&db).await {
+                Ok(access_token) => {
+                    fetch_active_patreon_user_ids(
+                        &client,
+                        &access_token,
+                        &patreon_base,
+                        &campaign_id,
+                    )
+                    .await
+                }
+                Err(e) => Err(e),
+            };
 
             match active_members {
                 Ok(active_members) => match db.connection() {
@@ -144,19 +147,17 @@ pub async fn start_patreon_plus_sync(
 
 async fn fetch_active_patreon_user_ids(
     client: &reqwest::Client,
-    db: &DbAppState,
-    patreon_auth: &OAuthProviderContext,
+    access_token: &str,
     patreon_base: &str,
     campaign_id: &str,
 ) -> Result<PatreonActiveMembers, ApiError> {
-    let access_token = patreon_auth.get_access_token(db).await?;
     let mut active_user_ids = HashSet::new();
     let mut total_member_count = 0;
     let mut cursor: Option<String> = None;
 
     loop {
         let url = format!("{patreon_base}/oauth2/v2/campaigns/{campaign_id}/members");
-        let mut request = client.get(url).bearer_auth(&access_token).query(&[
+        let mut request = client.get(url).bearer_auth(access_token).query(&[
             ("include", "user"),
             ("fields[member]", "patron_status"),
             ("fields[user]", "full_name,vanity"),
@@ -190,24 +191,11 @@ async fn fetch_active_patreon_user_ids(
         total_member_count += page.data.len();
 
         for member in page.data {
-            let active = member
-                .attributes
-                .and_then(|attributes| attributes.patron_status)
-                .as_deref()
-                == Some("active_patron");
-
-            if !active {
+            if !member.is_active() {
                 continue;
             }
 
-            let user_id = member
-                .relationships
-                .and_then(|relationships| relationships.user)
-                .and_then(|user| user.data)
-                .map(|data| data.id)
-                .unwrap_or(member.id);
-
-            active_user_ids.insert(user_id);
+            active_user_ids.insert(member.user_id().unwrap_or(member.id));
         }
 
         cursor = page
@@ -231,15 +219,7 @@ pub fn apply_patreon_plus_sync(
     conn: &mut DbConnection,
     active_patreon_user_ids: &HashSet<String>,
 ) -> Result<PatreonPlusSyncResult, ApiError> {
-    let role_id = role_permissions_full::table
-        .select(role_permissions_full::role_id)
-        .group_by(role_permissions_full::role_id)
-        .having(diesel::dsl::count(role_permissions_full::permission).eq(1))
-        .having(
-            diesel::dsl::max(role_permissions_full::permission)
-                .eq(Permission::SubmissionPriority.to_string()),
-        )
-        .first::<i32>(conn)?;
+    let role_id = patreon_plus_role_id(conn)?;
 
     let matched_user_ids = if active_patreon_user_ids.is_empty() {
         Vec::new()
@@ -281,29 +261,8 @@ pub fn apply_patreon_plus_sync(
                 .execute(conn)?;
         }
 
-        let (aredl_prioritized_count, arepl_prioritized_count) = if matched_user_ids.is_empty() {
-            (0, 0)
-        } else {
-            let aredl_count = diesel::update(
-                aredl::submissions::table
-                    .filter(aredl::submissions::status.eq(AredlSubmissionStatus::Pending))
-                    .filter(aredl::submissions::submitted_by.eq_any(&matched_user_ids))
-                    .filter(aredl::submissions::priority.eq(false)),
-            )
-            .set(aredl::submissions::priority.eq(true))
-            .execute(conn)?;
-
-            let arepl_count = diesel::update(
-                arepl::submissions::table
-                    .filter(arepl::submissions::status.eq(AreplSubmissionStatus::Pending))
-                    .filter(arepl::submissions::submitted_by.eq_any(&matched_user_ids))
-                    .filter(arepl::submissions::priority.eq(false)),
-            )
-            .set(arepl::submissions::priority.eq(true))
-            .execute(conn)?;
-
-            (aredl_count, arepl_count)
-        };
+        let (aredl_prioritized_count, arepl_prioritized_count) =
+            set_users_submissions_to_priority(conn, &matched_user_ids)?;
 
         Ok::<_, ApiError>(PatreonPlusSyncResult {
             matched_user_ids,
@@ -312,4 +271,21 @@ pub fn apply_patreon_plus_sync(
             arepl_prioritized_count,
         })
     })
+}
+
+impl PatreonMember {
+    fn is_active(&self) -> bool {
+        self.attributes
+            .as_ref()
+            .and_then(|attributes| attributes.patron_status.as_deref())
+            == Some("active_patron")
+    }
+
+    fn user_id(&self) -> Option<String> {
+        self.relationships
+            .as_ref()
+            .and_then(|relationships| relationships.user.as_ref())
+            .and_then(|user| user.data.as_ref())
+            .map(|data| data.id.clone())
+    }
 }
