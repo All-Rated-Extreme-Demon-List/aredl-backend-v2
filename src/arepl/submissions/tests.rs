@@ -1089,7 +1089,7 @@ async fn get_submission_queue() {
 }
 
 #[actix_web::test]
-async fn priority_submission_queue_position_uses_updated_at() {
+async fn priority_submission_queue_position_uses_priority_at() {
     let (app, db, auth, _) = init_test_app().await;
     let (user, _) = create_test_user(&db, None).await;
     let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
@@ -1127,7 +1127,7 @@ async fn regular_submission_queue_position_still_uses_created_at() {
 }
 
 #[actix_web::test]
-async fn claim_priority_submission_uses_updated_at() {
+async fn claim_priority_submission_uses_priority_at() {
     let (app, db, auth, _) = init_test_app().await;
     let (visible_reviewer, _) = create_test_full_reviewer(&db).await;
     let (submitter, _) = create_test_user(&db, None).await;

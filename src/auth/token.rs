@@ -4,7 +4,9 @@ use crate::schema::users;
 use crate::users::User;
 use chrono::{DateTime, Duration, TimeZone as _, Utc};
 use diesel::result::Error as DieselError;
-use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{
+    decode, encode, errors::ErrorKind, Algorithm, DecodingKey, EncodingKey, Header, Validation,
+};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -58,7 +60,13 @@ pub fn decode_token<T: Into<String>>(
 
     let decoded =
         decode::<TokenClaims>(&token_str, decoding_key, &Validation::new(Algorithm::HS256))
-            .map_err(|e| ApiError::Unauthorized(format!("Invalid token! {e}").as_str()))?;
+            .map_err(|e| {
+                if matches!(e.kind(), ErrorKind::ExpiredSignature) {
+                    ApiError::Unauthorized("Expired token")
+                } else {
+                    ApiError::Unauthorized("Invalid token")
+                }
+            })?;
 
     if !expected_types.is_empty() && !expected_types.contains(&decoded.claims.token_type.as_str()) {
         return Err(ApiError::Unauthorized("Invalid token type"));

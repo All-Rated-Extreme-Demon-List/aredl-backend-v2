@@ -129,11 +129,11 @@ where
             );
         };
 
-        let Ok(token_claims) =
-            decode_token(token, &app_state.jwt_decoding_key, &["initial", "access"])
-        else {
-            return Self::error_future(http_req, &ApiError::Unauthorized("Failed to decode token"));
-        };
+        let token_claims =
+            match decode_token(token, &app_state.jwt_decoding_key, &["initial", "access"]) {
+                Ok(token_claims) => token_claims,
+                Err(error) => return Self::error_future(http_req, &error),
+            };
 
         let Ok(user_claims) = decode_user_claims(&token_claims) else {
             return Self::error_future(
