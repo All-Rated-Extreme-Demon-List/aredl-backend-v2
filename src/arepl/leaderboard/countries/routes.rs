@@ -5,7 +5,6 @@ use crate::arepl::leaderboard::countries::{
 use crate::arepl::leaderboard::LeaderboardOrder;
 use crate::cache_control::CacheController;
 use crate::error_handler::ApiError;
-use crate::page_helper::{PageQuery, Paginated};
 use actix_web::{get, web, HttpResponse};
 use std::sync::Arc;
 use utoipa::OpenApi;
@@ -13,29 +12,22 @@ use utoipa::OpenApi;
 #[utoipa::path(
     get,
     summary = "Leaderboard - Countries",
-    description = "Get the countries leaderboard paginated data. Refreshes hourly",
+    description = "Get the countries leaderboard data. Refreshes hourly",
     tag = "AREDL (P)",
     params(
-        ("page" = Option<i64>, Query, description = "The page of the countries leaderboard to fetch"),
-        ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page"),
         ("order" = Option<LeaderboardOrder>, Query, description = "The sorting type to use. Defaults to using points"),
     ),
     responses(
-        (status = 200, body = [Paginated<CountryLeaderboardPage>])
+        (status = 200, body = [CountryLeaderboardPage])
     ),
 )]
 #[get("", wrap = "CacheController::public_with_max_age(300)")]
 async fn list(
     db: web::Data<Arc<DbAppState>>,
-    page_query: web::Query<PageQuery<100>>,
     options: web::Query<CountryLeaderboardQueryOptions>,
 ) -> Result<HttpResponse, ApiError> {
     let result = web::block(move || {
-        CountryLeaderboardPage::find(
-            &mut db.connection()?,
-            page_query.into_inner(),
-            options.into_inner(),
-        )
+        CountryLeaderboardPage::find_all(&mut db.connection()?, options.into_inner())
     })
     .await??;
     Ok(HttpResponse::Ok().json(result))

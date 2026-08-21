@@ -2,7 +2,6 @@ use crate::app_data::db::DbConnection;
 use crate::aredl::leaderboard::LeaderboardOrder;
 use crate::aredl::levels::BaseLevel;
 use crate::error_handler::ApiError;
-use crate::page_helper::{PageQuery, Paginated};
 use crate::scheduled::refresh_matviews::MatviewRefreshLog;
 use crate::schema::{
     aredl::{country_leaderboard, levels},
@@ -62,19 +61,15 @@ pub struct CountryLeaderboardQueryOptions {
 }
 
 impl CountryLeaderboardPage {
-    pub fn find<const D: i64>(
+    pub fn find_all(
         conn: &mut DbConnection,
-        page_query: PageQuery<D>,
         options: CountryLeaderboardQueryOptions,
-    ) -> Result<Paginated<Self>, ApiError> {
+    ) -> Result<Self, ApiError> {
         let build_query = || {
             country_leaderboard::table
                 .left_join(levels::table.on(country_leaderboard::hardest.eq(levels::id.nullable())))
                 .into_boxed::<Pg>()
         };
-
-        let total_count: i64 = build_query().count().get_result(conn)?;
-
         let mut query = build_query();
 
         match options.order.unwrap_or(LeaderboardOrder::TotalPoints) {
@@ -92,8 +87,6 @@ impl CountryLeaderboardPage {
         query = query.then_order_by(country_leaderboard::country.asc());
 
         let raw_entries: Vec<(CountryLeaderboardEntry, Option<BaseLevel>)> = query
-            .limit(page_query.per_page())
-            .offset(page_query.offset())
             .select((
                 CountryLeaderboardEntry::as_select(),
                 Option::<BaseLevel>::as_select(),
@@ -122,13 +115,9 @@ impl CountryLeaderboardPage {
                 last_refresh: Utc::now(),
             });
 
-        Ok(Paginated::<Self>::from_data(
-            page_query,
-            total_count,
-            Self {
-                last_refreshed: refresh_log.last_refresh,
-                data: entries_resolved,
-            },
-        ))
+        Ok(Self {
+            last_refreshed: refresh_log.last_refresh,
+            data: entries_resolved,
+        })
     }
 }
