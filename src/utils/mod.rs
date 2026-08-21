@@ -1,3 +1,4 @@
+pub(crate) mod patreon;
 mod probe;
 mod routes;
 

@@ -16,8 +16,15 @@ pub async fn new_patreon_context() -> Option<OAuthProviderContext> {
         }
     };
 
-    if config.scopes.is_empty() {
+    if !config.scopes.iter().any(|scope| scope == "identity") {
         config.scopes.push("identity".to_owned());
+    }
+    if !config
+        .scopes
+        .iter()
+        .any(|scope| scope == "identity.memberships")
+    {
+        config.scopes.push("identity.memberships".to_owned());
     }
     config
         .return_path

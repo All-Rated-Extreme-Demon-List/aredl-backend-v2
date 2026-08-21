@@ -69,7 +69,7 @@ pub fn set_oauth_env(provider: OAuthProvider, server_base: &str) {
                     "token_uri": "{server_base}/api/oauth2/token",
                     "api_base_uri": "{server_base}",
                     "redirect_uri": "https://example.com/patreon/callback",
-                    "scopes": ["identity"],
+                    "scopes": ["identity", "identity.memberships"],
                     "use_pkce": false,
                     "use_openid_scope": false,
                     "auth_type": "request_body"

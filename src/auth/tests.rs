@@ -5,8 +5,9 @@ use {
         seed_oauth_request,
     },
     crate::{
-        auth::{create_test_token, oauth::OAuthProvider, token},
+        auth::{create_test_token, oauth::OAuthProvider, token, Permission},
         providers::test_utils::{clear_oauth_env, set_oauth_env},
+        roles::test_utils::create_test_role_with_permission,
         test_utils::init_test_app,
         users::test_utils::create_test_user,
     },
@@ -18,6 +19,9 @@ use {
     httpmock::{prelude::*, Mock},
     serial_test::serial,
 };
+
+#[cfg(test)]
+const TEST_PATREON_CAMPAIGN_ID: &str = "campaign_aredl";
 
 #[cfg(test)]
 async fn mock_patreon_code_exchange<'a>(
@@ -82,7 +86,22 @@ async fn mock_patreon_identity<'a>(
                             "full_name": full_name,
                             "vanity": null
                         }
-                    }
+                    },
+                    "included": [{
+                        "id": "member_123",
+                        "type": "member",
+                        "attributes": {
+                            "patron_status": "active_patron"
+                        },
+                        "relationships": {
+                            "campaign": {
+                                "data": {
+                                    "id": TEST_PATREON_CAMPAIGN_ID,
+                                    "type": "campaign"
+                                }
+                            }
+                        }
+                    }]
                 }));
         })
         .await
@@ -564,6 +583,7 @@ async fn discord_callback_with_callback_url_redirects() {
 #[serial]
 async fn patreon_callback_links_current_site_user() {
     clear_oauth_env(OAuthProvider::Patreon);
+    std::env::set_var("PATREON_CAMPAIGN_ID", TEST_PATREON_CAMPAIGN_ID);
 
     let server = MockServer::start_async().await;
     set_oauth_env(OAuthProvider::Patreon, &server.base_url());
@@ -572,6 +592,7 @@ async fn patreon_callback_links_current_site_user() {
     mock_patreon_identity(&server, "patreon_access", "patreon_123", "Patron One").await;
 
     let (app, db, _, _) = init_test_app().await;
+    create_test_role_with_permission(&db, 5, Permission::SubmissionPriority).await;
     let (user_id, _) = create_test_user(&db, None).await;
 
     seed_oauth_request(
@@ -601,6 +622,7 @@ async fn patreon_callback_links_current_site_user() {
 #[serial]
 async fn patreon_callback_rejects_patreon_link_connected_to_another_user() {
     clear_oauth_env(OAuthProvider::Patreon);
+    std::env::set_var("PATREON_CAMPAIGN_ID", TEST_PATREON_CAMPAIGN_ID);
 
     let server = MockServer::start_async().await;
     set_oauth_env(OAuthProvider::Patreon, &server.base_url());
@@ -648,6 +670,7 @@ async fn patreon_callback_rejects_patreon_link_connected_to_another_user() {
 #[serial]
 async fn patreon_callback_replaces_current_users_old_patreon_link() {
     clear_oauth_env(OAuthProvider::Patreon);
+    std::env::set_var("PATREON_CAMPAIGN_ID", TEST_PATREON_CAMPAIGN_ID);
 
     let server = MockServer::start_async().await;
     set_oauth_env(OAuthProvider::Patreon, &server.base_url());
@@ -656,6 +679,7 @@ async fn patreon_callback_replaces_current_users_old_patreon_link() {
     mock_patreon_identity(&server, "patreon_access", "patreon_new", "Patron Two").await;
 
     let (app, db, _, _) = init_test_app().await;
+    create_test_role_with_permission(&db, 5, Permission::SubmissionPriority).await;
     let (current_user, _) = create_test_user(&db, None).await;
 
     seed_connected_account(
