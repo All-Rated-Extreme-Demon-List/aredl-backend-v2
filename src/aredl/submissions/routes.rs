@@ -136,7 +136,7 @@ async fn find_me(
 #[utoipa::path(
     post,
     summary = "[Auth]Create a submission",
-    description = "Create a submission to be checked by a moderator.",
+    description = "Create a submission to be checked by a reviewer.",
     tag = "AREDL - Submissions",
     responses(
         (status = 201, body = Submission)

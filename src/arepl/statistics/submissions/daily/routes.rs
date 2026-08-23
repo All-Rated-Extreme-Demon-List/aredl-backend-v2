@@ -17,17 +17,19 @@ use uuid::Uuid;
 #[derive(Deserialize, ToSchema)]
 pub struct StatsQuery {
     pub reviewer_id: Option<Uuid>,
+    pub level_id: Option<Uuid>,
 }
 
 #[utoipa::path(
     get,
     summary = "[Staff]Get submission statistics",
-    description = "Get per-day submission statistics, optionally filtered by moderator.",
+    description = "Get per-day submission statistics, optionally filtered by reviewer or level.",
     tag = "AREDL (P) - Statistics",
     params(
         ("page" = Option<i64>, Query, description = "The page to fetch"),
         ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page"),
-        ("reviewer_id" = Option<Uuid>, Query, description = "Filter for a specific moderator")
+        ("reviewer_id" = Option<Uuid>, Query, description = "Filter for a specific reviewer"),
+        ("level_id" = Option<Uuid>, Query, description = "Filter for a specific level")
     ),
     responses((status = 200, body = Paginated<DailyStatsPage>)),
     security(("access_token" = ["SubmissionSeeStatistics"]), ("api_key" = ["SubmissionSeeStatistics"]))
@@ -45,6 +47,7 @@ pub async fn stats(
             &mut db.connection()?,
             page.into_inner(),
             query.reviewer_id,
+            query.level_id,
             &authenticated,
         )
     })
@@ -63,14 +66,14 @@ pub struct LeaderboardQuery {
 
 #[utoipa::path(
     get,
-    summary = "[Staff]Moderator leaderboard",
-    description = "List moderators ranked by number of checked submissions.",
+    summary = "[Staff]Reviewer leaderboard",
+    description = "List reviewers ranked by number of checked submissions.",
     tag = "AREDL (P) - Statistics",
     params(
         ("since" = Option<NaiveDate>, Query, description = "Only include data since this date"),
         ("until" = Option<NaiveDate>, Query, description = "Only include data until this date"),
-        ("reviewer_id" = Option<Uuid>, Query, description = "Filter for a specific moderator"),
-        ("only_active" = Option<bool>, Query, description = "Whether or not to exclude moderators that aren't staff anymore"),
+        ("reviewer_id" = Option<Uuid>, Query, description = "Filter for a specific reviewer"),
+        ("only_active" = Option<bool>, Query, description = "Whether or not to exclude reviewers that aren't staff anymore"),
         ("include_hidden_reviewers" = Option<bool>, Query, description = "Whether to include hidden reviewers in the results. Requires `ReviewersAudit`; otherwise forced to false."),
     ),
     responses((status = 200, body = [ResolvedLeaderboardRow])),

@@ -28,7 +28,7 @@ use {
 };
 
 #[actix_web::test]
-async fn submission_stats_filter_moderator() {
+async fn submission_stats_filter_reviewer() {
     let (app, db, auth, _db) = init_test_app().await;
     let (mod1, _) = create_test_user(&db, Some(Permission::SubmissionSeeStatistics)).await;
     let token = create_test_token(mod1, &auth.jwt_encoding_key).unwrap();
@@ -54,8 +54,47 @@ async fn submission_stats_filter_moderator() {
     let entries = body["data"].as_array().expect("`data` should be array");
     assert_eq!(entries.len(), 1, "Entries array length should be 1");
     let entry = &entries[0];
+    assert!(entry.get("submitted").is_none());
     assert_eq!(entry["accepted"].as_i64().unwrap(), 1);
     assert_eq!(entry["denied"].as_i64().unwrap(), 1);
+    assert_eq!(entry["reviewed"].as_i64().unwrap(), 2);
+}
+
+#[actix_web::test]
+async fn submission_stats_filter_level() {
+    let (app, db, auth, _db) = init_test_app().await;
+    let (mod1, _) = create_test_user(&db, Some(Permission::SubmissionSeeStatistics)).await;
+    let token = create_test_token(mod1, &auth.jwt_encoding_key).unwrap();
+
+    let level_id = create_test_level(&db).await;
+    let other_level_id = create_test_level(&db).await;
+
+    let sub = create_test_submission(level_id, Uuid::new_v4(), &db).await;
+    insert_history_entry(sub, Some(mod1), SubmissionStatus::Accepted, &db).await;
+    insert_history_entry(sub, Some(mod1), SubmissionStatus::Denied, &db).await;
+
+    let other_sub = create_test_submission(other_level_id, Uuid::new_v4(), &db).await;
+    insert_history_entry(other_sub, Some(mod1), SubmissionStatus::Accepted, &db).await;
+
+    refresh_test_submission_stats(&db).await;
+
+    let uri = format!("/aredl/statistics/submissions/daily?level_id={level_id}&page=1&per_page=10");
+    let req = test::TestRequest::get()
+        .uri(&uri)
+        .insert_header((header::AUTHORIZATION, format!("Bearer {token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "Status: {}", resp.status());
+
+    let body: Value = read_body_json(resp).await;
+    let entries = body["data"].as_array().expect("`data` should be array");
+    assert_eq!(entries.len(), 1, "Entries array length should be 1");
+    let entry = &entries[0];
+    assert_eq!(entry["level"]["id"].as_str().unwrap(), level_id.to_string());
+    assert_eq!(entry["submitted"].as_i64().unwrap(), 1);
+    assert_eq!(entry["accepted"].as_i64().unwrap(), 1);
+    assert_eq!(entry["denied"].as_i64().unwrap(), 1);
+    assert_eq!(entry["reviewed"].as_i64().unwrap(), 2);
 }
 
 #[actix_web::test]
@@ -101,7 +140,7 @@ async fn submission_stats_reviewer_filter_returns_empty_for_hidden_reviewer_with
     let entries = body["data"].as_array().expect("`data` should be array");
     assert_eq!(entries.len(), 1);
     assert_eq!(
-        entries[0]["moderator"]["id"].as_str().unwrap(),
+        entries[0]["reviewer"]["id"].as_str().unwrap(),
         hidden_reviewer.to_string()
     );
 }
@@ -151,7 +190,7 @@ async fn submission_leaderboard_ignores_include_hidden_reviewers_without_audit()
     assert!(resp.status().is_success());
     let arr: Vec<ResolvedLeaderboardRow> = read_body_json(resp).await;
     assert_eq!(arr.len(), 1);
-    assert_eq!(arr[0].moderator.id, full_reviewer);
+    assert_eq!(arr[0].reviewer.id, full_reviewer);
 
     let req = test::TestRequest::get()
         .uri(uri)
@@ -161,8 +200,8 @@ async fn submission_leaderboard_ignores_include_hidden_reviewers_without_audit()
     assert!(resp.status().is_success());
     let arr: Vec<ResolvedLeaderboardRow> = read_body_json(resp).await;
     assert_eq!(arr.len(), 2);
-    assert!(arr.iter().any(|row| row.moderator.id == hidden_reviewer));
-    assert!(arr.iter().any(|row| row.moderator.id == full_reviewer));
+    assert!(arr.iter().any(|row| row.reviewer.id == hidden_reviewer));
+    assert!(arr.iter().any(|row| row.reviewer.id == full_reviewer));
 }
 
 #[actix_web::test]
@@ -231,10 +270,10 @@ async fn submission_leaderboard_counts_and_ordering() {
     let arr: Vec<ResolvedLeaderboardRow> = read_body_json(resp).await;
 
     assert_eq!(arr.len(), 2);
-    assert_eq!(arr[0].moderator.id, mod1);
-    assert_eq!(arr[0].total, 3);
-    assert_eq!(arr[1].moderator.id, mod2);
-    assert_eq!(arr[1].total, 2);
+    assert_eq!(arr[0].reviewer.id, mod1);
+    assert_eq!(arr[0].reviewed, 3);
+    assert_eq!(arr[1].reviewer.id, mod2);
+    assert_eq!(arr[1].reviewed, 2);
 }
 
 #[actix_web::test]
@@ -264,8 +303,8 @@ async fn submission_leaderboard_only_active_filters_out() {
     let arr: Vec<ResolvedLeaderboardRow> = read_body_json(resp).await;
 
     assert_eq!(arr.len(), 1);
-    assert_eq!(arr[0].moderator.id, mod_active);
-    assert_eq!(arr[0].total, 1);
+    assert_eq!(arr[0].reviewer.id, mod_active);
+    assert_eq!(arr[0].reviewed, 1);
 }
 
 #[actix_web::test]
@@ -365,11 +404,11 @@ async fn submission_leaderboard_until_filters_out_later_dates() {
     let arr: Vec<ResolvedLeaderboardRow> = read_body_json(resp).await;
 
     assert_eq!(arr.len(), 2);
-    assert_eq!(arr[0].moderator.id, mod1);
+    assert_eq!(arr[0].reviewer.id, mod1);
     assert_eq!(arr[0].accepted, 1);
     assert_eq!(arr[0].denied, 0);
     assert_eq!(arr[0].under_consideration, 1);
-    assert_eq!(arr[0].total, 2);
-    assert_eq!(arr[1].moderator.id, mod2);
-    assert_eq!(arr[1].total, 1);
+    assert_eq!(arr[0].reviewed, 2);
+    assert_eq!(arr[1].reviewer.id, mod2);
+    assert_eq!(arr[1].reviewed, 1);
 }

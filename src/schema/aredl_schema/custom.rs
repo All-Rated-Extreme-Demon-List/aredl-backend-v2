@@ -268,28 +268,44 @@ diesel::allow_tables_to_appear_in_same_query!(users, submissions);
 diesel::allow_tables_to_appear_in_same_query!(users, level_notes);
 
 diesel::table! {
-    aredl.submission_stats (day, reviewer_id) {
+    aredl.submission_daily_total_stats (day) {
         day -> Date,
-        reviewer_id -> Nullable<Uuid>,
         submitted -> Int8,
         accepted -> Int8,
         denied -> Int8,
         under_consideration -> Int8,
+        reviewed -> Int8,
     }
 }
 
-diesel::joinable!(submission_stats -> users (reviewer_id));
-diesel::allow_tables_to_appear_in_same_query!(submission_stats, users);
-
 diesel::table! {
-    aredl.submission_stats_leaderboard (reviewer_id) {
+    aredl.submission_daily_reviewer_stats (day, reviewer_id) {
+        day -> Date,
         reviewer_id -> Uuid,
         accepted -> Int8,
         denied -> Int8,
         under_consideration -> Int8,
-        total -> Int8,
+        reviewed -> Int8,
     }
 }
+
+diesel::table! {
+    aredl.submission_daily_level_stats (day, level_id) {
+        day -> Date,
+        level_id -> Uuid,
+        submitted -> Int8,
+        accepted -> Int8,
+        denied -> Int8,
+        under_consideration -> Int8,
+        reviewed -> Int8,
+    }
+}
+
+diesel::joinable!(submission_daily_reviewer_stats -> users (reviewer_id));
+diesel::joinable!(submission_daily_level_stats -> levels (level_id));
+
+diesel::allow_tables_to_appear_in_same_query!(submission_daily_reviewer_stats, users);
+diesel::allow_tables_to_appear_in_same_query!(submission_daily_level_stats, levels);
 
 diesel::table! {
     aredl.record_totals (level_id) {

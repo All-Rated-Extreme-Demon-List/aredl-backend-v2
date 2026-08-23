@@ -3,7 +3,7 @@ use {crate::app_data::db::DbAppState, diesel::prelude::*, diesel::sql_query, std
 
 #[cfg(test)]
 pub async fn refresh_test_submission_stats(db: &Arc<DbAppState>) {
-    sql_query("REFRESH MATERIALIZED VIEW arepl.submission_stats")
+    sql_query("SELECT arepl.rebuild_submission_daily_stats()")
         .execute(&mut db.connection().unwrap())
         .expect("Failed to refresh submission stats");
 }
