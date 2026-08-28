@@ -11,7 +11,7 @@ use utoipa::OpenApi;
 #[utoipa::path(
     get,
     summary = "[Staff]Total records",
-    description = "List levels ranked by number of records, as well as total records.",
+    description = "List levels ranked by number of records, as well as total records and verifications.",
     tag = "AREDL (P) - Statistics",
     responses((status = 200, body = [ResolvedLevelTotalRecordsRow])),
 )]

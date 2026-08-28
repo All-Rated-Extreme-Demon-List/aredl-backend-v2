@@ -15,12 +15,14 @@ use diesel::prelude::*;
 pub struct LevelTotalRecordsRow {
     pub level_id: Option<Uuid>,
     pub records: i64,
+    pub verifications: i64,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct ResolvedLevelTotalRecordsRow {
     pub level: Option<ExtendedBaseLevel>,
     pub records: i64,
+    pub verifications: i64,
 }
 
 pub fn total_records(
@@ -28,7 +30,10 @@ pub fn total_records(
 ) -> Result<Vec<ResolvedLevelTotalRecordsRow>, ApiError> {
     let rows: Vec<(LevelTotalRecordsRow, Option<ExtendedBaseLevel>)> = record_totals::table
         .left_join(levels::table.on(levels::id.nullable().eq(record_totals::level_id)))
-        .order_by(record_totals::records.desc())
+        .order_by((
+            record_totals::records.desc(),
+            record_totals::verifications.desc(),
+        ))
         .select((
             LevelTotalRecordsRow::as_select(),
             Option::<ExtendedBaseLevel>::as_select(),
@@ -40,6 +45,7 @@ pub fn total_records(
         .map(|(stats, level)| ResolvedLevelTotalRecordsRow {
             level,
             records: stats.records,
+            verifications: stats.verifications,
         })
         .collect::<Vec<_>>();
 

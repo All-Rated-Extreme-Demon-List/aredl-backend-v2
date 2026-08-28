@@ -312,6 +312,7 @@ diesel::table! {
     arepl.record_totals (level_id) {
         level_id -> Nullable<Uuid>,
         records -> Int8,
+        verifications -> Int8,
     }
 }
 

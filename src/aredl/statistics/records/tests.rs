@@ -4,12 +4,12 @@ use {
     crate::{
         aredl::{
             levels::test_utils::create_test_level_with_record,
-            records::test_utils::create_test_record,
+            records::test_utils::{create_test_record, set_test_record_verification},
             statistics::records::ResolvedLevelTotalRecordsRow,
         },
         auth::create_test_token,
         test_utils::init_test_app,
-        users::test_utils::create_test_user,
+        users::test_utils::{create_test_user, set_test_user_ban_level},
     },
     actix_web::{
         http::header,
@@ -30,6 +30,11 @@ async fn total_records_counts_and_ordering() {
 
     create_test_record(&db, user_2, level1).await;
     create_test_record(&db, user_3, level1).await;
+    let verification = create_test_record(&db, user_2, level2).await;
+    set_test_record_verification(&db, verification, true).await;
+    let banned_verification = create_test_record(&db, user_3, level2).await;
+    set_test_record_verification(&db, banned_verification, true).await;
+    set_test_user_ban_level(&db, user_3, 3).await;
 
     refresh_test_record_totals(&db);
 
@@ -44,9 +49,12 @@ async fn total_records_counts_and_ordering() {
 
     assert_eq!(arr.len(), 3);
     assert!(arr[0].level.is_none());
-    assert_eq!(arr[0].records, 4);
+    assert_eq!(arr[0].records, 3);
+    assert_eq!(arr[0].verifications, 1);
     assert_eq!(arr[1].level.as_ref().unwrap().id, level1);
-    assert_eq!(arr[1].records, 3);
+    assert_eq!(arr[1].records, 2);
+    assert_eq!(arr[1].verifications, 0);
     assert_eq!(arr[2].level.as_ref().unwrap().id, level2);
     assert_eq!(arr[2].records, 1);
+    assert_eq!(arr[2].verifications, 1);
 }
