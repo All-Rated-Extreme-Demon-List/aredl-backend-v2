@@ -143,6 +143,7 @@ pub mod aredl {
             nlw_tier -> Nullable<Varchar>,
             status -> LevelStatus,
             requires_raw_footage -> Bool,
+            nlw_tier_estimate -> Nullable<Varchar>,
         }
     }
 

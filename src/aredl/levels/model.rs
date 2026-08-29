@@ -93,6 +93,8 @@ pub struct Level {
     pub gddl_tier: Option<f64>,
     /// NLW tier for the level, fetched from NLW (Non List Worthy).
     pub nlw_tier: Option<String>,
+    /// Estimated NLW tier for where a pending level will place.
+    pub nlw_tier_estimate: Option<String>,
 }
 
 #[derive(Serialize, Debug, ToSchema)]
@@ -127,6 +129,8 @@ pub struct LevelPlace {
     pub tags: Option<Vec<Option<String>>>,
     /// Description of the level.
     pub description: Option<String>,
+    /// Estimated NLW tier for where a pending level will place.
+    pub nlw_tier_estimate: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, AsChangeset, ToSchema, Debug)]
@@ -155,6 +159,9 @@ pub struct LevelUpdate {
     /// Description of the level.
     #[serde(default, with = "double_option")]
     pub description: Option<Option<String>>,
+    /// Estimated NLW tier for where a pending level will place.
+    #[serde(default, with = "double_option")]
+    pub nlw_tier_estimate: Option<Option<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema, Default)]
@@ -198,6 +205,8 @@ pub struct ResolvedLevel {
     pub gddl_tier: Option<f64>,
     /// NLW tier for the level, fetched from NLW (Non List Worthy).
     pub nlw_tier: Option<String>,
+    /// Estimated NLW tier for where a pending level will place.
+    pub nlw_tier_estimate: Option<String>,
     /// User who published the level.
     pub publisher: BaseUser,
     /// Records that are marked as verifications for the level.
@@ -274,6 +283,7 @@ impl Level {
                 levels::is_edel_pending,
                 levels::gddl_tier,
                 levels::nlw_tier,
+                levels::nlw_tier_estimate,
             ))
             .load::<Self>(conn)?;
 
@@ -413,6 +423,7 @@ impl ResolvedLevel {
             is_edel_pending: level.is_edel_pending,
             gddl_tier: level.gddl_tier,
             nlw_tier: level.nlw_tier,
+            nlw_tier_estimate: level.nlw_tier_estimate,
             publisher,
             verifications,
         }
