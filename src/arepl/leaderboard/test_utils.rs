@@ -15,8 +15,4 @@ pub async fn refresh_test_leaderboards(db: &Arc<DbAppState>) {
     diesel::sql_query("REFRESH MATERIALIZED VIEW arepl.clans_leaderboard")
         .execute(conn)
         .expect("Failed to update clans leaderboard");
-
-    diesel::sql_query("REFRESH MATERIALIZED VIEW arepl.position_history_full_view")
-        .execute(conn)
-        .expect("Failed to update position history");
 }

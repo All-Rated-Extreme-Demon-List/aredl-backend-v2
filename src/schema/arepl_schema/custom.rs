@@ -31,7 +31,7 @@ diesel::table! {
     use diesel::sql_types::*;
     use crate::schema::arepl::sql_types::LevelStatus;
 
-    arepl.position_history_full_view (affected_level) {
+    arepl.position_history_full_view (ord, affected_level) {
         ord -> Int4,
         affected_level -> Uuid,
         position -> Nullable<Int4>,

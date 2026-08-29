@@ -111,9 +111,9 @@ pub async fn set_test_level_gd_id(db: &Arc<DbAppState>, level_id: Uuid, gd_id: i
 
 #[cfg(test)]
 pub async fn refresh_test_position_history(db: &Arc<DbAppState>) {
-    sql_query("REFRESH MATERIALIZED VIEW aredl.position_history_full_view")
+    sql_query("SELECT aredl.rebuild_position_history_full_view()")
         .execute(&mut db.connection().unwrap())
-        .expect("Failed to refresh position history view");
+        .expect("Failed to rebuild position history table");
 }
 
 #[cfg(test)]
