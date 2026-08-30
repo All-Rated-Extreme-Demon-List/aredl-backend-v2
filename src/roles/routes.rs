@@ -16,7 +16,7 @@ use utoipa::OpenApi;
 		(status = 200, body = [RoleResolved])
 	),
 )]
-#[get("", wrap = "UserAuth::require(Permission::RoleManage)")]
+#[get("", wrap = "UserAuth::require(Permission::RoleAssign)")]
 async fn find_all(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
     let roles = web::block(move || RoleResolved::find_all(&mut db.connection()?)).await??;
     Ok(HttpResponse::Ok().json(roles))
@@ -32,11 +32,11 @@ async fn find_all(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiErr
         (status = 200, body = Role)
     ),
     security(
-        ("access_token" = ["RoleManage"]),
-        ("api_key" = ["RoleManage"]),
+        ("access_token" = ["RoleModify"]),
+        ("api_key" = ["RoleModify"]),
     ),
 )]
-#[post("", wrap = "UserAuth::require(Permission::RoleManage)")]
+#[post("", wrap = "UserAuth::require(Permission::RoleModify)")]
 async fn create(
     db: web::Data<Arc<DbAppState>>,
     role: web::Json<RoleCreate>,
@@ -63,11 +63,11 @@ async fn create(
         (status = 200, body = Role)
     ),
     security(
-        ("access_token" = ["RoleManage"]),
-        ("api_key" = ["RoleManage"]),
+        ("access_token" = ["RoleModify"]),
+        ("api_key" = ["RoleModify"]),
     ),
 )]
-#[patch("/{id}", wrap = "UserAuth::require(Permission::RoleManage)")]
+#[patch("/{id}", wrap = "UserAuth::require(Permission::RoleModify)")]
 async fn update(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<i32>,
@@ -100,11 +100,11 @@ async fn update(
         (status = 200, body = Role)
     ),
     security(
-        ("access_token" = ["RoleManage"]),
-        ("api_key" = ["RoleManage"]),
+        ("access_token" = ["RoleModify"]),
+        ("api_key" = ["RoleModify"]),
     ),
 )]
-#[delete("/{id}", wrap = "UserAuth::require(Permission::RoleManage)")]
+#[delete("/{id}", wrap = "UserAuth::require(Permission::RoleModify)")]
 async fn delete(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,

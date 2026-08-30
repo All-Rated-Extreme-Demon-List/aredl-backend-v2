@@ -33,8 +33,10 @@ pub enum Permission {
     UserBan,
     /// Allows redacting a user (ban_level 4)
     UserRedact,
+    /// Allows assigning roles below your highest role to users
+    RoleAssign,
     /// Allows editing roles and permissions below your highest role
-    RoleManage,
+    RoleModify,
     /// Allows reviewing merge requests submitted through the site
     MergeReview,
     /// Allows directly merging two users

@@ -19,11 +19,11 @@ use utoipa::OpenApi;
         (status = 200, body = [String])
     ),
     security(
-        ("access_token" = ["RoleManage"]),
-        ("api_key" = ["RoleManage"]),
+        ("access_token" = ["RoleModify"]),
+        ("api_key" = ["RoleModify"]),
     ),
 )]
-#[get("", wrap = "UserAuth::require(Permission::RoleManage)")]
+#[get("", wrap = "UserAuth::require(Permission::RoleModify)")]
 async fn find_all(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<i32>,
@@ -48,11 +48,11 @@ async fn find_all(
         (status = 200, body = [String])
     ),
     security(
-        ("access_token" = ["RoleManage"]),
-        ("api_key" = ["RoleManage"]),
+        ("access_token" = ["RoleModify"]),
+        ("api_key" = ["RoleModify"]),
     ),
 )]
-#[get("/resolved", wrap = "UserAuth::require(Permission::RoleManage)")]
+#[get("/resolved", wrap = "UserAuth::require(Permission::RoleModify)")]
 async fn find_all_resolved(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<i32>,
@@ -78,11 +78,11 @@ async fn find_all_resolved(
         (status = 200, body = [String])
     ),
     security(
-        ("access_token" = ["RoleManage"]),
-        ("api_key" = ["RoleManage"]),
+        ("access_token" = ["RoleModify"]),
+        ("api_key" = ["RoleModify"]),
     ),
 )]
-#[post("", wrap = "UserAuth::require(Permission::RoleManage)")]
+#[post("", wrap = "UserAuth::require(Permission::RoleModify)")]
 async fn set(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<i32>,
@@ -116,11 +116,11 @@ async fn set(
         (status = 200, body = [String])
     ),
     security(
-        ("access_token" = ["RoleManage"]),
-        ("api_key" = ["RoleManage"]),
+        ("access_token" = ["RoleModify"]),
+        ("api_key" = ["RoleModify"]),
     ),
 )]
-#[patch("", wrap = "UserAuth::require(Permission::RoleManage)")]
+#[patch("", wrap = "UserAuth::require(Permission::RoleModify)")]
 async fn add(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<i32>,
@@ -154,11 +154,11 @@ async fn add(
         (status = 200, body = [String])
     ),
     security(
-        ("access_token" = ["RoleManage"]),
-        ("api_key" = ["RoleManage"]),
+        ("access_token" = ["RoleModify"]),
+        ("api_key" = ["RoleModify"]),
     ),
 )]
-#[delete("", wrap = "UserAuth::require(Permission::RoleManage)")]
+#[delete("", wrap = "UserAuth::require(Permission::RoleModify)")]
 async fn delete(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<i32>,

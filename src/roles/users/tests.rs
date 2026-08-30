@@ -15,7 +15,7 @@ use {
 #[actix_web::test]
 async fn add_role_users() {
     let (app, db, auth, _) = init_test_app().await;
-    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleAssign)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
     let role_id = create_test_role(&db, 10).await;
     let (u1, _) = create_test_user(&db, None).await;
@@ -36,7 +36,7 @@ async fn add_role_users() {
 #[actix_web::test]
 async fn set_role_users() {
     let (app, db, auth, _) = init_test_app().await;
-    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleAssign)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
     let role_id = create_test_role(&db, 10).await;
     let (u1, _) = create_test_user(&db, None).await;
@@ -58,7 +58,7 @@ async fn set_role_users() {
 #[actix_web::test]
 async fn delete_role_users() {
     let (app, db, auth, _) = init_test_app().await;
-    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleAssign)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
     let role_id = create_test_role(&db, 10).await;
     let (u1, _) = create_test_user(&db, None).await;
@@ -82,7 +82,7 @@ async fn delete_role_users() {
 async fn add_role_users_fails_when_target_role_has_same_privilege_as_user() {
     let (app, db, auth, _) = init_test_app().await;
 
-    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleAssign)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
 
     let lvl = TEST_STAFF_ROLE_PRIVILEGE_LEVEL;
@@ -108,7 +108,7 @@ async fn add_role_users_fails_when_target_role_has_same_privilege_as_user() {
 async fn set_role_users_fails_when_target_role_has_same_privilege_as_user() {
     let (app, db, auth, _) = init_test_app().await;
 
-    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleAssign)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
 
     let lvl = TEST_STAFF_ROLE_PRIVILEGE_LEVEL;
@@ -134,7 +134,7 @@ async fn set_role_users_fails_when_target_role_has_same_privilege_as_user() {
 async fn delete_role_users_fails_when_target_role_has_same_privilege_as_user() {
     let (app, db, auth, _) = init_test_app().await;
 
-    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleAssign)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
 
     let lvl = TEST_STAFF_ROLE_PRIVILEGE_LEVEL;

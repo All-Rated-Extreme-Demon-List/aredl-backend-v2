@@ -43,11 +43,11 @@ async fn get_profile_by_discord_id() {
 }
 
 #[actix_web::test]
-async fn get_profile_hides_hidden_roles_except_for_role_manage() {
+async fn get_profile_hides_hidden_roles_except_for_role_assign() {
     let (app, db, auth, _) = init_test_app().await;
     let (target_user, _) = create_test_user(&db, None).await;
     let (normal_requester, _) = create_test_user(&db, None).await;
-    let (manager_requester, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
+    let (manager_requester, _) = create_test_user(&db, Some(Permission::RoleAssign)).await;
 
     let hidden_role_id = create_test_hidden_role(&db, 5).await;
     let visible_role_id = create_test_role(&db, 4).await;
@@ -76,7 +76,7 @@ async fn get_profile_hides_hidden_roles_except_for_role_manage() {
         let hidden_role = roles
             .iter()
             .find(|r| r["id"] == hidden_role_id)
-            .expect("Hidden role should be present for role_manage users");
+            .expect("Hidden role should be present for role_assign users");
         let visible_role = roles
             .iter()
             .find(|r| r["id"] == visible_role_id)

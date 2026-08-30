@@ -15,7 +15,7 @@ use {
 #[actix_web::test]
 async fn list_role_permissions() {
     let (app, db, auth, _) = init_test_app().await;
-    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleModify)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
 
     let role_id = create_test_role(&db, 10).await;
@@ -35,7 +35,7 @@ async fn list_role_permissions() {
 #[actix_web::test]
 async fn list_resolved_role_permissions_includes_inherited_permissions() {
     let (app, db, auth, _) = init_test_app().await;
-    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleModify)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
 
     let base_role_id = create_test_role(&db, 5).await;
@@ -64,7 +64,7 @@ async fn list_resolved_role_permissions_includes_inherited_permissions() {
 #[actix_web::test]
 async fn add_role_permissions() {
     let (app, db, auth, _) = init_test_app().await;
-    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleModify)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
     let role_id = create_test_role(&db, 10).await;
 
@@ -83,7 +83,7 @@ async fn add_role_permissions() {
 #[actix_web::test]
 async fn set_role_permissions_replaces_direct_permissions() {
     let (app, db, auth, _) = init_test_app().await;
-    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleModify)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
 
     let role_id = create_test_role(&db, 10).await;
@@ -107,7 +107,7 @@ async fn set_role_permissions_replaces_direct_permissions() {
 #[actix_web::test]
 async fn delete_role_permissions() {
     let (app, db, auth, _) = init_test_app().await;
-    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleModify)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
 
     let role_id = create_test_role(&db, 10).await;
@@ -132,7 +132,7 @@ async fn delete_role_permissions() {
 #[actix_web::test]
 async fn add_role_permissions_rejects_unknown_permission() {
     let (app, db, auth, _) = init_test_app().await;
-    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleModify)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
     let role_id = create_test_role(&db, 10).await;
 
@@ -153,7 +153,7 @@ async fn add_role_permissions_rejects_unknown_permission() {
 #[actix_web::test]
 async fn add_role_permissions_fails_when_target_role_has_same_privilege_as_user() {
     let (app, db, auth, _) = init_test_app().await;
-    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleModify)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
     let role_id = create_test_role(&db, TEST_STAFF_ROLE_PRIVILEGE_LEVEL).await;
 

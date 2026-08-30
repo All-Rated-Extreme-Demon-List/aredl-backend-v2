@@ -20,7 +20,7 @@ use {
 #[actix_web::test]
 async fn list_roles() {
     let (app, db, auth, _) = init_test_app().await;
-    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleAssign)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
     let role1 = create_test_role_with_permission(&db, 10, Permission::LevelNotesModify).await;
     let role2 = create_test_role(&db, 20).await;
@@ -51,7 +51,7 @@ async fn list_roles() {
 #[actix_web::test]
 async fn create_role() {
     let (app, db, auth, _) = init_test_app().await;
-    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleModify)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
 
     let create_data = json!({"privilege_level": 30, "role_desc": "Tester", "hide": false});
@@ -69,7 +69,7 @@ async fn create_role() {
 #[actix_web::test]
 async fn update_role() {
     let (app, db, auth, _) = init_test_app().await;
-    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleModify)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
     let role_id = create_test_role(&db, 30).await;
 
@@ -91,7 +91,7 @@ async fn update_role() {
 #[actix_web::test]
 async fn delete_role() {
     let (app, db, auth, _) = init_test_app().await;
-    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleModify)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
     let role_id: i32 = create_test_role(&db, 30).await;
 
@@ -118,7 +118,7 @@ async fn delete_role() {
 async fn create_role_rejects_same_or_higher_privilege_than_user() {
     let (app, db, auth, _) = init_test_app().await;
 
-    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleModify)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
 
     for (privilege_level, role_desc) in [
@@ -147,7 +147,7 @@ async fn create_role_rejects_same_or_higher_privilege_than_user() {
 async fn update_role_fails_when_target_role_has_same_privilege_as_user() {
     let (app, db, auth, _) = init_test_app().await;
 
-    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleModify)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
 
     let lvl = TEST_STAFF_ROLE_PRIVILEGE_LEVEL;
@@ -171,7 +171,7 @@ async fn update_role_fails_when_target_role_has_same_privilege_as_user() {
 async fn delete_role_fails_when_target_role_has_same_privilege_as_user() {
     let (app, db, auth, _) = init_test_app().await;
 
-    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleModify)).await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
 
     let lvl = TEST_STAFF_ROLE_PRIVILEGE_LEVEL;
