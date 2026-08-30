@@ -139,7 +139,7 @@ impl ProfileResolved {
             .load::<Role>(conn)?;
 
         if !authenticated.map_or(Ok(false), |auth| {
-            auth.has_permission(conn, Permission::RoleManage)
+            auth.has_permission(conn, Permission::RoleAssign)
         })? {
             roles.retain(|role| !role.hide);
         }

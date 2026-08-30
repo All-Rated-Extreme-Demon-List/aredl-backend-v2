@@ -484,7 +484,7 @@ impl UserResolved {
 
         let can_view_hidden_roles = match authenticated.as_ref() {
             Some(auth) if auth.user_id == user.id => true,
-            Some(auth) => auth.has_permission(conn, Permission::RoleManage)?,
+            Some(auth) => auth.has_permission(conn, Permission::RoleAssign)?,
             None => false,
         };
 

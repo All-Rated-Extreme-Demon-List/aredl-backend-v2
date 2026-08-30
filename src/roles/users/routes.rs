@@ -21,12 +21,12 @@ use uuid::Uuid;
         (status = 200, body = [BaseUser])
     ),
     security(
-        ("access_token" = ["RoleManage"]),
-        ("api_key" = ["RoleManage"]),
+        ("access_token" = ["RoleAssign"]),
+        ("api_key" = ["RoleAssign"]),
     ),
 
 )]
-#[post("", wrap = "UserAuth::require(Permission::RoleManage)")]
+#[post("", wrap = "UserAuth::require(Permission::RoleAssign)")]
 async fn set(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<i32>,
@@ -60,12 +60,12 @@ async fn set(
         (status = 200, body = [BaseUser])
     ),
     security(
-        ("access_token" = ["RoleManage"]),
-        ("api_key" = ["RoleManage"]),
+        ("access_token" = ["RoleAssign"]),
+        ("api_key" = ["RoleAssign"]),
     ),
 
 )]
-#[patch("", wrap = "UserAuth::require(Permission::RoleManage)")]
+#[patch("", wrap = "UserAuth::require(Permission::RoleAssign)")]
 async fn add(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<i32>,
@@ -99,12 +99,12 @@ async fn add(
         (status = 200, body = [BaseUser])
     ),
     security(
-        ("access_token" = ["RoleManage"]),
-        ("api_key" = ["RoleManage"]),
+        ("access_token" = ["RoleAssign"]),
+        ("api_key" = ["RoleAssign"]),
     ),
 
 )]
-#[delete("", wrap = "UserAuth::require(Permission::RoleManage)")]
+#[delete("", wrap = "UserAuth::require(Permission::RoleAssign)")]
 async fn delete(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<i32>,

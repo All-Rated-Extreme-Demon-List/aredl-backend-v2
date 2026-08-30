@@ -216,11 +216,11 @@ async fn find_user_by_discord_id() {
 }
 
 #[actix_web::test]
-async fn find_user_hides_hidden_roles_and_hidden_scopes_except_for_role_manage() {
+async fn find_user_hides_hidden_roles_and_hidden_scopes_except_for_role_assign() {
     let (app, db, auth, _) = init_test_app().await;
     let (target_user, _) = create_test_user(&db, None).await;
     let (normal_requester, _) = create_test_user(&db, None).await;
-    let (manager_requester, _) = create_test_user(&db, Some(Permission::RoleManage)).await;
+    let (manager_requester, _) = create_test_user(&db, Some(Permission::RoleAssign)).await;
 
     let visible_role_id = create_test_role(&db, 1).await;
     let hidden_role_id = create_test_hidden_role(&db, 0).await;
@@ -264,11 +264,11 @@ async fn find_user_hides_hidden_roles_and_hidden_scopes_except_for_role_manage()
 
         assert!(
             roles.iter().any(|role| role["id"] == hidden_role_id),
-            "Hidden role should be present for role_manage users"
+            "Hidden role should be present for role_assign users"
         );
         assert!(
             scopes.iter().any(|scope| scope == "submission_review"),
-            "Hidden-role-derived scope should be present for role_manage users"
+            "Hidden-role-derived scope should be present for role_assign users"
         );
     };
 
