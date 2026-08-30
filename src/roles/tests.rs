@@ -9,7 +9,7 @@ use {
         test_utils::{assert_error_response, init_test_app},
         users::test_utils::{
             create_test_full_reviewer, create_test_hidden_reviewer, create_test_user,
-            TEST_STAFF_ROLE_PRIVILEGE_LEVEL,
+            create_test_user_with_permissions, TEST_STAFF_ROLE_PRIVILEGE_LEVEL,
         },
     },
     actix_http::StatusCode,
@@ -91,7 +91,9 @@ async fn update_role() {
 #[actix_web::test]
 async fn delete_role() {
     let (app, db, auth, _) = init_test_app().await;
-    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleModify)).await;
+    let (staff_id, _) =
+        create_test_user_with_permissions(&db, &[Permission::RoleModify, Permission::RoleAssign])
+            .await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
     let role_id: i32 = create_test_role(&db, 30).await;
 
