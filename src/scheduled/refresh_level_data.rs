@@ -6,9 +6,8 @@ use crate::scheduled::{sleep_until_next, startup_schedule};
 use crate::schema::aredl;
 use crate::schema::arepl;
 use chrono::Utc;
-use diesel::dsl::exists;
-use diesel::select;
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::task;
@@ -114,6 +113,40 @@ struct GDDLResponse {
     two_player_rating: Option<f64>,
 }
 
+#[derive(AsChangeset, Identifiable)]
+#[diesel(treat_none_as_null = true)]
+#[diesel(table_name = aredl::levels)]
+struct AredlEdelUpdate {
+    id: Uuid,
+    edel_enjoyment: Option<f64>,
+    is_edel_pending: bool,
+}
+
+#[derive(AsChangeset, Identifiable)]
+#[diesel(treat_none_as_null = true)]
+#[diesel(table_name = arepl::levels)]
+struct AreplEdelUpdate {
+    id: Uuid,
+    edel_enjoyment: Option<f64>,
+    is_edel_pending: bool,
+}
+
+#[derive(AsChangeset, Identifiable)]
+#[diesel(treat_none_as_null = true)]
+#[diesel(table_name = aredl::levels)]
+struct AredlNlwTierUpdate {
+    id: Uuid,
+    nlw_tier: Option<String>,
+}
+
+#[derive(AsChangeset, Identifiable)]
+#[diesel(treat_none_as_null = true)]
+#[diesel(table_name = arepl::levels)]
+struct AreplNlwTierUpdate {
+    id: Uuid,
+    nlw_tier: Option<String>,
+}
+
 async fn aredl_update_gddl_data(
     db: &DbAppState,
     id: Uuid,
@@ -175,7 +208,7 @@ async fn update_edel_data(
 ) -> Result<(), ApiError> {
     let ids_result = read_spreadsheet(access_token, spreadsheet_id, "'IDS'!B:D").await?;
 
-    let data: Vec<(i32, f64, bool)> = ids_result
+    let data = ids_result
         .values
         .into_iter()
         .filter_map(|values| -> Option<(i32, f64, bool)> {
@@ -188,42 +221,79 @@ async fn update_edel_data(
                 pending.parse().unwrap_or(false),
             ))
         })
-        .collect();
+        .map(|(level_id, enjoyment, pending)| (level_id, (enjoyment, pending)))
+        .collect::<HashMap<_, _>>();
+    let level_ids = data.keys().copied().collect::<Vec<_>>();
 
     let conn = &mut db.connection()?;
 
     conn.transaction(|conn| {
-        for (level_id, enjoyment, pending) in &data {
-            let aredl_2p: bool = select(exists(
-                aredl::levels::table
-                    .filter(aredl::levels::level_id.eq(*level_id))
-                    .filter(aredl::levels::two_player.eq(true)),
-            ))
-            .get_result(conn)?;
-            diesel::update(aredl::levels::table)
-                .set((
-                    aredl::levels::edel_enjoyment.eq(*enjoyment),
-                    aredl::levels::is_edel_pending.eq(*pending),
-                ))
-                .filter(aredl::levels::level_id.eq(*level_id))
-                .filter(aredl::levels::two_player.eq(aredl_2p))
-                .execute(conn)?;
+        let aredl_levels = aredl::levels::table
+            .filter(
+                aredl::levels::level_id
+                    .eq_any(&level_ids)
+                    .or(aredl::levels::edel_enjoyment
+                        .is_not_null()
+                        .or(aredl::levels::is_edel_pending.eq(true))),
+            )
+            .select((aredl::levels::id, aredl::levels::level_id))
+            .load::<(Uuid, i32)>(conn)?;
+        let aredl_updates = aredl_levels
+            .into_iter()
+            .map(|(id, level_id)| {
+                let (edel_enjoyment, is_edel_pending) = data
+                    .get(&level_id)
+                    .map_or((None, false), |(enjoyment, pending)| {
+                        (Some(*enjoyment), *pending)
+                    });
 
-            let arepl_2p: bool = select(exists(
-                arepl::levels::table
-                    .filter(arepl::levels::level_id.eq(*level_id))
-                    .filter(arepl::levels::two_player.eq(true)),
-            ))
-            .get_result(conn)?;
-            diesel::update(arepl::levels::table)
-                .set((
-                    arepl::levels::edel_enjoyment.eq(*enjoyment),
-                    arepl::levels::is_edel_pending.eq(*pending),
-                ))
-                .filter(arepl::levels::level_id.eq(*level_id))
-                .filter(arepl::levels::two_player.eq(arepl_2p))
+                AredlEdelUpdate {
+                    id,
+                    edel_enjoyment,
+                    is_edel_pending,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        if !aredl_updates.is_empty() {
+            diesel::update(aredl::levels::table)
+                .set(&aredl_updates)
                 .execute(conn)?;
         }
+
+        let arepl_levels = arepl::levels::table
+            .filter(
+                arepl::levels::level_id
+                    .eq_any(&level_ids)
+                    .or(arepl::levels::edel_enjoyment
+                        .is_not_null()
+                        .or(arepl::levels::is_edel_pending.eq(true))),
+            )
+            .select((arepl::levels::id, arepl::levels::level_id))
+            .load::<(Uuid, i32)>(conn)?;
+        let arepl_updates = arepl_levels
+            .into_iter()
+            .map(|(id, level_id)| {
+                let (edel_enjoyment, is_edel_pending) = data
+                    .get(&level_id)
+                    .map_or((None, false), |(enjoyment, pending)| {
+                        (Some(*enjoyment), *pending)
+                    });
+
+                AreplEdelUpdate {
+                    id,
+                    edel_enjoyment,
+                    is_edel_pending,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        if !arepl_updates.is_empty() {
+            diesel::update(arepl::levels::table)
+                .set(&arepl_updates)
+                .execute(conn)?;
+        }
+
         Ok(())
     })
 }
@@ -235,7 +305,7 @@ async fn update_nlw_data(
 ) -> Result<(), ApiError> {
     let ids_result = read_spreadsheet(access_token, spreadsheet_id, "'IDS'!C:D").await?;
 
-    let data: Vec<(i32, String)> = ids_result
+    let data = ids_result
         .values
         .into_iter()
         .filter_map(|values| -> Option<(i32, String)> {
@@ -245,36 +315,56 @@ async fn update_nlw_data(
 
             Some((id.parse().ok()?, tier.clone()))
         })
-        .collect();
+        .collect::<HashMap<_, _>>();
+    let level_ids = data.keys().copied().collect::<Vec<_>>();
 
     let conn = &mut db.connection()?;
 
     conn.transaction(|conn| {
-        for (level_id, tier) in &data {
-            let aredl_2p: bool = select(exists(
-                aredl::levels::table
-                    .filter(aredl::levels::level_id.eq(*level_id))
-                    .filter(aredl::levels::two_player.eq(true)),
-            ))
-            .get_result(conn)?;
-            diesel::update(aredl::levels::table)
-                .set(aredl::levels::nlw_tier.eq(tier))
-                .filter(aredl::levels::level_id.eq(*level_id))
-                .filter(aredl::levels::two_player.eq(aredl_2p))
-                .execute(conn)?;
+        let aredl_levels = aredl::levels::table
+            .filter(
+                aredl::levels::level_id
+                    .eq_any(&level_ids)
+                    .or(aredl::levels::nlw_tier.is_not_null()),
+            )
+            .select((aredl::levels::id, aredl::levels::level_id))
+            .load::<(Uuid, i32)>(conn)?;
+        let aredl_updates = aredl_levels
+            .into_iter()
+            .map(|(id, level_id)| AredlNlwTierUpdate {
+                id,
+                nlw_tier: data.get(&level_id).cloned(),
+            })
+            .collect::<Vec<_>>();
 
-            let arepl_2p: bool = select(exists(
-                arepl::levels::table
-                    .filter(arepl::levels::level_id.eq(*level_id))
-                    .filter(arepl::levels::two_player.eq(true)),
-            ))
-            .get_result(conn)?;
-            diesel::update(arepl::levels::table)
-                .set(arepl::levels::nlw_tier.eq(tier))
-                .filter(arepl::levels::level_id.eq(*level_id))
-                .filter(arepl::levels::two_player.eq(arepl_2p))
+        if !aredl_updates.is_empty() {
+            diesel::update(aredl::levels::table)
+                .set(&aredl_updates)
                 .execute(conn)?;
         }
+
+        let arepl_levels = arepl::levels::table
+            .filter(
+                arepl::levels::level_id
+                    .eq_any(&level_ids)
+                    .or(arepl::levels::nlw_tier.is_not_null()),
+            )
+            .select((arepl::levels::id, arepl::levels::level_id))
+            .load::<(Uuid, i32)>(conn)?;
+        let arepl_updates = arepl_levels
+            .into_iter()
+            .map(|(id, level_id)| AreplNlwTierUpdate {
+                id,
+                nlw_tier: data.get(&level_id).cloned(),
+            })
+            .collect::<Vec<_>>();
+
+        if !arepl_updates.is_empty() {
+            diesel::update(arepl::levels::table)
+                .set(&arepl_updates)
+                .execute(conn)?;
+        }
+
         Ok(())
     })
 }

@@ -48,6 +48,9 @@ dotenvy = "0.15.7"
 serde_with = "3.21.0"
 chrono-tz = "0.10.4"
 
+[patch.crates-io]
+diesel = { git = "https://github.com/diesel-rs/diesel", rev = "34ca5ea38f41292bed66289363b4a7bd2684605a" }
+
 [lints.clippy]
 # Correctness / panics / unfinished code
 unwrap_used = "warn"
