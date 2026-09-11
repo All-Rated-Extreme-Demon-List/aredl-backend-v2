@@ -71,7 +71,7 @@ pub struct RecurringShiftInsert {
     pub weekday: Weekday,
     /// The start time of the shift on the assigned day.
     pub start_hour: i32,
-    /// How long this shift should last
+    /// How long this shift should last, in hours.
     pub duration: i32,
     /// The timezone this shift is in, as an IANA timezone string (e.g., "America/New_York").
     pub timezone: String,
@@ -96,11 +96,17 @@ pub struct SelfRecurringShiftInsert {
 #[derive(Deserialize, ToSchema, AsChangeset, Debug)]
 #[diesel(table_name = recurrent_shifts)]
 pub struct RecurringShiftPatch {
+    /// UUID of the user to assign a regular shift to.
     pub user_id: Option<Uuid>,
+    /// The day of the week this shift is assigned at.
     pub weekday: Option<Weekday>,
+    /// The target number of submissions to review for this shift.
     pub target_count: Option<i32>,
+    /// The start time of the shift on the assigned day.
     pub start_hour: Option<i32>,
+    /// How long this shift should last, in hours.
     pub duration: Option<i32>,
+    /// The timezone this shift is in, as an IANA timezone string (e.g., "America/New_York").
     pub timezone: Option<String>,
 }
 

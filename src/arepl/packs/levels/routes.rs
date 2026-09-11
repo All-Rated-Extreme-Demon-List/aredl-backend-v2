@@ -20,11 +20,7 @@ use uuid::Uuid;
     responses(
         (status = 200, body = [BaseLevel])
     ),
-    security(
-        ("access_token" = ["PackModify"]),
-        ("api_key" = ["PackModify"]),
-    ),
-
+    security(("bearer_token" = ["PackModify"])),
 )]
 #[post("", wrap = "UserAuth::require(Permission::PackModify)")]
 async fn set(
@@ -53,11 +49,7 @@ async fn set(
     responses(
         (status = 200, body = [BaseLevel])
     ),
-    security(
-        ("access_token" = ["PackModify"]),
-        ("api_key" = ["PackModify"]),
-    ),
-
+    security(("bearer_token" = ["PackModify"])),
 )]
 #[patch("", wrap = "UserAuth::require(Permission::PackModify)")]
 async fn add(
@@ -86,11 +78,7 @@ async fn add(
     responses(
         (status = 200, body = [BaseLevel])
     ),
-    security(
-        ("access_token" = ["PackModify"]),
-        ("api_key" = ["PackModify"]),
-    ),
-
+    security(("bearer_token" = ["PackModify"])),
 )]
 #[delete("", wrap = "UserAuth::require(Permission::PackModify)")]
 async fn delete(

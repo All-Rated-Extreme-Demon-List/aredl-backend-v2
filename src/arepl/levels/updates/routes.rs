@@ -25,6 +25,7 @@ use uuid::Uuid;
         (status = 200, body = Vec<LevelUpdateEntry>)
     ),
     params(
+        ("level_id" = String, Path, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)"),
         ("type_filter" = Option<LevelUpdateType>, Query, description = "The type of update to filter by."),
     )
 )]
@@ -51,12 +52,12 @@ async fn find_all(
     description = "Add an update to a level",
     tag = "AREDL (P) - Levels (Updates)",
     params(
-        ("level_id" = String, description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
+        ("level_id" = String, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
         (status = 200, body = LevelUpdateEntry)
     ),
-    security(("access_token" = ["LevelUpdatesModify"]))
+    security(("bearer_token" = ["LevelUpdatesModify"])),
 )]
 #[post("", wrap = "UserAuth::require(Permission::LevelUpdatesModify)")]
 async fn create(
@@ -84,12 +85,13 @@ struct UpdatePath {
     description = "Update a level update's info",
     tag = "AREDL (P) - Levels (Updates)",
     params(
+        ("level_id" = String, Path, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)"),
         ("update_id" = Uuid, description = "The internal ID of this update")
     ),
     responses(
         (status = 200, body = LevelUpdateEntry)
     ),
-    security(("access_token" = ["LevelUpdatesModify"]))
+    security(("bearer_token" = ["LevelUpdatesModify"])),
 )]
 #[patch(
     "/{update_id}",
@@ -113,12 +115,13 @@ async fn update(
     description = "Deletes a level update",
     tag = "AREDL (P) - Levels (Updates)",
     params(
+        ("level_id" = String, Path, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)"),
         ("update_id" = Uuid, description = "The internal ID of this update")
     ),
     responses(
         (status = 200)
     ),
-    security(("access_token" = ["LevelUpdatesModify"]))
+    security(("bearer_token" = ["LevelUpdatesModify"])),
 )]
 #[delete(
     "/{update_id}",

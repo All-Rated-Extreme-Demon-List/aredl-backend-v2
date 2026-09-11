@@ -138,8 +138,11 @@ pub struct ShiftPage {
 #[derive(Deserialize, ToSchema, AsChangeset, Debug)]
 #[diesel(table_name = shifts)]
 pub struct ShiftPatch {
+    /// UUID of the user this shift is assigned to.
     pub user_id: Option<Uuid>,
+    /// The current status of the shift.
     pub status: Option<ShiftStatus>,
+    /// The number of submissions that have been reviewed for this shift.
     pub completed_count: Option<i32>,
 }
 
@@ -154,8 +157,11 @@ pub struct ShiftInsert {
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct ShiftCreate {
+    /// UUID of the user this shift is assigned to.
     pub user_id: Option<Uuid>,
+    /// The target number of submissions to review for this shift.
     pub target_count: i32,
+    /// How long this shift should last, in hours.
     pub length: i32,
 }
 

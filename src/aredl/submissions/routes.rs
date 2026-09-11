@@ -5,7 +5,7 @@ use crate::{
         submissions::{
             patch::{SubmissionPatchMod, SubmissionPatchUser},
             post::{SubmissionInsert, SubmissionPostMod},
-            resolved::{ResolvedSubmissionPage, SubmissionQueryOptions},
+            resolved::{ResolvedSubmissionPage, SubmissionQueryOptions, SubmissionsSortField},
             status, Submission, SubmissionPage, SubmissionResolved, SubmissionStatus,
         },
     },
@@ -32,13 +32,9 @@ use super::{history, queue};
     responses(
         (status = 200, body = Paginated<ResolvedSubmissionPage>)
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-    ),
     params(
-        ("page" = Option<i64>, Query, description = "The page of the list to fetch"),
-        ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page"),
+        ("sort" = Option<SubmissionsSortField>, Query, description = "The sorting type to use"),
+        PageQuery<50>,
         ("level_filter" = Option<Uuid>, Query, description = "Filter submissions to a specific level UUID"),
         ("status_filter" = Option<SubmissionStatus>, Query, description = "Filter submissions to specific statuses"),
         ("mobile_filter" = Option<bool>, Query, description = "Filter submissions to mobile/desktop submissions only"),
@@ -46,7 +42,9 @@ use super::{history, queue};
         ("priority_filter" = Option<bool>, Query, description = "Filter submissions to priority/non-priority submissions"),
         ("reviewer_filter" = Option<String>, Query, description = "Filter submissions to a specific reviewer (UUID, discord ID, or username)"),
         ("note_filter" = Option<String>, Query, description = "Filter submissions that contain a specific note substring"),
-))]
+),
+    security(("bearer_token" = ["SubmissionReview"])),
+)]
 #[get("", wrap = "UserAuth::require(Permission::SubmissionReview)")]
 async fn find_all(
     db: web::Data<Arc<DbAppState>>,
@@ -74,13 +72,10 @@ async fn find_all(
     responses(
         (status = 200, body = SubmissionResolved)
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-    ),
     params(
         ("id" = Uuid, description = "The ID of the submission")
     ),
+    security(("bearer_token" = [])),
 )]
 #[get("/{id}", wrap = "UserAuth::load()")]
 async fn find_one(
@@ -103,17 +98,17 @@ async fn find_one(
     responses(
         (status = 200, body = Paginated<SubmissionPage>)
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-    ),
     params(
-        ("page" = Option<i64>, Query, description = "The page of the list to fetch"),
-        ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page"),
+        ("sort" = Option<SubmissionsSortField>, Query, description = "The sorting type to use"),
+        ("priority_filter" = Option<bool>, Query, description = "Filter submissions to priority/non-priority submissions"),
+        ("note_filter" = Option<String>, Query, description = "Filter submissions that contain a specific note substring"),
+        PageQuery<50>,
         ("level_filter" = Option<Uuid>, Query, description = "Filter submissions to a specific level UUID"),
         ("status_filter" = Option<SubmissionStatus>, Query, description = "Filter submissions to specific statuses"),
         ("mobile_filter" = Option<bool>, Query, description = "Filter submissions to mobile/desktop submissions only")
-))]
+),
+    security(("bearer_token" = [])),
+)]
 #[get("/@me", wrap = "UserAuth::load()")]
 async fn find_me(
     db: web::Data<Arc<DbAppState>>,
@@ -141,11 +136,8 @@ async fn find_me(
     responses(
         (status = 201, body = Submission)
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-    ),
     request_body = SubmissionPostMod,
+    security(("bearer_token" = [])),
 )]
 #[post("", wrap = "UserAuth::load()")]
 async fn create(
@@ -180,14 +172,11 @@ async fn create(
     responses(
         (status = 200, body = Submission)
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-    ),
     params(
         ("id" = Uuid, description = "The ID of the submission")
     ),
     request_body = SubmissionPatchMod,
+    security(("bearer_token" = [])),
 )]
 #[patch("/{id}", wrap = "UserAuth::load()")]
 async fn patch(
@@ -241,10 +230,7 @@ async fn patch(
     responses(
         (status = 200, body = SubmissionResolved)
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-    ),
+    security(("bearer_token" = ["SubmissionReview"])),
 )]
 #[get("/claim", wrap = "UserAuth::require(Permission::SubmissionReview)")]
 async fn claim(
@@ -267,13 +253,10 @@ async fn claim(
     responses(
         (status = 204)
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-    ),
     params(
         ("id" = Uuid, description = "The ID of the submission")
     ),
+    security(("bearer_token" = [])),
 )]
 #[delete("/{id}", wrap = "UserAuth::load()")]
 async fn delete(

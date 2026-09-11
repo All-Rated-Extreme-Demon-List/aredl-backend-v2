@@ -9,6 +9,8 @@ use crate::error_handler::ApiError;
 use diesel::prelude::*;
 #[utoipa::path(
     get,
+    summary = "Check API health",
+    description = "Check whether the API and its database connection are healthy.",
     responses(
         (status = 200, description = "API and DB healthy"),
         (status = 503, description = "Service unavailable"),

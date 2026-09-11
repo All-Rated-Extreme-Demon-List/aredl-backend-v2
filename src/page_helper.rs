@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::openapi::path::{Parameter, ParameterBuilder, ParameterIn};
+use utoipa::openapi::schema::{KnownFormat, ObjectBuilder, SchemaFormat, Type};
+use utoipa::openapi::Required;
+use utoipa::{IntoParams, ToSchema};
 
 const DEFAULT_MAX_PER_PAGE: i64 = 100;
 
@@ -7,6 +10,33 @@ const DEFAULT_MAX_PER_PAGE: i64 = 100;
 pub struct PageQuery<const D: i64, const M: i64 = DEFAULT_MAX_PER_PAGE> {
     pub per_page: Option<i64>,
     pub page: Option<i64>,
+}
+
+impl<const D: i64, const M: i64> IntoParams for PageQuery<D, M> {
+    fn into_params(_: impl Fn() -> Option<ParameterIn>) -> Vec<Parameter> {
+        [
+            ("page", "The page number to fetch", 1, None),
+            ("per_page", "The number of items per page", D, Some(M)),
+        ]
+        .into_iter()
+        .map(|(name, description, default, maximum)| {
+            ParameterBuilder::new()
+                .name(name)
+                .parameter_in(ParameterIn::Query)
+                .required(Required::False)
+                .description(Some(description))
+                .schema(Some(
+                    ObjectBuilder::new()
+                        .schema_type(Type::Integer)
+                        .format(Some(SchemaFormat::KnownFormat(KnownFormat::Int64)))
+                        .default(Some(default.into()))
+                        .minimum(Some(1))
+                        .maximum(maximum),
+                ))
+                .build()
+        })
+        .collect()
+    }
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]

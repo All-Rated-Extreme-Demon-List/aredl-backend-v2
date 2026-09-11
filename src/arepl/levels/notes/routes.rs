@@ -24,15 +24,12 @@ use uuid::Uuid;
     responses(
         (status = 200, body = Vec<LevelNotesResolved>)
     ),
-    security(
-        (),
-        ("access_token" = []),
-        ("api_key" = []),
-    ),
     params(
+        ("level_id" = String, Path, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)"),
         ("type_filter" = Option<LevelNotesType>, Query, description = "The type of notes to filter by."),
         ("added_by" = Option<Uuid>, Query, description = "Filter by the moderator that added a note."),
     ),
+    security((), ("bearer_token" = [])),
 )]
 #[get(
     "",
@@ -63,12 +60,12 @@ async fn find_all(
     description = "Add a note to a level",
     tag = "AREDL (P) - Levels (Notes)",
     params(
-        ("level_id" = String, description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
+        ("level_id" = String, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
         (status = 200, body = LevelNotes)
     ),
-    security(("access_token" = ["LevelNotesModify"]))
+    security(("bearer_token" = ["LevelNotesModify"])),
 )]
 #[post("", wrap = "UserAuth::require(Permission::LevelNotesModify)")]
 async fn create(
@@ -97,12 +94,13 @@ struct NotePath {
     description = "Update a note's info",
     tag = "AREDL (P) - Levels (Notes)",
     params(
+        ("level_id" = String, Path, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)"),
         ("note_id" = Uuid, description = "The internal ID of this note")
     ),
     responses(
         (status = 200, body = LevelNotes)
     ),
-    security(("access_token" = ["LevelNotesModify"]))
+    security(("bearer_token" = ["LevelNotesModify"])),
 )]
 #[patch("/{note_id}", wrap = "UserAuth::require(Permission::LevelNotesModify)")]
 async fn update(
@@ -123,12 +121,13 @@ async fn update(
     description = "Deletes a level note",
     tag = "AREDL (P) - Levels (Notes)",
     params(
+        ("level_id" = String, Path, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)"),
         ("note_id" = Uuid, description = "The internal ID of this note")
     ),
     responses(
         (status = 200)
     ),
-    security(("access_token" = ["LevelNotesModify"]))
+    security(("bearer_token" = ["LevelNotesModify"])),
 )]
 #[delete("/{note_id}", wrap = "UserAuth::require(Permission::LevelNotesModify)")]
 async fn delete(

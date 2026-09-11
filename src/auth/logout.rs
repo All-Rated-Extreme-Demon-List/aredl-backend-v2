@@ -18,11 +18,7 @@ use diesel::prelude::*;
         (status = 200)
     ),
     tag = "Authentication",
-	security(
-		("access_token" = []),
-		("refresh_token" = []),
-		("api_key" = []),
-	)
+    security(("bearer_token" = []), ("refresh_token" = [])),
 )]
 #[post("")]
 pub async fn logout_all(

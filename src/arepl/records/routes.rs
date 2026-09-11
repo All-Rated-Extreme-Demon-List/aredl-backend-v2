@@ -1,6 +1,6 @@
 use crate::app_data::db::DbAppState;
 use crate::arepl::levels::id_resolver::resolve_level_id;
-use crate::arepl::records::model::RecordInsert;
+use crate::arepl::records::model::{RecordInsert, RecordSortField};
 use crate::arepl::records::{
     MutualVictors, MutualVictorsQuery, Record, RecordPatch, RecordsQueryOptions, ResolvedRecord,
 };
@@ -23,10 +23,10 @@ use uuid::Uuid;
     responses(
         (status = 200, body = ResolvedRecord),
     ),
-    security(
-        ("access_token" = ["RecordModify"]),
-        ("api_key" = ["RecordModify"]),
-    )
+    security(("bearer_token" = ["RecordModify"])),
+    params(
+        ("id" = Uuid, Path, description = "Internal record UUID"),
+    ),
 )]
 #[get("/{id}", wrap = "UserAuth::require(Permission::RecordModify)")]
 async fn find(
@@ -47,10 +47,7 @@ async fn find(
     responses(
         (status = 200, body = Record)
     ),
-    security(
-        ("access_token" = ["RecordModify"]),
-        ("api_key" = ["RecordModify"]),
-    )
+    security(("bearer_token" = ["RecordModify"])),
 )]
 #[post("", wrap = "UserAuth::require(Permission::RecordModify)")]
 async fn create(
@@ -79,10 +76,7 @@ async fn create(
     responses(
         (status = 200, body = Record)
     ),
-    security(
-        ("access_token" = ["RecordModify"]),
-        ("api_key" = ["RecordModify"]),
-    )
+    security(("bearer_token" = ["RecordModify"])),
 )]
 #[patch("/{id}", wrap = "UserAuth::require(Permission::RecordModify)")]
 async fn update(
@@ -116,10 +110,7 @@ async fn update(
     responses(
         (status = 200, body = Record)
     ),
-    security(
-        ("access_token" = ["RecordModify"]),
-        ("api_key" = ["RecordModify"]),
-    )
+    security(("bearer_token" = ["RecordModify"])),
 )]
 #[patch(
     "/{id}/update-timestamp",
@@ -145,10 +136,7 @@ async fn update_timestamp(
     responses(
         (status = 200)
     ),
-    security(
-        ("access_token" = ["RecordModify"]),
-        ("api_key" = ["RecordModify"]),
-    )
+    security(("bearer_token" = ["RecordModify"])),
 )]
 #[delete("/{id}", wrap = "UserAuth::require(Permission::RecordModify)")]
 async fn delete(
@@ -163,7 +151,7 @@ async fn delete(
 
 #[utoipa::path(
     get,
-    summary = "List mutual victors",
+    summary = "[Staff]List mutual victors",
     description = "List users who have beaten both levels",
     tag = "AREDL (P) - Records",
     params(
@@ -174,6 +162,7 @@ async fn delete(
     responses(
         (status = 200, body = MutualVictors)
     ),
+    security(("bearer_token" = ["RecordModify"])),
 )]
 #[get(
     "/mutual-victors",
@@ -201,8 +190,9 @@ async fn mutual_victors(
     description = "List a possibly filtered list of all records, with resolved levels and users data",
     tag = "AREDL (P) - Records",
     params(
-        ("page" = Option<i64>, Query, description = "The page of the list to fetch"),
-        ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page"),
+        ("verification_filter" = Option<bool>, Query, description = "Whether to show only/hide verification records"),
+        ("sort" = Option<RecordSortField>, Query, description = "The sorting type to use"),
+        PageQuery<100>,
         ("level_filter" = Option<Uuid>, Query, description = "The level internal UUID to filter by"),
         ("mobile_filter" = Option<bool>, Query, description = "Whether to show only/hide mobile records"),
         ("submitter_filter" = Option<String>, Query, description = "The submitter user (UUID, discord ID, or username) to filter by"),
@@ -210,10 +200,7 @@ async fn mutual_victors(
     responses(
         (status = 200, body = Paginated<ResolvedRecord>)
     ),
-    security(
-        ("access_token" = ["RecordModify"]),
-        ("api_key" = ["RecordModify"]),
-    )
+    security(("bearer_token" = ["RecordModify"])),
 )]
 #[get("", wrap = "UserAuth::require(Permission::RecordModify)")]
 async fn find_all(
@@ -241,13 +228,9 @@ async fn find_all(
         (status = 200, body = [ResolvedRecord])
     ),
     params(
-        ("page" = Option<i64>, Query, description = "The page of the list to fetch"),
-        ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page"),
+        PageQuery<100>,
     ),
-    security(
-        ("access_token" = [""]),
-        ("api_key" = [""]),
-    )
+    security(("bearer_token" = [])),
 )]
 #[get("/@me", wrap = "UserAuth::load()")]
 async fn find_me(
@@ -280,6 +263,7 @@ async fn find_me(
     components(
         schemas(
             Record,
+            RecordSortField,
             MutualVictors,
             RecordPatch,
             ResolvedRecord,

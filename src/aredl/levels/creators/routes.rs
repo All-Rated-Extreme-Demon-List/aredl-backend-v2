@@ -16,7 +16,7 @@ use uuid::Uuid;
     description = "List all creators of a level",
     tag = "AREDL - Levels (Creators)",
     params(
-        ("level_id" = String, description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
+        ("level_id" = String, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
         (status = 200, body = [BaseUser])
@@ -42,15 +42,12 @@ async fn find_all(
     description = "Change all the creators of a level to the given list",
     tag = "AREDL - Levels (Creators)",
     params(
-        ("level_id" = String, description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
+        ("level_id" = String, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
         (status = 200, description = "Creators set successfully", body = [BaseUser])
     ),
-    security(
-        ("access_token" = ["LevelModify"]),
-        ("api_key" = ["LevelModify"]),
-    )
+    security(("bearer_token" = ["LevelModify"])),
 )]
 #[post("", wrap = "UserAuth::require(Permission::LevelModify)")]
 async fn set(
@@ -75,15 +72,12 @@ async fn set(
     description = "Add the given creators to this level's creators list",
     tag = "AREDL - Levels (Creators)",
     params(
-        ("level_id" = String, description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
+        ("level_id" = String, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
         (status = 200, description = "Creators added successfully", body = [BaseUser])
     ),
-    security(
-        ("access_token" = ["LevelModify"]),
-        ("api_key" = ["LevelModify"]),
-    )
+    security(("bearer_token" = ["LevelModify"])),
 )]
 #[patch("", wrap = "UserAuth::require(Permission::LevelModify)")]
 async fn add(
@@ -108,15 +102,12 @@ async fn add(
     description = "Remove the given creators from this level's creators list",
     tag = "AREDL - Levels (Creators)",
     params(
-        ("level_id" = String, description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
+        ("level_id" = String, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
         (status = 200, description = "Creators removed successfully", body = [BaseUser])
     ),
-    security(
-        ("access_token" = ["LevelModify"]),
-        ("api_key" = ["LevelModify"]),
-    )
+    security(("bearer_token" = ["LevelModify"])),
 )]
 #[delete("", wrap = "UserAuth::require(Permission::LevelModify)")]
 async fn delete(

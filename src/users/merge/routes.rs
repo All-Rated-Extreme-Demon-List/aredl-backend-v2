@@ -32,10 +32,7 @@ pub struct DirectMergeOptions {
     responses(
         (status = 200, body = User)
     ),
-    security(
-        ("access_token" = ["DirectMerge"]),
-        ("api_key" = ["DirectMerge"]),
-    )
+    security(("bearer_token" = ["DirectMerge"])),
 )]
 #[post("", wrap = "UserAuth::require(Permission::DirectMerge)")]
 async fn direct_merge(
@@ -61,16 +58,12 @@ async fn direct_merge(
     description = "Paginated logs of merged users",
     tag = "Users - Merges",
     params(
-		("page" = Option<i64>, Query, description = "The page of the merge logs to fetch"),
-		("per_page" = Option<i64>, Query, description = "The number of merge logs to fetch per page"),
+		PageQuery<20>,
 	),
     responses(
         (status = 200, body = Paginated<MergeLog>)
     ),
-    security(
-        ("access_token" = ["MergeReview"]),
-        ("api_key" = ["MergeReview"]),
-    )
+    security(("bearer_token" = ["MergeReview"])),
 )]
 #[get("/logs", wrap = "UserAuth::require(Permission::MergeReview)")]
 async fn list_logs(

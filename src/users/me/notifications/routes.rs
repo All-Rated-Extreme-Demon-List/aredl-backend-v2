@@ -14,10 +14,7 @@ use utoipa::OpenApi;
     responses(
         (status = 200, body = [Notification])
     ),
-	security(
-		("access_token" = []),
-		("api_key" = []),
-	)
+    security(("bearer_token" = [])),
 )]
 #[get("", wrap = "UserAuth::load()")]
 async fn list(
@@ -39,10 +36,7 @@ async fn list(
     responses(
         (status = 200)
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-    )
+    security(("bearer_token" = [])),
 )]
 #[post("/clear", wrap = "UserAuth::load()")]
 async fn clear(

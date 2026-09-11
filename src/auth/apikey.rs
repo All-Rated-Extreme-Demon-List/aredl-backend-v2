@@ -29,16 +29,13 @@ pub struct ApiKeyResponse {
 	summary = "[Auth]Create API key",
     description = "Generate a new API Key token for the authenticated user, with the given lifetime.",
 	params(
-		("lifetime_minutes" = i64, Query, description = "Lifetime of the API key token to generate, in minutes.")
+		("lifetime_minutes" = i64, Query, description = "Lifetime of the API key token to generate, in minutes.", maximum = 525_600)
 	),
     responses(
         (status = 200, body = ApiKeyResponse)
     ),
     tag = "Authentication",
-	security(
-		("access_token" = []),
-		("api_key" = []),
-	)
+    security(("bearer_token" = [])),
 )]
 #[post("")]
 pub async fn create_api_key(

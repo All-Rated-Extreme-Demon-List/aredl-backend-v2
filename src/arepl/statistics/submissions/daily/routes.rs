@@ -26,13 +26,12 @@ pub struct StatsQuery {
     description = "Get per-day submission statistics, optionally filtered by reviewer or level.",
     tag = "AREDL (P) - Statistics",
     params(
-        ("page" = Option<i64>, Query, description = "The page to fetch"),
-        ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page"),
+        PageQuery<31, 3650>,
         ("reviewer_id" = Option<Uuid>, Query, description = "Filter for a specific reviewer"),
         ("level_id" = Option<Uuid>, Query, description = "Filter for a specific level")
     ),
     responses((status = 200, body = Paginated<DailyStatsPage>)),
-    security(("access_token" = ["SubmissionSeeStatistics"]), ("api_key" = ["SubmissionSeeStatistics"]))
+    security(("bearer_token" = ["SubmissionSeeStatistics"])),
 )]
 #[get("", wrap = "UserAuth::require(Permission::SubmissionSeeStatistics)")]
 pub async fn stats(
@@ -77,7 +76,7 @@ pub struct LeaderboardQuery {
         ("include_hidden_reviewers" = Option<bool>, Query, description = "Whether to include hidden reviewers in the results. Requires `ReviewersAudit`; otherwise forced to false."),
     ),
     responses((status = 200, body = [ResolvedLeaderboardRow])),
-    security(("access_token" = ["SubmissionSeeStatistics"]), ("api_key" = ["SubmissionSeeStatistics"]))
+    security(("bearer_token" = ["SubmissionSeeStatistics"])),
 )]
 #[get(
     "/leaderboard",

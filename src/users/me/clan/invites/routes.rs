@@ -16,10 +16,7 @@ use uuid::Uuid;
     responses(
         (status = 200, body = [ClanInviteResolved])
     ),
-	security(
-		("access_token" = []),
-		("api_key" = []),
-	)
+    security(("bearer_token" = [])),
 )]
 #[get("", wrap = "UserAuth::load()")]
 async fn list(
@@ -44,10 +41,7 @@ async fn list(
     responses(
         (status = 200)
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-    )
+    security(("bearer_token" = [])),
 )]
 #[post("/{invite_id}/accept", wrap = "UserAuth::load()")]
 async fn accept(
@@ -73,10 +67,7 @@ async fn accept(
     responses(
         (status = 200)
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-    )
+    security(("bearer_token" = [])),
 )]
 #[post("/{invite_id}/reject", wrap = "UserAuth::load()")]
 async fn reject(

@@ -49,10 +49,7 @@ async fn list(
     responses(
         (status = 200, body = [Uuid])
     ),
-    security(
-        ("access_token" = ["ClanModify"]),
-        ("api_key" = ["ClanModify"]),
-    )
+    security(("bearer_token" = ["ClanModify"])),
 )]
 #[post("", wrap = "UserAuth::require(Permission::ClanModify)")]
 async fn add(
@@ -81,10 +78,7 @@ async fn add(
     responses(
         (status = 200, body = [Uuid])
     ),
-    security(
-        ("access_token" = ["ClanModify"]),
-        ("api_key" = ["ClanModify"]),
-    )
+    security(("bearer_token" = ["ClanModify"])),
 )]
 #[patch("", wrap = "UserAuth::require(Permission::ClanModify)")]
 async fn set(
@@ -113,12 +107,7 @@ async fn set(
     responses(
         (status = 200, body = Clan)
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-		("access_token" = ["ClanModify"]),
-		("api_key" = ["ClanModify"]),
-    )
+    security(("bearer_token" = []), ("bearer_token" = ["ClanModify"])),
 )]
 #[delete("", wrap = "UserAuth::load()")]
 async fn delete(
@@ -157,12 +146,7 @@ async fn delete(
     responses(
         (status = 200, body = ClanInvite)
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-		("access_token" = ["ClanModify"]),
-		("api_key" = ["ClanModify"]),
-    )
+    security(("bearer_token" = []), ("bearer_token" = ["ClanModify"])),
 )]
 #[post("/invite", wrap = "UserAuth::load()")]
 async fn invite(
@@ -205,12 +189,7 @@ async fn invite(
     responses(
         (status = 200, body = ClanMember)
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-		("access_token" = ["ClanModify"]),
-		("api_key" = ["ClanModify"]),
-    )
+    security(("bearer_token" = []), ("bearer_token" = ["ClanModify"])),
 )]
 #[patch("/{user_id}", wrap = "UserAuth::load()")]
 async fn edit(

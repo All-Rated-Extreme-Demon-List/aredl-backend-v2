@@ -32,9 +32,7 @@ struct AuthRefreshResponse {
     responses(
         (status = 200, body = AuthRefreshResponse)
     ),
-    security(
-        ("refresh_token" = []),
-    )
+    security(("refresh_token" = [])),
 )]
 #[get("")]
 async fn refresh_auth(

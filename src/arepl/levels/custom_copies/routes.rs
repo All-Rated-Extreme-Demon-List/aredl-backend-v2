@@ -25,9 +25,10 @@ use uuid::Uuid;
         (status = 200, body = [LevelCustomCopy])
     ),
     params(
+        ("level_id" = String, Path, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)"),
         ("type_filter" = Option<LevelCustomCopyType>, Query, description = "The type of custom copy to filter by."),
         ("status_filter" = Option<LevelCustomCopyStatus>, Query, description = "The status of a custom copy to filter by."),
-        ("description" = Option<String>, Query, description = "Filter for the description of this custom copy. Use SQL LIKE syntax."),
+        ("description_filter" = Option<Option<String>>, Query, description = "Filter for the description of this custom copy. Use SQL LIKE syntax."),
         ("added_by" = Option<Uuid>, Query, description = "Filter by the moderator that added a custom copy."),
     )
 )]
@@ -54,12 +55,12 @@ async fn find_all(
     description = "Add a custom copy to a level",
     tag = "AREDL (P) - Levels (Custom Copies)",
     params(
-        ("level_id" = String, description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
+        ("level_id" = String, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
         (status = 200, body = LevelCustomCopy)
     ),
-    security(("access_token" = ["LevelCustomCopiesModify"]))
+    security(("bearer_token" = ["LevelCustomCopiesModify"])),
 )]
 #[post("", wrap = "UserAuth::require(Permission::LevelCustomCopiesModify)")]
 async fn create(
@@ -88,12 +89,13 @@ struct CustomCopyPath {
     description = "Update a custom copy's info",
     tag = "AREDL (P) - Levels (Custom Copies)",
     params(
+        ("level_id" = String, Path, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)"),
         ("copy_id" = Uuid, description = "The internal ID of this custom copy")
     ),
     responses(
         (status = 200, body = LevelCustomCopy)
     ),
-    security(("access_token" = ["LevelCustomCopiesModify"]))
+    security(("bearer_token" = ["LevelCustomCopiesModify"])),
 )]
 #[patch(
     "/{copy_id}",
@@ -117,12 +119,13 @@ async fn update(
     description = "Deletes a custom copy",
     tag = "AREDL (P) - Levels (Custom Copies)",
     params(
+        ("level_id" = String, Path, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)"),
         ("copy_id" = Uuid, description = "The internal ID of this custom copy")
     ),
     responses(
         (status = 200)
     ),
-    security(("access_token" = ["LevelCustomCopiesModify"]))
+    security(("bearer_token" = ["LevelCustomCopiesModify"])),
 )]
 #[delete(
     "/{copy_id}",

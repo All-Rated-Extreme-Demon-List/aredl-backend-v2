@@ -14,15 +14,16 @@ use utoipa::OpenApi;
 
 #[utoipa::path(
     get,
-    summary = "Get user",
-    description = "Get a specific user by their internal UUID",
+    summary = "[AuthPublic]Get user",
+    description = "Get a specific user by their internal UUID, username or discord ID",
     tag = "Users",
     params(
-        ("id" = String, Path, description = "The internal UUID or the discord ID of the user to lookup"),
+        ("id" = String, Path, description = "The internal UUID, username or discord ID of the user to lookup"),
     ),
     responses(
         (status = 200, body = UserResolved)
     ),
+    security((), ("bearer_token" = [])),
 )]
 #[get(
     "/{id}",
@@ -47,18 +48,19 @@ async fn find(
 
 #[utoipa::path(
     get,
-    summary = "Get users",
+    summary = "[AuthPublic]Get users",
     description = "Get paginated list of users",
     tag = "Users",
     params(
-        ("page" = Option<i64>, Query, description = "The page of the users list to fetch"),
-        ("per_page" = Option<i64>, Query, description = "The number of users to fetch per page"),
+        ("ban_level" = Option<i32>, Query, description = "The ban level to filter by"),
+        PageQuery<100>,
         ("name_filter" = Option<String>, Query, description = "The search filter to apply. Uses the SQL LIKE operator syntax."),
         ("placeholder" = Option<bool>, Query, description = "If specified, will only fetch users that are/are not placeholders. If not, all types of users are returned.")
     ),
     responses(
         (status = 200, body = Paginated<UserPage>)
     ),
+    security((), ("bearer_token" = [])),
 )]
 #[get(
     "",
@@ -92,12 +94,10 @@ async fn list(
     responses(
         (status = 200, body = User)
     ),
-    security(
-        ("access_token" = ["PlaceholderCreate"]),
-    )
+    security(("bearer_token" = ["PlaceholderCreate"])),
 )]
 #[post(
-    "placeholders",
+    "/placeholders",
     wrap = "UserAuth::require(Permission::PlaceholderCreate)"
 )]
 async fn create_placeholder(
@@ -124,10 +124,7 @@ async fn create_placeholder(
     responses(
         (status = 200, body = User)
     ),
-    security(
-        ("access_token" = ["UserModify"]),
-        ("api_key" = ["UserModify"]),
-    )
+    security(("bearer_token" = ["UserModify"])),
 )]
 #[patch("/{id}", wrap = "UserAuth::require(Permission::UserModify)")]
 async fn update(
@@ -170,10 +167,7 @@ async fn update(
     responses(
         (status = 200, body = User)
     ),
-    security(
-        ("access_token" = ["UserBan"]),
-        ("api_key" = ["UserBan"]),
-    )
+    security(("bearer_token" = ["UserBan"])),
 )]
 #[patch("/{id}/ban", wrap = "UserAuth::require(Permission::UserBan)")]
 async fn ban(

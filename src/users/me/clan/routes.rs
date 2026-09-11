@@ -15,10 +15,7 @@ use utoipa::OpenApi;
     responses(
         (status = 200)
     ),
-	security(
-		("access_token" = []),
-		("api_key" = []),
-	)
+    security(("bearer_token" = [])),
 )]
 #[post("/leave", wrap = "UserAuth::load()")]
 async fn leave(

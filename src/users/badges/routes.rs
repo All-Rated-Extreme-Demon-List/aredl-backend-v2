@@ -20,10 +20,6 @@ use super::{UserBadge, UserBadgeGrant};
     responses(
         (status = 200, body = [UserBadge])
     ),
-    security(
-        ("access_token" = ["UserModify"]),
-        ("api_key" = ["UserModify"]),
-    )
 )]
 #[get("")]
 async fn find_all(
@@ -51,10 +47,7 @@ async fn find_all(
     responses(
         (status = 200, body = [UserBadge])
     ),
-    security(
-        ("access_token" = ["UserModify"]),
-        ("api_key" = ["UserModify"]),
-    )
+    security(("bearer_token" = ["UserModify"])),
 )]
 #[post("/sync", wrap = "UserAuth::require(Permission::UserModify)")]
 async fn sync(
@@ -86,10 +79,7 @@ async fn sync(
     responses(
         (status = 200, body = [UserBadge])
     ),
-    security(
-        ("access_token" = ["UserModify"]),
-        ("api_key" = ["UserModify"]),
-    )
+    security(("bearer_token" = ["UserModify"])),
 )]
 #[patch("", wrap = "UserAuth::require(Permission::UserModify)")]
 async fn grant(
@@ -124,10 +114,7 @@ async fn grant(
     responses(
         (status = 200, body = [UserBadge])
     ),
-    security(
-        ("access_token" = ["UserModify"]),
-        ("api_key" = ["UserModify"]),
-    )
+    security(("bearer_token" = ["UserModify"])),
 )]
 #[delete("", wrap = "UserAuth::require(Permission::UserModify)")]
 async fn remove(

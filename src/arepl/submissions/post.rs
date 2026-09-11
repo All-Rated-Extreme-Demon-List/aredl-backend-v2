@@ -53,6 +53,7 @@ pub struct SubmissionInsert {
 
 #[derive(Serialize, Deserialize, Debug, Insertable, ToSchema, Default)]
 #[diesel(table_name=submissions, check_for_backend(Pg))]
+#[schema(as = PlatformerSubmissionPostMod)]
 pub struct SubmissionPostMod {
     /// [MOD ONLY] UUID of the user submitting the record.
     pub submitted_by: Option<Uuid>,

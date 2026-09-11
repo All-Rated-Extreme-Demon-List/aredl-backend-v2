@@ -6,7 +6,7 @@ use serde_json::json;
 use utoipa::openapi::extensions::Extensions;
 use utoipa::openapi::path::Operation;
 use utoipa::openapi::schema::Components;
-use utoipa::openapi::security::{ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityScheme};
+use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
 use utoipa::openapi::{PathItem, Server};
 use utoipa::{Modify, OpenApi};
 type JsonValue = serde_json::Value;
@@ -55,7 +55,7 @@ In addition to that, endpoints are also categorized by the type of authenticatio
 You can find what type an endpoint is by looking at the tags at the top of its page.
 
 ## Authentication
-You can authenticate using either a bearer token or an API key.
+You can authenticate using either an access token or an API key, both passed as a bearer token.
 
 There are two types of tokens:
 - **Access Token**: Used to make authenticated requests. Expires after 30 minutes.
@@ -174,13 +174,41 @@ struct MainApiDoc;
     nest(
         (path = "/api", api = MainApiDoc),
     ),
-    modifiers(&SecurityAddon, &StaffBadgeAddon, &ServerAddon),
+    modifiers(&SecurityAddon, &StaffBadgeAddon, &ServerAddon, &OperationIdAddon),
 )]
 pub struct ApiDoc;
 
 struct SecurityAddon;
 struct StaffBadgeAddon;
 struct ServerAddon;
+struct OperationIdAddon;
+
+impl Modify for OperationIdAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        for (path, item) in &mut openapi.paths.paths {
+            let path_id = path
+                .trim_start_matches('/')
+                .replace(['/', '-'], "_")
+                .replace('{', "by_")
+                .replace('}', "")
+                .replace('@', "current_");
+            for (method, operation) in [
+                ("get", &mut item.get),
+                ("post", &mut item.post),
+                ("put", &mut item.put),
+                ("patch", &mut item.patch),
+                ("delete", &mut item.delete),
+                ("head", &mut item.head),
+                ("options", &mut item.options),
+                ("trace", &mut item.trace),
+            ] {
+                if let Some(operation) = operation {
+                    operation.operation_id = Some(format!("{method}_{path_id}"));
+                }
+            }
+        }
+    }
+}
 
 impl Modify for ServerAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
@@ -197,15 +225,14 @@ impl Modify for SecurityAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
         let components = openapi.components.get_or_insert_with(Components::default);
         components.add_security_scheme(
-            "api_key",
-            SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::new("api-key"))),
-        );
-        components.add_security_scheme(
-            "access_token",
+            "bearer_token",
             SecurityScheme::Http(
                 HttpBuilder::new()
                     .scheme(HttpAuthScheme::Bearer)
                     .bearer_format("JWT")
+                    .description(Some(
+                        "Access token or API key, sent as Authorization: Bearer <token>.",
+                    ))
                     .build(),
             ),
         );

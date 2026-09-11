@@ -30,6 +30,7 @@ pub type ResolvedSubmissionRow = (
 );
 
 #[derive(Serialize, Deserialize, ToSchema)]
+#[schema(as = PlatformerSubmissionsSortField)]
 pub enum SubmissionsSortField {
     OldestCreatedAt,
     NewestCreatedAt,

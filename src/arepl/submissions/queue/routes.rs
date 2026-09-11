@@ -22,13 +22,10 @@ use uuid::Uuid;
         (status = 200, description = "Queue position found", body = QueuePositionResponse),
         (status = 404, description = "Submission not found or not pending"),
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-    ),
     params(
         ("id" = Uuid, description = "The ID of the submission to check position for")
-    )
+    ),
+    security(("bearer_token" = [])),
 )]
 #[get("{id}/queue", wrap = "UserAuth::load()")]
 async fn get_queue_position(

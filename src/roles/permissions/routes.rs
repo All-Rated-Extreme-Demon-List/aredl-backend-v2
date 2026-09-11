@@ -18,10 +18,7 @@ use utoipa::OpenApi;
     responses(
         (status = 200, body = [String])
     ),
-    security(
-        ("access_token" = ["RoleModify"]),
-        ("api_key" = ["RoleModify"]),
-    ),
+    security(("bearer_token" = ["RoleModify"])),
 )]
 #[get("", wrap = "UserAuth::require(Permission::RoleModify)")]
 async fn find_all(
@@ -47,10 +44,7 @@ async fn find_all(
     responses(
         (status = 200, body = [String])
     ),
-    security(
-        ("access_token" = ["RoleModify"]),
-        ("api_key" = ["RoleModify"]),
-    ),
+    security(("bearer_token" = ["RoleModify"])),
 )]
 #[get("/resolved", wrap = "UserAuth::require(Permission::RoleModify)")]
 async fn find_all_resolved(
@@ -77,10 +71,7 @@ async fn find_all_resolved(
     responses(
         (status = 200, body = [String])
     ),
-    security(
-        ("access_token" = ["RoleModify"]),
-        ("api_key" = ["RoleModify"]),
-    ),
+    security(("bearer_token" = ["RoleModify"])),
 )]
 #[post("", wrap = "UserAuth::require(Permission::RoleModify)")]
 async fn set(
@@ -115,10 +106,7 @@ async fn set(
     responses(
         (status = 200, body = [String])
     ),
-    security(
-        ("access_token" = ["RoleModify"]),
-        ("api_key" = ["RoleModify"]),
-    ),
+    security(("bearer_token" = ["RoleModify"])),
 )]
 #[patch("", wrap = "UserAuth::require(Permission::RoleModify)")]
 async fn add(
@@ -153,10 +141,7 @@ async fn add(
     responses(
         (status = 200, body = [String])
     ),
-    security(
-        ("access_token" = ["RoleModify"]),
-        ("api_key" = ["RoleModify"]),
-    ),
+    security(("bearer_token" = ["RoleModify"])),
 )]
 #[delete("", wrap = "UserAuth::require(Permission::RoleModify)")]
 async fn delete(

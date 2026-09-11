@@ -17,10 +17,7 @@ use uuid::Uuid;
     responses(
         (status = 200, body = Pack)
     ),
-    security(
-        ("access_token" = ["PackModify"]),
-        ("api_key" = ["PackModify"]),
-    ),
+    security(("bearer_token" = ["PackModify"])),
 )]
 #[post("", wrap = "UserAuth::require(Permission::PackModify)")]
 async fn create(
@@ -45,10 +42,7 @@ async fn create(
     responses(
         (status = 200, body = Pack)
     ),
-    security(
-        ("access_token" = ["PackModify"]),
-        ("api_key" = ["PackModify"]),
-    ),
+    security(("bearer_token" = ["PackModify"])),
 )]
 #[patch("/{id}", wrap = "UserAuth::require(Permission::PackModify)")]
 async fn update(
@@ -75,10 +69,7 @@ async fn update(
     responses(
         (status = 200, body = Pack)
     ),
-    security(
-        ("access_token" = ["PackModify"]),
-        ("api_key" = ["PackModify"]),
-    ),
+    security(("bearer_token" = ["PackModify"])),
 )]
 #[delete("/{id}", wrap = "UserAuth::require(Permission::PackModify)")]
 async fn delete(
@@ -93,16 +84,12 @@ async fn delete(
     get,
     summary = "Get Pack Victors",
     description = "Fetch the list of all users who have completed this pack",
-    tag = "AREDL - Packs",
+    tag = "AREDL (P) - Packs",
     params(
         ("pack_id" = Uuid, description = "Internal pack UUID")
     ),
     responses(
         (status = 200, body = [CompletedPackVictor])
-    ),
-    security(
-        ("access_token" = ["PackModify"]),
-        ("api_key" = ["PackModify"]),
     ),
 )]
 #[get(
@@ -137,6 +124,7 @@ async fn get_victors(
         )
     ),
     paths(
+        get_victors,
         create,
         update,
         delete

@@ -86,18 +86,26 @@ pub struct LevelCustomCopyInsert {
 #[derive(Serialize, Deserialize, AsChangeset, ToSchema)]
 #[diesel(table_name = level_custom_copies, check_for_backend(Pg))]
 pub struct LevelCustomCopyUpdate {
+    /// The in-game ID of this copy
     pub copy_id: Option<i32>,
+    /// The type of this custom copy
     pub id_type: Option<LevelCustomCopyType>,
+    /// The status of this custom copy on the site
     pub status: Option<LevelCustomCopyStatus>,
+    /// The description of what this custom copy changes, if any
     #[serde(default, with = "double_option")]
     pub description: Option<Option<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct LevelCustomCopyBody {
+    /// The in-game ID of this copy
     pub copy_id: i32,
+    /// The type of this custom copy
     pub id_type: LevelCustomCopyType,
+    /// The status of this custom copy on the site
     pub status: LevelCustomCopyStatus,
+    /// The description of what this custom copy changes, if any
     pub description: Option<String>,
 }
 

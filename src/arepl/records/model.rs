@@ -81,6 +81,7 @@ pub struct ResolvedRecord {
 
 #[derive(Serialize, Deserialize, Insertable, Debug, ToSchema, Clone)]
 #[diesel(table_name=records, check_for_backend(Pg))]
+#[schema(as = PlatformerRecordInsert)]
 pub struct RecordInsert {
     /// Internal UUID of the user who submitted the record.
     pub submitted_by: Uuid,
@@ -106,6 +107,7 @@ pub struct RecordInsert {
 
 #[derive(Serialize, Deserialize, AsChangeset, Debug, ToSchema, Clone)]
 #[diesel(table_name=records, check_for_backend(Pg))]
+#[schema(as = PlatformerRecordPatch)]
 pub struct RecordPatch {
     /// Internal UUID of the user who submitted the record.
     pub submitted_by: Option<Uuid>,
@@ -141,6 +143,7 @@ pub struct RecordUpdate {
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
+#[schema(as = PlatformerRecordSortField)]
 pub enum RecordSortField {
     OldestCreatedAt,
     NewestCreatedAt,

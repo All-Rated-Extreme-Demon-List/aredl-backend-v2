@@ -81,6 +81,9 @@ struct AuthResponse {
     responses(
         (status = 302)
     ),
+    params(
+        ("callback" = Option<String>, Query, description = "The URL to redirect to after the OAuth flow"),
+    ),
 )]
 #[get("")]
 async fn discord_auth(
@@ -121,6 +124,10 @@ async fn discord_auth(
     tag = "Authentication",
     responses(
         (status = 200, body = AuthResponse)
+    ),
+    params(
+        ("code" = String, Query, description = "The authorization code returned by the OAuth provider"),
+        ("state" = String, Query, description = "The state returned by the OAuth provider"),
     ),
 )]
 #[get("/callback")]

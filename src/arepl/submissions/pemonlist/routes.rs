@@ -15,10 +15,7 @@ use utoipa::OpenApi;
     responses(
         (status = 200, body = Vec<Submission>)
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-    )
+    security(("bearer_token" = [])),
 )]
 #[post("/sync", wrap = "UserAuth::load()")]
 async fn sync_pemonlist(

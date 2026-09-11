@@ -18,15 +18,11 @@ use crate::{
     responses(
         (status = 200, description = "Connected accounts", body = Vec<OAuthConnectedAccount>),
         (status = 404, description = "User not found"),
-
-    ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
     ),
     params(
         ("user_id" = Uuid, description = "The ID of the user for whom to retrieve connected accounts")
-    )
+    ),
+    security(("bearer_token" = [])),
 )]
 #[get("/user/{user_id}", wrap = "UserAuth::load()")]
 async fn get_connected_accounts(

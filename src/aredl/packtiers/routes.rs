@@ -18,11 +18,7 @@ use uuid::Uuid;
     responses(
         (status = 200, body = PackTierResolved)
     ),
-    security(
-        (),
-        ("access_token" = []),
-        ("api_key" = []),
-    )
+    security((), ("bearer_token" = [])),
 )]
 #[get(
     "",
@@ -52,10 +48,7 @@ async fn find_all(
     responses(
         (status = 200, body = PackTier)
     ),
-    security(
-        ("access_token" = ["PackTierModify"]),
-        ("api_key" = ["PackTierModify"]),
-    )
+    security(("bearer_token" = ["PackTierModify"])),
 )]
 #[post("", wrap = "UserAuth::require(Permission::PackTierModify)")]
 async fn create(
@@ -80,10 +73,7 @@ async fn create(
     responses(
         (status = 200, body = PackTier)
     ),
-    security(
-        ("access_token" = ["PackTierModify"]),
-        ("api_key" = ["PackTierModify"]),
-    )
+    security(("bearer_token" = ["PackTierModify"])),
 )]
 #[patch("/{id}", wrap = "UserAuth::require(Permission::PackTierModify)")]
 async fn update(
@@ -111,10 +101,7 @@ async fn update(
     responses(
         (status = 200, body = PackTier)
     ),
-    security(
-        ("access_token" = ["PackTierModify"]),
-        ("api_key" = ["PackTierModify"]),
-    )
+    security(("bearer_token" = ["PackTierModify"])),
 )]
 #[delete("/{id}", wrap = "UserAuth::require(Permission::PackTierModify)")]
 async fn delete(

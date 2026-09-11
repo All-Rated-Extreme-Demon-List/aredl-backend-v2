@@ -32,10 +32,7 @@ pub struct MergeRequestOptions {
     responses(
         (status = 200, body = ResolvedMergeRequest)
     ),
-    security(
-        ("access_token" = ["MergeReview"]),
-        ("api_key" = ["MergeReview"]),
-    )
+    security(("bearer_token" = ["MergeReview"])),
 )]
 #[get("/{id}", wrap = "UserAuth::require(Permission::MergeReview)")]
 async fn find_one(
@@ -54,16 +51,15 @@ async fn find_one(
     description = "Paginated list of pending/denied merge requests",
     tag = "Users - Merges",
     params(
-		("page" = Option<i64>, Query, description = "The page of the merge requests to fetch"),
-		("per_page" = Option<i64>, Query, description = "The number of merge requests to fetch per page"),
+        ("claimed_filter" = Option<bool>, Query, description = "Filter merge requests to claimed/unclaimed requests"),
+        ("rejected_filter" = Option<bool>, Query, description = "Filter merge requests to rejected/pending requests"),
+        ("user_filter" = Option<String>, Query, description = "Filter merge requests involving a specific user (UUID, discord ID, or username)"),
+		PageQuery<20>,
 	),
     responses(
         (status = 200, body = Paginated<ResolvedMergeRequest>)
     ),
-    security(
-        ("access_token" = ["MergeReview"]),
-        ("api_key" = ["MergeReview"]),
-    )
+    security(("bearer_token" = ["MergeReview"])),
 )]
 #[get("", wrap = "UserAuth::require(Permission::MergeReview)")]
 async fn list(
@@ -90,10 +86,7 @@ async fn list(
     responses(
         (status = 200, body = MergeRequest)
     ),
-    security(
-        ("access_token" = ["MergeReview"]),
-        ("api_key" = ["MergeReview"]),
-    )
+    security(("bearer_token" = ["MergeReview"])),
 )]
 #[get("/claim", wrap = "UserAuth::require(Permission::MergeReview)")]
 async fn claim(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
@@ -110,10 +103,7 @@ async fn claim(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError>
     responses(
         (status = 200, body = MergeRequest)
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-    )
+    security(("bearer_token" = [])),
 )]
 #[post("", wrap = "UserAuth::load()")]
 async fn create(
@@ -152,10 +142,7 @@ async fn create(
     responses(
         (status = 200, body = MergeRequest)
     ),
-    security(
-        ("access_token" = ["MergeReview"]),
-        ("api_key" = ["MergeReview"]),
-    )
+    security(("bearer_token" = ["MergeReview"])),
 )]
 #[post("/{id}/accept", wrap = "UserAuth::require(Permission::MergeReview)")]
 async fn accept(
@@ -178,10 +165,7 @@ async fn accept(
     responses(
         (status = 200, body = MergeRequest)
     ),
-    security(
-        ("access_token" = ["MergeReview"]),
-        ("api_key" = ["MergeReview"]),
-    )
+    security(("bearer_token" = ["MergeReview"])),
 )]
 #[post("/{id}/reject", wrap = "UserAuth::require(Permission::MergeReview)")]
 async fn reject(
@@ -205,10 +189,7 @@ async fn reject(
     responses(
         (status = 200, body = MergeRequest)
     ),
-    security(
-        ("access_token" = ["MergeReview"]),
-        ("api_key" = ["MergeReview"]),
-    )
+    security(("bearer_token" = ["MergeReview"])),
 )]
 #[post("/{id}/unclaim", wrap = "UserAuth::require(Permission::MergeReview)")]
 async fn unclaim(

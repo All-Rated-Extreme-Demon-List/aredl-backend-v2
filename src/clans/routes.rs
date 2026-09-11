@@ -19,8 +19,7 @@ use diesel::prelude::*;
     description = "Get paginated list of clans",
     tag = "Clans",
     params(
-        ("page" = Option<i64>, Query, description = "The page of the clans list to fetch"),
-        ("per_page" = Option<i64>, Query, description = "The number of clans to fetch per page"),
+        PageQuery<100>,
         ("name_filter" = Option<String>, Query, description = "The search filter to apply. Uses the SQL LIKE operator syntax."),
     ),
     responses(
@@ -53,10 +52,7 @@ async fn list(
     responses(
         (status = 200, body = Clan)
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-    )
+    security(("bearer_token" = [])),
 )]
 #[post("", wrap = "UserAuth::load()")]
 async fn create_and_join(
@@ -82,10 +78,7 @@ async fn create_and_join(
     responses(
         (status = 200, body = Clan)
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-    )
+    security(("bearer_token" = ["ClanModify"])),
 )]
 #[post("/placeholder", wrap = "UserAuth::require(Permission::ClanModify)")]
 async fn create_empty(
@@ -111,12 +104,7 @@ async fn create_empty(
     responses(
         (status = 200, body = Clan)
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-		("clan_id" = ["ClanModify"]),
-		("api_key" = ["ClanModify"]),
-    )
+    security(("bearer_token" = []), ("bearer_token" = ["ClanModify"])),
 )]
 #[patch("/{id}", wrap = "UserAuth::load()")]
 async fn update(
@@ -149,12 +137,7 @@ async fn update(
     responses(
         (status = 200, body = Clan)
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-		("clan_id" = ["ClanModify"]),
-		("api_key" = ["ClanModify"]),
-    )
+    security(("bearer_token" = []), ("bearer_token" = ["ClanModify"])),
 )]
 #[delete("/{id}", wrap = "UserAuth::load()")]
 async fn delete(

@@ -14,8 +14,8 @@ use utoipa::OpenApi;
     description = "Get a leaderboard paginated data. Refreshes hourly",
     tag = "AREDL (P)",
     params(
-        ("page" = Option<i64>, Query, description = "The page of the leaderboard to fetch"),
-        ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page"),
+        ("clan_filter" = Option<Uuid>, Query, description = "The clan filter to apply. Uses the internal clan UUID"),
+        PageQuery<100>,
         ("name_filter" = Option<String>, Query, description = "Search filter to apply. Uses the SQL LIKE operator syntax."),
         ("country_filter" = Option<i32>, Query, description = "The country filter to apply. Uses the ISO 3166-1 country codes"),
         ("order" = Option<LeaderboardOrder>, Query, description = "The sorting type to use. Defaults to using points (with packs)"),

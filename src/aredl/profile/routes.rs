@@ -11,15 +11,16 @@ use utoipa::OpenApi;
 
 #[utoipa::path(
     get,
-    summary = "Profile",
+    summary = "[AuthPublic]Profile",
     description = "Get an user AREDL profile",
     tag = "AREDL",
     params(
-        ("id" = String, description = "The user UUID or discord ID to lookup the profile for")
+        ("id" = String, description = "The internal UUID, username or discord ID of the user to lookup the profile for")
     ),
     responses(
         (status = 200, body = ProfileResolved)
     ),
+    security((), ("bearer_token" = [])),
 )]
 #[get(
     "/{id}",

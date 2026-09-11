@@ -69,16 +69,22 @@ pub struct LevelNoteInsert {
 #[derive(Serialize, Deserialize, AsChangeset, ToSchema)]
 #[diesel(table_name = level_notes, check_for_backend(Pg))]
 pub struct LevelNoteUpdate {
+    /// The content of this note
     pub note: Option<String>,
+    /// The type of this note.
     pub note_type: Option<LevelNotesType>,
+    /// An optional timestamp after which this note should apply
     #[serde(default, with = "double_option")]
     pub timestamp: Option<Option<DateTime<Utc>>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct LevelNotePost {
+    /// The content of this note
     pub note: String,
+    /// The type of this note.
     pub note_type: LevelNotesType,
+    /// An optional timestamp after which this note should apply
     pub timestamp: Option<DateTime<Utc>>,
 }
 

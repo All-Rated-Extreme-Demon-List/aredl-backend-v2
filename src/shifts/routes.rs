@@ -23,15 +23,11 @@ use uuid::Uuid;
         (status = 200, body = Paginated<ShiftPage>)
     ),
 	params(
-		("page" = i64, description = "The page number to fetch"),
-		("per_page" = i64, description = "The number of items per page"),
-		("status" = ShiftStatus, description = "The status of the shifts to fetch"),
-		("user_id" = Uuid, description = "The ID of the user to filter by"),
+		PageQuery<50>,
+		("status" = Option<ShiftStatus>, Query, description = "The status of the shifts to fetch"),
+		("user_id" = Option<Uuid>, Query, description = "The ID of the user to filter by"),
 	),
-    security(
-        ("access_token" = ["ShiftManage"]),
-        ("api_key" = ["ShiftManage"]),
-    ),
+    security(("bearer_token" = ["ShiftManage"])),
 )]
 #[get("", wrap = "UserAuth::require(Permission::ShiftManage)")]
 async fn find_all_shifts(
@@ -59,13 +55,9 @@ async fn find_all_shifts(
         (status = 200, body = Paginated<ShiftPage>)
     ),
 	params(
-		("page" = i64, description = "The page number to fetch"),
-		("per_page" = i64, description = "The number of items per page"),
+		PageQuery<50>,
 	),
-    security(
-        ("access_token" = ["ShiftManage"]),
-        ("api_key" = ["ShiftManage"]),
-    ),
+    security(("bearer_token" = ["SubmissionReview"])),
 )]
 #[get("/@me", wrap = "UserAuth::require(Permission::SubmissionReview)")]
 async fn find_all_shifts_me(
@@ -93,10 +85,7 @@ async fn find_all_shifts_me(
         (status = 200, body = Shift)
     ),
 	request_body = ShiftCreate,
-    security(
-        ("access_token" = ["SubmissionReview"]),
-        ("api_key" = ["SubmissionReview"]),
-    )
+    security(("bearer_token" = ["SubmissionReview"])),
 )]
 #[post("", wrap = "UserAuth::require(Permission::SubmissionReview)")]
 async fn create_shift_now(
@@ -133,10 +122,10 @@ async fn create_shift_now(
         (status = 200, body = Shift)
     ),
 	request_body = ShiftPatch,
-    security(
-        ("access_token" = ["ShiftManage"]),
-        ("api_key" = ["ShiftManage"]),
-    )
+    security(("bearer_token" = ["ShiftManage"])),
+    params(
+        ("id" = Uuid, Path, description = "The ID of the shift to edit"),
+    ),
 )]
 #[patch("/{id}", wrap = "UserAuth::require(Permission::ShiftManage)")]
 async fn patch_shift(
@@ -161,10 +150,10 @@ async fn patch_shift(
     responses(
         (status = 200, body = Shift)
     ),
-    security(
-        ("access_token" = ["ShiftManage"]),
-        ("api_key" = ["ShiftManage"]),
-    )
+    security(("bearer_token" = ["ShiftManage"])),
+    params(
+        ("id" = Uuid, Path, description = "The ID of the shift to delete"),
+    ),
 )]
 #[delete("/{id}", wrap = "UserAuth::require(Permission::ShiftManage)")]
 async fn delete_shift(
@@ -194,6 +183,7 @@ async fn delete_shift(
         )
     ),
     paths(
+        create_shift_now,
         find_all_shifts,
         find_all_shifts_me,
 		patch_shift,

@@ -20,11 +20,7 @@ use uuid::Uuid;
     responses(
         (status = 200, body = [BaseUser])
     ),
-    security(
-        ("access_token" = ["RoleAssign"]),
-        ("api_key" = ["RoleAssign"]),
-    ),
-
+    security(("bearer_token" = ["RoleAssign"])),
 )]
 #[post("", wrap = "UserAuth::require(Permission::RoleAssign)")]
 async fn set(
@@ -59,11 +55,7 @@ async fn set(
     responses(
         (status = 200, body = [BaseUser])
     ),
-    security(
-        ("access_token" = ["RoleAssign"]),
-        ("api_key" = ["RoleAssign"]),
-    ),
-
+    security(("bearer_token" = ["RoleAssign"])),
 )]
 #[patch("", wrap = "UserAuth::require(Permission::RoleAssign)")]
 async fn add(
@@ -98,11 +90,7 @@ async fn add(
     responses(
         (status = 200, body = [BaseUser])
     ),
-    security(
-        ("access_token" = ["RoleAssign"]),
-        ("api_key" = ["RoleAssign"]),
-    ),
-
+    security(("bearer_token" = ["RoleAssign"])),
 )]
 #[delete("", wrap = "UserAuth::require(Permission::RoleAssign)")]
 async fn delete(

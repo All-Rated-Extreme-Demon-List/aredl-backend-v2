@@ -22,10 +22,7 @@ use uuid::Uuid;
     responses(
         (status = 200, body = Vec<ResolvedRecurringShift>)
     ),
-    security(
-        ("access_token" = ["SubmissionReview"]),
-        ("api_key" = ["SubmissionReview"]),
-    ),
+    security(("bearer_token" = ["SubmissionReview"])),
 )]
 #[get("", wrap = "UserAuth::require(Permission::SubmissionReview)")]
 async fn find_all_recurring_shifts(
@@ -47,10 +44,7 @@ async fn find_all_recurring_shifts(
     responses(
         (status = 200, body = RecurringShift)
     ),
-    security(
-        ("access_token" = ["ShiftManage"]),
-        ("api_key" = ["ShiftManage"]),
-    ),
+    security(("bearer_token" = ["ShiftManage"])),
 )]
 #[post("", wrap = "UserAuth::require(Permission::ShiftManage)")]
 async fn create_new_recurring_shift(
@@ -75,10 +69,7 @@ async fn create_new_recurring_shift(
     responses(
         (status = 200, body = RecurringShift)
     ),
-    security(
-        ("access_token" = ["ShiftCreateOwn"]),
-        ("api_key" = ["ShiftCreateOwn"]),
-    ),
+    security(("bearer_token" = ["ShiftCreateOwn"])),
 )]
 #[post("/@me", wrap = "UserAuth::require(Permission::ShiftCreateOwn)")]
 async fn create_own_recurring_shift(
@@ -118,10 +109,10 @@ async fn create_own_recurring_shift(
         (status = 200, body = RecurringShift)
     ),
 	request_body = RecurringShiftPatch,
-    security(
-        ("access_token" = ["ShiftManage"]),
-        ("api_key" = ["ShiftManage"]),
-    )
+    security(("bearer_token" = ["ShiftManage"])),
+    params(
+        ("id" = Uuid, Path, description = "The ID of the shift to edit"),
+    ),
 )]
 #[patch("/{id}", wrap = "UserAuth::require(Permission::ShiftManage)")]
 async fn patch_recurring_shift(
@@ -152,10 +143,7 @@ async fn patch_recurring_shift(
 	params(
 		("id" = Uuid, description = "The ID of the shift to delete"),
 	),
-    security(
-        ("access_token" = ["ShiftManage"]),
-        ("api_key" = ["ShiftManage"]),
-    )
+    security(("bearer_token" = ["ShiftManage"])),
 )]
 #[delete("/{id}", wrap = "UserAuth::require(Permission::ShiftManage)")]
 async fn delete_recurring_shift(

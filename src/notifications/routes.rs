@@ -21,10 +21,7 @@ use crate::{
         (status = 401, description = "Unauthorized / invalid or missing token"),
         (status = 403, description = "Forbidden / insufficient permissions"),
     ),
-    security(
-        ("access_token" = ["NotificationsSubscribe"]),
-        ("api_key" = ["NotificationsSubscribe"]),
-    ),
+    security(("bearer_token" = ["NotificationsSubscribe"])),
 )]
 #[get(
     "/websocket",

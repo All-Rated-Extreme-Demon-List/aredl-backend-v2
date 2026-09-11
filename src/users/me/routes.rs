@@ -17,10 +17,7 @@ use utoipa::OpenApi;
     responses(
         (status = 200, body = UserResolved)
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-    )
+    security(("bearer_token" = [])),
 )]
 #[get("", wrap = "UserAuth::load()")]
 async fn find(
@@ -47,10 +44,7 @@ async fn find(
     responses(
         (status = 200, body = User)
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-    )
+    security(("bearer_token" = [])),
 )]
 #[patch("", wrap = "UserAuth::load()")]
 async fn update(
@@ -79,10 +73,7 @@ async fn update(
     responses(
         (status = 200, body = [UserBadge])
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-    )
+    security(("bearer_token" = [])),
 )]
 #[post("/sync", wrap = "UserAuth::load()")]
 async fn sync(

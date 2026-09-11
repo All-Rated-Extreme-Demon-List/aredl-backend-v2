@@ -80,11 +80,11 @@ struct PatreonRelationshipData {
     summary = "[Auth]Link Patreon account",
     description = "Starts a Patreon OAuth flow to link the authenticated AREDL user to a Patreon account.",
     tag = "Authentication",
-    request_body = OAuthOptions,
+    request_body = Option<OAuthOptions>,
     responses(
         (status = 200, body = PatreonLinkResponse)
     ),
-    security(("access_token" = []), ("api_key" = []))
+    security(("bearer_token" = [])),
 )]
 #[post("", wrap = "UserAuth::load()")]
 async fn patreon_link(
@@ -129,7 +129,11 @@ async fn patreon_link(
         (status = 200, body = PatreonLinkedResponse),
         (status = 409, description = "Patreon account is already linked to another user"),
         (status = 302)
-    )
+    ),
+    params(
+        ("code" = String, Query, description = "The authorization code returned by the OAuth provider"),
+        ("state" = String, Query, description = "The state returned by the OAuth provider"),
+    ),
 )]
 #[get("/callback")]
 async fn patreon_callback(

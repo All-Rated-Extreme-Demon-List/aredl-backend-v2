@@ -18,10 +18,7 @@ use uuid::Uuid;
     responses(
         (status = 200, body = Pack)
     ),
-    security(
-        ("access_token" = ["PackModify"]),
-        ("api_key" = ["PackModify"]),
-    ),
+    security(("bearer_token" = ["PackModify"])),
 )]
 #[post("", wrap = "UserAuth::require(Permission::PackModify)")]
 async fn create(
@@ -46,10 +43,7 @@ async fn create(
     responses(
         (status = 200, body = Pack)
     ),
-    security(
-        ("access_token" = ["PackModify"]),
-        ("api_key" = ["PackModify"]),
-    ),
+    security(("bearer_token" = ["PackModify"])),
 )]
 #[patch("/{id}", wrap = "UserAuth::require(Permission::PackModify)")]
 async fn update(
@@ -76,10 +70,7 @@ async fn update(
     responses(
         (status = 200, body = Pack)
     ),
-    security(
-        ("access_token" = ["PackModify"]),
-        ("api_key" = ["PackModify"]),
-    ),
+    security(("bearer_token" = ["PackModify"])),
 )]
 #[delete("/{id}", wrap = "UserAuth::require(Permission::PackModify)")]
 async fn delete(
@@ -100,10 +91,6 @@ async fn delete(
     ),
     responses(
         (status = 200, body = [CompletedPackVictor])
-    ),
-    security(
-        ("access_token" = ["PackModify"]),
-        ("api_key" = ["PackModify"]),
     ),
 )]
 #[get(
@@ -138,6 +125,7 @@ async fn get_victors(
         )
     ),
     paths(
+        get_victors,
         create,
         update,
         delete

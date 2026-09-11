@@ -11,12 +11,13 @@ use uuid::Uuid;
 
 #[utoipa::path(
     get,
-    summary = "Bounty Board",
+    summary = "[AuthPublic]Bounty Board",
     description = "Get the list of bounties",
     tag = "AREDL - Bounty Board",
     responses(
-        (status = 200, body = [Vec<BountyResolved>])
+        (status = 200, body = [BountyResolved])
     ),
+    security((), ("bearer_token" = [])),
 )]
 #[get(
     "",
@@ -34,13 +35,14 @@ async fn list(
 
 #[utoipa::path(
     post,
-    summary = "Create Bounty",
+    summary = "[Staff]Create Bounty",
     description = "Adds a new bounty for a level on the bounty board",
     tag = "AREDL - Bounty Board",
     request_body = BountyPost,
     responses(
         (status = 200, body = Bounty)
     ),
+    security(("bearer_token" = ["BountyManage"])),
 )]
 #[post("", wrap = "UserAuth::require(Permission::BountyManage)")]
 async fn create(
@@ -56,12 +58,16 @@ async fn create(
 
 #[utoipa::path(
     patch,
-    summary = "Update Bounty",
+    summary = "[Staff]Update Bounty",
     description = "Updates an existing bounty on the bounty board",
     tag = "AREDL - Bounty Board",
     request_body = BountyPatch,
     responses(
         (status = 200, body = Bounty)
+    ),
+    security(("bearer_token" = ["BountyManage"])),
+    params(
+        ("id" = Uuid, Path, description = "Internal bounty UUID"),
     ),
 )]
 #[patch("/{id}", wrap = "UserAuth::require(Permission::BountyManage)")]
@@ -82,11 +88,15 @@ async fn update(
 
 #[utoipa::path(
     delete,
-    summary = "Delete Bounty",
+    summary = "[Staff]Delete Bounty",
     description = "Deletes a bounty from the bounty board",
     tag = "AREDL - Bounty Board",
     responses(
         (status = 200, description = "Bounty deleted successfully")
+    ),
+    security(("bearer_token" = ["BountyManage"])),
+    params(
+        ("id" = Uuid, Path, description = "Internal bounty UUID"),
     ),
 )]
 #[delete("/{id}", wrap = "UserAuth::require(Permission::BountyManage)")]

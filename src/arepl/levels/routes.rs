@@ -26,11 +26,7 @@ use utoipa::OpenApi;
     responses(
         (status = 200, body = [LevelWithUserCompletionStatus])
     ),
-    security(
-        (),
-        ("access_token" = []),
-        ("api_key" = []),
-    )
+    security((), ("bearer_token" = [])),
 )]
 #[get(
     "",
@@ -61,10 +57,7 @@ async fn list(
     responses(
         (status = 200, description = "Level added successfully", body = Level)
     ),
-    security(
-        ("access_token" = ["LevelModify"]),
-        ("api_key" = ["LevelModify"]),
-    )
+    security(("bearer_token" = ["LevelModify"])),
 )]
 #[post("", wrap = "UserAuth::require(Permission::LevelModify)")]
 async fn create(
@@ -84,15 +77,12 @@ async fn create(
     description = "Edit the base information of a level",
     tag = "AREDL (P) - Levels",
     params(
-        ("level_id", description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
+        ("level_id", description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
         (status = 200, description = "Level edited successfully", body = Level)
     ),
-    security(
-        ("access_token" = ["LevelModify"]),
-        ("api_key" = ["LevelModify"]),
-    )
+    security(("bearer_token" = ["LevelModify"])),
 )]
 #[patch("/{level_id}", wrap = "UserAuth::require(Permission::LevelModify)")]
 async fn update(
@@ -117,7 +107,7 @@ async fn update(
     description = "Get more detailed information about a level",
     tag = "AREDL (P) - Levels",
     params(
-        ("level_id", description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
+        ("level_id", description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
         (status = 200, body = ResolvedLevel)
@@ -144,9 +134,9 @@ async fn find(
         (path = "/{level_id}/history", api = history::ApiDoc),
         (path = "/{level_id}/records", api = records::ApiDoc),
         (path = "/{level_id}/packs", api = packs::ApiDoc),
-        (path = "/custom-copies", api = custom_copies::ApiDoc),
-        (path = "/notes", api = notes::ApiDoc),
-        (path = "/updates", api = updates::ApiDoc),
+        (path = "/{level_id}/custom-copies", api = custom_copies::ApiDoc),
+        (path = "/{level_id}/notes", api = notes::ApiDoc),
+        (path = "/{level_id}/updates", api = updates::ApiDoc),
     ),
     tags(
         (name = "AREDL (P) - Levels", description="Endpoints for fetching and managing platformer levels on the AREDL")

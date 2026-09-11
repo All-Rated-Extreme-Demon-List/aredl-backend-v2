@@ -12,7 +12,7 @@ use crate::{
 
 #[utoipa::path(
     get,
-    summary = "[Staff]Total submissions",
+    summary = "Total submissions",
     description = "List levels ranked by number of submissions and part of the current queue, as well as total submissions.",
     tag = "AREDL - Statistics",
     responses((status = 200, body = [ResolvedQueueLevelSubmissionsRow])),

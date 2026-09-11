@@ -42,6 +42,7 @@ pub struct OAuthToken {
 
 #[derive(Debug, Default, Serialize, Deserialize, ToSchema)]
 pub struct OAuthOptions {
+    /// The URL to redirect to after the OAuth flow.
     pub callback: Option<String>,
 }
 

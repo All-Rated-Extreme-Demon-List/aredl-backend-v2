@@ -9,12 +9,13 @@ use utoipa::OpenApi;
 
 #[utoipa::path(
 	get,
-	summary = "List roles",
+	summary = "[Staff]List roles",
 	description = "Get the list of all roles and their users",
 	tag = "Roles",
 	responses(
 		(status = 200, body = [RoleResolved])
 	),
+    security(("bearer_token" = ["RoleAssign"])),
 )]
 #[get("", wrap = "UserAuth::require(Permission::RoleAssign)")]
 async fn find_all(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
@@ -31,10 +32,7 @@ async fn find_all(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiErr
     responses(
         (status = 200, body = Role)
     ),
-    security(
-        ("access_token" = ["RoleModify"]),
-        ("api_key" = ["RoleModify"]),
-    ),
+    security(("bearer_token" = ["RoleModify"])),
 )]
 #[post("", wrap = "UserAuth::require(Permission::RoleModify)")]
 async fn create(
@@ -62,10 +60,7 @@ async fn create(
     responses(
         (status = 200, body = Role)
     ),
-    security(
-        ("access_token" = ["RoleModify"]),
-        ("api_key" = ["RoleModify"]),
-    ),
+    security(("bearer_token" = ["RoleModify"])),
 )]
 #[patch("/{id}", wrap = "UserAuth::require(Permission::RoleModify)")]
 async fn update(
@@ -99,10 +94,7 @@ async fn update(
     responses(
         (status = 200, body = Role)
     ),
-    security(
-        ("access_token" = ["RoleModify"]),
-        ("api_key" = ["RoleModify"]),
-    ),
+    security(("bearer_token" = ["RoleModify"])),
 )]
 #[delete("/{id}", wrap = "UserAuth::require(Permission::RoleModify)")]
 async fn delete(

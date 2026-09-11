@@ -52,16 +52,22 @@ pub struct LevelUpdateEntryInsert {
 #[derive(Serialize, Deserialize, AsChangeset, ToSchema)]
 #[diesel(table_name = level_updates, check_for_backend(Pg))]
 pub struct LevelUpdateEntryUpdate {
+    /// Optional changelog text for this update
     #[serde(default, with = "double_option")]
     pub changelog: Option<Option<String>>,
+    /// The type of this update
     pub update_type: Option<LevelUpdateType>,
+    /// When this update applies
     pub timestamp: Option<DateTime<Utc>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct LevelUpdateEntryPost {
+    /// Optional changelog text for this update
     pub changelog: Option<String>,
+    /// The type of this update
     pub update_type: LevelUpdateType,
+    /// When this update applies
     pub timestamp: DateTime<Utc>,
 }
 

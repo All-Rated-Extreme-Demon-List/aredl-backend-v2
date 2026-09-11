@@ -16,6 +16,9 @@ use uuid::Uuid;
     responses(
         (status = 200, body = [Vec<ResolvedCompletedBounty>])
     ),
+    params(
+        ("bounty_id" = Uuid, Path, description = "Internal bounty UUID"),
+    ),
 )]
 #[get("", wrap = "CacheController::public_with_max_age(300)")]
 async fn list(
@@ -31,11 +34,15 @@ async fn list(
 
 #[utoipa::path(
     post,
-    summary = "Synchronize Bounty Completions",
+    summary = "[Staff]Synchronize Bounty Completions",
     description = "Adds any missing completions for this bounty based on existing records. ",
     tag = "AREDL (P) - Bounty Board",
     responses(
         (status = 200)
+    ),
+    security(("bearer_token" = ["BountyManage"])),
+    params(
+        ("bounty_id" = Uuid, Path, description = "Internal bounty UUID"),
     ),
 )]
 #[post("/sync", wrap = "UserAuth::require(Permission::BountyManage)")]

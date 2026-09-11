@@ -19,13 +19,10 @@ use crate::{
     responses(
         (status = 200, body = [SubmissionHistoryResolved])
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-    ),
     params(
         ("id" = Uuid, description = "The ID of the submission")
     ),
+    security(("bearer_token" = [])),
 )]
 #[get("{id}/history", wrap = "UserAuth::load()")]
 async fn get_history(

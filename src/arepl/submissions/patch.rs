@@ -53,6 +53,7 @@ pub struct SubmissionPatchUser {
 
 #[derive(Serialize, Deserialize, Debug, AsChangeset, Default, ToSchema, Clone, PartialEq)]
 #[diesel(table_name=submissions, check_for_backend(Pg))]
+#[schema(as = PlatformerSubmissionPatchMod)]
 pub struct SubmissionPatchMod {
     /// Whether the record was completed on mobile or not.
     pub mobile: Option<bool>,

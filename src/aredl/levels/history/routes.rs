@@ -13,7 +13,7 @@ use utoipa::OpenApi;
     description = "Get all of this level's placement history",
     tag = "AREDL - Levels",
     params(
-        ("level_id" = String, description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
+        ("level_id" = String, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
         (status = 200, body = [HistoryLevelResponse])

@@ -17,10 +17,7 @@ use utoipa::OpenApi;
     responses(
         (status = 200)
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-    ),
+    security(("bearer_token" = ["SubmissionStatusManage"])),
 )]
 #[post(
     "/enable",
@@ -43,10 +40,7 @@ async fn enable(
     responses(
         (status = 200)
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-    ),
+    security(("bearer_token" = ["SubmissionStatusManage"])),
 )]
 #[post(
     "/disable",
@@ -69,10 +63,7 @@ async fn disable(
     responses(
         (status = 200, body = SubmissionsEnabledFull)
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-    ),
+    security(("bearer_token" = ["SubmissionStatusManage"])),
 )]
 #[get(
     "/full",
@@ -92,10 +83,6 @@ async fn get_status_full(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse,
     responses(
         (status = 200)
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-    ),
 )]
 #[get("", wrap = "CacheController::public_with_max_age(60)")]
 async fn get_status(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
@@ -111,10 +98,7 @@ async fn get_status(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiE
     responses(
         (status = 200, body = [SubmissionsEnabledFull])
     ),
-    security(
-        ("access_token" = []),
-        ("api_key" = []),
-    ),
+    security(("bearer_token" = ["SubmissionStatusManage"])),
 )]
 #[get(
     "/history",

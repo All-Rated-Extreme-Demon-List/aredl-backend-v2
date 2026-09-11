@@ -13,8 +13,7 @@ use utoipa::OpenApi;
     description = "Get the changelog paginated data.",
     tag = "AREDL (P)",
     params(
-        ("page" = Option<i64>, Query, description = "The page of the changelog to fetch"),
-        ("per_page" = Option<i64>, Query, description = "The number of entries to fetch per page"),
+        PageQuery<20>,
     ),
     responses(
         (status = 200, body = [Paginated<ChangelogPage>])
