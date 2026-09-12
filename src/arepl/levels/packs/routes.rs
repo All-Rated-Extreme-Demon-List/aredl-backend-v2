@@ -2,7 +2,7 @@ use crate::app_data::db::DbAppState;
 use crate::arepl::levels::id_resolver::resolve_level_id;
 use crate::arepl::packs::PackWithTierResolved;
 use crate::cache_control::CacheController;
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use actix_web::{get, web, HttpResponse};
 use std::sync::Arc;
 use utoipa::OpenApi;
@@ -16,7 +16,8 @@ use utoipa::OpenApi;
         ("level_id" = String, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
-        (status = 200, body = [PackWithTierResolved])
+        (status = 200, body = [PackWithTierResolved]),
+        (status = 404, description = "Level not found", body = ErrorResponse)
     ),
 )]
 #[get("", wrap = "CacheController::public_with_max_age(900)")]

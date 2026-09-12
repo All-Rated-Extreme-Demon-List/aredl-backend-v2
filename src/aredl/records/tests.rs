@@ -224,7 +224,8 @@ async fn delete_record() {
         .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success(), "status is {}", resp.status());
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+    assert!(test::read_body(resp).await.is_empty());
 }
 
 #[actix_web::test]

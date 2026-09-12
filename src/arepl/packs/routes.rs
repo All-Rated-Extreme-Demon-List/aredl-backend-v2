@@ -2,7 +2,7 @@ use crate::app_data::db::DbAppState;
 use crate::arepl::packs::{levels, CompletedPackVictor, Pack, PackCreate, PackUpdate};
 use crate::auth::{Permission, UserAuth};
 use crate::cache_control::CacheController;
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
@@ -15,7 +15,7 @@ use uuid::Uuid;
     tag = "AREDL (P) - Packs",
     request_body = PackCreate,
     responses(
-        (status = 200, body = Pack)
+        (status = 200, body = Pack),
     ),
     security(("bearer_token" = ["PackModify"])),
 )]
@@ -40,7 +40,8 @@ async fn create(
     ),
     request_body = PackUpdate,
     responses(
-        (status = 200, body = Pack)
+        (status = 200, body = Pack),
+        (status = 404, description = "Pack not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["PackModify"])),
 )]
@@ -67,7 +68,8 @@ async fn update(
         ("id" = Uuid, description = "Internal pack UUID")
     ),
     responses(
-        (status = 200, body = Pack)
+        (status = 200, body = Pack),
+        (status = 404, description = "Pack not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["PackModify"])),
 )]
@@ -89,7 +91,7 @@ async fn delete(
         ("pack_id" = Uuid, description = "Internal pack UUID")
     ),
     responses(
-        (status = 200, body = [CompletedPackVictor])
+        (status = 200, body = [CompletedPackVictor]),
     ),
 )]
 #[get(

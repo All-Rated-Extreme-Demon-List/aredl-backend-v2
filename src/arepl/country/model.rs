@@ -61,6 +61,7 @@ pub struct CountryProfileRecord {
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
+#[schema(as = PlatformerResolvedCountryProfileRecord)]
 pub struct ResolvedCountryProfileRecord {
     #[serde(flatten)]
     pub record: ResolvedRecord,
@@ -130,6 +131,7 @@ impl ResolvedCountryProfileRecord {
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
+#[schema(as = PlatformerCountryProfileResolved)]
 pub struct CountryProfileResolved {
     /// Country of the profile. Uses the ISO 3166-1 numeric country code.
     pub country: i32,

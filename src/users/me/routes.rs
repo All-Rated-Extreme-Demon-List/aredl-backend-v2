@@ -1,6 +1,6 @@
 use crate::app_data::db::DbAppState;
 use crate::auth::{Authenticated, UserAuth};
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use crate::users::badges::UserBadge;
 use crate::users::me::{clan, notifications, UserMeUpdate};
 use crate::users::{User, UserResolved};
@@ -15,7 +15,8 @@ use utoipa::OpenApi;
     description = "Get information about the currently authenticated user",
     tag = "Users - Me",
     responses(
-        (status = 200, body = UserResolved)
+        (status = 200, body = UserResolved),
+        (status = 404, description = "User not found", body = ErrorResponse)
     ),
     security(("bearer_token" = [])),
 )]
@@ -42,7 +43,9 @@ async fn find(
     tag = "Users - Me",
     request_body = UserMeUpdate,
     responses(
-        (status = 200, body = User)
+        (status = 200, body = User),
+        (status = 403, description = "You cannot change your ban level while banned from the list", body = ErrorResponse),
+        (status = 404, description = "User not found", body = ErrorResponse)
     ),
     security(("bearer_token" = [])),
 )]
@@ -71,7 +74,7 @@ async fn update(
     description = "Recalculate newly unlocked badges for the authenticated user.",
     tag = "Users - Me",
     responses(
-        (status = 200, body = [UserBadge])
+        (status = 200, body = [UserBadge]),
     ),
     security(("bearer_token" = [])),
 )]

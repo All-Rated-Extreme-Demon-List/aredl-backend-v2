@@ -32,7 +32,7 @@ pub struct ApiKeyResponse {
 		("lifetime_minutes" = i64, Query, description = "Lifetime of the API key token to generate, in minutes.", maximum = 525_600)
 	),
     responses(
-        (status = 200, body = ApiKeyResponse)
+        (status = 200, body = ApiKeyResponse),
     ),
     tag = "Authentication",
     security(("bearer_token" = [])),

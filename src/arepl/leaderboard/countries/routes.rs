@@ -18,7 +18,7 @@ use utoipa::OpenApi;
         ("order" = Option<LeaderboardOrder>, Query, description = "The sorting type to use. Defaults to using points"),
     ),
     responses(
-        (status = 200, body = [CountryLeaderboardPage])
+        (status = 200, body = CountryLeaderboardPage),
     ),
 )]
 #[get("", wrap = "CacheController::public_with_max_age(300)")]

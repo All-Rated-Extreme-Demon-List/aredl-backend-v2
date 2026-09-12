@@ -12,7 +12,7 @@ use utoipa::OpenApi;
     description = "Get the list of important users by role (List staff and AREDL+)",
     tag = "Users",
     responses(
-        (status = 200, body = RoleResolved)
+        (status = 200, body = [RoleResolved]),
     ),
 )]
 #[get("", wrap = "CacheController::public_with_max_age(3600)")]

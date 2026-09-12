@@ -15,7 +15,7 @@ use diesel::prelude::*;
 	summary = "[Auth]Logout",
 	description = "Log out all of the current user's sessions.",
     responses(
-        (status = 200)
+        (status = 200, body = String, content_type = "application/json"),
     ),
     tag = "Authentication",
     security(("bearer_token" = []), ("refresh_token" = [])),

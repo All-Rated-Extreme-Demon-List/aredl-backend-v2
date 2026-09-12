@@ -1,12 +1,12 @@
 use crate::app_data::db::DbAppState;
 use crate::arepl::levels::id_resolver::resolve_level_id;
-use crate::arepl::records::model::{RecordInsert, RecordSortField};
+use crate::arepl::records::model::{RecordInsert, RecordSortField, ResolvedRecordPage};
 use crate::arepl::records::{
     MutualVictors, MutualVictorsQuery, Record, RecordPatch, RecordsQueryOptions, ResolvedRecord,
 };
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::cache_control::CacheController;
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use crate::page_helper::{PageQuery, Paginated};
 use crate::providers::ProvidersAppState;
 use actix_web::{delete, get, patch, post, web, HttpResponse};
@@ -22,6 +22,7 @@ use uuid::Uuid;
     tag = "AREDL (P) - Records",
     responses(
         (status = 200, body = ResolvedRecord),
+        (status = 404, description = "Record not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["RecordModify"])),
     params(
@@ -45,7 +46,10 @@ async fn find(
     tag = "AREDL (P) - Records",
     request_body = RecordInsert,
     responses(
-        (status = 200, body = Record)
+        (status = 200, body = Record),
+        (status = 403, description = "You cannot create records for yourself", body = ErrorResponse, examples(
+            ("own_record" = (value = json!({"message": "You cannot create records for yourself"})))
+        ))
     ),
     security(("bearer_token" = ["RecordModify"])),
 )]
@@ -74,7 +78,11 @@ async fn create(
         ("id" = Uuid, description = "Internal record UUID")
     ),
     responses(
-        (status = 200, body = Record)
+        (status = 200, body = Record),
+        (status = 403, description = "You cannot update records for yourself", body = ErrorResponse, examples(
+            ("own_record" = (value = json!({"message": "You cannot update records for yourself"})))
+        )),
+        (status = 404, description = "Record not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["RecordModify"])),
 )]
@@ -108,7 +116,8 @@ async fn update(
         ("id" = Uuid, description = "Internal record UUID")
     ),
     responses(
-        (status = 200, body = Record)
+        (status = 200, body = Record),
+        (status = 404, description = "Record not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["RecordModify"])),
 )]
@@ -134,7 +143,8 @@ async fn update_timestamp(
         ("id" = Uuid, description = "Internal record UUID")
     ),
     responses(
-        (status = 200)
+        (status = 204),
+        (status = 404, description = "Record not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["RecordModify"])),
 )]
@@ -146,7 +156,7 @@ async fn delete(
 ) -> Result<HttpResponse, ApiError> {
     web::block(move || Record::delete(&mut db.connection()?, id.into_inner(), &authenticated))
         .await??;
-    Ok(HttpResponse::Ok().json(()))
+    Ok(HttpResponse::NoContent().finish())
 }
 
 #[utoipa::path(
@@ -160,7 +170,8 @@ async fn delete(
         ("high_extremes" = Option<bool>, Query, description = "Whether to show only users with more than 50 records"),
     ),
     responses(
-        (status = 200, body = MutualVictors)
+        (status = 200, body = MutualVictors),
+        (status = 404, description = "One of the levels was not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["RecordModify"])),
 )]
@@ -198,7 +209,7 @@ async fn mutual_victors(
         ("submitter_filter" = Option<String>, Query, description = "The submitter user (UUID, discord ID, or username) to filter by"),
     ),
     responses(
-        (status = 200, body = Paginated<ResolvedRecord>)
+        (status = 200, body = Paginated<ResolvedRecordPage>),
     ),
     security(("bearer_token" = ["RecordModify"])),
 )]
@@ -225,7 +236,7 @@ async fn find_all(
     description = "List all of the authenticated user's records",
     tag = "AREDL (P) - Records",
     responses(
-        (status = 200, body = [ResolvedRecord])
+        (status = 200, body = Paginated<ResolvedRecordPage>),
     ),
     params(
         PageQuery<100>,

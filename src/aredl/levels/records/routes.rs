@@ -2,7 +2,7 @@ use crate::app_data::db::DbAppState;
 use crate::aredl::levels::records::{LevelResolvedRecordExtended, LevelResolvedRecordPage};
 use crate::aredl::levels::{id_resolver::resolve_level_id, records::RecordQuery};
 use crate::cache_control::CacheController;
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use crate::page_helper::{PageQuery, Paginated};
 use actix_web::{get, web, HttpResponse};
 use std::sync::Arc;
@@ -20,7 +20,8 @@ use utoipa::OpenApi;
         PageQuery<20>,
     ),
     responses(
-        (status = 200, body = Paginated<LevelResolvedRecordPage>)
+        (status = 200, body = Paginated<LevelResolvedRecordPage>),
+        (status = 404, description = "Level not found", body = ErrorResponse)
     ),
 )]
 #[get("", wrap = "CacheController::public_with_max_age(900)")]

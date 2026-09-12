@@ -30,7 +30,9 @@ pub struct StatsQuery {
         ("reviewer_id" = Option<Uuid>, Query, description = "Filter for a specific reviewer"),
         ("level_id" = Option<Uuid>, Query, description = "Filter for a specific level")
     ),
-    responses((status = 200, body = Paginated<DailyStatsPage>)),
+    responses(
+        (status = 200, body = Paginated<DailyStatsPage>),
+    ),
     security(("bearer_token" = ["SubmissionSeeStatistics"])),
 )]
 #[get("", wrap = "UserAuth::require(Permission::SubmissionSeeStatistics)")]
@@ -75,7 +77,9 @@ pub struct LeaderboardQuery {
         ("only_active" = Option<bool>, Query, description = "Whether or not to exclude reviewers that aren't staff anymore"),
         ("include_hidden_reviewers" = Option<bool>, Query, description = "Whether to include hidden reviewers in the results. Requires `ReviewersAudit`; otherwise forced to false."),
     ),
-    responses((status = 200, body = [ResolvedLeaderboardRow])),
+    responses(
+        (status = 200, body = [ResolvedLeaderboardRow]),
+    ),
     security(("bearer_token" = ["SubmissionSeeStatistics"])),
 )]
 #[get(

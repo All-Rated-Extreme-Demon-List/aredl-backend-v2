@@ -3,7 +3,7 @@ use crate::arepl::packtiers::PackTierResolved;
 use crate::arepl::packtiers::{PackTier, PackTierCreate, PackTierUpdate};
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::cache_control::CacheController;
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
@@ -16,7 +16,7 @@ use uuid::Uuid;
     description = "Get all pack tiers (and packs) information.",
     tag = "AREDL (P) - Pack Tiers",
     responses(
-        (status = 200, body = PackTierResolved)
+        (status = 200, body = [PackTierResolved]),
     ),
     security((), ("bearer_token" = [])),
 )]
@@ -46,7 +46,7 @@ async fn find_all(
     tag = "AREDL (P) - Pack Tiers",
     request_body = PackTierCreate,
     responses(
-        (status = 200, body = PackTier)
+        (status = 200, body = PackTier),
     ),
     security(("bearer_token" = ["PackTierModify"])),
 )]
@@ -71,7 +71,8 @@ async fn create(
         ("id", description = "Internal pack tier UUID")
     ),
     responses(
-        (status = 200, body = PackTier)
+        (status = 200, body = PackTier),
+        (status = 404, description = "Pack tier not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["PackTierModify"])),
 )]
@@ -99,7 +100,8 @@ async fn update(
         ("id", description = "Internal pack tier UUID")
     ),
     responses(
-        (status = 200, body = PackTier)
+        (status = 200, body = PackTier),
+        (status = 404, description = "Pack tier not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["PackTierModify"])),
 )]

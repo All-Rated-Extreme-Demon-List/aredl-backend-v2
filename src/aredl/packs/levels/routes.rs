@@ -18,7 +18,7 @@ use uuid::Uuid;
     ),
     request_body = [Uuid],
     responses(
-        (status = 200, body = [BaseLevel])
+        (status = 200, body = [BaseLevel]),
     ),
     security(("bearer_token" = ["PackModify"])),
 )]
@@ -47,7 +47,7 @@ async fn set(
     ),
     request_body = [Uuid],
     responses(
-        (status = 200, body = [BaseLevel])
+        (status = 200, body = [BaseLevel]),
     ),
     security(("bearer_token" = ["PackModify"])),
 )]
@@ -76,7 +76,7 @@ async fn add(
     ),
     request_body = [Uuid],
     responses(
-        (status = 200, body = [BaseLevel])
+        (status = 200, body = [BaseLevel]),
     ),
     security(("bearer_token" = ["PackModify"])),
 )]

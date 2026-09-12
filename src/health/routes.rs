@@ -4,7 +4,7 @@ use std::sync::Arc;
 use utoipa::OpenApi;
 
 use crate::app_data::db::DbAppState;
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 
 use diesel::prelude::*;
 #[utoipa::path(
@@ -13,7 +13,7 @@ use diesel::prelude::*;
     description = "Check whether the API and its database connection are healthy.",
     responses(
         (status = 200, description = "API and DB healthy"),
-        (status = 503, description = "Service unavailable"),
+        (status = 503, description = "Service unavailable", body = ErrorResponse),
     ),
     tag = "Health"
 )]

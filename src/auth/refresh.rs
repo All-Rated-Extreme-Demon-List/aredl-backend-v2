@@ -30,7 +30,7 @@ struct AuthRefreshResponse {
     description = "Get a new access token. If the refresh token is about to expire, will also return a new one.",
     tag = "Authentication",
     responses(
-        (status = 200, body = AuthRefreshResponse)
+        (status = 200, body = AuthRefreshResponse),
     ),
     security(("refresh_token" = [])),
 )]

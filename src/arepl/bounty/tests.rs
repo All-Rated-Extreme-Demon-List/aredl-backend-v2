@@ -347,11 +347,8 @@ async fn bounty_sync_completions_endpoint_adds_matching_records() {
             .to_request(),
     )
     .await;
-    assert!(
-        sync_resp.status().is_success(),
-        "sync completions status is {}",
-        sync_resp.status()
-    );
+    assert_eq!(sync_resp.status(), StatusCode::NO_CONTENT);
+    assert!(test::read_body(sync_resp).await.is_empty());
 
     assert_eq!(count_test_bounty_completions(&db, bounty.id), 3);
 }

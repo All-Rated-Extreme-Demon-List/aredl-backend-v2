@@ -3,7 +3,7 @@ use crate::{
     aredl::submissions::status::{SubmissionsEnabled, SubmissionsEnabledFull},
     auth::{Authenticated, Permission, UserAuth},
     cache_control::CacheController,
-    error_handler::ApiError,
+    error_handler::{ApiError, ErrorResponse},
 };
 use actix_web::{get, post, web, HttpResponse};
 use std::sync::Arc;
@@ -15,7 +15,7 @@ use utoipa::OpenApi;
     description = "Toggle submissions on, allowing users to submit records to the list",
     tag = "AREDL - Submissions",
     responses(
-        (status = 200)
+        (status = 200),
     ),
     security(("bearer_token" = ["SubmissionStatusManage"])),
 )]
@@ -38,7 +38,7 @@ async fn enable(
     description = "Toggle submissions off, stopping users from submitting records to the list.",
     tag = "AREDL - Submissions",
     responses(
-        (status = 200)
+        (status = 200),
     ),
     security(("bearer_token" = ["SubmissionStatusManage"])),
 )]
@@ -61,7 +61,8 @@ async fn disable(
     description = "Get the status of submissions. In addition to the status, this also returns the moderator who last enabled/disabled submissions, and the timestamp.",
     tag = "AREDL - Submissions",
     responses(
-        (status = 200, body = SubmissionsEnabledFull)
+        (status = 200, body = SubmissionsEnabledFull),
+        (status = 404, description = "No submission status has been registered yet.", body = ErrorResponse)
     ),
     security(("bearer_token" = ["SubmissionStatusManage"])),
 )]
@@ -81,7 +82,7 @@ async fn get_status_full(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse,
     description = "Get the status of submissions. Returns `false` if submissions are disabled, and `true` otherwise.",
     tag = "AREDL - Submissions",
     responses(
-        (status = 200)
+        (status = 200, body = bool, content_type = "application/json"),
     ),
 )]
 #[get("", wrap = "CacheController::public_with_max_age(60)")]
@@ -96,7 +97,7 @@ async fn get_status(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiE
     description = "Get a log of when submissions were enabled or disabled and by whom.",
     tag = "AREDL - Submissions",
     responses(
-        (status = 200, body = [SubmissionsEnabledFull])
+        (status = 200, body = [SubmissionsEnabledFull]),
     ),
     security(("bearer_token" = ["SubmissionStatusManage"])),
 )]

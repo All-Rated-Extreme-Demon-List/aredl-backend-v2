@@ -6,7 +6,7 @@ use crate::clans::members::{ClanInviteCreate, ClanMemberInvite, ClanMemberUpdate
 use crate::clans::{
     Clan, ClanCreate, ClanInvite, ClanListQueryOptions, ClanMember, ClanPage, ClanUpdate,
 };
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
@@ -22,7 +22,7 @@ use uuid::Uuid;
 		("clan_id" = Uuid, Path, description = "The internal UUID of the clan")
 	),
     responses(
-        (status = 200, body = [ClanMemberResolved])
+        (status = 200, body = [ClanMemberResolved]),
     ),
 )]
 #[get("", wrap = "CacheController::public_with_max_age(300)")]
@@ -47,7 +47,7 @@ async fn list(
         ("clan_id" = Uuid, description = "The internal UUID of the clan")
     ),
     responses(
-        (status = 200, body = [Uuid])
+        (status = 200, body = [Uuid]),
     ),
     security(("bearer_token" = ["ClanModify"])),
 )]
@@ -76,7 +76,7 @@ async fn add(
         ("clan_id" = Uuid, description = "The internal UUID of the clan")
     ),
     responses(
-        (status = 200, body = [Uuid])
+        (status = 200, body = [Uuid]),
     ),
     security(("bearer_token" = ["ClanModify"])),
 )]
@@ -105,7 +105,8 @@ async fn set(
     ),
     request_body = [Uuid],
     responses(
-        (status = 200, body = Clan)
+        (status = 200, body = [Uuid]),
+        (status = 403, description = "Insufficient clan role to remove one or more members without ClanModify permission", body = ErrorResponse)
     ),
     security(("bearer_token" = []), ("bearer_token" = ["ClanModify"])),
 )]
@@ -144,7 +145,10 @@ async fn delete(
         ("clan_id" = Uuid, description = "The internal UUID of the clan")
     ),
     responses(
-        (status = 200, body = ClanInvite)
+        (status = 200, body = ClanInvite),
+        (status = 403, description = "Clan owner/vice owner role or ClanModify permission required", body = ErrorResponse),
+        (status = 404, description = "Clan or inviting user not found", body = ErrorResponse),
+        (status = 409, description = "This user is already in a clan", body = ErrorResponse)
     ),
     security(("bearer_token" = []), ("bearer_token" = ["ClanModify"])),
 )]
@@ -187,7 +191,9 @@ async fn invite(
     ),
     request_body = ClanMemberUpdate,
     responses(
-        (status = 200, body = ClanMember)
+        (status = 200, body = ClanMember),
+        (status = 403, description = "Clan owner role or ClanModify permission required", body = ErrorResponse),
+        (status = 404, description = "Clan member not found", body = ErrorResponse)
     ),
     security(("bearer_token" = []), ("bearer_token" = ["ClanModify"])),
 )]

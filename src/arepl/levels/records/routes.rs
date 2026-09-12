@@ -4,7 +4,7 @@ use crate::arepl::levels::records::{
     LevelResolvedRecordExtended, LevelResolvedRecordPage, RecordQuery,
 };
 use crate::cache_control::CacheController;
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use crate::page_helper::{PageQuery, Paginated};
 use actix_web::{get, web, HttpResponse};
 use std::sync::Arc;
@@ -22,7 +22,8 @@ use utoipa::OpenApi;
         ("submitter_filter" = Option<String>, Query, description = "Filter records by submitter UUID, username, or Discord ID"),
     ),
     responses(
-        (status = 200, body = Paginated<LevelResolvedRecordPage>)
+        (status = 200, body = Paginated<LevelResolvedRecordPage>),
+        (status = 404, description = "Level not found", body = ErrorResponse)
     ),
 )]
 #[get("", wrap = "CacheController::public_with_max_age(900)")]

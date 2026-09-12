@@ -13,7 +13,9 @@ use utoipa::OpenApi;
     summary = "Total records",
     description = "List levels ranked by number of records, as well as total records and verifications.",
     tag = "AREDL - Statistics",
-    responses((status = 200, body = [ResolvedLevelTotalRecordsRow])),
+    responses(
+        (status = 200, body = [ResolvedLevelTotalRecordsRow]),
+    ),
 )]
 #[get("", wrap = "CacheController::public_with_max_age(900)")]
 pub async fn total(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {

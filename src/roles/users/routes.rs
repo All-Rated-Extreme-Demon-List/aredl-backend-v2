@@ -1,6 +1,6 @@
 use crate::app_data::db::DbAppState;
 use crate::auth::{Authenticated, Permission, UserAuth};
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use crate::users::BaseUser;
 use actix_web::{delete, patch, post, web, HttpResponse};
 use std::sync::Arc;
@@ -18,7 +18,11 @@ use uuid::Uuid;
     ),
     request_body = [Uuid],
     responses(
-        (status = 200, body = [BaseUser])
+        (status = 200, body = [BaseUser]),
+        (status = 403, description = "You do not have sufficient privilege to edit this role", body = ErrorResponse, examples(
+            ("role_privilege" = (value = json!({"message": "You do not have sufficient permissions to edit this role."})))
+        )),
+        (status = 404, description = "Role not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["RoleAssign"])),
 )]
@@ -53,7 +57,11 @@ async fn set(
     ),
     request_body = [Uuid],
     responses(
-        (status = 200, body = [BaseUser])
+        (status = 200, body = [BaseUser]),
+        (status = 403, description = "You do not have sufficient privilege to edit this role", body = ErrorResponse, examples(
+            ("role_privilege" = (value = json!({"message": "You do not have sufficient permissions to edit this role."})))
+        )),
+        (status = 404, description = "Role not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["RoleAssign"])),
 )]
@@ -88,7 +96,11 @@ async fn add(
     ),
     request_body = [Uuid],
     responses(
-        (status = 200, body = [BaseUser])
+        (status = 200, body = [BaseUser]),
+        (status = 403, description = "You do not have sufficient privilege to edit this role", body = ErrorResponse, examples(
+            ("role_privilege" = (value = json!({"message": "You do not have sufficient permissions to edit this role."})))
+        )),
+        (status = 404, description = "Role not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["RoleAssign"])),
 )]

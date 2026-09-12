@@ -64,6 +64,7 @@ pub struct ClanProfileRecord {
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
+#[schema(as = PlatformerResolvedClanProfileRecord)]
 pub struct ResolvedClanProfileRecord {
     #[serde(flatten)]
     pub record: ResolvedRecord,
@@ -111,6 +112,7 @@ pub struct ResolvedClanMemberPoints {
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
+#[schema(as = PlatformerClanProfileResolved)]
 pub struct ClanProfileResolved {
     /// This profile's clan.
     pub clan: Clan,

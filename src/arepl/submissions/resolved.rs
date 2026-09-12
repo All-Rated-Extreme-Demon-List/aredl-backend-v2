@@ -53,6 +53,7 @@ pub struct SubmissionQueryOptions {
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
+#[schema(as = PlatformerResolvedSubmissionPage)]
 pub struct ResolvedSubmissionPage {
     data: Vec<SubmissionResolved>,
 }

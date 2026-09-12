@@ -17,7 +17,7 @@ use crate::{
     description = "Get the timestamps of each time this submission's status was changed.",
     tag = "AREDL (P) - Submissions",
     responses(
-        (status = 200, body = [SubmissionHistoryResolved])
+        (status = 200, body = [SubmissionHistoryResolved]),
     ),
     params(
         ("id" = Uuid, description = "The ID of the submission")

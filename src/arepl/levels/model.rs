@@ -166,6 +166,7 @@ pub struct LevelUpdate {
 
 // Level struct that has publisher and verification resolved
 #[derive(Serialize, Debug, ToSchema)]
+#[schema(as = PlatformerResolvedLevel)]
 pub struct ResolvedLevel {
     /// Internal level UUID
     pub id: Uuid,

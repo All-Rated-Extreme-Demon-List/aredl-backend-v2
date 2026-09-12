@@ -12,7 +12,7 @@ use utoipa::OpenApi;
     description = "Get the list of notifications you've received",
     tag = "Users - Me",
     responses(
-        (status = 200, body = [Notification])
+        (status = 200, body = [Notification]),
     ),
     security(("bearer_token" = [])),
 )]
@@ -34,7 +34,7 @@ async fn list(
     description = "Removes all your current notifications.",
     tag = "Users - Me",
     responses(
-        (status = 200)
+        (status = 204),
     ),
     security(("bearer_token" = [])),
 )]
@@ -47,7 +47,7 @@ async fn clear(
         Notification::clear_me_notifications(&mut db.connection()?, authenticated.user_id)
     })
     .await??;
-    Ok(HttpResponse::Ok().json(()))
+    Ok(HttpResponse::NoContent().finish())
 }
 
 #[derive(OpenApi)]

@@ -41,6 +41,7 @@ impl SubmissionStatus {
 
 #[derive(Serialize, Deserialize, Queryable, Insertable, Selectable, Debug, ToSchema, Clone)]
 #[diesel(table_name = submissions, check_for_backend(Pg))]
+#[schema(as = PlatformerSubmission)]
 pub struct Submission {
     /// Internal UUID of the submission.
     pub id: Uuid,
@@ -90,6 +91,7 @@ pub struct Submission {
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
+#[schema(as = PlatformerSubmissionResolved)]
 pub struct SubmissionResolved {
     /// Internal UUID of the submission.
     pub id: Uuid,
@@ -141,6 +143,7 @@ pub struct SubmissionResolved {
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
+#[schema(as = PlatformerSubmissionPage)]
 pub struct SubmissionPage {
     data: Vec<Submission>,
 }

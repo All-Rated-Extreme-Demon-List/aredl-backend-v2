@@ -8,7 +8,7 @@ use crate::{
         },
     },
     auth::{Permission, UserAuth},
-    error_handler::ApiError,
+    error_handler::{ApiError, ErrorResponse},
     CacheController,
 };
 use actix_web::{delete, get, patch, post, web, HttpResponse};
@@ -22,7 +22,7 @@ use uuid::Uuid;
     description = "List all updates for a level",
     tag = "AREDL (P) - Levels (Updates)",
     responses(
-        (status = 200, body = Vec<LevelUpdateEntry>)
+        (status = 200, body = Vec<LevelUpdateEntry>),
     ),
     params(
         ("level_id" = String, Path, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)"),
@@ -55,7 +55,8 @@ async fn find_all(
         ("level_id" = String, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
-        (status = 200, body = LevelUpdateEntry)
+        (status = 200, body = LevelUpdateEntry),
+        (status = 404, description = "Level not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["LevelUpdatesModify"])),
 )]
@@ -89,7 +90,8 @@ struct UpdatePath {
         ("update_id" = Uuid, description = "The internal ID of this update")
     ),
     responses(
-        (status = 200, body = LevelUpdateEntry)
+        (status = 200, body = LevelUpdateEntry),
+        (status = 404, description = "Level update not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["LevelUpdatesModify"])),
 )]
@@ -119,7 +121,7 @@ async fn update(
         ("update_id" = Uuid, description = "The internal ID of this update")
     ),
     responses(
-        (status = 200)
+        (status = 200),
     ),
     security(("bearer_token" = ["LevelUpdatesModify"])),
 )]

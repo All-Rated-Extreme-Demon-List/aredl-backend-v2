@@ -4,11 +4,11 @@ use actix_web::{Error as ActixError, HttpResponse, ResponseError};
 use diesel::result::DatabaseErrorKind;
 use diesel::result::Error as DieselError;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::error::Error as StdError;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use url::ParseError;
+use utoipa::ToSchema;
 
 #[derive(Debug)]
 pub enum ConfigError {
@@ -97,6 +97,12 @@ impl From<ConfigError> for StartupError {
 pub struct ApiError {
     pub error_status_code: u16,
     pub error_message: String,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct ErrorResponse {
+    /// Error message. Server errors return "Internal server error".
+    pub message: String,
 }
 
 impl ApiError {
@@ -256,6 +262,8 @@ impl ResponseError for ApiError {
             "Internal server error".to_owned()
         };
 
-        HttpResponse::build(status_code).json(json!({"message": error_message}))
+        HttpResponse::build(status_code).json(ErrorResponse {
+            message: error_message,
+        })
     }
 }

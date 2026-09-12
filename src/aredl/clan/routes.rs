@@ -2,7 +2,7 @@ use crate::app_data::db::DbAppState;
 use crate::aredl::clan::ClanProfileResolved;
 use crate::aredl::levels::records::LevelResolvedRecordExtended;
 use crate::cache_control::CacheController;
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use actix_web::{get, web, HttpResponse};
 use std::sync::Arc;
 use utoipa::OpenApi;
@@ -14,7 +14,10 @@ use uuid::Uuid;
     description = "Get a clan's AREDL profile",
     tag = "AREDL",
     params(("id" = Uuid, description = "The clan to lookup the data for")),
-    responses((status = 200, body = ClanProfileResolved))
+    responses(
+        (status = 200, body = ClanProfileResolved),
+        (status = 404, description = "Clan not found", body = ErrorResponse)
+    )
 )]
 #[get("/{id}", wrap = "CacheController::public_with_max_age(900)")]
 async fn find(
@@ -36,7 +39,9 @@ async fn find(
         ("clan_id" = Uuid, description = "The clan to lookup the records for"),
         ("level_id" = Uuid, description = "The level to lookup the records for")
     ),
-    responses((status = 200, body = [LevelResolvedRecordExtended]))
+    responses(
+        (status = 200, body = [LevelResolvedRecordExtended]),
+    )
 )]
 #[get(
     "/{clan_id}/levels/{level_id}/records",

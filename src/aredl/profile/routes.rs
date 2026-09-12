@@ -1,6 +1,6 @@
 use crate::aredl::profile::ProfileResolved;
 use crate::cache_control::CacheController;
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use crate::{
     app_data::db::DbAppState,
     auth::{Authenticated, UserAuth},
@@ -18,7 +18,8 @@ use utoipa::OpenApi;
         ("id" = String, description = "The internal UUID, username or discord ID of the user to lookup the profile for")
     ),
     responses(
-        (status = 200, body = ProfileResolved)
+        (status = 200, body = ProfileResolved),
+        (status = 404, description = "User not found", body = ErrorResponse)
     ),
     security((), ("bearer_token" = [])),
 )]

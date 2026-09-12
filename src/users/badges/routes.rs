@@ -1,6 +1,6 @@
 use crate::app_data::db::DbAppState;
 use crate::auth::{Authenticated, Permission, UserAuth};
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use crate::users::User;
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
@@ -18,7 +18,8 @@ use super::{UserBadge, UserBadgeGrant};
         ("id" = String, description = "The internal UUID, username or discord ID of the user")
     ),
     responses(
-        (status = 200, body = [UserBadge])
+        (status = 200, body = [UserBadge]),
+        (status = 404, description = "User not found", body = ErrorResponse)
     ),
 )]
 #[get("")]
@@ -45,7 +46,8 @@ async fn find_all(
         ("id" = String, description = "The internal UUID, username or discord ID of the user")
     ),
     responses(
-        (status = 200, body = [UserBadge])
+        (status = 200, body = [UserBadge]),
+        (status = 404, description = "User not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["UserModify"])),
 )]
@@ -77,7 +79,8 @@ async fn sync(
     ),
     request_body = UserBadgeGrant,
     responses(
-        (status = 200, body = [UserBadge])
+        (status = 200, body = [UserBadge]),
+        (status = 404, description = "User not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["UserModify"])),
 )]
@@ -112,7 +115,8 @@ async fn grant(
     ),
     request_body = [String],
     responses(
-        (status = 200, body = [UserBadge])
+        (status = 200, body = [UserBadge]),
+        (status = 404, description = "User not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["UserModify"])),
 )]

@@ -2,7 +2,7 @@ use crate::app_data::db::DbAppState;
 use crate::arepl::levels::id_resolver::resolve_level_id;
 use crate::auth::{Permission, UserAuth};
 use crate::cache_control::CacheController;
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use crate::users::BaseUser;
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
@@ -19,7 +19,8 @@ use uuid::Uuid;
         ("level_id" = String, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
-        (status = 200, body = [BaseUser])
+        (status = 200, body = [BaseUser]),
+        (status = 404, description = "Level not found", body = ErrorResponse)
     ),
 )]
 #[get("", wrap = "CacheController::public_with_max_age(900)")]
@@ -45,7 +46,8 @@ async fn find_all(
         ("level_id" = String, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
-        (status = 200, description = "Creators set successfully", body = [BaseUser])
+        (status = 200, description = "Creators set successfully", body = [BaseUser]),
+        (status = 404, description = "Level not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["LevelModify"])),
 )]
@@ -75,7 +77,8 @@ async fn set(
         ("level_id" = String, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
-        (status = 200, description = "Creators added successfully", body = [BaseUser])
+        (status = 200, description = "Creators added successfully", body = [BaseUser]),
+        (status = 404, description = "Level not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["LevelModify"])),
 )]
@@ -105,7 +108,8 @@ async fn add(
         ("level_id" = String, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
-        (status = 200, description = "Creators removed successfully", body = [BaseUser])
+        (status = 200, description = "Creators removed successfully", body = [BaseUser]),
+        (status = 404, description = "Level not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["LevelModify"])),
 )]

@@ -1,7 +1,7 @@
 use crate::{
     app_data::db::DbAppState,
     auth::{Authenticated, Permission, UserAuth},
-    error_handler::ApiError,
+    error_handler::{ApiError, ErrorResponse},
     page_helper::{PageQuery, Paginated},
     shifts::{
         recurring, ResolvedShift, Shift, ShiftCreate, ShiftFilterQuery, ShiftPage, ShiftPatch,
@@ -20,7 +20,7 @@ use uuid::Uuid;
     description = "Get a possibly filtered list of all current and past shifts.",
     tag = "Shifts",
     responses(
-        (status = 200, body = Paginated<ShiftPage>)
+        (status = 200, body = Paginated<ShiftPage>),
     ),
 	params(
 		PageQuery<50>,
@@ -52,7 +52,7 @@ async fn find_all_shifts(
     description = "Get a list of all current and past shifts for the authenticated user.",
     tag = "Shifts",
     responses(
-        (status = 200, body = Paginated<ShiftPage>)
+        (status = 200, body = Paginated<ShiftPage>),
     ),
 	params(
 		PageQuery<50>,
@@ -82,7 +82,10 @@ async fn find_all_shifts_me(
     description = "Starts a new shift immediately.",
     tag = "Shifts",
     responses(
-        (status = 200, body = Shift)
+        (status = 201, body = Shift),
+        (status = 403, description = "ShiftManage permission required to assign a shift to another user", body = ErrorResponse, examples(
+            ("other_user" = (value = json!({"message": "You can only create shifts for yourself."})))
+        ))
     ),
 	request_body = ShiftCreate,
     security(("bearer_token" = ["SubmissionReview"])),
@@ -119,7 +122,8 @@ async fn create_shift_now(
     description = "Edits a current or past shift.",
     tag = "Shifts",
     responses(
-        (status = 200, body = Shift)
+        (status = 201, body = Shift),
+        (status = 404, description = "Shift not found", body = ErrorResponse)
     ),
 	request_body = ShiftPatch,
     security(("bearer_token" = ["ShiftManage"])),
@@ -148,7 +152,8 @@ async fn patch_shift(
     description = "Deletes a current or past shift.",
     tag = "Shifts",
     responses(
-        (status = 200, body = Shift)
+        (status = 201, body = Shift),
+        (status = 404, description = "Shift not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["ShiftManage"])),
     params(

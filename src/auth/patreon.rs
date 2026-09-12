@@ -3,7 +3,7 @@ use crate::auth::oauth::OAuthProvider;
 use crate::auth::oauth::{exchange_oauth_code, OAuthCallbackQuery, OAuthRequestData};
 use crate::auth::OAuthOptions;
 use crate::auth::{Authenticated, UserAuth};
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use crate::get_secret;
 use crate::providers::ProvidersAppState;
 use crate::schema::oauth_connected_accounts;
@@ -82,7 +82,8 @@ struct PatreonRelationshipData {
     tag = "Authentication",
     request_body = Option<OAuthOptions>,
     responses(
-        (status = 200, body = PatreonLinkResponse)
+        (status = 200, body = PatreonLinkResponse),
+        (status = 503, description = "Patreon integration is not configured", body = ErrorResponse)
     ),
     security(("bearer_token" = [])),
 )]
@@ -127,8 +128,11 @@ async fn patreon_link(
     tag = "Authentication",
     responses(
         (status = 200, body = PatreonLinkedResponse),
-        (status = 409, description = "Patreon account is already linked to another user"),
-        (status = 302)
+        (status = 409, description = "Patreon account is already linked to another user", body = ErrorResponse),
+        (status = 302, description = "Redirect to the callback URL if one was provided", headers(("Location" = String, description = "Callback URL with patreon=linked"))),
+        (status = 403, description = "This Patreon account is not an active member of the AREDL Patreon", body = ErrorResponse),
+        (status = 404, description = "OAuth request not found", body = ErrorResponse),
+        (status = 503, description = "Patreon integration is not configured", body = ErrorResponse)
     ),
     params(
         ("code" = String, Query, description = "The authorization code returned by the OAuth provider"),

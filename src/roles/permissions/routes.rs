@@ -1,6 +1,6 @@
 use crate::app_data::db::DbAppState;
 use crate::auth::{Authenticated, Permission, UserAuth};
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use crate::roles::Role;
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
@@ -16,7 +16,11 @@ use utoipa::OpenApi;
         ("id" = i32, description = "Internal role ID")
     ),
     responses(
-        (status = 200, body = [String])
+        (status = 200, body = [String]),
+        (status = 403, description = "You do not have sufficient privilege to edit this role", body = ErrorResponse, examples(
+            ("role_privilege" = (value = json!({"message": "You do not have sufficient permissions to edit this role."})))
+        )),
+        (status = 404, description = "Role not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["RoleModify"])),
 )]
@@ -42,7 +46,11 @@ async fn find_all(
         ("id" = i32, description = "Internal role ID")
     ),
     responses(
-        (status = 200, body = [String])
+        (status = 200, body = [String]),
+        (status = 403, description = "You do not have sufficient privilege to edit this role", body = ErrorResponse, examples(
+            ("role_privilege" = (value = json!({"message": "You do not have sufficient permissions to edit this role."})))
+        )),
+        (status = 404, description = "Role not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["RoleModify"])),
 )]
@@ -69,7 +77,11 @@ async fn find_all_resolved(
     ),
     request_body = [String],
     responses(
-        (status = 200, body = [String])
+        (status = 200, body = [String]),
+        (status = 403, description = "You do not have sufficient privilege to edit this role", body = ErrorResponse, examples(
+            ("role_privilege" = (value = json!({"message": "You do not have sufficient permissions to edit this role."})))
+        )),
+        (status = 404, description = "Role not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["RoleModify"])),
 )]
@@ -104,7 +116,11 @@ async fn set(
     ),
     request_body = [String],
     responses(
-        (status = 200, body = [String])
+        (status = 200, body = [String]),
+        (status = 403, description = "You do not have sufficient privilege to edit this role", body = ErrorResponse, examples(
+            ("role_privilege" = (value = json!({"message": "You do not have sufficient permissions to edit this role."})))
+        )),
+        (status = 404, description = "Role not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["RoleModify"])),
 )]
@@ -139,7 +155,11 @@ async fn add(
     ),
     request_body = [String],
     responses(
-        (status = 200, body = [String])
+        (status = 200, body = [String]),
+        (status = 403, description = "You do not have sufficient privilege to edit this role", body = ErrorResponse, examples(
+            ("role_privilege" = (value = json!({"message": "You do not have sufficient permissions to edit this role."})))
+        )),
+        (status = 404, description = "Role not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["RoleModify"])),
 )]

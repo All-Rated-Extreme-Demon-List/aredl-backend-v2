@@ -24,6 +24,7 @@ use uuid::Uuid;
 use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema, Clone)]
 #[diesel(table_name=records, check_for_backend(Pg))]
+#[schema(as = PlatformerRecord)]
 pub struct Record {
     /// Internal UUID of the record.
     pub id: Uuid,
@@ -52,6 +53,7 @@ pub struct Record {
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
+#[schema(as = PlatformerResolvedRecord)]
 pub struct ResolvedRecord {
     /// Internal UUID of the record.
     pub id: Uuid,
@@ -179,6 +181,7 @@ pub struct MutualVictors {
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
+#[schema(as = PlatformerResolvedRecordPage)]
 pub struct ResolvedRecordPage {
     data: Vec<ResolvedRecord>,
 }

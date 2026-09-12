@@ -20,7 +20,7 @@ use utoipa::OpenApi;
         ("order" = Option<LeaderboardOrder>, Query, description = "The sorting type to use. Defaults to using points (with packs)"),
     ),
     responses(
-        (status = 200, body = [Paginated<LeaderboardPage>])
+        (status = 200, body = Paginated<LeaderboardPage>),
     ),
 )]
 #[get("", wrap = "CacheController::public_with_max_age(300)")]

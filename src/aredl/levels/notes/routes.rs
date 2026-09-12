@@ -8,7 +8,7 @@ use crate::{
         },
     },
     auth::{Authenticated, Permission, UserAuth},
-    error_handler::ApiError,
+    error_handler::{ApiError, ErrorResponse},
     CacheController,
 };
 use actix_web::{delete, get, patch, post, web, HttpResponse};
@@ -22,7 +22,7 @@ use uuid::Uuid;
     description = "List all notes for a level",
     tag = "AREDL - Levels (Notes)",
     responses(
-        (status = 200, body = Vec<LevelNotesResolved>)
+        (status = 200, body = Vec<LevelNotesResolved>),
     ),
     params(
         ("level_id" = String, Path, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)"),
@@ -63,7 +63,8 @@ async fn find_all(
         ("level_id" = String, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
-        (status = 200, body = LevelNotes)
+        (status = 200, body = LevelNotes),
+        (status = 404, description = "Level not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["LevelNotesModify"])),
 )]
@@ -98,7 +99,8 @@ struct NotePath {
         ("note_id" = Uuid, description = "The internal ID of this note")
     ),
     responses(
-        (status = 200, body = LevelNotes)
+        (status = 200, body = LevelNotes),
+        (status = 404, description = "Note not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["LevelNotesModify"])),
 )]
@@ -125,7 +127,7 @@ async fn update(
         ("note_id" = Uuid, description = "The internal ID of this note")
     ),
     responses(
-        (status = 200)
+        (status = 200),
     ),
     security(("bearer_token" = ["LevelNotesModify"])),
 )]

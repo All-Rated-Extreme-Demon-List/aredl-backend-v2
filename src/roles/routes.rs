@@ -1,6 +1,6 @@
 use crate::app_data::db::DbAppState;
 use crate::auth::{Authenticated, Permission, UserAuth};
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use crate::roles::{permissions, users, Role, RoleCreate, RoleResolved, RoleUpdate};
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
@@ -13,8 +13,8 @@ use utoipa::OpenApi;
 	description = "Get the list of all roles and their users",
 	tag = "Roles",
 	responses(
-		(status = 200, body = [RoleResolved])
-	),
+		(status = 200, body = [RoleResolved]),
+    ),
     security(("bearer_token" = ["RoleAssign"])),
 )]
 #[get("", wrap = "UserAuth::require(Permission::RoleAssign)")]
@@ -30,7 +30,10 @@ async fn find_all(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiErr
     tag = "Roles",
     request_body = RoleCreate,
     responses(
-        (status = 200, body = Role)
+        (status = 200, body = Role),
+        (status = 403, description = "You cannot create a role with higher permissions than yourself", body = ErrorResponse, examples(
+            ("role_privilege" = (value = json!({"message": "You can not create a role with higher permissions than yourself."})))
+        ))
     ),
     security(("bearer_token" = ["RoleModify"])),
 )]
@@ -58,7 +61,11 @@ async fn create(
     ),
     request_body = RoleUpdate,
     responses(
-        (status = 200, body = Role)
+        (status = 200, body = Role),
+        (status = 403, description = "You do not have sufficient privilege to edit this role", body = ErrorResponse, examples(
+            ("role_privilege" = (value = json!({"message": "You do not have sufficient permissions to edit this role."})))
+        )),
+        (status = 404, description = "Role not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["RoleModify"])),
 )]
@@ -92,7 +99,11 @@ async fn update(
         ("id" = i32, description = "Internal role ID")
     ),
     responses(
-        (status = 200, body = Role)
+        (status = 200, body = Role),
+        (status = 403, description = "You do not have sufficient privilege to edit this role", body = ErrorResponse, examples(
+            ("role_privilege" = (value = json!({"message": "You do not have sufficient permissions to edit this role."})))
+        )),
+        (status = 404, description = "Role not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["RoleModify"])),
 )]

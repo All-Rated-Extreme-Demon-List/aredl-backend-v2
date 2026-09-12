@@ -11,6 +11,7 @@ use {
             me::notifications::test_utils::count_test_notifications, test_utils::create_test_user,
         },
     },
+    actix_http::StatusCode,
     actix_web::test::{self, read_body_json},
 };
 #[actix_web::test]
@@ -54,7 +55,8 @@ async fn accept_invite() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success());
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+    assert!(test::read_body(resp).await.is_empty());
 
     let member_count = count_test_clan_members(&db, clan_id, user_id);
     assert_eq!(member_count, 1);
@@ -83,7 +85,8 @@ async fn reject_invite() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success());
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+    assert!(test::read_body(resp).await.is_empty());
 
     let invite_count = count_test_clan_invites_for_user(&db, user_id);
     assert_eq!(invite_count, 0);
@@ -109,7 +112,8 @@ async fn leave_clan() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success());
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+    assert!(test::read_body(resp).await.is_empty());
 
     let member_count = count_test_clan_members(&db, clan_id, user_id);
     assert_eq!(member_count, 0);

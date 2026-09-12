@@ -35,6 +35,7 @@ pub struct SubmissionHistory {
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[schema(as = PlatformerSubmissionHistoryResolved)]
 pub struct SubmissionHistoryResolved {
     pub id: Uuid,
     pub submission_id: Uuid,

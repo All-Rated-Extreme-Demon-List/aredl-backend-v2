@@ -5,6 +5,7 @@ use {
         auth::create_test_token, test_utils::init_test_app,
         users::me::notifications::NotificationType, users::test_utils::create_test_user,
     },
+    actix_http::StatusCode,
     actix_web::test::{self, read_body_json},
 };
 
@@ -43,7 +44,8 @@ async fn clear_notifications() {
         .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success());
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+    assert!(test::read_body(resp).await.is_empty());
 
     let remaining = count_test_notifications(&db, user_id);
     assert_eq!(remaining, 0);

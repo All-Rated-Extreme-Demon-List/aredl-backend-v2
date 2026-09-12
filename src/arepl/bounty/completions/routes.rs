@@ -1,7 +1,7 @@
 use crate::arepl::bounty::completions::ResolvedCompletedBounty;
 use crate::auth::{Permission, UserAuth};
 use crate::cache_control::CacheController;
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use crate::{app_data::db::DbAppState, arepl::bounty::Bounty};
 use actix_web::{get, post, web, HttpResponse};
 use std::sync::Arc;
@@ -14,7 +14,7 @@ use uuid::Uuid;
     description = "Get the list of completions for a specific bounty",
     tag = "AREDL (P) - Bounty Board",
     responses(
-        (status = 200, body = [Vec<ResolvedCompletedBounty>])
+        (status = 200, body = [ResolvedCompletedBounty]),
     ),
     params(
         ("bounty_id" = Uuid, Path, description = "Internal bounty UUID"),
@@ -38,7 +38,8 @@ async fn list(
     description = "Adds any missing completions for this bounty based on existing records. ",
     tag = "AREDL (P) - Bounty Board",
     responses(
-        (status = 200)
+        (status = 204),
+        (status = 404, description = "Bounty not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["BountyManage"])),
     params(
@@ -55,7 +56,7 @@ async fn sync_completions(
         Bounty::find_by_id(conn, id.into_inner())?.sync_completions(conn)
     })
     .await??;
-    Ok(HttpResponse::Ok().json(()))
+    Ok(HttpResponse::NoContent().finish())
 }
 
 #[derive(OpenApi)]

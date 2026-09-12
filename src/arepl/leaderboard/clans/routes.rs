@@ -19,7 +19,7 @@ use utoipa::OpenApi;
         ("name_filter" = Option<String>, Query, description = "Search filter to apply. Uses the SQL LIKE operator syntax."),
     ),
     responses(
-        (status = 200, body = [Paginated<ClansLeaderboardPage>])
+        (status = 200, body = Paginated<ClansLeaderboardPage>),
     ),
 )]
 #[get("", wrap = "CacheController::public_with_max_age(300)")]

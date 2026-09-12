@@ -5,7 +5,6 @@ use crate::page_helper::{PageQuery, Paginated};
 use crate::users::merge::requests;
 use crate::users::merge::MergeLogPage;
 use crate::users::merge::{merge_users, MergeLog};
-use crate::users::User;
 use actix_web::web;
 use actix_web::{get, post, HttpResponse, Result};
 use serde::{Deserialize, Serialize};
@@ -30,7 +29,7 @@ pub struct DirectMergeOptions {
     tag = "Users - Merges",
     request_body = DirectMergeOptions,
     responses(
-        (status = 200, body = User)
+        (status = 204),
     ),
     security(("bearer_token" = ["DirectMerge"])),
 )]
@@ -49,7 +48,7 @@ async fn direct_merge(
         )
     })
     .await??;
-    Ok(HttpResponse::Ok().json(()))
+    Ok(HttpResponse::NoContent().finish())
 }
 
 #[utoipa::path(
@@ -61,7 +60,7 @@ async fn direct_merge(
 		PageQuery<20>,
 	),
     responses(
-        (status = 200, body = Paginated<MergeLog>)
+        (status = 200, body = Paginated<MergeLogPage>),
     ),
     security(("bearer_token" = ["MergeReview"])),
 )]

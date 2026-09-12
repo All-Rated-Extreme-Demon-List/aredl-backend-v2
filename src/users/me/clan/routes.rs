@@ -1,7 +1,7 @@
 use crate::app_data::db::DbAppState;
 use crate::auth::{Authenticated, UserAuth};
 use crate::clans::Clan;
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use crate::users::me::clan::invites;
 use actix_web::{post, web, HttpResponse};
 use std::sync::Arc;
@@ -13,7 +13,9 @@ use utoipa::OpenApi;
     description = "Leaves the clan you are currently in.",
     tag = "Users - Me",
     responses(
-        (status = 200)
+        (status = 204),
+        (status = 404, description = "You are not a member of a clan", body = ErrorResponse),
+        (status = 409, description = "You cannot leave a clan you own", body = ErrorResponse)
     ),
     security(("bearer_token" = [])),
 )]
@@ -23,7 +25,7 @@ async fn leave(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     web::block(move || Clan::leave(&mut db.connection()?, authenticated.user_id)).await??;
-    Ok(HttpResponse::Ok().json(()))
+    Ok(HttpResponse::NoContent().finish())
 }
 
 #[derive(OpenApi)]

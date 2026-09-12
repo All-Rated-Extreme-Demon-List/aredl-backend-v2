@@ -2,7 +2,7 @@ use crate::app_data::db::DbAppState;
 use crate::aredl::bounty::{completions, Bounty, BountyPatch, BountyPost, BountyResolved};
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::cache_control::CacheController;
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
@@ -15,7 +15,7 @@ use uuid::Uuid;
     description = "Get the list of bounties",
     tag = "AREDL - Bounty Board",
     responses(
-        (status = 200, body = [BountyResolved])
+        (status = 200, body = [BountyResolved]),
     ),
     security((), ("bearer_token" = [])),
 )]
@@ -40,7 +40,7 @@ async fn list(
     tag = "AREDL - Bounty Board",
     request_body = BountyPost,
     responses(
-        (status = 200, body = Bounty)
+        (status = 200, body = Bounty),
     ),
     security(("bearer_token" = ["BountyManage"])),
 )]
@@ -63,7 +63,8 @@ async fn create(
     tag = "AREDL - Bounty Board",
     request_body = BountyPatch,
     responses(
-        (status = 200, body = Bounty)
+        (status = 200, body = Bounty),
+        (status = 404, description = "Bounty not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["BountyManage"])),
     params(
@@ -92,7 +93,8 @@ async fn update(
     description = "Deletes a bounty from the bounty board",
     tag = "AREDL - Bounty Board",
     responses(
-        (status = 200, description = "Bounty deleted successfully")
+        (status = 200, description = "Bounty deleted successfully"),
+        (status = 404, description = "Bounty not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["BountyManage"])),
     params(

@@ -2,7 +2,7 @@ use crate::app_data::db::DbAppState;
 use crate::arepl::submissions::pemonlist::PemonlistPlayer;
 use crate::arepl::submissions::Submission;
 use crate::auth::{Authenticated, UserAuth};
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use actix_web::{post, web, HttpResponse};
 use std::sync::Arc;
 use utoipa::OpenApi;
@@ -13,7 +13,9 @@ use utoipa::OpenApi;
     description = "Import and/or update platformer submissions from a Pemonlist account. The pemonlist account must be linked to the same discord account as the authenticated user.",
     tag = "AREDL (P) - Submissions",
     responses(
-        (status = 200, body = Vec<Submission>)
+        (status = 200, body = Vec<Submission>),
+        (status = 404, description = "User or Pemonlist player not found", body = ErrorResponse),
+        (status = 422, description = "Your account is not linked to a Discord account", body = ErrorResponse)
     ),
     security(("bearer_token" = [])),
 )]

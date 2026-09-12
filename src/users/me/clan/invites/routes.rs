@@ -1,7 +1,7 @@
 use crate::app_data::db::DbAppState;
 use crate::auth::{Authenticated, UserAuth};
 use crate::clans::ClanInvite;
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use crate::users::me::clan::invites::ClanInviteResolved;
 use actix_web::{get, post, web, HttpResponse};
 use std::sync::Arc;
@@ -14,7 +14,7 @@ use uuid::Uuid;
     description = "Get the list of clan invites you've received",
     tag = "Users - Me",
     responses(
-        (status = 200, body = [ClanInviteResolved])
+        (status = 200, body = [ClanInviteResolved]),
     ),
     security(("bearer_token" = [])),
 )]
@@ -39,7 +39,9 @@ async fn list(
         ("invite_id" = Uuid, description = "The internal UUID of the invite")
     ),
     responses(
-        (status = 200)
+        (status = 204),
+        (status = 403, description = "You cannot accept an invite that is not yours", body = ErrorResponse),
+        (status = 404, description = "Invite, clan or invited user not found", body = ErrorResponse)
     ),
     security(("bearer_token" = [])),
 )]
@@ -53,7 +55,7 @@ async fn accept(
         ClanInvite::accept_invite(&mut db.connection()?, *invite_id, &authenticated)
     })
     .await??;
-    Ok(HttpResponse::Ok().json(()))
+    Ok(HttpResponse::NoContent().finish())
 }
 
 #[utoipa::path(
@@ -65,7 +67,9 @@ async fn accept(
         ("invite_id" = Uuid, description = "The internal UUID of the invite")
     ),
     responses(
-        (status = 200)
+        (status = 204),
+        (status = 403, description = "You cannot reject an invite that is not yours", body = ErrorResponse),
+        (status = 404, description = "Invite not found", body = ErrorResponse)
     ),
     security(("bearer_token" = [])),
 )]
@@ -79,7 +83,7 @@ async fn reject(
         ClanInvite::reject_invite(&mut db.connection()?, *invite_id, &authenticated)
     })
     .await??;
-    Ok(HttpResponse::Ok().json(()))
+    Ok(HttpResponse::NoContent().finish())
 }
 
 #[derive(OpenApi)]

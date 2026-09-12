@@ -2,7 +2,7 @@ use crate::app_data::db::DbAppState;
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::cache_control::CacheController;
 use crate::clans::{members, Clan, ClanCreate, ClanListQueryOptions, ClanPage, ClanUpdate};
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::clan_members;
 use actix_web::{delete, get, patch, post, web, HttpResponse};
@@ -23,7 +23,7 @@ use diesel::prelude::*;
         ("name_filter" = Option<String>, Query, description = "The search filter to apply. Uses the SQL LIKE operator syntax."),
     ),
     responses(
-        (status = 200, body = Paginated<ClanPage>)
+        (status = 200, body = Paginated<ClanPage>),
     ),
 )]
 #[get("", wrap = "CacheController::public_with_max_age(180)")]
@@ -50,7 +50,13 @@ async fn list(
     tag = "Clans",
     request_body = ClanCreate,
     responses(
-        (status = 200, body = Clan)
+        (status = 200, body = Clan),
+        (status = 409, description = "You are already in a clan", body = ErrorResponse),
+        (status = 422, description = "Clan name, tag or description is too long", body = ErrorResponse, examples(
+            ("name_too_long" = (value = json!({"message": "The clan name can at most be 100 characters long."}))),
+            ("tag_too_long" = (value = json!({"message": "The clan tag can at most be 5 characters long."}))),
+            ("description_too_long" = (value = json!({"message": "The clan description can at most be 300 characters long."})))
+        ))
     ),
     security(("bearer_token" = [])),
 )]
@@ -76,7 +82,12 @@ async fn create_and_join(
     tag = "Clans",
     request_body = ClanCreate,
     responses(
-        (status = 200, body = Clan)
+        (status = 200, body = Clan),
+        (status = 422, description = "Clan name, tag or description is too long", body = ErrorResponse, examples(
+            ("name_too_long" = (value = json!({"message": "The clan name can at most be 100 characters long."}))),
+            ("tag_too_long" = (value = json!({"message": "The clan tag can at most be 5 characters long."}))),
+            ("description_too_long" = (value = json!({"message": "The clan description can at most be 300 characters long."})))
+        ))
     ),
     security(("bearer_token" = ["ClanModify"])),
 )]
@@ -102,7 +113,14 @@ async fn create_empty(
     ),
     request_body = ClanUpdate,
     responses(
-        (status = 200, body = Clan)
+        (status = 200, body = Clan),
+        (status = 403, description = "Clan owner role or ClanModify permission required", body = ErrorResponse),
+        (status = 404, description = "Clan not found", body = ErrorResponse),
+        (status = 422, description = "Clan name, tag or description is too long", body = ErrorResponse, examples(
+            ("name_too_long" = (value = json!({"message": "The clan name can at most be 100 characters long."}))),
+            ("tag_too_long" = (value = json!({"message": "The clan tag can at most be 5 characters long."}))),
+            ("description_too_long" = (value = json!({"message": "The clan description can at most be 300 characters long."})))
+        ))
     ),
     security(("bearer_token" = []), ("bearer_token" = ["ClanModify"])),
 )]
@@ -135,7 +153,12 @@ async fn update(
         ("id" = Uuid, description = "The internal UUID of the clan")
     ),
     responses(
-        (status = 200, body = Clan)
+        (status = 200, body = Clan),
+        (status = 403, description = "Clan owner role or ClanModify permission required; non-staff owners cannot delete a clan with other members", body = ErrorResponse, examples(
+            ("clan_permission" = (value = json!({"message": "You do not have the required permission to perform this action"}))),
+            ("remaining_members" = (value = json!({"message": "You cannot delete a clan unless you're the only member left in it."})))
+        )),
+        (status = 404, description = "Clan not found", body = ErrorResponse)
     ),
     security(("bearer_token" = []), ("bearer_token" = ["ClanModify"])),
 )]

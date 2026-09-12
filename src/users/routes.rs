@@ -1,7 +1,7 @@
 use crate::app_data::db::DbAppState;
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::cache_control::CacheController;
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use crate::page_helper::{PageQuery, Paginated};
 use crate::users::{
     badges, me, merge, names, PlaceholderOptions, User, UserBanUpdate, UserListQueryOptions,
@@ -21,7 +21,8 @@ use utoipa::OpenApi;
         ("id" = String, Path, description = "The internal UUID, username or discord ID of the user to lookup"),
     ),
     responses(
-        (status = 200, body = UserResolved)
+        (status = 200, body = UserResolved),
+        (status = 404, description = "User not found", body = ErrorResponse)
     ),
     security((), ("bearer_token" = [])),
 )]
@@ -58,7 +59,7 @@ async fn find(
         ("placeholder" = Option<bool>, Query, description = "If specified, will only fetch users that are/are not placeholders. If not, all types of users are returned.")
     ),
     responses(
-        (status = 200, body = Paginated<UserPage>)
+        (status = 200, body = Paginated<UserPage>),
     ),
     security((), ("bearer_token" = [])),
 )]
@@ -92,7 +93,7 @@ async fn list(
     tag = "Users",
     request_body = PlaceholderOptions,
     responses(
-        (status = 200, body = User)
+        (status = 200, body = User),
     ),
     security(("bearer_token" = ["PlaceholderCreate"])),
 )]
@@ -122,7 +123,11 @@ async fn create_placeholder(
     ),
     request_body = UserUpdate,
     responses(
-        (status = 200, body = User)
+        (status = 200, body = User),
+        (status = 403, description = "You do not have sufficient privilege to affect this user", body = ErrorResponse, examples(
+            ("user_privilege" = (value = json!({"message": "You do not have sufficient privilege to affect this user."})))
+        )),
+        (status = 404, description = "User not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["UserModify"])),
 )]
@@ -165,7 +170,12 @@ async fn update(
     ),
     request_body = UserBanUpdate,
     responses(
-        (status = 200, body = User)
+        (status = 200, body = User),
+        (status = 403, description = "Insufficient privilege to affect this user, or missing UserRedact permission", body = ErrorResponse, examples(
+            ("user_privilege" = (value = json!({"message": "You do not have sufficient privilege to affect this user."}))),
+            ("redact_permission" = (value = json!({"message": "You do not have the required permission (UserRedact) to perform this action"})))
+        )),
+        (status = 404, description = "User not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["UserBan"])),
 )]

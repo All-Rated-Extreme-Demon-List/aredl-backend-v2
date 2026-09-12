@@ -3,12 +3,13 @@ use crate::{
     arepl::levels::{
         custom_copies::{
             LevelCustomCopy, LevelCustomCopyBody, LevelCustomCopyQueryOptions,
-            LevelCustomCopyStatus, LevelCustomCopyType, LevelCustomCopyUpdate,
+            LevelCustomCopyResolved, LevelCustomCopyStatus, LevelCustomCopyType,
+            LevelCustomCopyUpdate,
         },
         id_resolver::resolve_level_id,
     },
     auth::{Authenticated, Permission, UserAuth},
-    error_handler::ApiError,
+    error_handler::{ApiError, ErrorResponse},
     CacheController,
 };
 use actix_web::{delete, get, patch, post, web, HttpResponse};
@@ -22,7 +23,7 @@ use uuid::Uuid;
     description = "List all custom copies for a level",
     tag = "AREDL (P) - Levels (Custom Copies)",
     responses(
-        (status = 200, body = [LevelCustomCopy])
+        (status = 200, body = [LevelCustomCopyResolved]),
     ),
     params(
         ("level_id" = String, Path, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)"),
@@ -58,7 +59,8 @@ async fn find_all(
         ("level_id" = String, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
-        (status = 200, body = LevelCustomCopy)
+        (status = 200, body = LevelCustomCopy),
+        (status = 404, description = "Level not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["LevelCustomCopiesModify"])),
 )]
@@ -93,7 +95,8 @@ struct CustomCopyPath {
         ("copy_id" = Uuid, description = "The internal ID of this custom copy")
     ),
     responses(
-        (status = 200, body = LevelCustomCopy)
+        (status = 200, body = LevelCustomCopy),
+        (status = 404, description = "Custom copy not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["LevelCustomCopiesModify"])),
 )]
@@ -123,7 +126,7 @@ async fn update(
         ("copy_id" = Uuid, description = "The internal ID of this custom copy")
     ),
     responses(
-        (status = 200)
+        (status = 200),
     ),
     security(("bearer_token" = ["LevelCustomCopiesModify"])),
 )]

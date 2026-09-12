@@ -6,7 +6,7 @@ use crate::{
     },
     auth::{Authenticated, UserAuth},
     cache_control::CacheController,
-    error_handler::ApiError,
+    error_handler::{ApiError, ErrorResponse},
 };
 use actix_web::{get, web, HttpResponse};
 use std::sync::Arc;
@@ -20,7 +20,7 @@ use uuid::Uuid;
     tag = "AREDL - Submissions",
     responses(
         (status = 200, description = "Queue position found", body = QueuePositionResponse),
-        (status = 404, description = "Submission not found or not pending"),
+        (status = 404, description = "Submission not found or not pending", body = ErrorResponse),
     ),
     params(
         ("id" = Uuid, description = "The ID of the submission to check position for")
@@ -46,7 +46,7 @@ async fn get_queue_position(
     description = "Get the amount of pending submissions.",
     tag = "AREDL - Submissions",
     responses(
-        (status = 200, body = SubmissionQueue)
+        (status = 200, body = SubmissionQueue),
     )
 )]
 #[get("queue", wrap = "CacheController::public_with_max_age(60)")]

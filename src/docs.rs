@@ -1,14 +1,18 @@
+use crate::error_handler::ErrorResponse;
 use crate::{
     aredl, arepl, auth, clans, get_optional_secret, health, notifications, roles, shifts, users,
     utils,
 };
 use serde_json::json;
+use utoipa::openapi::example::ExampleBuilder;
 use utoipa::openapi::extensions::Extensions;
 use utoipa::openapi::path::Operation;
 use utoipa::openapi::schema::Components;
 use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
-use utoipa::openapi::{PathItem, Server};
-use utoipa::{Modify, OpenApi};
+use utoipa::openapi::{
+    ContentBuilder, OpenApi as OpenApiDocument, PathItem, RefOr, ResponseBuilder, Server,
+};
+use utoipa::{Modify, OpenApi, PartialSchema as _};
 type JsonValue = serde_json::Value;
 const API_DESCRIPTION: &str = "
 # Welcome to the AREDL API v2 Documentation!
@@ -174,7 +178,7 @@ struct MainApiDoc;
     nest(
         (path = "/api", api = MainApiDoc),
     ),
-    modifiers(&SecurityAddon, &StaffBadgeAddon, &ServerAddon, &OperationIdAddon),
+    modifiers(&SecurityAddon, &AuthResponsesAddon, &StaffBadgeAddon, &ServerAddon, &OperationIdAddon),
 )]
 pub struct ApiDoc;
 
@@ -182,6 +186,120 @@ struct SecurityAddon;
 struct StaffBadgeAddon;
 struct ServerAddon;
 struct OperationIdAddon;
+struct AuthResponsesAddon;
+
+// add authentication/permissions error responses based on the provided security scheme
+impl Modify for AuthResponsesAddon {
+    fn modify(&self, openapi: &mut OpenApiDocument) {
+        let error_response = |description: &str| {
+            ResponseBuilder::new()
+                .description(description)
+                .content(
+                    "application/json",
+                    ContentBuilder::new()
+                        .schema(Some(ErrorResponse::schema()))
+                        .build(),
+                )
+                .build()
+        };
+        for item in openapi.paths.paths.values_mut() {
+            for operation in [
+                &mut item.get,
+                &mut item.post,
+                &mut item.put,
+                &mut item.patch,
+                &mut item.delete,
+                &mut item.head,
+                &mut item.options,
+                &mut item.trace,
+            ]
+            .into_iter()
+            .flatten()
+            {
+                let Some(security) = &operation.security else {
+                    continue;
+                };
+                let security: Vec<_> = security
+                    .iter()
+                    .map(|requirement| json!(requirement))
+                    .collect();
+                let authenticated = security.iter().any(|requirement| {
+                    requirement.get("bearer_token").is_some()
+                        || requirement.get("refresh_token").is_some()
+                });
+                let permission_required = authenticated
+                    && security.iter().all(|requirement| {
+                        requirement
+                            .get("bearer_token")
+                            .and_then(JsonValue::as_array)
+                            .is_some_and(|scopes| !scopes.is_empty())
+                    });
+                if authenticated {
+                    let response = operation.responses.responses.entry("401".to_owned()).or_insert_with(|| {
+                        error_response("Missing required authentication, or invalid, expired or invalidated token").into()
+                    });
+                    if let RefOr::T(response) = response {
+                        if let Some(content) = response.content.get_mut("application/json") {
+                            for (name, message) in [
+                                ("invalid_token", "Invalid token"),
+                                ("expired_token", "Expired token"),
+                                ("invalid_token_type", "Invalid token type"),
+                                ("invalidated_token", "Token has been invalidated"),
+                            ] {
+                                content.examples.insert(
+                                    name.to_owned(),
+                                    ExampleBuilder::new()
+                                        .value(Some(json!({"message": message})))
+                                        .build()
+                                        .into(),
+                                );
+                            }
+                        }
+                    }
+                }
+                if permission_required {
+                    let permissions = security
+                        .iter()
+                        .map(|requirement| {
+                            requirement["bearer_token"]
+                                .as_array()
+                                .into_iter()
+                                .flatten()
+                                .filter_map(JsonValue::as_str)
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        })
+                        .collect::<Vec<_>>()
+                        .join(" or ");
+                    let description = format!("Missing required permission: {permissions}");
+                    let response = operation
+                        .responses
+                        .responses
+                        .entry("403".to_owned())
+                        .or_insert_with(|| error_response("").into());
+                    if let RefOr::T(response) = response {
+                        if !response.description.is_empty() {
+                            response.description.push_str("; ");
+                        }
+                        response.description.push_str(&description);
+                        if let Some(content) = response.content.get_mut("application/json") {
+                            for permission in security
+                                .iter()
+                                .filter_map(|requirement| requirement["bearer_token"].as_array())
+                                .flatten()
+                                .filter_map(JsonValue::as_str)
+                            {
+                                content.examples.insert(format!("missing_{permission}"), ExampleBuilder::new()
+                                    .value(Some(json!({"message": format!("You do not have the required permission ({permission}) to access this endpoint")})))
+                                    .build().into());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 impl Modify for OperationIdAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {

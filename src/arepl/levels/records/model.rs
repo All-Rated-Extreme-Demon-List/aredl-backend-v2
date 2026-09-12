@@ -19,6 +19,7 @@ pub struct RecordQuery {
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 /// A resolved record for a specific level (ommits the level field compared to `ResolvedRecord`).
+#[schema(as = PlatformerLevelResolvedRecord)]
 pub struct LevelResolvedRecord {
     /// Internal UUID of the record.
     pub id: Uuid,
@@ -40,6 +41,7 @@ pub struct LevelResolvedRecord {
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 /// A resolved record for a specific level (ommits the level field compared to `ResolvedRecord`), with an extended resolved user.
+#[schema(as = PlatformerLevelResolvedRecordExtended)]
 pub struct LevelResolvedRecordExtended {
     /// Internal UUID of the record.
     pub id: Uuid,
@@ -60,6 +62,7 @@ pub struct LevelResolvedRecordExtended {
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
+#[schema(as = PlatformerLevelResolvedRecordPage)]
 pub struct LevelResolvedRecordPage {
     pub data: Vec<LevelResolvedRecordExtended>,
 }

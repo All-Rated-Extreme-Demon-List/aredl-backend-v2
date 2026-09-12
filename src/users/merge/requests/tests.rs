@@ -85,7 +85,8 @@ async fn accept_merge_request() {
         .to_request();
 
     let res = test::call_service(&app, req).await;
-    assert!(res.status().is_success(), "status is {}", res.status());
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+    assert!(test::read_body(res).await.is_empty());
 
     let records = test_records_for_user(&db, user_1_id);
 

@@ -6,7 +6,7 @@ use crate::arepl::levels::{
 use crate::arepl::levels::{notes, updates, LevelQueryOptions};
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::cache_control::CacheController;
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use actix_web::{get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
@@ -24,7 +24,7 @@ use utoipa::OpenApi;
         ("at" = Option<DateTime<Utc>>, Query, description = "Return the state of the list at the provided timestamp"),
     ),
     responses(
-        (status = 200, body = [LevelWithUserCompletionStatus])
+        (status = 200, body = [LevelWithUserCompletionStatus]),
     ),
     security((), ("bearer_token" = [])),
 )]
@@ -55,7 +55,7 @@ async fn list(
     description = "Place a new level on the list",
     tag = "AREDL (P) - Levels",
     responses(
-        (status = 200, description = "Level added successfully", body = Level)
+        (status = 200, description = "Level added successfully", body = Level),
     ),
     security(("bearer_token" = ["LevelModify"])),
 )]
@@ -80,7 +80,8 @@ async fn create(
         ("level_id", description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
-        (status = 200, description = "Level edited successfully", body = Level)
+        (status = 200, description = "Level edited successfully", body = Level),
+        (status = 404, description = "Level not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["LevelModify"])),
 )]
@@ -110,7 +111,8 @@ async fn update(
         ("level_id", description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
-        (status = 200, body = ResolvedLevel)
+        (status = 200, body = ResolvedLevel),
+        (status = 404, description = "Level not found", body = ErrorResponse)
     ),
 )]
 #[get("/{level_id}", wrap = "CacheController::public_with_max_age(900)")]

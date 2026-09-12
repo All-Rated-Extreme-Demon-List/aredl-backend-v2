@@ -15,7 +15,9 @@ use crate::{
     summary = "Total submissions",
     description = "List levels ranked by number of submissions and part of the current queue, as well as total submissions.",
     tag = "AREDL (P) - Statistics",
-    responses((status = 200, body = [ResolvedQueueLevelSubmissionsRow])),
+    responses(
+        (status = 200, body = [ResolvedQueueLevelSubmissionsRow]),
+    ),
 )]
 #[get("", wrap = "CacheController::public_with_max_age(900)")]
 pub async fn total(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {

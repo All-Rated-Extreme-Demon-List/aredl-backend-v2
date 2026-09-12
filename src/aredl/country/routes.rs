@@ -14,7 +14,9 @@ use uuid::Uuid;
     description = "Get a country's AREDL profile",
     tag = "AREDL",
     params(("id" = i32, description = "The country to lookup the data for")),
-    responses((status = 200, body = CountryProfileResolved))
+    responses(
+        (status = 200, body = CountryProfileResolved),
+    )
 )]
 #[get("/{id}", wrap = "CacheController::public_with_max_age(3600)")]
 async fn find(
@@ -36,7 +38,9 @@ async fn find(
         ("country" = i32, description = "The country to lookup the records for"),
         ("level_id" = Uuid, description = "The level to lookup the records for")
     ),
-    responses((status = 200, body = [LevelResolvedRecordExtended]))
+    responses(
+        (status = 200, body = [LevelResolvedRecordExtended]),
+    )
 )]
 #[get(
     "/{country}/levels/{level_id}/records",

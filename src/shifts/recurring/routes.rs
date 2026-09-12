@@ -1,7 +1,7 @@
 use crate::{
     app_data::db::DbAppState,
     auth::{Authenticated, Permission, UserAuth},
-    error_handler::ApiError,
+    error_handler::{ApiError, ErrorResponse},
     shifts::{
         parse_timezone,
         recurring::{RecurringShift, RecurringShiftInsert, RecurringShiftPatch},
@@ -20,7 +20,7 @@ use uuid::Uuid;
     description = "Get a possibly filtered list of the currently scheduled recurring shifts.",
     tag = "Shifts",
     responses(
-        (status = 200, body = Vec<ResolvedRecurringShift>)
+        (status = 200, body = Vec<ResolvedRecurringShift>),
     ),
     security(("bearer_token" = ["SubmissionReview"])),
 )]
@@ -42,7 +42,7 @@ async fn find_all_recurring_shifts(
     description = "Schedules a new recurring shift for a user on a specific week day and time",
     tag = "Shifts",
     responses(
-        (status = 200, body = RecurringShift)
+        (status = 200, body = RecurringShift),
     ),
     security(("bearer_token" = ["ShiftManage"])),
 )]
@@ -67,7 +67,7 @@ async fn create_new_recurring_shift(
     description = "Schedules a new recurring shift for the authenticated user.",
     tag = "Shifts",
     responses(
-        (status = 200, body = RecurringShift)
+        (status = 200, body = RecurringShift),
     ),
     security(("bearer_token" = ["ShiftCreateOwn"])),
 )]
@@ -106,7 +106,8 @@ async fn create_own_recurring_shift(
     description = "Edits a recurring shift data.",
     tag = "Shifts",
     responses(
-        (status = 200, body = RecurringShift)
+        (status = 201, body = RecurringShift),
+        (status = 404, description = "Recurring shift not found", body = ErrorResponse)
     ),
 	request_body = RecurringShiftPatch,
     security(("bearer_token" = ["ShiftManage"])),
@@ -138,7 +139,8 @@ async fn patch_recurring_shift(
     description = "Deletes a recurrent shift.",
     tag = "Shifts",
     responses(
-        (status = 200, body = RecurringShift)
+        (status = 201, body = RecurringShift),
+        (status = 404, description = "Recurring shift not found", body = ErrorResponse)
     ),
 	params(
 		("id" = Uuid, description = "The ID of the shift to delete"),

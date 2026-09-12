@@ -10,7 +10,7 @@ use crate::{
         },
     },
     auth::{Authenticated, Permission, UserAuth},
-    error_handler::ApiError,
+    error_handler::{ApiError, ErrorResponse},
     notifications::WebsocketNotification,
     page_helper::{PageQuery, Paginated},
     providers::ProvidersAppState,
@@ -30,7 +30,7 @@ use super::{history, queue};
     description = "Get a possibly filtered list of resolved submissions.",
     tag = "AREDL - Submissions",
     responses(
-        (status = 200, body = Paginated<ResolvedSubmissionPage>)
+        (status = 200, body = Paginated<ResolvedSubmissionPage>),
     ),
     params(
         ("sort" = Option<SubmissionsSortField>, Query, description = "The sorting type to use"),
@@ -70,7 +70,8 @@ async fn find_all(
     description = "Get a specific submission by its ID. If you aren't staff, the submission must be yours.",
     tag = "AREDL - Submissions",
     responses(
-        (status = 200, body = SubmissionResolved)
+        (status = 200, body = SubmissionResolved),
+        (status = 404, description = "Submission not found or not visible to this user", body = ErrorResponse)
     ),
     params(
         ("id" = Uuid, description = "The ID of the submission")
@@ -96,7 +97,7 @@ async fn find_one(
     description = "List all submissions submitted by the logged in user.",
     tag = "AREDL - Submissions",
     responses(
-        (status = 200, body = Paginated<SubmissionPage>)
+        (status = 200, body = Paginated<ResolvedSubmissionPage>),
     ),
     params(
         ("sort" = Option<SubmissionsSortField>, Query, description = "The sorting type to use"),
@@ -134,7 +135,17 @@ async fn find_me(
     description = "Create a submission to be checked by a reviewer.",
     tag = "AREDL - Submissions",
     responses(
-        (status = 201, body = Submission)
+        (status = 201, body = Submission),
+        (status = 403, description = "You have been banned from the list, or submissions are currently disabled", body = ErrorResponse, examples(
+            ("banned" = (value = json!({"message": "You have been banned from the list."}))),
+            ("disabled" = (value = json!({"message": "Submissions are currently disabled"})))
+        )),
+        (status = 404, description = "User or level not found", body = ErrorResponse),
+        (status = 409, description = "You already have a submission for this level", body = ErrorResponse),
+        (status = 422, description = "This level is on the legacy list, or required raw footage is missing", body = ErrorResponse, examples(
+            ("legacy_level" = (value = json!({"message": "This level is on the legacy list and is not accepting records."}))),
+            ("raw_footage_required" = (value = json!({"message": "This level requires raw footage"})))
+        ))
     ),
     request_body = SubmissionPostMod,
     security(("bearer_token" = [])),
@@ -170,7 +181,16 @@ async fn create(
     description = "Edit a submission. If you aren't staff, the submission must be yours and not being actively reviewed.",
     tag = "AREDL - Submissions",
     responses(
-        (status = 200, body = Submission)
+        (status = 200, body = Submission),
+        (status = 403, description = "User is banned, submission is locked or belongs to another user, or reviewer permissions are insufficient", body = ErrorResponse, examples(
+            ("banned" = (value = json!({"message": "You have been banned from submitting records."}))),
+            ("not_submitter" = (value = json!({"message": "You can only edit your own submissions."}))),
+            ("locked" = (value = json!({"message": "This submission has been locked and cannot be edited"}))),
+            ("reviewer_permissions" = (value = json!({"message": "You do not have permission to edit this submission."})))
+        )),
+        (status = 404, description = "User, submission or level not found", body = ErrorResponse),
+        (status = 409, description = "This submission is currently being reviewed and cannot be edited", body = ErrorResponse),
+        (status = 422, description = "This level is on the legacy list and is not accepting records", body = ErrorResponse)
     ),
     params(
         ("id" = Uuid, description = "The ID of the submission")
@@ -228,7 +248,8 @@ async fn patch(
     description = "Claim the next submission to be checked. Alternates between priority and non-priority submissions when possible.",
     tag = "AREDL - Submissions",
     responses(
-        (status = 200, body = SubmissionResolved)
+        (status = 200, body = SubmissionResolved),
+        (status = 404, description = "There are no submissions available to claim", body = ErrorResponse)
     ),
     security(("bearer_token" = ["SubmissionReview"])),
 )]
@@ -251,7 +272,7 @@ async fn claim(
     description = "Delete a submission by its ID. If you aren't staff, the submission must be yours and in the pending state.",
     tag = "AREDL - Submissions",
     responses(
-        (status = 204)
+        (status = 204),
     ),
     params(
         ("id" = Uuid, description = "The ID of the submission")

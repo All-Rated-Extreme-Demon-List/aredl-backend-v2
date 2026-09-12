@@ -1,7 +1,7 @@
 use crate::app_data::db::DbAppState;
 use crate::auth::Authenticated;
 use crate::auth::{Permission, UserAuth};
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use crate::page_helper::{PageQuery, Paginated};
 use crate::users::merge::requests::{
     MergeRequest, MergeRequestPage, MergeRequestQueryOptions, MergeRequestUpsert,
@@ -30,7 +30,8 @@ pub struct MergeRequestOptions {
 		("id" = Uuid, Path, description = "Internal UUID of the merge request to find"),
 	),
     responses(
-        (status = 200, body = ResolvedMergeRequest)
+        (status = 200, body = ResolvedMergeRequest),
+        (status = 404, description = "Merge request not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["MergeReview"])),
 )]
@@ -57,7 +58,7 @@ async fn find_one(
 		PageQuery<20>,
 	),
     responses(
-        (status = 200, body = Paginated<ResolvedMergeRequest>)
+        (status = 200, body = Paginated<MergeRequestPage>),
     ),
     security(("bearer_token" = ["MergeReview"])),
 )]
@@ -84,7 +85,7 @@ async fn list(
     description = "Finds the oldest unclaimed merge request, marks it as claimed and returns it.",
     tag = "Users - Merges",
     responses(
-        (status = 200, body = MergeRequest)
+        (status = 200, body = Option<MergeRequest>),
     ),
     security(("bearer_token" = ["MergeReview"])),
 )]
@@ -101,7 +102,17 @@ async fn claim(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError>
     tag = "Users - Merges",
     request_body = MergeRequestOptions,
     responses(
-        (status = 200, body = MergeRequest)
+        (status = 200, body = MergeRequest),
+        (status = 403, description = "You have been banned from the list", body = ErrorResponse),
+        (status = 404, description = "Requesting or secondary user not found", body = ErrorResponse, examples(
+            ("requesting_user" = (value = json!({"message": "Not found"}))),
+            ("secondary_user" = (value = json!({"message": "The secondary user does not exist."})))
+        )),
+        (status = 409, description = "Secondary user is not a placeholder, or you already have a pending merge request", body = ErrorResponse, examples(
+            ("not_placeholder" = (value = json!({"message": "You can only submit merge requests for placeholder users. To merge your account with a user that is already linked to another discord account, please make a support post on our discord server."}))),
+            ("pending_request" = (value = json!({"message": "You already submitted a merge request for your account. Please wait until it's either accepted or denied before submitting a new one."})))
+        )),
+        (status = 422, description = "You cannot merge your account with itself", body = ErrorResponse)
     ),
     security(("bearer_token" = [])),
 )]
@@ -140,7 +151,8 @@ async fn create(
 		("id" = Uuid, Path, description = "Internal UUID of the merge request to accept"),
 	),
     responses(
-        (status = 200, body = MergeRequest)
+        (status = 204),
+        (status = 404, description = "Merge request not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["MergeReview"])),
 )]
@@ -151,7 +163,7 @@ async fn accept(
 ) -> Result<HttpResponse, ApiError> {
     web::block(move || MergeRequest::accept(&mut db.connection()?, id.into_inner())).await??;
 
-    Ok(HttpResponse::Ok().json(()))
+    Ok(HttpResponse::NoContent().finish())
 }
 
 #[utoipa::path(
@@ -163,7 +175,8 @@ async fn accept(
 		("id" = Uuid, Path, description = "Internal UUID of the merge request to reject"),
 	),
     responses(
-        (status = 200, body = MergeRequest)
+        (status = 200, body = MergeRequest),
+        (status = 404, description = "Merge request not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["MergeReview"])),
 )]
@@ -187,7 +200,8 @@ async fn reject(
 		("id" = Uuid, Path, description = "Internal UUID of the merge request to unclaim"),
 	),
     responses(
-        (status = 200, body = MergeRequest)
+        (status = 200, body = MergeRequest),
+        (status = 404, description = "Merge request not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["MergeReview"])),
 )]

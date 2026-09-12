@@ -18,8 +18,6 @@ use crate::{
     tag = "Notifications",
     responses(
         (status = 101, description = "Switching Protocols to WebSocket"),
-        (status = 401, description = "Unauthorized / invalid or missing token"),
-        (status = 403, description = "Forbidden / insufficient permissions"),
     ),
     security(("bearer_token" = ["NotificationsSubscribe"])),
 )]

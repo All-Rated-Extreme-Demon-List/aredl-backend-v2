@@ -14,7 +14,7 @@ use crate::auth::oauth::{exchange_oauth_code, OAuthCallbackQuery, OAuthRequestDa
 use crate::auth::permission;
 use crate::auth::token::{self, UserClaims};
 use crate::auth::OAuthOptions;
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use crate::providers::ProvidersAppState;
 use crate::roles::Role;
 use crate::schema::{roles, user_roles};
@@ -79,7 +79,8 @@ struct AuthResponse {
     description = "Used to authenticate with discord. Creates a Discord OAuth2 flow, which then redirects to [Discord Callback](#get-/api/auth/discord/callback)",
     tag = "Authentication",
     responses(
-        (status = 302)
+        (status = 302, description = "Redirect to Discord authorization", headers(("Location" = String, description = "Discord authorization URL"))),
+        (status = 503, description = "Discord integration is not configured", body = ErrorResponse)
     ),
     params(
         ("callback" = Option<String>, Query, description = "The URL to redirect to after the OAuth flow"),
@@ -123,7 +124,10 @@ async fn discord_auth(
     description = "End of the discord Oauth2 flow, returns the authenticated user data",
     tag = "Authentication",
     responses(
-        (status = 200, body = AuthResponse)
+        (status = 200, body = AuthResponse),
+        (status = 302, description = "Redirect to the callback URL if one was provided", headers(("Location" = String, description = "Callback URL with authentication data"))),
+        (status = 404, description = "OAuth request not found", body = ErrorResponse),
+        (status = 503, description = "Discord integration is not configured", body = ErrorResponse)
     ),
     params(
         ("code" = String, Query, description = "The authorization code returned by the OAuth provider"),

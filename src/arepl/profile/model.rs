@@ -50,6 +50,7 @@ pub struct Rank {
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 /// A resolved record for a specific level (ommits the level field compared to `ResolvedRecord`).
+#[schema(as = PlatformerProfileRecordResolved)]
 pub struct ProfileRecordResolved {
     /// Internal UUID of the record.
     pub id: Uuid,
@@ -74,6 +75,7 @@ pub struct ProfileRecordResolved {
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
+#[schema(as = PlatformerProfileResolved)]
 pub struct ProfileResolved {
     #[serde(flatten)]
     pub user: User,

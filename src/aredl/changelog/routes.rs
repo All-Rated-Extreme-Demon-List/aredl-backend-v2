@@ -16,7 +16,7 @@ use utoipa::OpenApi;
         PageQuery<20>,
     ),
     responses(
-        (status = 200, body = [Paginated<ChangelogPage>])
+        (status = 200, body = Paginated<ChangelogPage>),
     ),
 )]
 #[get("", wrap = "CacheController::public_with_max_age(900)")]
