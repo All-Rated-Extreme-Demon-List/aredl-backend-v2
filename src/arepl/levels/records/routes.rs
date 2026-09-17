@@ -17,9 +17,10 @@ use utoipa::OpenApi;
     tag = "AREDL (P) - Levels",
     params(
         ("level_id" = String, description = "Level ID (Can be internal UUID, or GD ID. For the latter, add a _2p suffix to target the 2p version)"),
+        ("submitter_filter" = Option<String>, Query, description = "Filter records by submitter UUID, username, or Discord ID"),
+        ("high_extremes" = Option<bool>, Query, description = "Only show records from players with 50+ records on their profile"),
         ("page" = Option<i64>, Query, description = "The page of records to fetch"),
         ("per_page" = Option<i64>, Query, description = "The number of records to fetch per page"),
-        ("submitter_filter" = Option<String>, Query, description = "Filter records by submitter UUID, username, or Discord ID"),
     ),
     responses(
         (status = 200, body = Paginated<LevelResolvedRecordPage>)
