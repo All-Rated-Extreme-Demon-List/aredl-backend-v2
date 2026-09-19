@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use actix_web::{get, web, Error, HttpRequest, HttpResponse};
+use actix_web::{get, web, HttpRequest, HttpResponse};
 use actix_ws::{handle, Message};
 use futures_util::StreamExt as _;
 use tokio::{sync::broadcast, time::interval};
@@ -8,6 +8,7 @@ use utoipa::OpenApi;
 
 use crate::{
     auth::{Permission, UserAuth},
+    error_handler::ApiError,
     notifications::WebsocketNotification,
 };
 
@@ -29,7 +30,7 @@ async fn notifications_websocket(
     req: HttpRequest,
     stream: web::Payload,
     notify_tx: web::Data<broadcast::Sender<WebsocketNotification>>,
-) -> Result<HttpResponse, Error> {
+) -> Result<HttpResponse, ApiError> {
     let (res, mut session, mut msg_stream) = handle(&req, stream)?;
     let mut rx = notify_tx.subscribe();
     let mut heartbeat = interval(Duration::from_secs(30));

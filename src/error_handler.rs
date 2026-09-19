@@ -1,6 +1,7 @@
 use actix_web::error::BlockingError;
 use actix_web::http::StatusCode;
-use actix_web::{Error as ActixError, HttpResponse, ResponseError};
+use actix_web::web::{FormConfig, JsonConfig, PathConfig, QueryConfig, ServiceConfig};
+use actix_web::{Error as ActixError, HttpRequest, HttpResponse, ResponseError};
 use diesel::result::DatabaseErrorKind;
 use diesel::result::Error as DieselError;
 use serde::{Deserialize, Serialize};
@@ -9,6 +10,22 @@ use std::fmt;
 use std::fmt::{Display, Formatter};
 use url::ParseError;
 use utoipa::ToSchema;
+
+pub fn configure_extractor_errors(config: &mut ServiceConfig) {
+    config
+        .app_data(JsonConfig::default().error_handler(extractor_error))
+        .app_data(QueryConfig::default().error_handler(extractor_error))
+        .app_data(FormConfig::default().error_handler(extractor_error))
+        .app_data(
+            PathConfig::default().error_handler(|error, _| {
+                ApiError::NotFound(error.source().unwrap_or(&error)).into()
+            }),
+        );
+}
+
+fn extractor_error(error: impl Into<ActixError>, _: &HttpRequest) -> ActixError {
+    ApiError::from(error.into()).into()
+}
 
 #[derive(Debug)]
 pub enum ConfigError {
@@ -242,7 +259,7 @@ impl From<ActixError> for ApiError {
     fn from(error: ActixError) -> Self {
         let response_error = error.as_response_error();
         ApiError {
-            error_status_code: response_error.status_code().as_u16(),
+            error_status_code: response_error.error_response().status().as_u16(),
             error_message: error.to_string(),
         }
     }

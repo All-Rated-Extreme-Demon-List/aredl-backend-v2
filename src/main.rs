@@ -32,7 +32,7 @@ mod utils;
 use crate::app_data::{auth as auth_data, db};
 use crate::cache_control::CacheController;
 use crate::docs::ApiDoc;
-use crate::error_handler::{ConfigError, StartupError};
+use crate::error_handler::{configure_extractor_errors, ConfigError, StartupError};
 use crate::scheduled::{
     data_cleaner::start_data_cleaner, refresh_discord_avatars::start_discord_avatars_refresher,
     refresh_level_data::start_level_data_refresher, refresh_matviews::start_matviews_refresher,
@@ -150,6 +150,7 @@ async fn main() -> Result<(), StartupError> {
             .wrap(prometheus.clone())
             .service(
                 web::scope("/api")
+                    .configure(configure_extractor_errors)
                     .app_data(web::Data::new(auth_app_state.clone()))
                     .app_data(web::Data::new(db_app_state.clone()))
                     .app_data(web::Data::new(providers_app_state.clone()))

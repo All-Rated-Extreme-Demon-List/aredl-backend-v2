@@ -3,6 +3,7 @@ use crate::app_data::{
     db::DbAppState,
     providers::init_app_state as providers_init_app_state,
 };
+use crate::error_handler::configure_extractor_errors;
 use actix_http::{Request, StatusCode};
 #[cfg(test)]
 use {crate::providers::ProvidersAppState, tokio::sync::broadcast::Sender};
@@ -90,6 +91,7 @@ pub async fn init_test_app() -> (
 
     let app = test::init_service(
         App::new()
+            .configure(configure_extractor_errors)
             .app_data(Data::new(db_app_state.clone()))
             .app_data(Data::new(auth_app_state.clone()))
             .app_data(Data::new(notify_tx.clone()))
@@ -138,6 +140,7 @@ pub async fn init_test_app_with_providers(
 
     let app = test::init_service(
         App::new()
+            .configure(configure_extractor_errors)
             .app_data(Data::new(db_app_state.clone()))
             .app_data(Data::new(auth_app_state.clone()))
             .app_data(Data::new(notify_tx.clone()))
