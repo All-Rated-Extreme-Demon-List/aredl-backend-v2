@@ -41,6 +41,10 @@ async fn list(
     request_body = BountyPost,
     responses(
         (status = 200, body = Bounty),
+        (status = 400, description = "End date must be after start date, and target submissions must be a positive integer", body = ErrorResponse, examples(
+            ("invalid_dates" = (value = json!({"message": "End date must be after start date."}))),
+            ("invalid_target" = (value = json!({"message": "Target submissions must be a positive integer."})))
+        )),
     ),
     security(("bearer_token" = ["BountyManage"])),
 )]
@@ -64,6 +68,10 @@ async fn create(
     request_body = BountyPatch,
     responses(
         (status = 200, body = Bounty),
+        (status = 400, description = "End date must be after start date, and target submissions must be a positive integer", body = ErrorResponse, examples(
+            ("invalid_dates" = (value = json!({"message": "End date must be after start date."}))),
+            ("invalid_target" = (value = json!({"message": "Target submissions must be a positive integer."})))
+        )),
         (status = 404, description = "Bounty not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["BountyManage"])),

@@ -24,6 +24,7 @@ use uuid::Uuid;
     tag = "AREDL - Levels (Custom Copies)",
     responses(
         (status = 200, body = [LevelCustomCopyResolved]),
+        (status = 400, description = "Invalid level ID", body = ErrorResponse),
     ),
     params(
         ("level_id" = String, Path, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)"),
@@ -60,6 +61,7 @@ async fn find_all(
     ),
     responses(
         (status = 200, body = LevelCustomCopy),
+        (status = 400, description = "Invalid level ID", body = ErrorResponse),
         (status = 404, description = "Level not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["LevelCustomCopiesModify"])),

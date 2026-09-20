@@ -9,7 +9,7 @@ use crate::app_data::auth::AuthAppState;
 use crate::app_data::db::DbAppState;
 use crate::auth::token::UserClaims;
 use crate::auth::token::{self, check_token_valid};
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 
 #[derive(Debug, Deserialize)]
 pub struct ApiKeyOptions {
@@ -33,6 +33,7 @@ pub struct ApiKeyResponse {
 	),
     responses(
         (status = 200, body = ApiKeyResponse),
+        (status = 422, description = "API key lifetime cannot exceed 1 year (525600 minutes)", body = ErrorResponse),
     ),
     tag = "Authentication",
     security(("bearer_token" = [])),

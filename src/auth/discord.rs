@@ -80,6 +80,7 @@ struct AuthResponse {
     tag = "Authentication",
     responses(
         (status = 302, description = "Redirect to Discord authorization", headers(("Location" = String, description = "Discord authorization URL"))),
+        (status = 400, description = "Invalid callback URL", body = ErrorResponse),
         (status = 503, description = "Discord integration is not configured", body = ErrorResponse)
     ),
     params(
@@ -127,6 +128,11 @@ async fn discord_auth(
         (status = 200, body = AuthResponse),
         (status = 302, description = "Redirect to the callback URL if one was provided", headers(("Location" = String, description = "Callback URL with authentication data"))),
         (status = 404, description = "OAuth request not found", body = ErrorResponse),
+        (status = 502, description = "Failed to exchange OAuth code or request/load Discord user data", body = ErrorResponse, examples(
+            ("token_exchange" = (value = json!({"message": "Failed to request token!"}))),
+            ("user_request" = (value = json!({"message": "Failed to request discord data"}))),
+            ("user_response" = (value = json!({"message": "Failed to load discord data"})))
+        )),
         (status = 503, description = "Discord integration is not configured", body = ErrorResponse)
     ),
     params(

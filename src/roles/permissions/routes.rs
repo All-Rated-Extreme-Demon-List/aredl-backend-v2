@@ -78,6 +78,7 @@ async fn find_all_resolved(
     request_body = [String],
     responses(
         (status = 200, body = [String]),
+        (status = 400, description = "Unknown permission", body = ErrorResponse),
         (status = 403, description = "You do not have sufficient privilege to edit this role", body = ErrorResponse, examples(
             ("role_privilege" = (value = json!({"message": "You do not have sufficient permissions to edit this role."})))
         )),
@@ -117,6 +118,7 @@ async fn set(
     request_body = [String],
     responses(
         (status = 200, body = [String]),
+        (status = 400, description = "Unknown permission", body = ErrorResponse),
         (status = 403, description = "You do not have sufficient privilege to edit this role", body = ErrorResponse, examples(
             ("role_privilege" = (value = json!({"message": "You do not have sufficient permissions to edit this role."})))
         )),
@@ -156,6 +158,7 @@ async fn add(
     request_body = [String],
     responses(
         (status = 200, body = [String]),
+        (status = 400, description = "Unknown permission", body = ErrorResponse),
         (status = 403, description = "You do not have sufficient privilege to edit this role", body = ErrorResponse, examples(
             ("role_privilege" = (value = json!({"message": "You do not have sufficient permissions to edit this role."})))
         )),

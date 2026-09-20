@@ -80,6 +80,7 @@ async fn sync(
     request_body = UserBadgeGrant,
     responses(
         (status = 200, body = [UserBadge]),
+        (status = 400, description = "Unknown badge code", body = ErrorResponse),
         (status = 404, description = "User not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["UserModify"])),
@@ -116,6 +117,7 @@ async fn grant(
     request_body = [String],
     responses(
         (status = 200, body = [UserBadge]),
+        (status = 400, description = "Unknown badge code", body = ErrorResponse),
         (status = 404, description = "User not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["UserModify"])),

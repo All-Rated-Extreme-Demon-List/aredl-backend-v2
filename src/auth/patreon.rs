@@ -83,6 +83,7 @@ struct PatreonRelationshipData {
     request_body = Option<OAuthOptions>,
     responses(
         (status = 200, body = PatreonLinkResponse),
+        (status = 400, description = "Invalid callback URL", body = ErrorResponse),
         (status = 503, description = "Patreon integration is not configured", body = ErrorResponse)
     ),
     security(("bearer_token" = [])),
@@ -128,10 +129,16 @@ async fn patreon_link(
     tag = "Authentication",
     responses(
         (status = 200, body = PatreonLinkedResponse),
+        (status = 400, description = "Invalid Patreon OAuth request", body = ErrorResponse),
         (status = 409, description = "Patreon account is already linked to another user", body = ErrorResponse),
         (status = 302, description = "Redirect to the callback URL if one was provided", headers(("Location" = String, description = "Callback URL with patreon=linked"))),
         (status = 403, description = "This Patreon account is not an active member of the AREDL Patreon", body = ErrorResponse),
         (status = 404, description = "OAuth request not found", body = ErrorResponse),
+        (status = 502, description = "Failed to exchange OAuth code or request/parse Patreon identity", body = ErrorResponse, examples(
+            ("token_exchange" = (value = json!({"message": "Failed to request token!"}))),
+            ("identity_request" = (value = json!({"message": "Failed to request Patreon identity (502 Bad Gateway): Bad Gateway"}))),
+            ("identity_response" = (value = json!({"message": "Failed to parse Patreon identity response: error decoding response body"})))
+        )),
         (status = 503, description = "Patreon integration is not configured", body = ErrorResponse)
     ),
     params(

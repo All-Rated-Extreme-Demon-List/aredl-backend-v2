@@ -43,6 +43,7 @@ async fn find_all_recurring_shifts(
     tag = "Shifts",
     responses(
         (status = 200, body = RecurringShift),
+        (status = 400, description = "Invalid timezone provided. Please provide a valid IANA timezone string.", body = ErrorResponse),
     ),
     security(("bearer_token" = ["ShiftManage"])),
 )]
@@ -68,6 +69,7 @@ async fn create_new_recurring_shift(
     tag = "Shifts",
     responses(
         (status = 200, body = RecurringShift),
+        (status = 400, description = "Invalid timezone provided. Please provide a valid IANA timezone string.", body = ErrorResponse),
     ),
     security(("bearer_token" = ["ShiftCreateOwn"])),
 )]
@@ -107,6 +109,7 @@ async fn create_own_recurring_shift(
     tag = "Shifts",
     responses(
         (status = 201, body = RecurringShift),
+        (status = 400, description = "Invalid timezone provided. Please provide a valid IANA timezone string.", body = ErrorResponse),
         (status = 404, description = "Recurring shift not found", body = ErrorResponse)
     ),
 	request_body = RecurringShiftPatch,

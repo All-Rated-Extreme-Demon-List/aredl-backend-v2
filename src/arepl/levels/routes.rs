@@ -81,6 +81,7 @@ async fn create(
     ),
     responses(
         (status = 200, description = "Level edited successfully", body = Level),
+        (status = 400, description = "Invalid level ID", body = ErrorResponse),
         (status = 404, description = "Level not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["LevelModify"])),
@@ -112,6 +113,7 @@ async fn update(
     ),
     responses(
         (status = 200, body = ResolvedLevel),
+        (status = 400, description = "Invalid level ID", body = ErrorResponse),
         (status = 404, description = "Level not found", body = ErrorResponse)
     ),
 )]

@@ -17,6 +17,7 @@ use utoipa::OpenApi;
     ),
     responses(
         (status = 200, body = [PackWithTierResolved]),
+        (status = 400, description = "Invalid level ID", body = ErrorResponse),
         (status = 404, description = "Level not found", body = ErrorResponse)
     ),
 )]

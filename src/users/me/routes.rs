@@ -44,6 +44,13 @@ async fn find(
     request_body = UserMeUpdate,
     responses(
         (status = 200, body = User),
+        (status = 400, description = "Display name or description is too long, country changes are on cooldown, or the selected level or badge is not unlocked", body = ErrorResponse, examples(
+            ("display_name_too_long" = (value = json!({"message": "The display name can at most be 35 characters long."}))),
+            ("description_too_long" = (value = json!({"message": "The description can at most be 300 characters long."}))),
+            ("country_cooldown" = (value = json!({"message": "You have recently changed your country, please wait 30 days and 0 hours before changing it again."}))),
+            ("background_level" = (value = json!({"message": "You have not beaten the selected level."}))),
+            ("featured_badge" = (value = json!({"message": "You have not unlocked the selected badge."})))
+        )),
         (status = 403, description = "You cannot change your ban level while banned from the list", body = ErrorResponse),
         (status = 404, description = "User not found", body = ErrorResponse)
     ),

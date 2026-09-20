@@ -136,15 +136,22 @@ async fn find_me(
     tag = "AREDL - Submissions",
     responses(
         (status = 201, body = Submission),
+        (status = 400, description = "Invalid completion video or raw footage URL", body = ErrorResponse, examples(
+            ("invalid_video_url" = (value = json!({"message": "Invalid completion video URL: Malformed URL"}))),
+            ("invalid_raw_url" = (value = json!({"message": "Invalid raw footage URL: Malformed URL"})))
+        )),
         (status = 403, description = "You have been banned from the list, or submissions are currently disabled", body = ErrorResponse, examples(
             ("banned" = (value = json!({"message": "You have been banned from the list."}))),
             ("disabled" = (value = json!({"message": "Submissions are currently disabled"})))
         )),
         (status = 404, description = "User or level not found", body = ErrorResponse),
         (status = 409, description = "You already have a submission for this level", body = ErrorResponse),
-        (status = 422, description = "This level is on the legacy list, or required raw footage is missing", body = ErrorResponse, examples(
+        (status = 410, description = "This level has been removed from the list", body = ErrorResponse),
+        (status = 422, description = "This level is on the legacy list, required raw footage is missing, or the completion video provider is unsupported or not allowed", body = ErrorResponse, examples(
             ("legacy_level" = (value = json!({"message": "This level is on the legacy list and is not accepting records."}))),
-            ("raw_footage_required" = (value = json!({"message": "This level requires raw footage"})))
+            ("raw_footage_required" = (value = json!({"message": "This level requires raw footage"}))),
+            ("unsupported_video_url" = (value = json!({"message": "Invalid completion video URL: URL does not match any known supported providers. Please refer to our guidelines for a list of supported websites."}))),
+            ("disallowed_video_provider" = (value = json!({"message": "Invalid completion video URL: This provider is not allowed for this field"})))
         ))
     ),
     request_body = SubmissionPostMod,
@@ -182,6 +189,12 @@ async fn create(
     tag = "AREDL - Submissions",
     responses(
         (status = 200, body = Submission),
+        (status = 400, description = "Invalid completion video or raw footage URL, no changes provided, or editing a non-pending submission while submissions are closed", body = ErrorResponse, examples(
+            ("invalid_video_url" = (value = json!({"message": "Invalid completion video URL: Malformed URL"}))),
+            ("invalid_raw_url" = (value = json!({"message": "Invalid raw footage URL: Malformed URL"}))),
+            ("no_changes" = (value = json!({"message": "No changes were provided!"}))),
+            ("submissions_closed" = (value = json!({"message": "Submissions are currently closed. You can only edit pending submissions."})))
+        )),
         (status = 403, description = "User is banned, submission is locked or belongs to another user, or reviewer permissions are insufficient", body = ErrorResponse, examples(
             ("banned" = (value = json!({"message": "You have been banned from submitting records."}))),
             ("not_submitter" = (value = json!({"message": "You can only edit your own submissions."}))),
@@ -190,7 +203,12 @@ async fn create(
         )),
         (status = 404, description = "User, submission or level not found", body = ErrorResponse),
         (status = 409, description = "This submission is currently being reviewed and cannot be edited", body = ErrorResponse),
-        (status = 422, description = "This level is on the legacy list and is not accepting records", body = ErrorResponse)
+        (status = 410, description = "This level has been removed from the list", body = ErrorResponse),
+        (status = 422, description = "This level is on the legacy list, or the completion video provider is unsupported or not allowed", body = ErrorResponse, examples(
+            ("legacy_level" = (value = json!({"message": "This level is on the legacy list and is not accepting records!"}))),
+            ("unsupported_video_url" = (value = json!({"message": "Invalid completion video URL: URL does not match any known supported providers. Please refer to our guidelines for a list of supported websites."}))),
+            ("disallowed_video_provider" = (value = json!({"message": "Invalid completion video URL: This provider is not allowed for this field"})))
+        ))
     ),
     params(
         ("id" = Uuid, description = "The ID of the submission")

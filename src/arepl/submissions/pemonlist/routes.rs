@@ -15,7 +15,12 @@ use utoipa::OpenApi;
     responses(
         (status = 200, body = Vec<Submission>),
         (status = 404, description = "User or Pemonlist player not found", body = ErrorResponse),
-        (status = 422, description = "Your account is not linked to a Discord account", body = ErrorResponse)
+        (status = 422, description = "Your account is not linked to a Discord account", body = ErrorResponse),
+        (status = 502, description = "Failed to request Pemonlist data, parse its response or parse a completion time", body = ErrorResponse, examples(
+            ("request_failed" = (value = json!({"message": "error sending request for url (https://pemonlist.com/api/player/123456789)"}))),
+            ("invalid_response" = (value = json!({"message": "Failed to parse data received from pemonlist: error decoding response body"}))),
+            ("invalid_completion_time" = (value = json!({"message": "Malformed formatted_time (out of range)"})))
+        ))
     ),
     security(("bearer_token" = [])),
 )]

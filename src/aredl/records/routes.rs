@@ -172,6 +172,7 @@ async fn delete(
     ),
     responses(
         (status = 200, body = MutualVictors),
+        (status = 400, description = "Invalid level ID", body = ErrorResponse),
         (status = 404, description = "One of the levels was not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["RecordModify"])),

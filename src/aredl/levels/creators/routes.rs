@@ -20,6 +20,7 @@ use uuid::Uuid;
     ),
     responses(
         (status = 200, body = [BaseUser]),
+        (status = 400, description = "Invalid level ID", body = ErrorResponse),
         (status = 404, description = "Level not found", body = ErrorResponse)
     ),
 )]
@@ -47,6 +48,7 @@ async fn find_all(
     ),
     responses(
         (status = 200, description = "Creators set successfully", body = [BaseUser]),
+        (status = 400, description = "Invalid level ID", body = ErrorResponse),
         (status = 404, description = "Level not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["LevelModify"])),
@@ -78,6 +80,7 @@ async fn set(
     ),
     responses(
         (status = 200, description = "Creators added successfully", body = [BaseUser]),
+        (status = 400, description = "Invalid level ID", body = ErrorResponse),
         (status = 404, description = "Level not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["LevelModify"])),
@@ -109,6 +112,7 @@ async fn add(
     ),
     responses(
         (status = 200, description = "Creators removed successfully", body = [BaseUser]),
+        (status = 400, description = "Invalid level ID", body = ErrorResponse),
         (status = 404, description = "Level not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["LevelModify"])),

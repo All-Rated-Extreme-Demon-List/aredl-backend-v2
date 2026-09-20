@@ -4,7 +4,7 @@ use crate::{
         stats_mod_leaderboard, DailyStatsPage, ResolvedLeaderboardRow,
     },
     auth::{Authenticated, Permission, UserAuth},
-    error_handler::ApiError,
+    error_handler::{ApiError, ErrorResponse},
     page_helper::{PageQuery, Paginated},
 };
 use actix_web::{get, web, HttpResponse};
@@ -32,6 +32,7 @@ pub struct StatsQuery {
     ),
     responses(
         (status = 200, body = Paginated<DailyStatsPage>),
+        (status = 400, description = "You can not filter by both reviewer and level at the same time", body = ErrorResponse),
     ),
     security(("bearer_token" = ["SubmissionSeeStatistics"])),
 )]
