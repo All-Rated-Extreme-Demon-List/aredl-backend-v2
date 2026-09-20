@@ -17,7 +17,6 @@ use crate::{
     tag = "Authentication",
     responses(
         (status = 200, description = "Connected accounts", body = Vec<OAuthConnectedAccount>),
-        (status = 404, description = "User not found"),
     ),
     params(
         ("user_id" = Uuid, description = "The ID of the user for whom to retrieve connected accounts")
