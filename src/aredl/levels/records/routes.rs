@@ -48,18 +48,8 @@ async fn find_all(
 
 #[derive(OpenApi)]
 #[openapi(
-    tags(
-        (name = "AREDL - Levels (Records)", description = "Endpoints for fetching and managing records of a specific level")
-    ),
-    components(
-        schemas(
-            LevelResolvedRecordExtended,
-            LevelResolvedRecordPage,
-        )
-    ),
-    paths(
-        find_all,
-    )
+    components(schemas(LevelResolvedRecordExtended, LevelResolvedRecordPage,)),
+    paths(find_all,)
 )]
 pub struct ApiDoc;
 
