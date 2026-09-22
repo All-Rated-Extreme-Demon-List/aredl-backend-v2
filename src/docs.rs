@@ -68,6 +68,16 @@ API keys can be created through the AREDL website settings or the API key endpoi
 
 You can invalidate all active tokens using the Logout All endpoint.
 
+## Response caching
+API responses default to `Cache-Control: no-cache, no-store` unless an endpoint sets its own cache policy. Cacheable endpoints return one of the following policies, where `N` is the endpoint's cache lifetime in seconds:
+
+| Cache-Control | Meaning |
+|---|---|
+| `public, max-age=N` | The response may be stored by shared and private caches for N seconds. |
+| `private, max-age=N` | The response may be stored by private caches for N seconds, but not by shared caches. |
+
+Endpoints with authentication-dependent caching use `public` when the request has no `Authorization` header and `private` when that header is present.
+
 ## Allowed video URL types
 Some submissions endpoints accept `video_url` (completion video) and `raw_url` (raw footage):
 

@@ -8,17 +8,43 @@ use utoipa::OpenApi;
 
 use crate::{
     auth::{Permission, UserAuth},
-    error_handler::ApiError,
+    error_handler::{ApiError, ErrorResponse},
     notifications::WebsocketNotification,
+    shifts::ShiftInsert,
 };
 
 #[utoipa::path(
     get,
     summary = "[Staff]Subscribe to notifications",
-    description = "Upgrades the HTTP connection to a WebSocket. This websocker will receive notifications about events such as accepted/denied submissions. This is mainly used by the discord bot.",
+    description = "Upgrades the HTTP connection to a WebSocket for staff notifications, mainly used by the Discord bot.
+
+Send a WebSocket handshake with `Upgrade: websocket`, `Connection: Upgrade`, `Sec-WebSocket-Version: 13`, and `Sec-WebSocket-Key`, along with the bearer token.
+
+After the `101` upgrade, notifications are sent as JSON text messages using `WebsocketNotification`.
+
+| notification_type | data payload | When sent |
+|---|---|---|
+| `SUBMISSION_CREATED` | `Submission` or `PlatformerSubmission` | After a classic or platformer submission is created. |
+| `SUBMISSION_ACCEPTED` | `Submission` or `PlatformerSubmission` | After a reviewer changes the submission status to Accepted. |
+| `SUBMISSION_DENIED` | `Submission` or `PlatformerSubmission` | After a reviewer changes the submission status to Denied. |
+| `SUBMISSION_UNDER_CONSIDERATION` | `Submission` or `PlatformerSubmission` | After a reviewer changes the submission status to UnderConsideration. |
+| `SUBMISSION_UNDER_REVIEW` | `Submission` or `PlatformerSubmission` | After a reviewer changes the submission status to UnderReview. |
+| `SHIFT_COMPLETED` | `Shift` | When a reviewer completes a shift after reviewing a submission. |
+| `SHIFTS_CREATED` | Array of `ShiftInsert` | Emitted whenever the scheduled job to create shifts based on recurrent-shifts runs. |
+| `SHIFTS_MISSED` | Array of `Shift` | Emitted when the cleanup job expires running shifts that haven't been completed in time. |
+
+The server sends Ping frames every 30 seconds and responds to client Ping frames with Pong.
+",
     tag = "Notifications",
     responses(
-        (status = 101, description = "Switching Protocols to WebSocket"),
+        (status = 101, description = "Switching Protocols to WebSocket. Following notifications are WebSocket text messages.",
+            headers(
+                ("Upgrade" = String),
+                ("Connection" = String),
+                ("Sec-WebSocket-Accept" = String)
+            )
+        ),
+        (status = 400, description = "Invalid WebSocket handshake: missing or invalid Upgrade/Connection headers, missing or unsupported Sec-WebSocket-Version, or missing Sec-WebSocket-Key.", body = ErrorResponse),
     ),
     security(("bearer_token" = ["NotificationsSubscribe"])),
 )]
@@ -98,7 +124,7 @@ async fn notifications_websocket(
 
 #[derive(OpenApi)]
 #[openapi(
-    components(schemas(WebsocketNotification)),
+    components(schemas(WebsocketNotification, ShiftInsert)),
     paths(notifications_websocket)
 )]
 pub struct ApiDoc;

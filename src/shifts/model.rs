@@ -147,12 +147,16 @@ pub struct ShiftPatch {
     pub completed_count: Option<i32>,
 }
 
-#[derive(Insertable, Serialize, Clone)]
+#[derive(Insertable, Serialize, Clone, ToSchema)]
 #[diesel(table_name = shifts)]
 pub struct ShiftInsert {
+    /// UUID of the user this shift is assigned to.
     pub user_id: Uuid,
+    /// The target number of submissions to review for this shift.
     pub target_count: i32,
+    /// The start time of the shift.
     pub start_at: DateTime<Utc>,
+    /// The end time of the shift.
     pub end_at: DateTime<Utc>,
 }
 

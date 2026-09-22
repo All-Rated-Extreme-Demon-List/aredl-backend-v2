@@ -3,8 +3,14 @@ use tokio::sync::broadcast;
 use utoipa::ToSchema;
 
 #[derive(Clone, Debug, Serialize, Deserialize, ToSchema)]
+/// JSON text message sent after the notifications WebSocket handshake succeeds.
 pub struct WebsocketNotification {
+    /// Event name: SUBMISSION_CREATED, SUBMISSION_ACCEPTED, SUBMISSION_DENIED,
+    /// SUBMISSION_UNDER_CONSIDERATION, SUBMISSION_UNDER_REVIEW, SHIFT_COMPLETED,
+    /// SHIFTS_CREATED, or SHIFTS_MISSED.
     pub notification_type: String,
+    /// Event payload: a Submission or PlatformerSubmission for submission events, etc..
+    /// See the WebSocket endpoint description for more details
     pub data: serde_json::Value,
 }
 
