@@ -59,30 +59,44 @@ pub struct LevelDailyStats {
 
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct ResolvedLeaderboardRow {
+    /// The reviewer for this leaderboard row.
     pub reviewer: ExtendedBaseUser,
+    /// How many submissions this reviewer has accepted on this time period
     pub accepted: i64,
+    /// How many submissions this reviewer has denied on this time period
     pub denied: i64,
+    /// How many submissions this reviewer has put under consideration on this time period
     pub under_consideration: i64,
+    /// How many total submissions this reviewer has reviewed on this time period (accepted + denied + under consideration)
     pub reviewed: i64,
 }
 
 #[derive(Default, Serialize, Deserialize, ToSchema)]
 pub struct ResolvedDailyStats {
+    /// The date for which these stats apply (YYYY-MM-DD, based on UTC).
     pub date: NaiveDate,
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// If some, the reviewer for whom these stats apply.
     pub reviewer: Option<BaseUser>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// If some, the level for which these stats apply.
     pub level: Option<ExtendedBaseLevel>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    /// The number of newly submitted submissions on this day
     pub submitted: Option<i64>,
+    /// The number of submissions that were accepted on this day
     pub accepted: i64,
+    /// The number of submissions that were denied on this day
     pub denied: i64,
+    /// The number of submissions that were put under consideration on this day
     pub under_consideration: i64,
+    /// The total number of reviewed submissions on this day (accepted + denied + under consideration)
     pub reviewed: i64,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct DailyStatsPage {
+    /// Daily submission statistics for this page
     pub data: Vec<ResolvedDailyStats>,
 }
 

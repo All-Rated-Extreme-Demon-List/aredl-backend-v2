@@ -65,6 +65,7 @@ pub struct CountryProfileRecord {
 pub struct ResolvedCountryProfileRecord {
     #[serde(flatten)]
     pub record: ResolvedRecord,
+    /// How many member completed the same level.
     pub completion_count: i64,
 }
 

@@ -37,22 +37,44 @@ pub struct SubmissionHistory {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[schema(as = PlatformerSubmissionHistoryResolved)]
 pub struct SubmissionHistoryResolved {
+    /// The internal UUID of this submission history entry.
     pub id: Uuid,
+    /// Internal UUID of the submission.
     pub submission_id: Uuid,
+    /// The status of this submission
     pub status: SubmissionStatus,
+    /// The timestamp when this submission history entry was created.
     pub timestamp: DateTime<Utc>,
+    /// Completion video URL.
+    ///
+    /// The provider is enforced and the URL is stored in a standardized canonical form.
+    /// See [Allowed video URL types](#allowed-video-url-types).
     pub video_url: Option<String>,
+    /// Raw footage URL (optional).
+    ///
+    /// Only requires a valid URL (the site is not enforced). If the URL matches a recognized provider
+    /// it is standardized, otherwise it is stored as-is.
+    /// See [Allowed video URL types](#allowed-video-url-types).
     pub raw_url: Option<String>,
+    /// Whether the record was completed on mobile or not.
     pub mobile: Option<bool>,
+    /// ID of the custom copy used for the record, if any.
     pub custom_copy_id: Option<i32>,
+    /// The mod menu used in this record
     pub mod_menu: Option<String>,
+    /// Completion time of the record in milliseconds.
     pub completion_time: Option<i64>,
+    /// Any additional notes left by the submitter.
     pub user_notes: Option<String>,
+    /// Notes given by the reviewer when reviewing the record.
     pub reviewer_notes: Option<String>,
+    /// [MOD ONLY] User who reviewed the record.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reviewer: Option<BaseUser>,
+    /// [MOD ONLY] Private notes given by the reviewer when reviewing the record.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub private_reviewer_notes: Option<String>,
+    /// Whether or not this submission has been locked by a staff member
     pub locked: Option<bool>,
 }
 

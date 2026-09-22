@@ -42,17 +42,25 @@ pub struct LevelNotes {
     pub timestamp: Option<DateTime<Utc>>,
     /// The moderator who added this note
     pub added_by: Uuid,
+    /// The timestamp when this note was added
     pub created_at: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct LevelNotesResolved {
+    /// The internal ID of this note
     pub id: Uuid,
+    /// The internal ID of the level this note is for
     pub level_id: Uuid,
+    /// The content of this note
     pub note: String,
+    /// The type of this note.
     pub note_type: LevelNotesType,
+    /// An optional timestamp after which this note should apply
     pub timestamp: Option<DateTime<Utc>>,
+    /// The moderator who added this note
     pub added_by: BaseUser,
+    /// The timestamp when this note was created
     pub created_at: DateTime<Utc>,
 }
 

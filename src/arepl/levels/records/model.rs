@@ -64,6 +64,7 @@ pub struct LevelResolvedRecordExtended {
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 #[schema(as = PlatformerLevelResolvedRecordPage)]
 pub struct LevelResolvedRecordPage {
+    /// Resolved level records for this page
     pub data: Vec<LevelResolvedRecordExtended>,
 }
 

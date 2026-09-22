@@ -54,6 +54,7 @@ pub struct SubmissionQueryOptions {
 
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct ResolvedSubmissionPage {
+    /// Resolved submissions for this page
     data: Vec<SubmissionResolved>,
 }
 

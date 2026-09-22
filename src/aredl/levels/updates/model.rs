@@ -37,6 +37,7 @@ pub struct LevelUpdateEntry {
     pub update_type: LevelUpdateType,
     /// When this update applies
     pub timestamp: DateTime<Utc>,
+    /// The timestamp when this update was added to the site
     pub created_at: DateTime<Utc>,
 }
 

@@ -20,11 +20,13 @@ use diesel::prelude::*;
 
 #[derive(Debug, Serialize, ToSchema)]
 struct PatreonLinkResponse {
+    /// The OAuth authorization URL to start the Patreon connect process
     authorize_url: String,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
 struct PatreonLinkedResponse {
+    /// The Patreon user ID of the account that was connected
     provider_user_id: String,
 }
 

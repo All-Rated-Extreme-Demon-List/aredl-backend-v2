@@ -20,8 +20,11 @@ pub struct QueueLevelSubmissionsRow {
 
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct ResolvedQueueLevelSubmissionsRow {
+    /// The level for which these submissions are counted (if none, all levels)
     pub level: Option<ExtendedBaseLevel>,
+    /// How many pending submissions this level currently has
     pub submissions: i64,
+    /// The percentage of the total submission queue that this level's pending submissions represent
     pub percent_of_queue: f64,
 }
 

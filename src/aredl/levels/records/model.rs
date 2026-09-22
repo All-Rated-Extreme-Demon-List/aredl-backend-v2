@@ -61,6 +61,7 @@ pub struct LevelResolvedRecordExtended {
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct LevelResolvedRecordPage {
+    /// Resolved level records for this page
     pub data: Vec<LevelResolvedRecordExtended>,
 }
 

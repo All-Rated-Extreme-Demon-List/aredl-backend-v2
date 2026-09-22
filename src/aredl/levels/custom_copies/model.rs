@@ -66,13 +66,21 @@ pub struct LevelCustomCopy {
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct LevelCustomCopyResolved {
+    /// The internal ID of this custom copy entry
     pub id: Uuid,
+    /// The internal ID of the level this custom copy is for
     pub level_id: Uuid,
+    /// The in-game ID of this copy
     pub copy_id: i32,
+    /// The moderator who added this custom copy
     pub added_by: BaseUser,
+    /// The type of this custom copy
     pub id_type: LevelCustomCopyType,
+    /// The description of what this custom copy changes, if any
     pub description: Option<String>,
+    /// The status of this custom copy on the site
     pub status: LevelCustomCopyStatus,
+    /// The time this custom copy was added
     pub created_at: DateTime<Utc>,
 }
 

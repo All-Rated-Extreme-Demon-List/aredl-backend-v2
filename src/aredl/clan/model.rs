@@ -65,6 +65,7 @@ pub struct ClanProfileRecord {
 pub struct ResolvedClanProfileRecord {
     #[serde(flatten)]
     pub record: ResolvedRecord,
+    /// How many member completed the same level.
     pub completion_count: i64,
 }
 
@@ -72,6 +73,7 @@ pub struct ResolvedClanProfileRecord {
 pub struct ResolvedClanProfileLevel {
     #[serde(flatten)]
     pub level: ExtendedBaseLevel,
+    /// The user who published the level.
     pub publisher: BaseUser,
 }
 
@@ -103,8 +105,11 @@ pub struct ClanMemberPointsEntry {
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct ResolvedClanMemberPoints {
+    /// The member of the clan for this entry.
     pub member: ExtendedBaseUser,
+    /// How many levels this member has completed.
     pub completed_levels: i64,
+    /// The total points contributed by this member to the clan. For each record, the member's contribution is the level's given points divided by how many clan members completed it.
     pub contributed_points: f64,
 }
 

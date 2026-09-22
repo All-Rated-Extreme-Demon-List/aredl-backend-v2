@@ -132,6 +132,7 @@ pub struct ShiftFilterQuery {
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct ShiftPage {
+    /// Resolved shifts for this page
     pub data: Vec<ResolvedShift>,
 }
 

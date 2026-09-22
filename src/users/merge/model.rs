@@ -45,6 +45,7 @@ pub fn merge_users(
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct MergeLogPage {
+    /// Merge log entries for this page
     pub data: Vec<MergeLog>,
 }
 

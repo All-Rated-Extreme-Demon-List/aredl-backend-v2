@@ -164,13 +164,17 @@ pub struct MutualVictorsQuery {
 
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct MutualVictors {
+    /// The first level to find victors from
     pub level: ExtendedBaseLevel,
+    /// The second level to find mutual victors of the first level from
     pub other_level: ExtendedBaseLevel,
+    /// The resulting list of users who have a record on both levels
     pub mutuals: Vec<ExtendedBaseUser>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct ResolvedRecordPage {
+    /// Resolved records for this page
     data: Vec<ResolvedRecord>,
 }
 

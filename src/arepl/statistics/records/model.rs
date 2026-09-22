@@ -20,8 +20,11 @@ pub struct LevelTotalRecordsRow {
 
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct ResolvedLevelTotalRecordsRow {
+    /// The level for which these total records are counted (if none, all levels)
     pub level: Option<ExtendedBaseLevel>,
+    /// How many accepted records this level currently has
     pub records: i64,
+    /// How many verifications this level currently has
     pub verifications: i64,
 }
 

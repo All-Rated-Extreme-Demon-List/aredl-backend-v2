@@ -53,6 +53,7 @@ pub struct PackWithTier {
 pub struct PackLevelResolved {
     #[serde(flatten)]
     pub pack_level: ExtendedBaseLevel,
+    /// Whether the requesting user has completed this level or not.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub completed_by_user: Option<bool>,
 }

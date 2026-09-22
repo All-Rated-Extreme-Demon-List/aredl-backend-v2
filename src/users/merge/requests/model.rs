@@ -67,6 +67,7 @@ pub struct MergeRequestQueryOptions {
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct MergeRequestPage {
+    /// Resolved merge requests for this page
     pub data: Vec<ResolvedMergeRequest>,
 }
 
