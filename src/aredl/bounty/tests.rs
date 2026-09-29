@@ -128,11 +128,7 @@ async fn bounty_board_permissions_and_validation() {
             .to_request(),
     )
     .await;
-    assert!(
-        create_resp.status().is_success(),
-        "create bounty status is {}",
-        create_resp.status()
-    );
+    assert_eq!(create_resp.status(), actix_http::StatusCode::CREATED);
     let created: serde_json::Value = read_body_json(create_resp).await;
     let bounty_id = Uuid::parse_str(created["id"].as_str().unwrap()).unwrap();
 
@@ -175,11 +171,7 @@ async fn bounty_board_permissions_and_validation() {
             .to_request(),
     )
     .await;
-    assert!(
-        delete_resp.status().is_success(),
-        "delete bounty status is {}",
-        delete_resp.status()
-    );
+    assert_eq!(delete_resp.status(), actix_http::StatusCode::NO_CONTENT);
 }
 
 #[actix_web::test]

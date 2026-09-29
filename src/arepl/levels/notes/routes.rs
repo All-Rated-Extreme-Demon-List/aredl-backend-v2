@@ -64,7 +64,7 @@ async fn find_all(
         ("level_id" = String, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
-        (status = 200, body = LevelNotes),
+        (status = 201, body = LevelNotes),
         (status = 400, description = "Invalid level ID", body = ErrorResponse),
         (status = 404, description = "Level not found", body = ErrorResponse)
     ),
@@ -83,7 +83,7 @@ async fn create(
         LevelNotes::create(conn, body.into_inner(), level_id, &auth)
     })
     .await??;
-    Ok(HttpResponse::Ok().json(notes))
+    Ok(HttpResponse::Created().json(notes))
 }
 
 #[derive(serde::Deserialize)]
@@ -129,7 +129,7 @@ async fn update(
         ("note_id" = Uuid, description = "The internal ID of this note")
     ),
     responses(
-        (status = 200),
+        (status = 204),
     ),
     security(("bearer_token" = ["LevelNotesModify"])),
 )]
@@ -139,7 +139,7 @@ async fn delete(
     path: web::Path<NotePath>,
 ) -> Result<HttpResponse, ApiError> {
     web::block(move || LevelNotes::delete(&mut db.connection()?, &path.note_id)).await??;
-    Ok(HttpResponse::Ok().finish())
+    Ok(HttpResponse::NoContent().finish())
 }
 
 #[derive(OpenApi)]

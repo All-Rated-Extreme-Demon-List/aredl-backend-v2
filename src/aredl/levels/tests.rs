@@ -40,7 +40,7 @@ async fn create_level() {
         .set_json(&level_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success(), "status is {}", resp.status());
+    assert_eq!(resp.status(), actix_http::StatusCode::CREATED);
 
     let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(
@@ -393,5 +393,42 @@ async fn get_level_records() {
             .to_owned(),
         record_id.to_string(),
         "Record IDs do not match!"
+    );
+}
+
+#[actix_web::test]
+async fn create_level_with_out_of_range_position_returns_422() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::LevelModify)).await;
+    let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
+    let req = test::TestRequest::post()
+        .uri("/aredl/levels")
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!({"name": "Invalid position", "level_id": 123_456, "publisher_id": user_id, "status": "MainList", "two_player": false, "position": json!(0)}))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_error_response!(
+        resp,
+        actix_http::StatusCode::UNPROCESSABLE_ENTITY,
+        Some("Position 0 outside of range 1 to 1")
+    );
+}
+
+#[actix_web::test]
+async fn update_level_with_out_of_range_position_returns_422() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::LevelModify)).await;
+    let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
+    let level_id = create_test_level(&db).await;
+    let req = test::TestRequest::patch()
+        .uri(&format!("/aredl/levels/{level_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!({"position": json!(0)}))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_error_response!(
+        resp,
+        actix_http::StatusCode::UNPROCESSABLE_ENTITY,
+        Some("Position 0 outside of range 1 to 1")
     );
 }

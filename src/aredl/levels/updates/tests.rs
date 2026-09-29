@@ -35,7 +35,7 @@ async fn create_update() {
         .set_json(&update_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success(), "status is {}", resp.status());
+    assert_eq!(resp.status(), StatusCode::CREATED);
     let body: serde_json::Value = read_body_json(resp).await;
 
     assert_eq!(
@@ -94,7 +94,8 @@ async fn delete_update() {
         .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success(), "status is {}", resp.status());
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+    assert!(test::read_body(resp).await.is_empty());
 }
 
 #[actix_web::test]

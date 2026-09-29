@@ -25,7 +25,7 @@ async fn create_and_join() {
         .set_json(&payload)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success());
+    assert_eq!(resp.status(), actix_http::StatusCode::CREATED);
     let clan: serde_json::Value = read_body_json(resp).await;
     let clan_id = Uuid::parse_str(clan["id"].as_str().unwrap()).unwrap();
     let count = count_test_clan_members(&db, clan_id, user_id);
@@ -66,7 +66,7 @@ async fn create_empty_clan() {
         .set_json(&payload)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success());
+    assert_eq!(resp.status(), actix_http::StatusCode::CREATED);
 }
 
 #[actix_web::test]

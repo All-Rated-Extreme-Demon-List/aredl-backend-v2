@@ -93,7 +93,7 @@ async fn list(
     tag = "Users",
     request_body = PlaceholderOptions,
     responses(
-        (status = 200, body = User),
+        (status = 201, body = User),
     ),
     security(("bearer_token" = ["PlaceholderCreate"])),
 )]
@@ -110,7 +110,7 @@ async fn create_placeholder(
     let result =
         web::block(move || User::create_placeholder(&mut db.connection()?, options.into_inner()))
             .await??;
-    Ok(HttpResponse::Ok().json(result))
+    Ok(HttpResponse::Created().json(result))
 }
 
 #[utoipa::path(

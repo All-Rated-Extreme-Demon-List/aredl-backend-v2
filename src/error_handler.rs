@@ -1,4 +1,4 @@
-use actix_web::error::BlockingError;
+use actix_web::error::{BlockingError, JsonPayloadError};
 use actix_web::http::StatusCode;
 use actix_web::web::{FormConfig, JsonConfig, PathConfig, QueryConfig, ServiceConfig};
 use actix_web::{Error as ActixError, HttpRequest, HttpResponse, ResponseError};
@@ -13,14 +13,18 @@ use utoipa::ToSchema;
 
 pub fn configure_extractor_errors(config: &mut ServiceConfig) {
     config
-        .app_data(JsonConfig::default().error_handler(extractor_error))
+        .app_data(JsonConfig::default().error_handler(|error, request| {
+            if matches!(error, JsonPayloadError::ContentType) {
+                ApiError::UnsupportedMediaType(error).into()
+            } else {
+                extractor_error(error, request)
+            }
+        }))
         .app_data(QueryConfig::default().error_handler(extractor_error))
         .app_data(FormConfig::default().error_handler(extractor_error))
-        .app_data(
-            PathConfig::default().error_handler(|error, _| {
-                ApiError::NotFound(error.source().unwrap_or(&error)).into()
-            }),
-        );
+        .app_data(PathConfig::default().error_handler(|error, _| {
+            ApiError::BadRequest(error.source().unwrap_or(&error)).into()
+        }));
 }
 
 fn extractor_error(error: impl Into<ActixError>, _: &HttpRequest) -> ActixError {

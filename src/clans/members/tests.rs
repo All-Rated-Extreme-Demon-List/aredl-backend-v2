@@ -190,7 +190,7 @@ async fn invite_member() {
         .set_json(json!({"user_id": user_id}))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success());
+    assert_eq!(resp.status(), actix_http::StatusCode::CREATED);
     let invite: serde_json::Value = read_body_json(resp).await;
     assert_eq!(invite["user_id"].as_str().unwrap(), user_id.to_string());
 }

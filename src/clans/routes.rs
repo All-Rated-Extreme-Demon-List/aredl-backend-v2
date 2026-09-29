@@ -50,7 +50,7 @@ async fn list(
     tag = "Clans",
     request_body = ClanCreate,
     responses(
-        (status = 200, body = Clan),
+        (status = 201, body = Clan),
         (status = 409, description = "You are already in a clan", body = ErrorResponse),
         (status = 422, description = "Clan name, tag or description is too long", body = ErrorResponse, examples(
             ("name_too_long" = (value = json!({"message": "The clan name can at most be 100 characters long."}))),
@@ -72,7 +72,7 @@ async fn create_and_join(
         Clan::create_and_join(&mut db.connection()?, &clan.into_inner(), &authenticated)
     })
     .await??;
-    Ok(HttpResponse::Ok().json(result))
+    Ok(HttpResponse::Created().json(result))
 }
 
 #[utoipa::path(
@@ -82,7 +82,7 @@ async fn create_and_join(
     tag = "Clans",
     request_body = ClanCreate,
     responses(
-        (status = 200, body = Clan),
+        (status = 201, body = Clan),
         (status = 422, description = "Clan name, tag or description is too long", body = ErrorResponse, examples(
             ("name_too_long" = (value = json!({"message": "The clan name can at most be 100 characters long."}))),
             ("tag_too_long" = (value = json!({"message": "The clan tag can at most be 5 characters long."}))),
@@ -100,7 +100,7 @@ async fn create_empty(
     root_span.record("body", tracing::field::debug(&clan));
     let result =
         web::block(move || Clan::create_empty(&mut db.connection()?, &clan.into_inner())).await??;
-    Ok(HttpResponse::Ok().json(result))
+    Ok(HttpResponse::Created().json(result))
 }
 
 #[utoipa::path(

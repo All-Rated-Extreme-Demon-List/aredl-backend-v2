@@ -145,7 +145,7 @@ async fn delete(
         ("clan_id" = Uuid, description = "The internal UUID of the clan")
     ),
     responses(
-        (status = 200, body = ClanInvite),
+        (status = 201, body = ClanInvite),
         (status = 403, description = "Clan owner/vice owner role or ClanModify permission required", body = ErrorResponse),
         (status = 404, description = "Clan or inviting user not found", body = ErrorResponse),
         (status = 409, description = "This user is already in a clan", body = ErrorResponse)
@@ -176,7 +176,7 @@ async fn invite(
         Ok::<ClanInvite, ApiError>(invite)
     })
     .await??;
-    Ok(HttpResponse::Ok().json(result))
+    Ok(HttpResponse::Created().json(result))
 }
 
 #[utoipa::path(

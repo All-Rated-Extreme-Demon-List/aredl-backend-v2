@@ -29,7 +29,7 @@ async fn create_pack_tier() {
         .set_json(&tier_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success(), "status is {}", resp.status());
+    assert_eq!(resp.status(), actix_http::StatusCode::CREATED);
     let body: serde_json::Value = read_body_json(resp).await;
 
     assert_eq!(

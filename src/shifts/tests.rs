@@ -115,7 +115,7 @@ async fn patch_shift() {
         .set_json(&patch_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success(), "status is {}", resp.status());
+    assert_eq!(resp.status(), actix_http::StatusCode::OK);
     let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(
         patch_data["status"].as_str().unwrap(),
@@ -136,7 +136,7 @@ async fn delete_shift() {
         .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success(), "status is {}", resp.status());
+    assert_eq!(resp.status(), actix_http::StatusCode::OK);
 }
 
 #[actix_web::test]
@@ -159,7 +159,7 @@ async fn create_recurring_shift() {
         .set_json(&insert_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success(), "status is {}", resp.status());
+    assert_eq!(resp.status(), actix_http::StatusCode::CREATED);
     let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(body["user_id"].as_str().unwrap(), user_id.to_string());
 }
@@ -277,7 +277,7 @@ async fn patch_recurring_shift() {
         .set_json(&patch_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success(), "status is {}", resp.status());
+    assert_eq!(resp.status(), actix_http::StatusCode::OK);
     let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(body["target_count"].as_i64().unwrap(), 42);
 }
@@ -294,7 +294,7 @@ async fn delete_recurring_shift() {
         .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success(), "status is {}", resp.status());
+    assert_eq!(resp.status(), actix_http::StatusCode::OK);
     let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(body["id"].as_str().unwrap(), recurring_id.to_string());
 }

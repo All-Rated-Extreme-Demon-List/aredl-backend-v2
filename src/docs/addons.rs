@@ -144,7 +144,7 @@ impl Modify for ExtractorResponsesAddon {
                     body.required == Some(Required::True)
                         && body.content.contains_key("application/json")
                 }) {
-                    add_error_response(operation, "400", "Invalid JSON body or content type");
+                    add_error_response(operation, "400", "Invalid JSON body");
                 }
             }
         }

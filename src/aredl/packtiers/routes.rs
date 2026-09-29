@@ -46,7 +46,7 @@ async fn find_all(
     tag = "AREDL - Pack Tiers",
     request_body = PackTierCreate,
     responses(
-        (status = 200, body = PackTier),
+        (status = 201, body = PackTier),
     ),
     security(("bearer_token" = ["PackTierModify"])),
 )]
@@ -59,7 +59,7 @@ async fn create(
     root_span.record("body", tracing::field::debug(&tier));
     let tier =
         web::block(move || PackTier::create(&mut db.connection()?, tier.into_inner())).await??;
-    Ok(HttpResponse::Ok().json(tier))
+    Ok(HttpResponse::Created().json(tier))
 }
 #[utoipa::path(
     patch,

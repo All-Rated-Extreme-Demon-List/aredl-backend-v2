@@ -60,7 +60,7 @@ async fn find_all(
         ("level_id" = String, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
-        (status = 200, body = LevelCustomCopy),
+        (status = 201, body = LevelCustomCopy),
         (status = 400, description = "Invalid level ID", body = ErrorResponse),
         (status = 404, description = "Level not found", body = ErrorResponse)
     ),
@@ -79,7 +79,7 @@ async fn create(
         LevelCustomCopy::create(conn, body.into_inner(), level_id, &auth)
     })
     .await??;
-    Ok(HttpResponse::Ok().json(custom_copies))
+    Ok(HttpResponse::Created().json(custom_copies))
 }
 
 #[derive(serde::Deserialize)]
@@ -128,7 +128,7 @@ async fn update(
         ("copy_id" = Uuid, description = "The internal ID of this custom copy")
     ),
     responses(
-        (status = 200),
+        (status = 204),
     ),
     security(("bearer_token" = ["LevelCustomCopiesModify"])),
 )]
@@ -141,7 +141,7 @@ async fn delete(
     path: web::Path<CustomCopyPath>,
 ) -> Result<HttpResponse, ApiError> {
     web::block(move || LevelCustomCopy::delete(&mut db.connection()?, &path.copy_id)).await??;
-    Ok(HttpResponse::Ok().finish())
+    Ok(HttpResponse::NoContent().finish())
 }
 
 #[derive(OpenApi)]

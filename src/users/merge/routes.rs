@@ -1,6 +1,6 @@
 use crate::app_data::db::DbAppState;
 use crate::auth::{Permission, UserAuth};
-use crate::error_handler::ApiError;
+use crate::error_handler::{ApiError, ErrorResponse};
 use crate::page_helper::{PageQuery, Paginated};
 use crate::users::merge::requests;
 use crate::users::merge::MergeLogPage;
@@ -29,6 +29,7 @@ pub struct DirectMergeOptions {
     tag = "Users - Merges",
     request_body = DirectMergeOptions,
     responses(
+        (status = 422, description = "Primary or secondary user does not exist, or a user is being merged with themselves", body = ErrorResponse),
         (status = 204),
     ),
     security(("bearer_token" = ["DirectMerge"])),

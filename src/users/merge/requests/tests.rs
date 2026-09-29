@@ -415,7 +415,7 @@ async fn claim_merge_request() {
     let merge_1 = create_test_merge_req(&db, user_1_id, user_2_id).await;
     create_test_merge_req(&db, user_3_id, user_2_id).await;
 
-    let req = test::TestRequest::get()
+    let req = test::TestRequest::post()
         .uri("/users/merge/requests/claim")
         .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
@@ -438,16 +438,15 @@ async fn claim_merge_request_when_none_exist() {
     let token =
         create_test_token(mod_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    let req = test::TestRequest::get()
+    let req = test::TestRequest::post()
         .uri("/users/merge/requests/claim")
         .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success(), "status is {}", resp.status());
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 
-    let body: serde_json::Value = read_body_json(resp).await;
-    assert!(body.is_null(), "Expected null body when no requests");
+    assert!(test::read_body(resp).await.is_empty());
 }
 
 #[actix_web::test]

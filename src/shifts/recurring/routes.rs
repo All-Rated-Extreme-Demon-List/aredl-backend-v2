@@ -42,7 +42,7 @@ async fn find_all_recurring_shifts(
     description = "Schedules a new recurring shift for a user on a specific week day and time",
     tag = "Shifts",
     responses(
-        (status = 200, body = RecurringShift),
+        (status = 201, body = RecurringShift),
         (status = 400, description = "Invalid timezone provided. Please provide a valid IANA timezone string.", body = ErrorResponse),
     ),
     security(("bearer_token" = ["ShiftManage"])),
@@ -59,7 +59,7 @@ async fn create_new_recurring_shift(
         RecurringShift::create(&mut db.connection()?, &body.into_inner())
     })
     .await??;
-    Ok(HttpResponse::Ok().json(shift))
+    Ok(HttpResponse::Created().json(shift))
 }
 
 #[utoipa::path(
@@ -68,7 +68,7 @@ async fn create_new_recurring_shift(
     description = "Schedules a new recurring shift for the authenticated user.",
     tag = "Shifts",
     responses(
-        (status = 200, body = RecurringShift),
+        (status = 201, body = RecurringShift),
         (status = 400, description = "Invalid timezone provided. Please provide a valid IANA timezone string.", body = ErrorResponse),
     ),
     security(("bearer_token" = ["ShiftCreateOwn"])),
@@ -99,7 +99,7 @@ async fn create_own_recurring_shift(
         )
     })
     .await??;
-    Ok(HttpResponse::Ok().json(shift))
+    Ok(HttpResponse::Created().json(shift))
 }
 
 #[utoipa::path(
@@ -108,7 +108,7 @@ async fn create_own_recurring_shift(
     description = "Edits a recurring shift data.",
     tag = "Shifts",
     responses(
-        (status = 201, body = RecurringShift),
+        (status = 200, body = RecurringShift),
         (status = 400, description = "Invalid timezone provided. Please provide a valid IANA timezone string.", body = ErrorResponse),
         (status = 404, description = "Recurring shift not found", body = ErrorResponse)
     ),
@@ -133,7 +133,7 @@ async fn patch_recurring_shift(
         RecurringShift::patch(&mut db.connection()?, id.into_inner(), &body.into_inner())
     })
     .await??;
-    Ok(HttpResponse::Created().json(updated))
+    Ok(HttpResponse::Ok().json(updated))
 }
 
 #[utoipa::path(
@@ -142,7 +142,7 @@ async fn patch_recurring_shift(
     description = "Deletes a recurrent shift.",
     tag = "Shifts",
     responses(
-        (status = 201, body = RecurringShift),
+        (status = 200, body = RecurringShift),
         (status = 404, description = "Recurring shift not found", body = ErrorResponse)
     ),
 	params(
@@ -158,7 +158,7 @@ async fn delete_recurring_shift(
     let deleted =
         web::block(move || RecurringShift::delete(&mut db.connection()?, id.into_inner()))
             .await??;
-    Ok(HttpResponse::Created().json(deleted))
+    Ok(HttpResponse::Ok().json(deleted))
 }
 
 #[derive(OpenApi)]

@@ -15,7 +15,7 @@ use uuid::Uuid;
     tag = "AREDL (P) - Packs",
     request_body = PackCreate,
     responses(
-        (status = 200, body = Pack),
+        (status = 201, body = Pack),
     ),
     security(("bearer_token" = ["PackModify"])),
 )]
@@ -27,7 +27,7 @@ async fn create(
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&pack));
     let pack = web::block(move || Pack::create(&mut db.connection()?, pack.into_inner())).await??;
-    Ok(HttpResponse::Ok().json(pack))
+    Ok(HttpResponse::Created().json(pack))
 }
 
 #[utoipa::path(

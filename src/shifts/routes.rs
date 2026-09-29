@@ -122,7 +122,7 @@ async fn create_shift_now(
     description = "Edits a current or past shift.",
     tag = "Shifts",
     responses(
-        (status = 201, body = Shift),
+        (status = 200, body = Shift),
         (status = 404, description = "Shift not found", body = ErrorResponse)
     ),
 	request_body = ShiftPatch,
@@ -143,7 +143,7 @@ async fn patch_shift(
         Shift::patch(&mut db.connection()?, id.into_inner(), &body.into_inner())
     })
     .await??;
-    Ok(HttpResponse::Created().json(updated))
+    Ok(HttpResponse::Ok().json(updated))
 }
 
 #[utoipa::path(
@@ -152,7 +152,7 @@ async fn patch_shift(
     description = "Deletes a current or past shift.",
     tag = "Shifts",
     responses(
-        (status = 201, body = Shift),
+        (status = 200, body = Shift),
         (status = 404, description = "Shift not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["ShiftManage"])),
@@ -167,7 +167,7 @@ async fn delete_shift(
 ) -> Result<HttpResponse, ApiError> {
     let deleted =
         web::block(move || Shift::delete(&mut db.connection()?, id.into_inner())).await??;
-    Ok(HttpResponse::Created().json(deleted))
+    Ok(HttpResponse::Ok().json(deleted))
 }
 
 #[derive(OpenApi)]

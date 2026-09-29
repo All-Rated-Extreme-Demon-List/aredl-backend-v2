@@ -30,7 +30,8 @@ async fn find_all(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiErr
     tag = "Roles",
     request_body = RoleCreate,
     responses(
-        (status = 200, body = Role),
+        (status = 409, description = "Role inheritance would form a cycle", body = ErrorResponse),
+        (status = 201, body = Role),
         (status = 403, description = "You cannot create a role with higher permissions than yourself", body = ErrorResponse, examples(
             ("role_privilege" = (value = json!({"message": "You can not create a role with higher permissions than yourself."})))
         ))
@@ -48,7 +49,7 @@ async fn create(
     let role =
         web::block(move || Role::create(&mut db.connection()?, &authenticated, role.into_inner()))
             .await??;
-    Ok(HttpResponse::Ok().json(role))
+    Ok(HttpResponse::Created().json(role))
 }
 
 #[utoipa::path(
@@ -61,6 +62,7 @@ async fn create(
     ),
     request_body = RoleUpdate,
     responses(
+        (status = 409, description = "Role inheritance would form a cycle", body = ErrorResponse),
         (status = 200, body = Role),
         (status = 403, description = "You do not have sufficient privilege to edit this role", body = ErrorResponse, examples(
             ("role_privilege" = (value = json!({"message": "You do not have sufficient permissions to edit this role."})))

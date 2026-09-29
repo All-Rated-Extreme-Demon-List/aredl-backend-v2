@@ -40,7 +40,7 @@ async fn list(
     tag = "AREDL (P) - Bounty Board",
     request_body = BountyPost,
     responses(
-        (status = 200, body = Bounty),
+        (status = 201, body = Bounty),
         (status = 400, description = "End date must be after start date, and target submissions must be a positive integer", body = ErrorResponse, examples(
             ("invalid_dates" = (value = json!({"message": "End date must be after start date."}))),
             ("invalid_target" = (value = json!({"message": "Target submissions must be a positive integer."})))
@@ -57,7 +57,7 @@ async fn create(
     root_span.record("body", tracing::field::debug(&new_bounty));
     let result = web::block(move || Bounty::create(&mut db.connection()?, new_bounty.into_inner()))
         .await??;
-    Ok(HttpResponse::Ok().json(result))
+    Ok(HttpResponse::Created().json(result))
 }
 
 #[utoipa::path(
@@ -101,7 +101,7 @@ async fn update(
     description = "Deletes a bounty from the bounty board",
     tag = "AREDL (P) - Bounty Board",
     responses(
-        (status = 200, description = "Bounty deleted successfully"),
+        (status = 204, description = "Bounty deleted successfully"),
         (status = 404, description = "Bounty not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["BountyManage"])),
@@ -119,7 +119,7 @@ async fn delete(
         Bounty::find_by_id(conn, id.into_inner())?.delete(conn)
     })
     .await??;
-    Ok(HttpResponse::Ok().finish())
+    Ok(HttpResponse::NoContent().finish())
 }
 
 #[derive(OpenApi)]

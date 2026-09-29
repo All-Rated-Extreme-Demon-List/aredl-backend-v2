@@ -56,7 +56,7 @@ async fn find_all(
         ("level_id" = String, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
     ),
     responses(
-        (status = 200, body = LevelUpdateEntry),
+        (status = 201, body = LevelUpdateEntry),
         (status = 400, description = "Invalid level ID", body = ErrorResponse),
         (status = 404, description = "Level not found", body = ErrorResponse)
     ),
@@ -74,7 +74,7 @@ async fn create(
         LevelUpdateEntry::create(conn, body.into_inner(), level_id)
     })
     .await??;
-    Ok(HttpResponse::Ok().json(created))
+    Ok(HttpResponse::Created().json(created))
 }
 
 #[derive(serde::Deserialize)]
@@ -123,7 +123,7 @@ async fn update(
         ("update_id" = Uuid, description = "The internal ID of this update")
     ),
     responses(
-        (status = 200),
+        (status = 204),
     ),
     security(("bearer_token" = ["LevelUpdatesModify"])),
 )]
@@ -136,7 +136,7 @@ async fn delete(
     path: web::Path<UpdatePath>,
 ) -> Result<HttpResponse, ApiError> {
     web::block(move || LevelUpdateEntry::delete(&mut db.connection()?, &path.update_id)).await??;
-    Ok(HttpResponse::Ok().finish())
+    Ok(HttpResponse::NoContent().finish())
 }
 
 #[derive(OpenApi)]

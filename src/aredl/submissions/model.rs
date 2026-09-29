@@ -211,8 +211,8 @@ impl Submission {
     pub fn claim_highest_priority(
         conn: &mut DbConnection,
         authenticated: &Authenticated,
-    ) -> Result<SubmissionResolved, ApiError> {
-        conn.transaction(|conn| -> Result<SubmissionResolved, ApiError> {
+    ) -> Result<Option<SubmissionResolved>, ApiError> {
+        conn.transaction(|conn| -> Result<Option<SubmissionResolved>, ApiError> {
             let can_claim_raw_footage =
                 authenticated.has_permission(conn, Permission::SubmissionEditWithRawFootage)?;
 
@@ -233,9 +233,7 @@ impl Submission {
             )? {
                 id
             } else {
-                return Err(ApiError::NotFound(
-                    "There are no submissions available to claim",
-                ));
+                return Ok(None);
             };
 
             diesel::update(submissions::table.filter(submissions::id.eq(next_id)))
@@ -248,7 +246,7 @@ impl Submission {
 
             let resolved = SubmissionResolved::find_one(conn, next_id, authenticated)?;
 
-            Ok(resolved)
+            Ok(Some(resolved))
         })
     }
 

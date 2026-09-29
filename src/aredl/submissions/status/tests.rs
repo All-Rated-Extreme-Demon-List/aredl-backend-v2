@@ -28,7 +28,7 @@ async fn enable_submissions() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success(), "status is {}", resp.status());
+    assert_eq!(resp.status(), actix_http::StatusCode::NO_CONTENT);
 
     let status = SubmissionsEnabled::is_enabled(&mut db.connection().unwrap())
         .expect("Failed to get submission status");
@@ -70,7 +70,7 @@ async fn disable_submissions() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success(), "status is {}", resp.status());
+    assert_eq!(resp.status(), actix_http::StatusCode::NO_CONTENT);
 
     let status = SubmissionsEnabled::is_enabled(&mut db.connection().unwrap())
         .expect("Failed to get submission status");

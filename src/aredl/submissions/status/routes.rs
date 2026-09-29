@@ -15,7 +15,7 @@ use utoipa::OpenApi;
     description = "Toggle submissions on, allowing users to submit records to the list",
     tag = "AREDL - Submissions",
     responses(
-        (status = 200),
+        (status = 204),
     ),
     security(("bearer_token" = ["SubmissionStatusManage"])),
 )]
@@ -29,7 +29,7 @@ async fn enable(
 ) -> Result<HttpResponse, ApiError> {
     web::block(move || SubmissionsEnabled::enable(&mut db.connection()?, authenticated.user_id))
         .await??;
-    Ok(HttpResponse::Ok().finish())
+    Ok(HttpResponse::NoContent().finish())
 }
 
 #[utoipa::path(
@@ -38,7 +38,7 @@ async fn enable(
     description = "Toggle submissions off, stopping users from submitting records to the list.",
     tag = "AREDL - Submissions",
     responses(
-        (status = 200),
+        (status = 204),
     ),
     security(("bearer_token" = ["SubmissionStatusManage"])),
 )]
@@ -52,7 +52,7 @@ async fn disable(
 ) -> Result<HttpResponse, ApiError> {
     web::block(move || SubmissionsEnabled::disable(&mut db.connection()?, authenticated.user_id))
         .await??;
-    Ok(HttpResponse::Ok().finish())
+    Ok(HttpResponse::NoContent().finish())
 }
 
 #[utoipa::path(

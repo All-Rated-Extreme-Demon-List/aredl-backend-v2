@@ -3,7 +3,10 @@ use {
     crate::{
         auth::{create_test_token, permission, Permission},
         roles::{
-            test_utils::{add_user_to_role, create_test_role, create_test_role_with_permission},
+            test_utils::{
+                add_user_to_role, create_test_role, create_test_role_inheriting,
+                create_test_role_with_permission,
+            },
             Role, RoleResolved,
         },
         test_utils::{assert_error_response, init_test_app},
@@ -61,7 +64,7 @@ async fn create_role() {
         .set_json(&create_data)
         .to_request();
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success());
+    assert_eq!(resp.status(), actix_http::StatusCode::CREATED);
     let created: Role = read_body_json(resp).await;
     assert_eq!(created.role_desc, "Tester", "Role description should match");
 }
@@ -226,4 +229,26 @@ async fn find_reviewer_visibility_excludes_visible_reviewers_and_mixed_role_user
     assert!(visible_reviewers.contains(&mixed_user));
     assert!(!hidden_reviewers.contains(&visible_user));
     assert!(!hidden_reviewers.contains(&mixed_user));
+}
+
+#[actix_web::test]
+async fn role_inheritance_cycle_returns_conflict() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (staff_id, _) = create_test_user(&db, Some(Permission::RoleModify)).await;
+    let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
+    let parent = create_test_role(&db, 10).await;
+    let child = create_test_role_inheriting(&db, 10, parent).await;
+    let req = test::TestRequest::patch()
+        .uri(&format!("/roles/{parent}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!({"inherits_from_role_id": child}))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_error_response!(
+        resp,
+        StatusCode::CONFLICT,
+        Some(&format!(
+            "Role inheritance cycle detected for role {parent}"
+        ))
+    );
 }

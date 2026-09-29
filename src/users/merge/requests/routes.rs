@@ -80,19 +80,23 @@ async fn list(
 }
 
 #[utoipa::path(
-    get,
+    post,
     summary = "[Staff]Claim merge request",
     description = "Finds the oldest unclaimed merge request, marks it as claimed and returns it.",
     tag = "Users - Merges",
     responses(
-        (status = 200, body = Option<MergeRequest>),
+        (status = 200, body = MergeRequest),
+        (status = 204, description = "There are no merge requests available to claim"),
     ),
     security(("bearer_token" = ["MergeReview"])),
 )]
-#[get("/claim", wrap = "UserAuth::require(Permission::MergeReview)")]
+#[post("/claim", wrap = "UserAuth::require(Permission::MergeReview)")]
 async fn claim(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
     let result = web::block(move || MergeRequest::claim(&mut db.connection()?)).await??;
-    Ok(HttpResponse::Ok().json(result))
+    Ok(match result {
+        Some(item) => HttpResponse::Ok().json(item),
+        None => HttpResponse::NoContent().finish(),
+    })
 }
 
 #[utoipa::path(

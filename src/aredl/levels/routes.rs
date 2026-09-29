@@ -55,7 +55,8 @@ async fn list(
     description = "Place a new level on the list",
     tag = "AREDL - Levels",
     responses(
-        (status = 200, description = "Level added successfully", body = Level),
+        (status = 422, description = "A position is required for MainList/Legacy levels and must be valid", body = ErrorResponse),
+        (status = 201, description = "Level added successfully", body = Level),
     ),
     security(("bearer_token" = ["LevelModify"])),
 )]
@@ -68,7 +69,7 @@ async fn create(
     root_span.record("body", tracing::field::debug(&level));
     let level =
         web::block(move || Level::create(&mut db.connection()?, level.into_inner())).await??;
-    Ok(HttpResponse::Ok().json(level))
+    Ok(HttpResponse::Created().json(level))
 }
 
 #[utoipa::path(
@@ -81,6 +82,7 @@ async fn create(
         description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)",
     )),
     responses(
+        (status = 422, description = "A position is required for MainList/Legacy levels and must be valid", body = ErrorResponse),
         (status = 200, description = "Level edited successfully", body = Level),
         (status = 400, description = "Invalid level ID", body = ErrorResponse),
         (status = 404, description = "Level not found", body = ErrorResponse)

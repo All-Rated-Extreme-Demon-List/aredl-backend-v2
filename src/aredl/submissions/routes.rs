@@ -261,17 +261,17 @@ async fn patch(
 }
 
 #[utoipa::path(
-    get,
+    post,
     summary = "[Staff]Claim a submission",
     description = "Claim the next submission to be checked. Alternates between priority and non-priority submissions when possible.",
     tag = "AREDL - Submissions",
     responses(
         (status = 200, body = SubmissionResolved),
-        (status = 404, description = "There are no submissions available to claim", body = ErrorResponse)
+        (status = 204, description = "There are no submissions available to claim")
     ),
     security(("bearer_token" = ["SubmissionReview"])),
 )]
-#[get("/claim", wrap = "UserAuth::require(Permission::SubmissionReview)")]
+#[post("/claim", wrap = "UserAuth::require(Permission::SubmissionReview)")]
 async fn claim(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,
@@ -281,7 +281,10 @@ async fn claim(
     })
     .await??;
 
-    Ok(HttpResponse::Ok().json(claimed))
+    Ok(match claimed {
+        Some(item) => HttpResponse::Ok().json(item),
+        None => HttpResponse::NoContent().finish(),
+    })
 }
 
 #[utoipa::path(

@@ -40,7 +40,7 @@ async fn create_placeholder_user() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success());
+    assert_eq!(resp.status(), actix_http::StatusCode::CREATED);
 
     let created_user: serde_json::Value = read_body_json(resp).await;
     assert_eq!(created_user["global_name"], "test_placeholder");
@@ -540,7 +540,7 @@ async fn placeholder_random_username() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    assert!(resp.status().is_success());
+    assert_eq!(resp.status(), actix_http::StatusCode::CREATED);
 
     let created_user: serde_json::Value = read_body_json(resp).await;
     assert_ne!(created_user["username"], "test_placeholder");

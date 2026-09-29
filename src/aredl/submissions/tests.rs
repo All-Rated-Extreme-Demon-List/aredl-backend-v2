@@ -687,7 +687,7 @@ async fn submission_aredlplus_boost() {
         "Priority field for user 2 is not true as expected"
     );
 
-    let claim_req = test::TestRequest::get()
+    let claim_req = test::TestRequest::post()
         .uri("/aredl/submissions/claim")
         .insert_header(("Authorization", format!("Bearer {token_mod}")))
         .to_request();
@@ -702,7 +702,7 @@ async fn submission_aredlplus_boost() {
     assert_eq!(body["id"], submission2["id"]);
 
     // next claim should alternate to a non-priority submission when available.
-    let claim_req = test::TestRequest::get()
+    let claim_req = test::TestRequest::post()
         .uri("/aredl/submissions/claim")
         .insert_header(("Authorization", format!("Bearer {token_mod}")))
         .to_request();
@@ -916,7 +916,7 @@ async fn claim_priority_submission_uses_priority_at() {
     let (_older_created, newer_created) =
         create_priority_queue_order_test_submissions(&db, submitter).await;
 
-    let req = test::TestRequest::get()
+    let req = test::TestRequest::post()
         .uri("/aredl/submissions/claim")
         .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
@@ -942,7 +942,7 @@ async fn claim_submission_without_raw_footage_permission_skips_raw_submissions()
 
     set_test_submission_raw_url(&db, non_raw_submission, None);
 
-    let req = test::TestRequest::get()
+    let req = test::TestRequest::post()
         .uri("/aredl/submissions/claim")
         .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
@@ -954,8 +954,8 @@ async fn claim_submission_without_raw_footage_permission_skips_raw_submissions()
 }
 
 #[actix_web::test]
-async fn claim_submission_without_raw_footage_permission_returns_not_found_when_only_raw_available()
-{
+async fn claim_submission_without_raw_footage_permission_returns_no_content_when_only_raw_available(
+) {
     let (app, db, auth, _) = init_test_app().await;
     let (reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
     let (submitter, _) = create_test_user(&db, None).await;
@@ -964,17 +964,14 @@ async fn claim_submission_without_raw_footage_permission_returns_not_found_when_
     let level = create_test_level(&db).await;
     create_test_submission(level, submitter, &db).await;
 
-    let req = test::TestRequest::get()
+    let req = test::TestRequest::post()
         .uri("/aredl/submissions/claim")
         .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
     let resp = test::call_service(&app, req).await;
 
-    assert_error_response!(
-        resp,
-        StatusCode::NOT_FOUND,
-        Some("There are no submissions available to claim"),
-    );
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+    assert!(test::read_body(resp).await.is_empty());
 }
 
 #[actix_web::test]
@@ -994,7 +991,7 @@ async fn claim_submission_raw_claim_reviewer_can_claim_raw_submission() {
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, submitter, &db).await;
 
-    let req = test::TestRequest::get()
+    let req = test::TestRequest::post()
         .uri("/aredl/submissions/claim")
         .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
@@ -1792,7 +1789,7 @@ async fn increment_shift() {
     let level = create_test_level(&db).await;
     create_test_submission(level, submitter_id, &db).await;
 
-    let req = test::TestRequest::get()
+    let req = test::TestRequest::post()
         .uri("/aredl/submissions/claim")
         .insert_header(("Authorization", format!("Bearer {token_mod}")))
         .to_request();
@@ -1825,7 +1822,7 @@ async fn shift_completes() {
     let level = create_test_level(&db).await;
     create_test_submission(level, submitter_id, &db).await;
 
-    let req = test::TestRequest::get()
+    let req = test::TestRequest::post()
         .uri("/aredl/submissions/claim")
         .insert_header(("Authorization", format!("Bearer {token}")))
         .to_request();
