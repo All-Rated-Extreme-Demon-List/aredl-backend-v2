@@ -6,7 +6,8 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use diesel::{
-    pg::Pg, QueryDsl as _, Queryable, RunQueryDsl as _, Selectable, SelectableHelper as _, ExpressionMethods as _
+    pg::Pg, ExpressionMethods as _, QueryDsl as _, Queryable, RunQueryDsl as _, Selectable,
+    SelectableHelper as _,
 };
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
