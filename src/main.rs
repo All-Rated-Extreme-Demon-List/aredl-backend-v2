@@ -16,6 +16,7 @@ mod test_utils;
 
 mod aredl;
 mod arepl;
+mod audit;
 mod auth;
 mod cache_control;
 mod clans;

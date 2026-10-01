@@ -248,7 +248,6 @@ pub mod aredl {
             raw_url -> Nullable<Varchar>,
             reviewer_id -> Nullable<Uuid>,
             priority -> Bool,
-            priority_at -> Timestamptz,
             reviewer_notes -> Nullable<Varchar>,
             user_notes -> Nullable<Varchar>,
             created_at -> Timestamptz,
@@ -257,6 +256,7 @@ pub mod aredl {
             updated_at -> Timestamptz,
             private_reviewer_notes -> Nullable<Text>,
             locked -> Bool,
+            priority_at -> Timestamptz,
         }
     }
 
