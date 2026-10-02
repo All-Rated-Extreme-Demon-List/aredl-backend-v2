@@ -10,13 +10,11 @@ custom_type_derives = ["diesel::query_builder::QueryId"]
 file = "src/schema/aredl_schema/generated.rs"
 schema = "aredl"
 custom_type_derives = ["diesel::query_builder::QueryId"]
-filter = { except_tables = ["position_history_full_view", "submission_daily_level_stats", "submission_daily_reviewer_stats", "submission_daily_total_stats"]}
 
 [print_schema.arepl]
 file = "src/schema/arepl_schema/generated.rs"
 schema = "arepl"
 custom_type_derives = ["diesel::query_builder::QueryId"]
-filter = { except_tables = ["position_history_full_view", "submission_daily_level_stats", "submission_daily_reviewer_stats", "submission_daily_total_stats"]}
 
 [migrations_directory]
 dir = "migrations"

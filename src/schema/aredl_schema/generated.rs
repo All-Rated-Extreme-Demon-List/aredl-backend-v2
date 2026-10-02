@@ -196,6 +196,22 @@ pub mod aredl {
     }
 
     diesel::table! {
+        use diesel::sql_types::*;
+        use super::sql_types::LevelStatus;
+
+        aredl.position_history_full_view (ord, affected_level) {
+            ord -> Int4,
+            affected_level -> Uuid,
+            position -> Nullable<Int4>,
+            moved -> Bool,
+            status -> LevelStatus,
+            action_at -> Timestamptz,
+            cause -> Uuid,
+            pos_diff -> Nullable<Int4>,
+        }
+    }
+
+    diesel::table! {
         aredl.records (id) {
             id -> Uuid,
             level_id -> Uuid,
@@ -208,6 +224,40 @@ pub mod aredl {
             hide_video -> Bool,
             submission_id -> Uuid,
             achieved_at -> Timestamptz,
+        }
+    }
+
+    diesel::table! {
+        aredl.submission_daily_level_stats (day, level_id) {
+            day -> Date,
+            level_id -> Uuid,
+            submitted -> Int8,
+            accepted -> Int8,
+            denied -> Int8,
+            under_consideration -> Int8,
+            reviewed -> Int8,
+        }
+    }
+
+    diesel::table! {
+        aredl.submission_daily_reviewer_stats (day, reviewer_id) {
+            day -> Date,
+            reviewer_id -> Uuid,
+            accepted -> Int8,
+            denied -> Int8,
+            under_consideration -> Int8,
+            reviewed -> Int8,
+        }
+    }
+
+    diesel::table! {
+        aredl.submission_daily_total_stats (day) {
+            day -> Date,
+            submitted -> Int8,
+            accepted -> Int8,
+            denied -> Int8,
+            under_consideration -> Int8,
+            reviewed -> Int8,
         }
     }
 
@@ -248,7 +298,6 @@ pub mod aredl {
             raw_url -> Nullable<Varchar>,
             reviewer_id -> Nullable<Uuid>,
             priority -> Bool,
-            priority_at -> Timestamptz,
             reviewer_notes -> Nullable<Varchar>,
             user_notes -> Nullable<Varchar>,
             created_at -> Timestamptz,
@@ -257,6 +306,7 @@ pub mod aredl {
             updated_at -> Timestamptz,
             private_reviewer_notes -> Nullable<Text>,
             locked -> Bool,
+            priority_at -> Timestamptz,
         }
     }
 
@@ -291,7 +341,11 @@ pub mod aredl {
         pack_tiers,
         packs,
         position_history,
+        position_history_full_view,
         records,
+        submission_daily_level_stats,
+        submission_daily_reviewer_stats,
+        submission_daily_total_stats,
         submission_history,
         submissions,
         submissions_enabled,

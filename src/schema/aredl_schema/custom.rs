@@ -3,7 +3,8 @@
 
 use crate::schema::aredl::{
     bounty_completed, level_custom_copies, level_notes, levels, levels_created, pack_levels,
-    pack_tiers, packs, records, submission_history, submissions, submissions_enabled,
+    pack_tiers, packs, records, submission_daily_reviewer_stats, submission_history, submissions,
+    submissions_enabled,
 };
 use crate::schema::{clan_members, clans, users};
 
@@ -26,26 +27,6 @@ diesel::allow_tables_to_appear_in_same_query!(records, clans);
 diesel::allow_tables_to_appear_in_same_query!(records, clan_members);
 diesel::allow_tables_to_appear_in_same_query!(submission_history, users);
 diesel::allow_tables_to_appear_in_same_query!(bounty_completed, users);
-
-diesel::table! {
-    use diesel::sql_types::*;
-    use crate::schema::aredl::sql_types::LevelStatus;
-
-    aredl.position_history_full_view (ord, affected_level) {
-        ord -> Int4,
-        affected_level -> Uuid,
-        position -> Nullable<Int4>,
-        moved -> Bool,
-        status -> LevelStatus,
-        action_at -> Timestamptz,
-        cause -> Uuid,
-        pos_diff -> Nullable<Int4>,
-    }
-}
-
-diesel::joinable!(position_history_full_view -> levels (affected_level));
-
-diesel::allow_tables_to_appear_in_same_query!(levels, position_history_full_view,);
 
 diesel::table! {
     aredl.badge_level_statistics (submitted_by, id) {
@@ -267,45 +248,8 @@ diesel::allow_tables_to_appear_in_same_query!(users, level_custom_copies);
 diesel::allow_tables_to_appear_in_same_query!(users, submissions);
 diesel::allow_tables_to_appear_in_same_query!(users, level_notes);
 
-diesel::table! {
-    aredl.submission_daily_total_stats (day) {
-        day -> Date,
-        submitted -> Int8,
-        accepted -> Int8,
-        denied -> Int8,
-        under_consideration -> Int8,
-        reviewed -> Int8,
-    }
-}
-
-diesel::table! {
-    aredl.submission_daily_reviewer_stats (day, reviewer_id) {
-        day -> Date,
-        reviewer_id -> Uuid,
-        accepted -> Int8,
-        denied -> Int8,
-        under_consideration -> Int8,
-        reviewed -> Int8,
-    }
-}
-
-diesel::table! {
-    aredl.submission_daily_level_stats (day, level_id) {
-        day -> Date,
-        level_id -> Uuid,
-        submitted -> Int8,
-        accepted -> Int8,
-        denied -> Int8,
-        under_consideration -> Int8,
-        reviewed -> Int8,
-    }
-}
-
 diesel::joinable!(submission_daily_reviewer_stats -> users (reviewer_id));
-diesel::joinable!(submission_daily_level_stats -> levels (level_id));
-
-diesel::allow_tables_to_appear_in_same_query!(submission_daily_reviewer_stats, users);
-diesel::allow_tables_to_appear_in_same_query!(submission_daily_level_stats, levels);
+diesel::allow_tables_to_appear_in_same_query!(users, submission_daily_reviewer_stats);
 
 diesel::table! {
     aredl.record_totals (level_id) {

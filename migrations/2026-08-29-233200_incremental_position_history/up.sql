@@ -17,7 +17,8 @@ CREATE TABLE aredl.position_history_full_view (
     status level_status NOT NULL,
     action_at TIMESTAMPTZ NOT NULL,
     cause UUID NOT NULL,
-    pos_diff INTEGER
+    pos_diff INTEGER,
+    PRIMARY KEY (ord, affected_level)
 );
 
 CREATE TABLE arepl.position_history_full_view (
@@ -28,7 +29,8 @@ CREATE TABLE arepl.position_history_full_view (
     status level_status NOT NULL,
     action_at TIMESTAMPTZ NOT NULL,
     cause UUID NOT NULL,
-    pos_diff INTEGER
+    pos_diff INTEGER,
+    PRIMARY KEY (ord, affected_level)
 );
 
 CREATE FUNCTION aredl.rebuild_position_history_full_view() RETURNS VOID AS
@@ -425,12 +427,6 @@ $$ LANGUAGE plpgsql;
 
 SELECT aredl.rebuild_position_history_full_view();
 SELECT arepl.rebuild_position_history_full_view();
-
-CREATE UNIQUE INDEX aredl_position_history_full_view_ord_level_idx
-ON aredl.position_history_full_view (ord, affected_level);
-
-CREATE UNIQUE INDEX arepl_position_history_full_view_ord_level_idx
-ON arepl.position_history_full_view (ord, affected_level);
 
 CREATE INDEX aredl_position_history_full_view_affected_ord_idx
 ON aredl.position_history_full_view (affected_level, ord DESC);

@@ -263,7 +263,7 @@ pub fn stats_mod_leaderboard(
     let visibility = ReviewerVisibility::new(conn, authenticated)?;
 
     let mut query = submission_daily_reviewer_stats::table
-        .inner_join(users::table.on(users::id.eq(submission_daily_reviewer_stats::reviewer_id)))
+        .inner_join(users::table)
         .select((
             ReviewerDailyStats::as_select(),
             ExtendedBaseUser::as_select(),
