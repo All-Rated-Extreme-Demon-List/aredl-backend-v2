@@ -5,7 +5,7 @@ use crate::{
     shifts::{
         parse_timezone,
         recurring::{RecurringShift, RecurringShiftInsert, RecurringShiftPatch},
-        ResolvedRecurringShift, SelfRecurringShiftInsert,
+        ResolvedRecurringShift
     },
 };
 use actix_web::{delete, get, patch, post, web, HttpResponse};
@@ -57,46 +57,6 @@ async fn create_new_recurring_shift(
     let shift = web::block(move || {
         parse_timezone(&body.timezone)?;
         RecurringShift::create(&mut db.connection()?, &body.into_inner())
-    })
-    .await??;
-    Ok(HttpResponse::Created().json(shift))
-}
-
-#[utoipa::path(
-    post,
-    summary = "[Staff]Create own recurring shift",
-    description = "Schedules a new recurring shift for the authenticated user.",
-    tag = "Shifts",
-    responses(
-        (status = 201, body = RecurringShift),
-        (status = 400, description = "Invalid timezone provided. Please provide a valid IANA timezone string.", body = ErrorResponse),
-    ),
-    security(("bearer_token" = ["ShiftCreateOwn"])),
-)]
-#[post("/@me", wrap = "UserAuth::require(Permission::ShiftCreateOwn)")]
-async fn create_own_recurring_shift(
-    db: web::Data<Arc<DbAppState>>,
-    body: web::Json<SelfRecurringShiftInsert>,
-    root_span: RootSpan,
-    authenticated: Authenticated,
-) -> Result<HttpResponse, ApiError> {
-    root_span.record("body", tracing::field::debug(&body));
-    let shift = web::block(move || {
-        let new_shift = body.into_inner();
-
-        parse_timezone(&new_shift.timezone)?;
-
-        RecurringShift::create(
-            &mut db.connection()?,
-            &RecurringShiftInsert {
-                user_id: authenticated.user_id,
-                start_hour: new_shift.start_hour,
-                weekday: new_shift.weekday,
-                duration: new_shift.duration,
-                target_count: new_shift.target_count,
-                timezone: new_shift.timezone,
-            },
-        )
     })
     .await??;
     Ok(HttpResponse::Created().json(shift))
@@ -167,14 +127,12 @@ async fn delete_recurring_shift(
         ResolvedRecurringShift,
         RecurringShift,
         RecurringShiftPatch,
-        SelfRecurringShiftInsert
     )),
     paths(
         find_all_recurring_shifts,
         patch_recurring_shift,
         delete_recurring_shift,
         create_new_recurring_shift,
-        create_own_recurring_shift,
     )
 )]
 pub struct ApiDoc;
@@ -183,7 +141,6 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
         web::scope("/recurring")
             .service(find_all_recurring_shifts)
             .service(create_new_recurring_shift)
-            .service(create_own_recurring_shift)
             .service(patch_recurring_shift)
             .service(delete_recurring_shift),
     );
