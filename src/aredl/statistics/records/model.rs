@@ -32,7 +32,7 @@ pub fn total_records(
     conn: &mut DbConnection,
 ) -> Result<Vec<ResolvedLevelTotalRecordsRow>, ApiError> {
     let rows: Vec<(LevelTotalRecordsRow, Option<ExtendedBaseLevel>)> = record_totals::table
-        .left_join(levels::table.on(levels::id.nullable().eq(record_totals::level_id)))
+        .left_join(levels::table)
         .order_by((
             record_totals::records.desc(),
             record_totals::verifications.desc(),

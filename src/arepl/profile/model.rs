@@ -130,14 +130,14 @@ impl ProfileResolved {
         authenticated: Option<Authenticated>,
     ) -> Result<Self, ApiError> {
         let clan = clans::table
-            .inner_join(clan_members::table.on(clans::id.eq(clan_members::clan_id)))
+            .inner_join(clan_members::table)
             .filter(clan_members::user_id.eq(user.id))
             .select(Clan::as_select())
             .first::<Clan>(conn)
             .optional()?;
 
         let mut roles = roles::table
-            .inner_join(user_roles::table.on(user_roles::role_id.eq(roles::id)))
+            .inner_join(user_roles::table)
             .filter(user_roles::user_id.eq(user.id))
             .order(roles::privilege_level.desc())
             .select(Role::as_select())
@@ -157,7 +157,7 @@ impl ProfileResolved {
 
         let records = records::table
             .filter(records::submitted_by.eq(user.id))
-            .inner_join(levels::table.on(levels::id.eq(records::level_id)))
+            .inner_join(levels::table)
             .order(levels::position.asc())
             .select((Record::as_select(), ExtendedBaseLevel::as_select()))
             .load::<(Record, ExtendedBaseLevel)>(conn)?
@@ -166,7 +166,7 @@ impl ProfileResolved {
             .collect::<Vec<_>>();
 
         let mut created = levels::table
-            .inner_join(levels_created::table.on(levels_created::level_id.eq(levels::id)))
+            .inner_join(levels_created::table)
             .order(levels::position.asc())
             .filter(levels_created::user_id.eq(user.id))
             .select(ExtendedBaseLevel::as_select())
@@ -181,7 +181,7 @@ impl ProfileResolved {
         // also append to "created" the levels that the user has published that don't have any listed creators
 
         let published_without_creators_list: Vec<ExtendedBaseLevel> = levels::table
-            .left_outer_join(levels_created::table.on(levels_created::level_id.eq(levels::id)))
+            .left_outer_join(levels_created::table)
             .filter(levels::publisher_id.eq(user.id))
             .filter(levels_created::level_id.is_null())
             .order(levels::position.asc())
@@ -192,8 +192,8 @@ impl ProfileResolved {
         created.sort_by_key(|lvl| lvl.position);
 
         let packs = packs::table
-            .inner_join(completed_packs::table.on(completed_packs::pack_id.eq(packs::id)))
-            .inner_join(pack_tiers::table.on(pack_tiers::id.eq(packs::tier)))
+            .inner_join(completed_packs::table)
+            .inner_join(pack_tiers::table)
             .filter(completed_packs::user_id.eq(user.id))
             .order(pack_tiers::placement.asc())
             .select((BasePack::as_select(), BasePackTier::as_select()))

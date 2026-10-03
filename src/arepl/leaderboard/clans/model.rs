@@ -71,8 +71,8 @@ impl ClansLeaderboardPage {
     ) -> Result<Paginated<Self>, ApiError> {
         let build_filtered_query = || {
             let mut q = clans_leaderboard::table
-                .inner_join(clans::table.on(clans::id.eq(clans_leaderboard::clan_id)))
-                .left_join(levels::table.on(clans_leaderboard::hardest.eq(levels::id.nullable())))
+                .inner_join(clans::table)
+                .left_join(levels::table)
                 .into_boxed::<Pg>();
 
             if let Some(filter) = &options.name_filter {

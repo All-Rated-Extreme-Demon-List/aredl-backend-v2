@@ -67,7 +67,7 @@ impl CountryLeaderboardPage {
     ) -> Result<Self, ApiError> {
         let build_query = || {
             country_leaderboard::table
-                .left_join(levels::table.on(country_leaderboard::hardest.eq(levels::id.nullable())))
+                .left_join(levels::table)
                 .into_boxed::<Pg>()
         };
         let mut query = build_query();

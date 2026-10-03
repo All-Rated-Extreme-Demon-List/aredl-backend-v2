@@ -470,14 +470,14 @@ impl UserResolved {
         authenticated: Option<&Authenticated>,
     ) -> Result<Self, ApiError> {
         let clan = clans::table
-            .inner_join(clan_members::table.on(clans::id.eq(clan_members::clan_id)))
+            .inner_join(clan_members::table)
             .filter(clan_members::user_id.eq(user.id))
             .select(Clan::as_select())
             .first::<Clan>(conn)
             .optional()?;
 
         let mut roles = user_roles::table
-            .inner_join(roles::table.on(user_roles::role_id.eq(roles::id)))
+            .inner_join(roles::table)
             .filter(user_roles::user_id.eq(user.id))
             .select(Role::as_select())
             .load::<Role>(conn)?;

@@ -265,7 +265,7 @@ impl Level {
                 position_history_full_view::affected_level.asc(),
                 position_history_full_view::ord.desc(),
             ))
-            .inner_join(levels::table.on(position_history_full_view::affected_level.eq(levels::id)))
+            .inner_join(levels::table)
             .select((
                 levels::id,
                 levels::name,
@@ -372,7 +372,7 @@ impl ResolvedLevel {
     pub fn find(conn: &mut DbConnection, id: Uuid) -> Result<Self, ApiError> {
         let (level, publisher) = levels::table
             .filter(levels::id.eq(id))
-            .inner_join(users::table.on(levels::publisher_id.eq(users::id)))
+            .inner_join(users::table)
             .select((Level::as_select(), BaseUserWithBanLevel::as_select()))
             .first::<(Level, BaseUserWithBanLevel)>(conn)?;
 
@@ -380,7 +380,7 @@ impl ResolvedLevel {
             .filter(records::level_id.eq(id))
             .filter(records::is_verification.eq(true))
             .order(records::achieved_at.asc())
-            .inner_join(users::table.on(records::submitted_by.eq(users::id)))
+            .inner_join(users::table)
             .select((Record::as_select(), BaseUserWithBanLevel::as_select()))
             .load::<(Record, BaseUserWithBanLevel)>(conn)?;
 

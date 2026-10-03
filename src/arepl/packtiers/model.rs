@@ -116,8 +116,7 @@ impl PackTierResolved {
             .load::<PackWithTier>(conn)?
             .grouped_by(&pack_tiers);
 
-        let levels_base_query =
-            pack_levels::table.inner_join(levels::table.on(levels::id.eq(pack_levels::level_id)));
+        let levels_base_query = pack_levels::table.inner_join(levels::table);
 
         let pack_levels = match user_id {
             Some(user) =>

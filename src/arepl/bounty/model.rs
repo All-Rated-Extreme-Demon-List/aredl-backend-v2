@@ -91,8 +91,7 @@ impl BountyResolved {
     ) -> Result<Vec<Self>, ApiError> {
         let user_id = authenticated.as_ref().map(|auth| auth.user_id);
 
-        let base_bounties_query =
-            bounties::table.inner_join(levels::table.on(bounties::level_id.eq(levels::id)));
+        let base_bounties_query = bounties::table.inner_join(levels::table);
 
         let bounties = base_bounties_query
             .select((Bounty::as_select(), ExtendedBaseLevel::as_select()))
@@ -104,7 +103,7 @@ impl BountyResolved {
             .collect::<Vec<_>>();
 
         let completion_counts = bounty_completed::table
-            .inner_join(users::table.on(users::id.eq(bounty_completed::user_id)))
+            .inner_join(users::table)
             .filter(bounty_completed::bounty_id.eq_any(&bounty_ids))
             .filter(users::ban_level.le(2))
             .group_by(bounty_completed::bounty_id)
@@ -118,7 +117,7 @@ impl BountyResolved {
 
         let completed_by_user = match user_id {
             Some(user) => bounty_completed::table
-                .inner_join(users::table.on(users::id.eq(bounty_completed::user_id)))
+                .inner_join(users::table)
                 .filter(bounty_completed::bounty_id.eq_any(&bounty_ids))
                 .filter(bounty_completed::user_id.eq(user))
                 .filter(users::ban_level.le(2))

@@ -131,7 +131,7 @@ impl LevelNotes {
 
         let notes = query
             .order(level_notes::created_at.desc())
-            .inner_join(users::table.on(level_notes::added_by.eq(users::id)))
+            .inner_join(users::table)
             .select((LevelNotes::as_select(), BaseUser::as_select()))
             .load(conn)?
             .into_iter()

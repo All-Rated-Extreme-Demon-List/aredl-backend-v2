@@ -152,8 +152,8 @@ impl CountryProfileResolved {
 
         let records = min_placement_country_records::table
             .filter(min_placement_country_records::country.eq(country))
-            .inner_join(users::table.on(users::id.eq(min_placement_country_records::submitted_by)))
-            .inner_join(levels::table.on(levels::id.eq(min_placement_country_records::level_id)))
+            .inner_join(users::table)
+            .inner_join(levels::table)
             .select((
                 CountryProfileRecord::as_select(),
                 ExtendedBaseUser::as_select(),
@@ -170,8 +170,8 @@ impl CountryProfileResolved {
         let created_rows: Vec<(CountryCreatedLevelEntry, ExtendedBaseLevel, BaseUser)> =
             country_created_levels::table
                 .filter(country_created_levels::country.eq(country))
-                .inner_join(levels::table.on(levels::id.eq(country_created_levels::level_id)))
-                .inner_join(users::table.on(users::id.eq(country_created_levels::creator_id)))
+                .inner_join(levels::table)
+                .inner_join(users::table)
                 .filter(users::ban_level.ne(4))
                 .order_by((
                     country_created_levels::order_pos.asc(),
@@ -203,7 +203,7 @@ impl CountryProfileResolved {
         let created = created_by_level.into_values().collect();
 
         let published = levels::table
-            .inner_join(users::table.on(users::id.eq(levels::publisher_id)))
+            .inner_join(users::table)
             .filter(users::country.eq(country))
             .filter(users::ban_level.ne(4))
             .order_by(levels::position.asc())
@@ -232,8 +232,8 @@ impl CountryProfileResolved {
     ) -> Result<Vec<LevelResolvedRecordExtended>, ApiError> {
         records::table
             .filter(records::level_id.eq(level_id))
-            .inner_join(users::table.on(records::submitted_by.eq(users::id)))
-            .inner_join(levels::table.on(records::level_id.eq(levels::id)))
+            .inner_join(users::table)
+            .inner_join(levels::table)
             .filter(users::country.eq(country))
             .filter(users::ban_level.le(1))
             .filter(levels::status.ne(LevelStatus::Removed))

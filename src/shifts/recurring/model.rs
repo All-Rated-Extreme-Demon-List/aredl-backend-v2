@@ -124,7 +124,7 @@ impl ResolvedRecurringShift {
         authenticated: &Authenticated,
     ) -> Result<Vec<Self>, ApiError> {
         let result_rows = recurrent_shifts::table
-            .inner_join(users::table.on(recurrent_shifts::user_id.eq(users::id)))
+            .inner_join(users::table)
             .order((
                 recurrent_shifts::weekday.asc(),
                 recurrent_shifts::start_hour.asc(),

@@ -32,7 +32,7 @@ pub fn total_submissions(
     conn: &mut DbConnection,
 ) -> Result<Vec<ResolvedQueueLevelSubmissionsRow>, ApiError> {
     let rows: Vec<(QueueLevelSubmissionsRow, Option<ExtendedBaseLevel>)> = submission_totals::table
-        .left_join(levels::table.on(levels::id.nullable().eq(submission_totals::level_id)))
+        .left_join(levels::table)
         .order_by(submission_totals::submissions.desc())
         .select((
             QueueLevelSubmissionsRow::as_select(),

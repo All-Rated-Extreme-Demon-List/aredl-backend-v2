@@ -75,7 +75,7 @@ pub enum Permission {
 
 pub fn get_highest_role_privilege_level(conn: &mut DbConnection, user_id: Uuid) -> i32 {
     let privilege_level: Option<i32> = user_roles::table
-        .inner_join(roles::table.on(roles::id.eq(user_roles::role_id)))
+        .inner_join(roles::table)
         .filter(user_roles::user_id.eq(user_id))
         .select(max(roles::privilege_level))
         .first(conn)
@@ -89,7 +89,7 @@ pub fn get_user_permissions(
     exclude_hidden_roles: bool,
 ) -> Result<Vec<String>, ApiError> {
     let roles = user_roles::table
-        .inner_join(roles::table.on(roles::id.eq(user_roles::role_id)))
+        .inner_join(roles::table)
         .filter(user_roles::user_id.eq(user_id))
         .select((roles::id, roles::hide))
         .load::<(i32, bool)>(conn)?

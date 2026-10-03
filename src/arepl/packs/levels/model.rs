@@ -17,7 +17,7 @@ impl BaseLevel {
 
             let levels: Vec<BaseLevel> = pack_levels::table
                 .filter(pack_levels::pack_id.eq(pack_id))
-                .inner_join(levels::table.on(pack_levels::level_id.eq(levels::id)))
+                .inner_join(levels::table)
                 .select(BaseLevel::as_select())
                 .load(connection)?;
             Ok(levels)
@@ -37,7 +37,7 @@ impl BaseLevel {
 
             let levels: Vec<BaseLevel> = pack_levels::table
                 .filter(pack_levels::pack_id.eq(pack_id))
-                .inner_join(levels::table.on(pack_levels::level_id.eq(levels::id)))
+                .inner_join(levels::table)
                 .select(BaseLevel::as_select())
                 .load(connection)?;
             Ok(levels)
@@ -54,7 +54,7 @@ impl BaseLevel {
 
             let levels: Vec<BaseLevel> = pack_levels::table
                 .filter(pack_levels::pack_id.eq(pack_id))
-                .inner_join(levels::table.on(pack_levels::level_id.eq(levels::id)))
+                .inner_join(levels::table)
                 .select(BaseLevel::as_select())
                 .load(connection)?;
             Ok(levels)

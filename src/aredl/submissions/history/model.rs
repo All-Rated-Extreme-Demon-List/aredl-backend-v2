@@ -106,7 +106,7 @@ impl SubmissionHistoryResolved {
         authenticated: &Authenticated,
     ) -> Result<Vec<SubmissionHistoryResolved>, ApiError> {
         let history_row = submission_history::table
-            .left_join(users::table.on(submission_history::reviewer_id.eq(users::id.nullable())))
+            .left_join(users::table)
             .into_boxed::<Pg>()
             .select((
                 SubmissionHistory::as_select(),

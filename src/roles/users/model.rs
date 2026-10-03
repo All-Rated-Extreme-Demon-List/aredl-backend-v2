@@ -21,7 +21,7 @@ impl BaseUser {
 
             let users: Vec<BaseUser> = user_roles::table
                 .filter(user_roles::role_id.eq(role_id))
-                .inner_join(users::table.on(user_roles::user_id.eq(users::id)))
+                .inner_join(users::table)
                 .select(BaseUser::as_select())
                 .load(connection)?;
             Ok(users)
@@ -43,7 +43,7 @@ impl BaseUser {
 
             let users: Vec<BaseUser> = user_roles::table
                 .filter(user_roles::role_id.eq(role_id))
-                .inner_join(users::table.on(user_roles::user_id.eq(users::id)))
+                .inner_join(users::table)
                 .select(BaseUser::as_select())
                 .load(connection)?;
             Ok(users)
@@ -62,7 +62,7 @@ impl BaseUser {
 
             let users: Vec<BaseUser> = user_roles::table
                 .filter(user_roles::role_id.eq(role_id))
-                .inner_join(users::table.on(user_roles::user_id.eq(users::id)))
+                .inner_join(users::table)
                 .select(BaseUser::as_select())
                 .load(connection)?;
             Ok(users)

@@ -91,7 +91,7 @@ impl LevelResolvedRecordExtended {
             let mut query = records::table
                 .filter(records::level_id.eq(level_id))
                 .filter(records::is_verification.eq(false))
-                .inner_join(users::table.on(records::submitted_by.eq(users::id)))
+                .inner_join(users::table)
                 .filter(users::ban_level.le(2))
                 .into_boxed();
 

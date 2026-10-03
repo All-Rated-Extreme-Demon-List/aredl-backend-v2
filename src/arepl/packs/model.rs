@@ -94,7 +94,7 @@ impl Pack {
         pack_id: Uuid,
     ) -> Result<Vec<CompletedPackVictor>, ApiError> {
         let victors = completed_packs::table
-            .inner_join(users::table.on(users::id.eq(completed_packs::user_id)))
+            .inner_join(users::table)
             .filter(completed_packs::pack_id.eq(pack_id))
             .select((completed_packs::completed_at, ExtendedBaseUser::as_select()))
             .order(completed_packs::completed_at.asc())

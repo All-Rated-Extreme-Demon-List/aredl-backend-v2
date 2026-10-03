@@ -195,8 +195,8 @@ impl ClanProfileResolved {
 
         let records = min_placement_clans_records::table
             .filter(min_placement_clans_records::clan_id.eq(clan_id))
-            .inner_join(users::table.on(users::id.eq(min_placement_clans_records::submitted_by)))
-            .inner_join(levels::table.on(levels::id.eq(min_placement_clans_records::level_id)))
+            .inner_join(users::table)
+            .inner_join(levels::table)
             .select((
                 ClanProfileRecord::as_select(),
                 ExtendedBaseUser::as_select(),
@@ -212,7 +212,7 @@ impl ClanProfileResolved {
 
         let members_points = clan_member_points::table
             .filter(clan_member_points::clan_id.eq(clan_id))
-            .inner_join(users::table.on(users::id.eq(clan_member_points::submitted_by)))
+            .inner_join(users::table)
             .order_by((
                 clan_member_points::contributed_points.desc(),
                 clan_member_points::completed_levels.desc(),
@@ -231,8 +231,8 @@ impl ClanProfileResolved {
         let created_rows: Vec<(ClanCreatedLevelEntry, ExtendedBaseLevel, BaseUser)> =
             clans_created_levels::table
                 .filter(clans_created_levels::clan_id.eq(clan_id))
-                .inner_join(levels::table.on(levels::id.eq(clans_created_levels::level_id)))
-                .inner_join(users::table.on(users::id.eq(clans_created_levels::creator_id)))
+                .inner_join(levels::table)
+                .inner_join(users::table)
                 .filter(users::ban_level.ne(4))
                 .order_by((
                     clans_created_levels::order_pos.asc(),
@@ -263,8 +263,7 @@ impl ClanProfileResolved {
         let created = created_by_level.into_values().collect();
 
         let published = levels::table
-            .inner_join(users::table.on(users::id.eq(levels::publisher_id)))
-            .inner_join(clan_members::table.on(clan_members::user_id.eq(users::id)))
+            .inner_join(users::table.inner_join(clan_members::table))
             .filter(clan_members::clan_id.eq(clan_id))
             .filter(users::ban_level.ne(4))
             .order_by(levels::position.asc())
@@ -294,9 +293,8 @@ impl ClanProfileResolved {
     ) -> Result<Vec<LevelResolvedRecordExtended>, ApiError> {
         records::table
             .filter(records::level_id.eq(level_id))
-            .inner_join(users::table.on(records::submitted_by.eq(users::id)))
-            .inner_join(levels::table.on(records::level_id.eq(levels::id)))
-            .inner_join(clan_members::table.on(clan_members::user_id.eq(records::submitted_by)))
+            .inner_join(users::table.inner_join(clan_members::table))
+            .inner_join(levels::table)
             .filter(clan_members::clan_id.eq(clan_id))
             .filter(users::ban_level.le(1))
             .filter(levels::status.ne(LevelStatus::Removed))

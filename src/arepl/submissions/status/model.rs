@@ -92,7 +92,7 @@ impl SubmissionsEnabledFull {
     pub fn get_statuses(conn: &mut DbConnection) -> Result<Vec<Self>, ApiError> {
         let status = submissions_enabled::table
             .order_by(submissions_enabled::created_at.desc())
-            .inner_join(users::table.on(users::id.eq(submissions_enabled::moderator)))
+            .inner_join(users::table)
             .select((SubmissionsEnabled::as_select(), BaseUser::as_select()))
             .load::<(SubmissionsEnabled, BaseUser)>(conn)?;
 

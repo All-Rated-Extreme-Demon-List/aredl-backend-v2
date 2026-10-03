@@ -84,7 +84,7 @@ impl User {
         if let Some(Some(background_level)) = user.background_level {
             let beaten_aredl_level: Option<AredlLevel> = aredl::records::table
                 .filter(aredl::records::submitted_by.eq(id))
-                .inner_join(aredl::levels::table.on(aredl::levels::id.eq(aredl::records::level_id)))
+                .inner_join(aredl::levels::table)
                 .filter(aredl::levels::level_id.eq(background_level))
                 .select(AredlLevel::as_select())
                 .get_result(conn)
@@ -92,7 +92,7 @@ impl User {
 
             let beaten_arepl_level: Option<AreplLevel> = arepl::records::table
                 .filter(arepl::records::submitted_by.eq(id))
-                .inner_join(arepl::levels::table.on(arepl::levels::id.eq(arepl::records::level_id)))
+                .inner_join(arepl::levels::table)
                 .filter(arepl::levels::level_id.eq(background_level))
                 .select(AreplLevel::as_select())
                 .get_result(conn)

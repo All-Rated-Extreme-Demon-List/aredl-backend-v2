@@ -184,7 +184,7 @@ async fn discord_callback(
         let user = User::upsert(conn, UserUpsert::from(discord_user_data))?;
 
         let roles = user_roles::table
-            .inner_join(roles::table.on(user_roles::role_id.eq(roles::id)))
+            .inner_join(roles::table)
             .filter(user_roles::user_id.eq(user.id))
             .select(Role::as_select())
             .load::<Role>(conn)?;

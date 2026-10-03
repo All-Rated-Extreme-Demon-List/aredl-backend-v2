@@ -106,9 +106,9 @@ impl LeaderboardPage {
     ) -> Result<Paginated<Self>, ApiError> {
         let build_filtered_query = || {
             let mut q = user_leaderboard::table
-                .inner_join(users::table.on(users::id.eq(user_leaderboard::user_id)))
-                .left_join(clans::table.on(user_leaderboard::clan_id.eq(clans::id.nullable())))
-                .left_join(levels::table.on(user_leaderboard::hardest.eq(levels::id.nullable())))
+                .inner_join(users::table)
+                .left_join(clans::table)
+                .left_join(levels::table)
                 .into_boxed::<Pg>();
 
             if let Some(name_like) = options.name_filter.clone() {

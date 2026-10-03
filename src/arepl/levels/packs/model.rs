@@ -9,9 +9,9 @@ use diesel::prelude::*;
 impl PackWithTierResolved {
     pub fn find_all(conn: &mut DbConnection, level_id: Uuid) -> Result<Vec<Self>, ApiError> {
         let packs = packs::table
-            .inner_join(pack_levels::table.on(pack_levels::pack_id.eq(packs::id)))
+            .inner_join(pack_levels::table)
             .filter(pack_levels::level_id.eq(level_id))
-            .inner_join(pack_tiers::table.on(packs::tier.eq(pack_tiers::id)))
+            .inner_join(pack_tiers::table)
             .select((BasePack::as_select(), BasePackTier::as_select()))
             .load::<(BasePack, BasePackTier)>(conn)?;
         let resolved = packs

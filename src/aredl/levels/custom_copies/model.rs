@@ -161,7 +161,7 @@ impl LevelCustomCopy {
 
         let custom_copies = query
             .order(level_custom_copies::created_at.desc())
-            .inner_join(users::table.on(level_custom_copies::added_by.eq(users::id)))
+            .inner_join(users::table)
             .select((LevelCustomCopy::as_select(), BaseUser::as_select()))
             .load::<(LevelCustomCopy, BaseUser)>(conn)?
             .into_iter()

@@ -187,6 +187,7 @@ diesel::table! {
 }
 
 diesel::joinable!(clans_leaderboard -> levels (hardest));
+diesel::joinable!(clans_leaderboard -> clans (clan_id));
 diesel::joinable!(clans_created_levels -> clans (clan_id));
 diesel::joinable!(clans_created_levels -> levels (level_id));
 diesel::joinable!(clans_created_levels -> users (creator_id));

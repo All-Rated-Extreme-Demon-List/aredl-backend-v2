@@ -195,9 +195,7 @@ impl DailyStatsPage {
             (None, Some(level_filter)) => {
                 let build_filtered_query = || {
                     submission_daily_level_stats::table
-                        .inner_join(
-                            levels::table.on(levels::id.eq(submission_daily_level_stats::level_id)),
-                        )
+                        .inner_join(levels::table)
                         .filter(submission_daily_level_stats::level_id.eq(level_filter))
                         .into_boxed::<Pg>()
                 };
@@ -259,7 +257,7 @@ pub fn stats_mod_leaderboard(
     let visibility = ReviewerVisibility::new(conn, authenticated)?;
 
     let mut query = submission_daily_reviewer_stats::table
-        .inner_join(users::table.on(users::id.eq(submission_daily_reviewer_stats::reviewer_id)))
+        .inner_join(users::table)
         .select((
             ReviewerDailyStats::as_select(),
             ExtendedBaseUser::as_select(),

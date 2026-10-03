@@ -81,8 +81,8 @@ fn resolve_query<'a>(q: submissions::BoxedQuery<'a, Pg>) -> _ {
             .nullable(),
     );
 
-    q.inner_join(levels::table.on(submissions::level_id.eq(levels::id)))
-        .inner_join(users::table.on(submissions::submitted_by.eq(users::id)))
+    q.inner_join(levels::table)
+        .inner_join(users::table)
         .left_join(
             reviewers.on(reviewers
                 .field(users::id)

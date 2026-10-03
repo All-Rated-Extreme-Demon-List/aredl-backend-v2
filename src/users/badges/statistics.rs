@@ -192,10 +192,7 @@ impl UserListStatistics {
             .collect::<Vec<_>>();
 
         let packs = classic_completed_packs::table
-            .inner_join(
-                aredl::packs::table.on(aredl::packs::id.eq(classic_completed_packs::pack_id)),
-            )
-            .inner_join(aredl::pack_tiers::table.on(aredl::pack_tiers::id.eq(aredl::packs::tier)))
+            .inner_join(aredl::packs::table.inner_join(aredl::pack_tiers::table))
             .filter(classic_completed_packs::user_id.eq(user_id))
             .order(aredl::pack_tiers::placement.asc())
             .select((
@@ -214,10 +211,7 @@ impl UserListStatistics {
             .collect::<Vec<_>>();
 
         let mut created_levels = aredl::levels::table
-            .inner_join(
-                aredl::levels_created::table
-                    .on(aredl::levels_created::level_id.eq(aredl::levels::id)),
-            )
+            .inner_join(aredl::levels_created::table)
             .filter(aredl::levels_created::user_id.eq(user_id))
             .filter(aredl::levels::status.ne(ClassicLevelStatus::Removed))
             .order(aredl::levels::position.asc())
@@ -300,10 +294,7 @@ impl UserListStatistics {
             .collect::<Vec<_>>();
 
         let packs = platformer_completed_packs::table
-            .inner_join(
-                arepl::packs::table.on(arepl::packs::id.eq(platformer_completed_packs::pack_id)),
-            )
-            .inner_join(arepl::pack_tiers::table.on(arepl::pack_tiers::id.eq(arepl::packs::tier)))
+            .inner_join(arepl::packs::table.inner_join(arepl::pack_tiers::table))
             .filter(platformer_completed_packs::user_id.eq(user_id))
             .order(arepl::pack_tiers::placement.asc())
             .select((
@@ -322,10 +313,7 @@ impl UserListStatistics {
             .collect::<Vec<_>>();
 
         let mut created_levels = arepl::levels::table
-            .inner_join(
-                arepl::levels_created::table
-                    .on(arepl::levels_created::level_id.eq(arepl::levels::id)),
-            )
+            .inner_join(arepl::levels_created::table)
             .filter(arepl::levels_created::user_id.eq(user_id))
             .filter(arepl::levels::status.ne(PlatformerLevelStatus::Removed))
             .order(arepl::levels::position.asc())
@@ -404,10 +392,7 @@ impl UserListStatistics {
             (ClassicBountyType::Event, "event"),
         ] {
             let count = aredl::bounty_completed::table
-                .inner_join(
-                    aredl::bounties::table
-                        .on(aredl::bounties::id.eq(aredl::bounty_completed::bounty_id)),
-                )
+                .inner_join(aredl::bounties::table)
                 .filter(aredl::bounty_completed::user_id.eq(user_id))
                 .filter(aredl::bounties::bounty_type.eq(bounty_type))
                 .count()
@@ -429,10 +414,7 @@ impl UserListStatistics {
             (PlatformerBountyType::Event, "event"),
         ] {
             let count = arepl::bounty_completed::table
-                .inner_join(
-                    arepl::bounties::table
-                        .on(arepl::bounties::id.eq(arepl::bounty_completed::bounty_id)),
-                )
+                .inner_join(arepl::bounties::table)
                 .filter(arepl::bounty_completed::user_id.eq(user_id))
                 .filter(arepl::bounties::bounty_type.eq(bounty_type))
                 .count()

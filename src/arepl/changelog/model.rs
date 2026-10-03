@@ -130,10 +130,7 @@ impl ChangelogPage {
             .order(position_history::i.desc())
             .limit(page_query.per_page())
             .offset(page_query.offset())
-            .inner_join(
-                level_affected
-                    .on(position_history::affected_level.eq(level_affected.field(levels::id))),
-            )
+            .inner_join(level_affected)
             .left_join(
                 level_above
                     .on(position_history::level_above.eq(level_above.field(levels::id).nullable())),

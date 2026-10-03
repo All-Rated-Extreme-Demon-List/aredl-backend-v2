@@ -66,7 +66,7 @@ impl CountryLeaderboardPage {
         options: CountryLeaderboardQueryOptions,
     ) -> Result<Self, ApiError> {
         let mut query = country_leaderboard::table
-            .left_join(levels::table.on(country_leaderboard::hardest.eq(levels::id.nullable())))
+            .left_join(levels::table)
             .into_boxed::<Pg>();
 
         match options.order.unwrap_or(LeaderboardOrder::TotalPoints) {

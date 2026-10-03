@@ -14,7 +14,7 @@ impl BaseUser {
     ) -> Result<Vec<Self>, ApiError> {
         let creators = levels_created::table
             .filter(levels_created::level_id.eq(level_id))
-            .inner_join(users::table.on(levels_created::user_id.eq(users::id)))
+            .inner_join(users::table)
             .select(BaseUserWithBanLevel::as_select())
             .load::<BaseUserWithBanLevel>(conn)?;
         let creators = creators

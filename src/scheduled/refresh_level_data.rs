@@ -71,10 +71,7 @@ pub async fn start_level_data_refresher(
 
             if let Ok(list) = db.connection().and_then(|mut conn| {
                 aredl::levels::table
-                    .left_join(
-                        aredl::last_gddl_update::table
-                            .on(aredl::last_gddl_update::id.eq(aredl::levels::id)),
-                    )
+                    .left_join(aredl::last_gddl_update::table)
                     .filter(
                         aredl::last_gddl_update::updated_at
                             .is_null()

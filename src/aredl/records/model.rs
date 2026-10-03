@@ -399,7 +399,7 @@ impl MutualVictors {
         let mut mutuals_query = records::table
             .filter(records::level_id.eq(level_id))
             .filter(records::submitted_by.eq_any(other_level_victors))
-            .inner_join(users::table.on(records::submitted_by.eq(users::id)))
+            .inner_join(users::table)
             .into_boxed();
 
         if let Some(true) = high_extremes {
@@ -584,8 +584,8 @@ impl ResolvedRecord {
     pub fn find(conn: &mut DbConnection, record_id: Uuid) -> Result<Self, ApiError> {
         let (record, user, level): (Record, ExtendedBaseUser, ExtendedBaseLevel) = records::table
             .filter(records::id.eq(record_id))
-            .inner_join(users::table.on(records::submitted_by.eq(users::id)))
-            .inner_join(levels::table.on(records::level_id.eq(levels::id)))
+            .inner_join(users::table)
+            .inner_join(levels::table)
             .select((
                 Record::as_select(),
                 ExtendedBaseUser::as_select(),
@@ -623,8 +623,8 @@ impl ResolvedRecord {
         let total_count: i64 = build_filtered().count().get_result(conn)?;
 
         let mut records_query = build_filtered()
-            .inner_join(users::table.on(records::submitted_by.eq(users::id)))
-            .inner_join(levels::table.on(records::level_id.eq(levels::id)))
+            .inner_join(users::table)
+            .inner_join(levels::table)
             .limit(page_query.per_page())
             .offset(page_query.offset())
             .select((
