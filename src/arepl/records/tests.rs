@@ -19,11 +19,14 @@ use {
             },
             ProvidersAppState,
         },
+        schema::arepl::records,
         {test_utils::*, users::test_utils::create_test_user},
     },
     actix_http::StatusCode,
     actix_web::test::{self, read_body_json},
+    chrono::prelude::TimeZone as _,
     chrono::{DateTime, Utc},
+    diesel::{ExpressionMethods as _, QueryDsl as _, RunQueryDsl as _},
     httpmock::prelude::*,
     serde_json::json,
     serial_test::serial,
@@ -402,6 +405,65 @@ async fn get_mutual_victors() {
         .collect();
 
     assert_eq!(ids, vec![high_extreme_user.to_string()]);
+}
+
+#[actix_web::test]
+async fn get_mutual_victors_sort_by_achieved_at() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
+    let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
+
+    let first_level = create_test_level(&db).await;
+    let second_level = create_test_level(&db).await;
+
+    let mutual_user = create_test_user(&db, None).await.0;
+    let verification_only_user = create_test_user(&db, None).await.0;
+    let high_extreme_user = create_test_user(&db, None).await.0;
+
+    // Create records for mutual victors
+    create_test_record(&db, mutual_user, first_level).await;
+    create_test_record(&db, mutual_user, second_level).await;
+    create_test_record(&db, verification_only_user, first_level).await;
+    create_test_record(&db, verification_only_user, second_level).await;
+    let record_id_first = create_test_record(&db, high_extreme_user, first_level).await;
+    let record_id_second = create_test_record(&db, high_extreme_user, second_level).await;
+
+    let old_achieved_at = Utc
+        .with_ymd_and_hms(2000, 1, 1, 0, 0, 0)
+        .unwrap()
+        .naive_utc();
+    diesel::update(
+        records::table.filter(records::id.eq_any(vec![record_id_first, record_id_second])),
+    )
+    .set(records::achieved_at.eq(old_achieved_at))
+    .execute(&mut db.connection().expect("Failed to get DB connection"))
+    .expect("Failed to update record with old achieved_at timestamp");
+
+    let req = test::TestRequest::get()
+        .uri(&format!(
+            "/arepl/records/mutual-victors?level_id={first_level}&other_level_id={second_level}"
+        ))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(resp.status().is_success(), "status is {}", resp.status());
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["level"]["id"], first_level.to_string());
+    assert_eq!(body["other_level"]["id"], second_level.to_string());
+
+    let ids: Vec<String> = body["mutuals"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|user| user["id"].as_str().unwrap().to_owned())
+        .collect();
+    let expected = vec![
+        high_extreme_user.to_string(), // This record was modified to have the oldest achieved_at timestamp
+        mutual_user.to_string(),
+        verification_only_user.to_string(),
+    ];
+
+    assert_eq!(ids, expected);
 }
 
 #[actix_web::test]
