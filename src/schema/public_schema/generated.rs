@@ -240,8 +240,10 @@ pub mod public {
     diesel::joinable!(notifications -> users (user_id));
     diesel::joinable!(oauth_connected_accounts -> users (user_id));
     diesel::joinable!(oauth_requests -> users (user_id));
+    diesel::joinable!(recurrent_shifts -> users (user_id));
     diesel::joinable!(role_permissions -> permissions (permission));
     diesel::joinable!(role_permissions -> roles (role_id));
+    diesel::joinable!(shifts -> users (user_id));
     diesel::joinable!(user_badges -> users (user_id));
     diesel::joinable!(user_roles -> roles (role_id));
     diesel::joinable!(user_roles -> users (user_id));

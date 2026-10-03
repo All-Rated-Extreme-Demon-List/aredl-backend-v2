@@ -61,15 +61,6 @@ pub mod aredl {
     }
 
     diesel::table! {
-        aredl.guideline_updates (id) {
-            id -> Uuid,
-            moderator -> Uuid,
-            text -> Varchar,
-            created_at -> Timestamptz,
-        }
-    }
-
-    diesel::table! {
         aredl.last_gddl_update (id) {
             id -> Uuid,
             updated_at -> Timestamptz,
@@ -321,16 +312,23 @@ pub mod aredl {
 
     diesel::joinable!(bounties -> levels (level_id));
     diesel::joinable!(bounty_completed -> bounties (bounty_id));
+    diesel::joinable!(last_gddl_update -> levels (id));
     diesel::joinable!(level_custom_copies -> levels (level_id));
     diesel::joinable!(level_notes -> levels (level_id));
     diesel::joinable!(level_updates -> levels (level_id));
+    diesel::joinable!(levels_created -> levels (level_id));
+    diesel::joinable!(pack_levels -> levels (level_id));
+    diesel::joinable!(pack_levels -> packs (pack_id));
+    diesel::joinable!(packs -> pack_tiers (tier));
+    diesel::joinable!(records -> levels (level_id));
     diesel::joinable!(records -> submissions (submission_id));
+    diesel::joinable!(submission_daily_level_stats -> levels (level_id));
     diesel::joinable!(submission_history -> submissions (submission_id));
+    diesel::joinable!(submissions -> levels (level_id));
 
     diesel::allow_tables_to_appear_in_same_query!(
         bounties,
         bounty_completed,
-        guideline_updates,
         last_gddl_update,
         level_custom_copies,
         level_notes,

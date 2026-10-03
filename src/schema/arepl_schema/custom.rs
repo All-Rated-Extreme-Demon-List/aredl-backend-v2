@@ -3,8 +3,8 @@
 
 use crate::schema::arepl::{
     bounty_completed, level_custom_copies, level_notes, levels, levels_created, pack_levels,
-    pack_tiers, packs, records, submission_daily_reviewer_stats, submission_history, submissions,
-    submissions_enabled,
+    pack_tiers, packs, position_history, position_history_full_view, records,
+    submission_daily_reviewer_stats, submission_history, submissions, submissions_enabled,
 };
 use crate::schema::{clan_members, clans, users};
 
@@ -157,10 +157,11 @@ diesel::table! {
 }
 
 diesel::joinable!(min_placement_country_records -> users (submitted_by));
+diesel::joinable!(min_placement_country_records -> submissions (submission_id));
 diesel::joinable!(min_placement_country_records -> levels (level_id));
 
 diesel::allow_tables_to_appear_in_same_query!(min_placement_country_records, users,);
-
+diesel::allow_tables_to_appear_in_same_query!(min_placement_country_records, submissions,);
 diesel::allow_tables_to_appear_in_same_query!(min_placement_country_records, levels,);
 
 diesel::table! {
@@ -218,13 +219,13 @@ diesel::table! {
 }
 
 diesel::joinable!(min_placement_clans_records -> users (submitted_by));
+diesel::joinable!(min_placement_clans_records -> submissions (submission_id));
 diesel::joinable!(min_placement_clans_records -> levels (level_id));
 diesel::joinable!(min_placement_clans_records -> clans (clan_id));
 
 diesel::allow_tables_to_appear_in_same_query!(min_placement_clans_records, users,);
-
+diesel::allow_tables_to_appear_in_same_query!(min_placement_clans_records, submissions,);
 diesel::allow_tables_to_appear_in_same_query!(min_placement_clans_records, levels,);
-
 diesel::allow_tables_to_appear_in_same_query!(min_placement_clans_records, clans,);
 
 diesel::table! {
@@ -242,8 +243,8 @@ diesel::joinable!(clan_member_points -> users (submitted_by));
 diesel::allow_tables_to_appear_in_same_query!(clan_member_points, clans,);
 diesel::allow_tables_to_appear_in_same_query!(clan_member_points, users,);
 
-diesel::joinable!(users -> level_custom_copies (id));
-diesel::joinable!(users -> level_notes (id));
+diesel::joinable!(level_custom_copies -> users (added_by));
+diesel::joinable!(level_notes -> users (added_by));
 
 diesel::allow_tables_to_appear_in_same_query!(users, submissions_enabled);
 diesel::allow_tables_to_appear_in_same_query!(users, level_custom_copies);
@@ -274,3 +275,8 @@ diesel::table! {
 
 diesel::joinable!(submission_totals -> levels (level_id));
 diesel::allow_tables_to_appear_in_same_query!(submission_totals, levels);
+
+diesel::joinable!(submissions_enabled -> users (moderator));
+diesel::joinable!(submissions -> users (submitted_by));
+diesel::joinable!(position_history -> levels (affected_level));
+diesel::joinable!(position_history_full_view -> levels (affected_level));

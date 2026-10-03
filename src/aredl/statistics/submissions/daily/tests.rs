@@ -7,7 +7,9 @@ use {
                 test_utils::refresh_test_submission_stats, ResolvedLeaderboardRow,
             },
             submissions::{
-                test_utils::{create_test_submission, insert_history_entry, set_history_timestamp},
+                test_utils::{
+                    create_test_submission_with_user, insert_history_entry, set_history_timestamp,
+                },
                 SubmissionStatus,
             },
         },
@@ -24,7 +26,6 @@ use {
         test::{self, read_body_json},
     },
     serde_json::Value,
-    uuid::Uuid,
 };
 
 #[actix_web::test]
@@ -36,7 +37,7 @@ async fn submission_stats_filter_reviewer() {
     let level_id = create_test_level(&db).await;
     let mod_id = mod1;
 
-    let sub = create_test_submission(level_id, Uuid::new_v4(), &db).await;
+    let sub = create_test_submission_with_user(level_id, &db).await;
     insert_history_entry(sub, Some(mod_id), SubmissionStatus::Accepted, &db).await;
     insert_history_entry(sub, Some(mod_id), SubmissionStatus::Denied, &db).await;
     refresh_test_submission_stats(&db).await;
@@ -69,11 +70,11 @@ async fn submission_stats_filter_level() {
     let level_id = create_test_level(&db).await;
     let other_level_id = create_test_level(&db).await;
 
-    let sub = create_test_submission(level_id, Uuid::new_v4(), &db).await;
+    let sub = create_test_submission_with_user(level_id, &db).await;
     insert_history_entry(sub, Some(mod1), SubmissionStatus::Accepted, &db).await;
     insert_history_entry(sub, Some(mod1), SubmissionStatus::Denied, &db).await;
 
-    let other_sub = create_test_submission(other_level_id, Uuid::new_v4(), &db).await;
+    let other_sub = create_test_submission_with_user(other_level_id, &db).await;
     insert_history_entry(other_sub, Some(mod1), SubmissionStatus::Accepted, &db).await;
 
     refresh_test_submission_stats(&db).await;
@@ -111,7 +112,7 @@ async fn submission_stats_reviewer_filter_returns_empty_for_hidden_reviewer_with
         .expect("Failed to generate token");
 
     let level_id = create_test_level(&db).await;
-    let sub = create_test_submission(level_id, Uuid::new_v4(), &db).await;
+    let sub = create_test_submission_with_user(level_id, &db).await;
     insert_history_entry(sub, Some(hidden_reviewer), SubmissionStatus::Accepted, &db).await;
 
     refresh_test_submission_stats(&db).await;
@@ -160,7 +161,7 @@ async fn submission_leaderboard_ignores_include_hidden_reviewers_without_audit()
 
     let lvl = create_test_level(&db).await;
 
-    let hidden_sub = create_test_submission(lvl, Uuid::new_v4(), &db).await;
+    let hidden_sub = create_test_submission_with_user(lvl, &db).await;
     insert_history_entry(
         hidden_sub,
         Some(hidden_reviewer),
@@ -169,7 +170,7 @@ async fn submission_leaderboard_ignores_include_hidden_reviewers_without_audit()
     )
     .await;
 
-    let visible_sub = create_test_submission(lvl, Uuid::new_v4(), &db).await;
+    let visible_sub = create_test_submission_with_user(lvl, &db).await;
     insert_history_entry(
         visible_sub,
         Some(full_reviewer),
@@ -249,12 +250,12 @@ async fn submission_leaderboard_counts_and_ordering() {
 
     let lvl = create_test_level(&db).await;
 
-    let sub1 = create_test_submission(lvl, Uuid::new_v4(), &db).await;
+    let sub1 = create_test_submission_with_user(lvl, &db).await;
     insert_history_entry(sub1, Some(mod1), SubmissionStatus::Accepted, &db).await;
     insert_history_entry(sub1, Some(mod1), SubmissionStatus::Accepted, &db).await;
     insert_history_entry(sub1, Some(mod1), SubmissionStatus::Denied, &db).await;
 
-    let sub2 = create_test_submission(lvl, Uuid::new_v4(), &db).await;
+    let sub2 = create_test_submission_with_user(lvl, &db).await;
     insert_history_entry(sub2, Some(mod2), SubmissionStatus::Accepted, &db).await;
     insert_history_entry(sub2, Some(mod2), SubmissionStatus::UnderConsideration, &db).await;
 
@@ -285,9 +286,9 @@ async fn submission_leaderboard_only_active_filters_out() {
 
     let lvl = create_test_level(&db).await;
 
-    let s1 = create_test_submission(lvl, Uuid::new_v4(), &db).await;
+    let s1 = create_test_submission_with_user(lvl, &db).await;
     insert_history_entry(s1, Some(mod_active), SubmissionStatus::Accepted, &db).await;
-    let s2 = create_test_submission(lvl, Uuid::new_v4(), &db).await;
+    let s2 = create_test_submission_with_user(lvl, &db).await;
     insert_history_entry(s2, Some(mod_inactive), SubmissionStatus::Denied, &db).await;
 
     refresh_test_submission_stats(&db).await;
@@ -314,7 +315,7 @@ async fn submission_leaderboard_since_filters_out_future_date() {
     let token = create_test_token(mod1, &auth.jwt_encoding_key).unwrap();
 
     let lvl = create_test_level(&db).await;
-    let sub = create_test_submission(lvl, Uuid::new_v4(), &db).await;
+    let sub = create_test_submission_with_user(lvl, &db).await;
     insert_history_entry(sub, Some(mod1), SubmissionStatus::Accepted, &db).await;
 
     refresh_test_submission_stats(&db).await;
@@ -346,7 +347,7 @@ async fn submission_leaderboard_until_filters_out_later_dates() {
 
     let lvl = create_test_level(&db).await;
 
-    let mod1_before_cutoff = create_test_submission(lvl, Uuid::new_v4(), &db).await;
+    let mod1_before_cutoff = create_test_submission_with_user(lvl, &db).await;
     insert_history_entry(
         mod1_before_cutoff,
         Some(mod1),
@@ -360,7 +361,7 @@ async fn submission_leaderboard_until_filters_out_later_dates() {
         "2024-01-09T12:00:00Z".parse().unwrap(),
     );
 
-    let mod1_on_cutoff = create_test_submission(lvl, Uuid::new_v4(), &db).await;
+    let mod1_on_cutoff = create_test_submission_with_user(lvl, &db).await;
     insert_history_entry(
         mod1_on_cutoff,
         Some(mod1),
@@ -370,7 +371,7 @@ async fn submission_leaderboard_until_filters_out_later_dates() {
     .await;
     set_history_timestamp(&db, mod1_on_cutoff, "2024-01-10T12:00:00Z".parse().unwrap());
 
-    let mod1_after_cutoff = create_test_submission(lvl, Uuid::new_v4(), &db).await;
+    let mod1_after_cutoff = create_test_submission_with_user(lvl, &db).await;
     insert_history_entry(mod1_after_cutoff, Some(mod1), SubmissionStatus::Denied, &db).await;
     set_history_timestamp(
         &db,
@@ -378,7 +379,7 @@ async fn submission_leaderboard_until_filters_out_later_dates() {
         "2024-01-11T12:00:00Z".parse().unwrap(),
     );
 
-    let mod2_before_cutoff = create_test_submission(lvl, Uuid::new_v4(), &db).await;
+    let mod2_before_cutoff = create_test_submission_with_user(lvl, &db).await;
     insert_history_entry(
         mod2_before_cutoff,
         Some(mod2),

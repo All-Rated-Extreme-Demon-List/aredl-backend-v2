@@ -7,12 +7,19 @@ use {
             submissions::{history::SubmissionHistory, Submission, SubmissionStatus},
         },
         schema::arepl::{submission_history, submissions},
+        users::test_utils::create_test_user,
     },
     chrono::{DateTime, Utc},
     diesel::prelude::*,
     std::sync::Arc,
     uuid::Uuid,
 };
+
+#[cfg(test)]
+pub async fn create_test_submission_with_user(level_id: Uuid, db: &Arc<DbAppState>) -> Uuid {
+    let (user_id, _) = create_test_user(db, None).await;
+    create_test_submission(level_id, user_id, db).await
+}
 
 #[cfg(test)]
 pub async fn create_test_submission(level_id: Uuid, user_id: Uuid, db: &Arc<DbAppState>) -> Uuid {
