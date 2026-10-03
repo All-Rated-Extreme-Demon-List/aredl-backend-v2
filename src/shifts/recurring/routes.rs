@@ -5,7 +5,7 @@ use crate::{
     shifts::{
         parse_timezone,
         recurring::{RecurringShift, RecurringShiftInsert, RecurringShiftPatch},
-        ResolvedRecurringShift
+        ResolvedRecurringShift,
     },
 };
 use actix_web::{delete, get, patch, post, web, HttpResponse};
@@ -123,11 +123,7 @@ async fn delete_recurring_shift(
 
 #[derive(OpenApi)]
 #[openapi(
-    components(schemas(
-        ResolvedRecurringShift,
-        RecurringShift,
-        RecurringShiftPatch,
-    )),
+    components(schemas(ResolvedRecurringShift, RecurringShift, RecurringShiftPatch,)),
     paths(
         find_all_recurring_shifts,
         patch_recurring_shift,
