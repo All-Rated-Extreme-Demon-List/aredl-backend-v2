@@ -433,10 +433,12 @@ async fn get_mutual_victors_sort_by_achieved_at() {
         .with_ymd_and_hms(2000, 1, 1, 0, 0, 0)
         .unwrap()
         .naive_utc();
-    diesel::update(records::table.filter(records::id.eq_any(vec![record_id_first, record_id_second])))
-        .set(records::achieved_at.eq(old_achieved_at))
-        .execute(&mut db.connection().expect("Failed to get DB connection"))
-        .expect("Failed to update record with old achieved_at timestamp");
+    diesel::update(
+        records::table.filter(records::id.eq_any(vec![record_id_first, record_id_second])),
+    )
+    .set(records::achieved_at.eq(old_achieved_at))
+    .execute(&mut db.connection().expect("Failed to get DB connection"))
+    .expect("Failed to update record with old achieved_at timestamp");
 
     let req = test::TestRequest::get()
         .uri(&format!(
