@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::app_data::db::{DbAppState, DbConnection};
-use crate::aredl::levels::ExtendedBaseLevel;
+use crate::aredl::levels::{ExtendedBaseLevel, Level};
 use crate::aredl::submissions::patch::SubmissionPatchMod;
 use crate::aredl::submissions::post::SubmissionPostMod;
 use crate::aredl::submissions::{Submission, SubmissionStatus};
@@ -164,8 +164,8 @@ pub struct MutualVictorsQuery {
 
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct MutualVictors {
-    pub level: ExtendedBaseLevel,
-    pub other_level: ExtendedBaseLevel,
+    pub level: Level,
+    pub other_level: Level,
     pub mutuals: Vec<ExtendedBaseUser>,
 }
 
@@ -380,12 +380,12 @@ impl MutualVictors {
     ) -> Result<Self, ApiError> {
         let level = levels::table
             .filter(levels::id.eq(level_id))
-            .select(ExtendedBaseLevel::as_select())
-            .first::<ExtendedBaseLevel>(conn)?;
+            .select(Level::as_select())
+            .first::<Level>(conn)?;
         let other_level = levels::table
             .filter(levels::id.eq(other_level_id))
-            .select(ExtendedBaseLevel::as_select())
-            .first::<ExtendedBaseLevel>(conn)?;
+            .select(Level::as_select())
+            .first::<Level>(conn)?;
 
         let other_level_victors = records::table
             .filter(records::level_id.eq(other_level_id))
@@ -410,8 +410,7 @@ impl MutualVictors {
 
         let mutuals = mutuals_query
             .select(ExtendedBaseUser::as_select())
-            .distinct()
-            .order_by(users::username.asc())
+            .order_by(records::achieved_at.asc())
             .load::<ExtendedBaseUser>(conn)?;
 
         Ok(Self {
