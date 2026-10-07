@@ -3,7 +3,8 @@ mod auth_responses_addon;
 mod utils;
 
 use crate::{
-    aredl, arepl, auth, clans, health, notifications, roles, shifts, users, utils as utils_routes, audit,
+    aredl, arepl, audit, auth, clans, health, notifications, roles, shifts, users,
+    utils as utils_routes,
 };
 use addons::{
     ExtractorResponsesAddon, OperationIdAddon, SecurityAddon, ServerAddon, StaffBadgeAddon,
