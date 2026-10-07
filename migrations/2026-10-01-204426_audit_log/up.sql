@@ -18,7 +18,7 @@ CREATE TYPE audit_entity_type AS ENUM (
 CREATE TABLE audit_logs (
     id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
     timestamp TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    actor_id uuid REFERENCES users(id) ON DELETE SET NULL, -- null = automatic/system action or deleted user
+    actor_id uuid, -- null = automatic/system action
     action_type audit_action NOT NULL,
     entity_id uuid NOT NULL,
     entity_type audit_entity_type NOT NULL,
