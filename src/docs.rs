@@ -3,7 +3,7 @@ mod auth_responses_addon;
 mod utils;
 
 use crate::{
-    aredl, arepl, auth, clans, health, notifications, roles, shifts, users, utils as utils_routes,
+    aredl, arepl, auth, clans, health, notifications, roles, shifts, users, utils as utils_routes, audit,
 };
 use addons::{
     ExtractorResponsesAddon, OperationIdAddon, SecurityAddon, ServerAddon, StaffBadgeAddon,
@@ -161,6 +161,7 @@ Permissions are explicit grants on roles. A role can inherit grants from another
 #[derive(OpenApi)]
 #[openapi(
     nest(
+        (path = "/audit", api = audit::ApiDoc),
         (path = "/aredl", api = aredl::ApiDoc),
         (path = "/arepl", api = arepl::ApiDoc),
         (path = "/users", api = users::ApiDoc),

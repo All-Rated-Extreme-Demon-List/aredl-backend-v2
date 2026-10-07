@@ -169,7 +169,8 @@ async fn main() -> Result<(), StartupError> {
                     .configure(notifications::init_routes)
                     .configure(health::init_routes)
                     .configure(shifts::init_routes)
-                    .configure(utils::init_routes),
+                    .configure(utils::init_routes)
+                    .configure(audit::init_routes),
             )
             .service(
                 RapiDoc::with_openapi("/openapi.json", ApiDoc::openapi())

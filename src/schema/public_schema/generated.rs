@@ -257,6 +257,7 @@ pub mod public {
         }
     }
 
+    diesel::joinable!(audit_logs -> users (actor_id));
     diesel::joinable!(clan_invites -> clans (clan_id));
     diesel::joinable!(clan_members -> clans (clan_id));
     diesel::joinable!(clan_members -> users (user_id));
