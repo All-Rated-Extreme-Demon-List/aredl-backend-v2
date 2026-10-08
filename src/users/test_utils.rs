@@ -1,8 +1,16 @@
 #[cfg(test)]
 use {
     crate::{
-        app_data::db::DbAppState, audit::{AuditAction, AuditEntityType, AuditLogEntry}, auth::Permission, schema::{audit_logs, role_permissions, roles, user_roles, users}, users::User,
-    }, chrono::{DateTime, Utc}, diesel::prelude::*, std::sync::Arc, uuid::Uuid,
+        app_data::db::DbAppState,
+        audit::{AuditAction, AuditEntityType, AuditLogEntry},
+        auth::Permission,
+        schema::{audit_logs, role_permissions, roles, user_roles, users},
+        users::User,
+    },
+    chrono::{DateTime, Utc},
+    diesel::prelude::*,
+    std::sync::Arc,
+    uuid::Uuid,
 };
 
 #[cfg(test)]

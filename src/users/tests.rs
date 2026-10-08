@@ -11,7 +11,7 @@ use {
         users::{
             test_utils::{
                 create_test_user, create_test_user_with_permissions, get_test_user,
-                set_test_user_ban_level, set_test_user_discord_id, latest_audit_entry_for_user
+                latest_audit_entry_for_user, set_test_user_ban_level, set_test_user_discord_id,
             },
             User, UserUpsert,
         },
