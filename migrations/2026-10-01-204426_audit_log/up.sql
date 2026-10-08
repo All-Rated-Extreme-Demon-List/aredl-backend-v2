@@ -22,7 +22,7 @@ CREATE TABLE audit_logs (
     action_type audit_action NOT NULL,
     entity_id uuid NOT NULL,
     entity_type audit_entity_type NOT NULL,
-    diff JSONB NOT NULL
+    diff JSONB
 );
 
 CREATE INDEX audit_entity_idx ON audit_logs (entity_type, entity_id, timestamp DESC);

@@ -1,4 +1,5 @@
 use crate::app_data::db::DbAppState;
+use crate::audit::AuditLogEntry;
 use crate::auth::{Authenticated, UserAuth};
 use crate::error_handler::{ApiError, ErrorResponse};
 use crate::users::badges::UserBadge;
@@ -65,11 +66,11 @@ async fn update(
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&user));
     let user = web::block(move || {
-        User::update_me(
-            &mut db.connection()?,
-            authenticated.user_id,
-            &user.into_inner(),
-        )
+        let conn = &mut db.connection()?;
+        let before = User::from_uuid(conn, authenticated.user_id)?;
+        let updated_user = User::update_me(conn, authenticated.user_id, &user.into_inner())?;
+        AuditLogEntry::log_update(conn, Some(authenticated.user_id), &before, &updated_user)?;
+        Ok::<_, ApiError>(updated_user)
     })
     .await??;
     Ok(HttpResponse::Ok().json(user))

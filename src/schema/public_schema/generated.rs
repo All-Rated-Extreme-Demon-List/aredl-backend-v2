@@ -39,7 +39,7 @@ pub mod public {
             action_type -> AuditAction,
             entity_id -> Uuid,
             entity_type -> AuditEntityType,
-            diff -> Jsonb,
+            diff -> Nullable<Jsonb>,
         }
     }
 
@@ -257,7 +257,6 @@ pub mod public {
         }
     }
 
-    diesel::joinable!(audit_logs -> users (actor_id));
     diesel::joinable!(clan_invites -> clans (clan_id));
     diesel::joinable!(clan_members -> clans (clan_id));
     diesel::joinable!(clan_members -> users (user_id));

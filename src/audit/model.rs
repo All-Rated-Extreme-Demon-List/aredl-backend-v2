@@ -6,8 +6,8 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use diesel::{
-    pg::Pg, ExpressionMethods as _, QueryDsl as _, Queryable, RunQueryDsl as _, Selectable,
-    SelectableHelper as _,
+    pg::Pg, ExpressionMethods as _, Insertable, QueryDsl as _, Queryable, RunQueryDsl as _,
+    Selectable, SelectableHelper as _,
 };
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
@@ -50,8 +50,18 @@ pub struct AuditLogEntry {
     pub actor_id: Option<Uuid>,
     pub entity_type: AuditEntityType,
     pub entity_id: Uuid,
-    pub diff: Value,
+    pub diff: Option<Value>,
     pub timestamp: DateTime<Utc>,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = audit_logs)]
+struct NewAuditLogEntry {
+    pub action_type: AuditAction,
+    pub actor_id: Option<Uuid>,
+    pub entity_type: AuditEntityType,
+    pub entity_id: Uuid,
+    pub diff: Option<Value>,
 }
 
 pub trait Auditable: Serialize {
@@ -77,6 +87,127 @@ pub struct AuditLogPage {
 }
 
 impl AuditLogEntry {
+    fn serialize_auditable<T: Auditable>(entity: &T) -> Result<Value, ApiError> {
+        let mut value = serde_json::to_value(entity).map_err(|err| {
+            ApiError::InternalServerError(format!("Failed to serialize audit log entity: {err}"))
+        })?;
+
+        if let Value::Object(map) = &mut value {
+            for redacted_field in T::redacted_fields() {
+                if map.contains_key(*redacted_field) {
+                    map.remove(*redacted_field);
+                }
+            }
+        }
+
+        Ok(value)
+    }
+
+    fn generate_update_diff<T: Auditable>(before: &T, after: &T) -> Result<Value, ApiError> {
+        let before_value = Self::serialize_auditable(before)?;
+        let after_value = Self::serialize_auditable(after)?;
+
+        let (Some(before_obj), Some(after_obj)) =
+            (before_value.as_object(), after_value.as_object())
+        else {
+            return Err(ApiError::InternalServerError("Invalid diff value(s)"));
+        };
+
+        let mut diff = serde_json::Map::new();
+        let keys = before_obj
+            .keys()
+            .chain(after_obj.keys())
+            .collect::<std::collections::BTreeSet<_>>();
+
+        for key in keys {
+            let before_value = before_obj.get(key);
+            let after_value = after_obj.get(key);
+
+            match (before_value, after_value) {
+                (Some(before), Some(after)) if before != after => {
+                    diff.insert(key.clone(), after.clone());
+                }
+                (None, Some(after)) => {
+                    diff.insert(key.clone(), after.clone());
+                }
+                (Some(_), None) => {
+                    diff.insert(key.clone(), Value::Null);
+                }
+                _ => {}
+            }
+        }
+
+        Ok(Value::Object(diff))
+    }
+
+    pub fn log_create<T: Auditable>(
+        conn: &mut DbConnection,
+        actor_id: Option<Uuid>,
+        entity: &T,
+    ) -> Result<(), ApiError> {
+        let entry = NewAuditLogEntry {
+            action_type: AuditAction::Create,
+            actor_id,
+            entity_type: T::ENTITY_TYPE,
+            entity_id: entity.entity_id(),
+            diff: Some(Self::serialize_auditable(entity)?),
+        };
+
+        diesel::insert_into(audit_logs::table)
+            .values(entry)
+            .execute(conn)?;
+
+        Ok(())
+    }
+
+    pub fn log_update<T: Auditable>(
+        conn: &mut DbConnection,
+        actor_id: Option<Uuid>,
+        before: &T,
+        after: &T,
+    ) -> Result<(), ApiError> {
+        let diff = Self::generate_update_diff(before, after)?;
+
+        if diff.as_object().is_none_or(serde_json::Map::is_empty) {
+            return Ok(());
+        }
+
+        let entry = NewAuditLogEntry {
+            action_type: AuditAction::Update,
+            actor_id,
+            entity_type: T::ENTITY_TYPE,
+            entity_id: after.entity_id(),
+            diff: Some(diff),
+        };
+
+        diesel::insert_into(audit_logs::table)
+            .values(entry)
+            .execute(conn)?;
+
+        Ok(())
+    }
+
+    #[expect(dead_code, reason = "Only users is implemented rn")]
+    pub fn log_delete<T: Auditable>(
+        conn: &mut DbConnection,
+        actor_id: Option<Uuid>,
+        entity: &T,
+    ) -> Result<(), ApiError> {
+        let entry = NewAuditLogEntry {
+            action_type: AuditAction::Delete,
+            actor_id,
+            entity_type: T::ENTITY_TYPE,
+            entity_id: entity.entity_id(),
+            diff: None,
+        };
+
+        diesel::insert_into(audit_logs::table)
+            .values(entry)
+            .execute(conn)?;
+
+        Ok(())
+    }
+
     pub fn list_all<const D: i64>(
         conn: &mut DbConnection,
         opts: &AuditLogQueryOpts,

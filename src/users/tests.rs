@@ -2,6 +2,7 @@
 use {
     crate::users::test_utils::create_test_placeholder_user,
     crate::{
+        audit::AuditAction,
         auth::{create_test_token, Permission},
         roles::test_utils::{
             add_permission_to_role, add_user_to_role, create_test_hidden_role, create_test_role,
@@ -10,7 +11,7 @@ use {
         users::{
             test_utils::{
                 create_test_user, create_test_user_with_permissions, get_test_user,
-                set_test_user_ban_level, set_test_user_discord_id,
+                set_test_user_ban_level, set_test_user_discord_id, latest_audit_entry_for_user
             },
             User, UserUpsert,
         },
@@ -19,6 +20,7 @@ use {
     actix_web::test::{self, read_body_json},
     chrono::Utc,
     serde_json::json,
+    uuid::Uuid,
 };
 
 #[actix_web::test]
@@ -44,6 +46,19 @@ async fn create_placeholder_user() {
 
     let created_user: serde_json::Value = read_body_json(resp).await;
     assert_eq!(created_user["global_name"], "test_placeholder");
+
+    let created_user_id: Uuid = created_user["id"]
+        .as_str()
+        .expect("Expected user id in response")
+        .parse()
+        .expect("Expected valid user id");
+    let log = latest_audit_entry_for_user(&db, created_user_id, AuditAction::Create);
+    assert_eq!(log.actor_id, Some(staff_user_id));
+    if let Some(diff) = log.diff {
+        assert_eq!(diff["global_name"], "test_placeholder");
+    } else {
+        panic!("Expected diff in audit log for user creation");
+    }
 }
 
 #[actix_web::test]
@@ -71,6 +86,15 @@ async fn update_user_info() {
     let updated_user: serde_json::Value = read_body_json(resp).await;
     assert_eq!(updated_user["global_name"], "Updated Name");
     assert_eq!(updated_user["description"], "Updated description");
+
+    let log = latest_audit_entry_for_user(&db, user_id, AuditAction::Update);
+    assert_eq!(log.actor_id, Some(staff_user_id));
+    if let Some(diff) = log.diff {
+        assert_eq!(diff["global_name"], "Updated Name");
+        assert_eq!(diff["description"], "Updated description");
+    } else {
+        panic!("Expected diff in audit log for user update");
+    }
 }
 
 #[actix_web::test]

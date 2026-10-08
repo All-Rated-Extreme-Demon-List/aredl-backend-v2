@@ -1,4 +1,5 @@
 use crate::app_data::db::DbAppState;
+use crate::audit::AuditLogEntry;
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::cache_control::CacheController;
 use crate::error_handler::{ApiError, ErrorResponse};
@@ -104,12 +105,17 @@ async fn list(
 async fn create_placeholder(
     db: web::Data<Arc<DbAppState>>,
     options: web::Json<PlaceholderOptions>,
+    authenticated: Authenticated,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&options));
-    let result =
-        web::block(move || User::create_placeholder(&mut db.connection()?, options.into_inner()))
-            .await??;
+    let result = web::block(move || {
+        let conn = &mut db.connection()?;
+        let created_user = User::create_placeholder(conn, options.into_inner())?;
+        AuditLogEntry::log_create(conn, Some(authenticated.user_id), &created_user)?;
+        Ok::<_, ApiError>(created_user)
+    })
+    .await??;
     Ok(HttpResponse::Created().json(result))
 }
 
@@ -144,7 +150,10 @@ async fn update(
         let conn = &mut db.connection()?;
         let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
         authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
-        User::update(conn, user_id, &user.into_inner())
+        let before = User::from_uuid(conn, user_id)?;
+        let updated_user = User::update(conn, user_id, &user.into_inner())?;
+        AuditLogEntry::log_update(conn, Some(authenticated.user_id), &before, &updated_user)?;
+        Ok::<_, ApiError>(updated_user)
     })
     .await??;
 
@@ -195,7 +204,10 @@ async fn ban(
         if user.ban_level == 4 {
             authenticated.ensure_has_permission(conn, Permission::UserRedact)?;
         }
-        User::ban(conn, &authenticated, user_id, user.into_inner().ban_level)
+        let before = User::from_uuid(conn, user_id)?;
+        let updated_user = User::ban(conn, &authenticated, user_id, user.into_inner().ban_level)?;
+        AuditLogEntry::log_update(conn, Some(authenticated.user_id), &before, &updated_user)?;
+        Ok::<_, ApiError>(updated_user)
     })
     .await??;
 

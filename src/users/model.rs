@@ -1,4 +1,5 @@
 use crate::app_data::db::DbConnection;
+use crate::audit::{AuditEntityType, AuditLogEntry, Auditable};
 use crate::auth::{permission, Authenticated, Permission};
 use crate::clans::Clan;
 use crate::error_handler::ApiError;
@@ -303,12 +304,16 @@ impl User {
                 })
                 .returning(Self::as_select())
                 .get_result::<Self>(conn)?;
+
+            AuditLogEntry::log_update(conn, Some(user.id), &user, &updated_user)?;
             Ok(updated_user)
         } else {
             let user = diesel::insert_into(users::table)
                 .values(&user_upsert)
                 .returning(Self::as_select())
                 .get_result::<Self>(conn)?;
+
+            AuditLogEntry::log_create(conn, Some(user.id), &user)?;
             Ok(user)
         }
     }
@@ -442,6 +447,18 @@ impl From<User> for BaseUser {
             username: user.username,
             global_name: user.global_name,
         }
+    }
+}
+
+impl Auditable for User {
+    const ENTITY_TYPE: AuditEntityType = AuditEntityType::User;
+
+    fn entity_id(&self) -> Uuid {
+        self.id
+    }
+
+    fn redacted_fields() -> &'static [&'static str] {
+        &[]
     }
 }
 

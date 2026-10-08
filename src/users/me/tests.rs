@@ -9,11 +9,12 @@ use {
         arepl::levels::test_utils::{
             create_test_level_with_record, get_test_level as get_test_arepl_level,
         },
+        audit::AuditAction,
         auth::create_test_token,
         test_utils::init_test_app,
         users::test_utils::{
-            create_test_user, set_test_user_background_level, set_test_user_ban_level,
-            set_test_user_last_country_update,
+            create_test_user, latest_audit_entry_for_user, set_test_user_background_level,
+            set_test_user_ban_level, set_test_user_last_country_update,
         },
     },
     actix_web::test::{self, read_body_json},
@@ -83,6 +84,16 @@ async fn update_authenticated_user() {
     assert_eq!(user["description"], "Updated description");
     assert_eq!(user["ban_level"], 1);
     assert_eq!(user["country"], 10);
+
+    let audit_log = latest_audit_entry_for_user(&db, user_id, AuditAction::Update);
+
+    assert_eq!(audit_log.actor_id, Some(user_id));
+    assert_eq!(
+        audit_log
+            .diff
+            .expect("Expected diff in audit log for user update")["global_name"],
+        "Updated Name"
+    );
 }
 
 #[actix_web::test]
