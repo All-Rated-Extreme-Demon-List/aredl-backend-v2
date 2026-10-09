@@ -4,6 +4,8 @@ CREATE SCHEMA aredl;
 
 CREATE SCHEMA arepl;
 
+
+
 CREATE TYPE aredl.custom_id_status AS ENUM ( 'Published', 'Allowed', 'Banned' );
 
 CREATE TYPE aredl.custom_id_type AS ENUM ( 'Bugfix', 'GlobedCopy', 'Ldm', 'Other' );
@@ -83,6 +85,13 @@ CREATE TABLE aredl.levels (
     nlw_tier_estimate character varying,
     CONSTRAINT aredl_levels_level_id_check CHECK ((level_id > 0)),
     CONSTRAINT aredl_levels_status_position_check CHECK ((((status = ANY (ARRAY['Pending'::public.level_status, 'Removed'::public.level_status])) AND (position IS NULL)) OR ((status = ANY (ARRAY['MainList'::public.level_status, 'Legacy'::public.level_status])) AND (position IS NOT NULL))))
+);
+
+CREATE TABLE aredl.guideline_updates (
+    id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+    moderator UUID NOT NULL REFERENCES public.users(id),
+    text VARCHAR NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
 
 CREATE TABLE aredl.position_history_full_view (
