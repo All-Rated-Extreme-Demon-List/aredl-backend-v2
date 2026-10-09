@@ -1,11 +1,11 @@
 #[cfg(test)]
 use {
     crate::{
-        aredl::{
+        auth::{create_test_token, Permission},
+        list::{
             levels::test_utils::create_test_level_with_record,
             records::test_utils::test_records_for_user,
         },
-        auth::{create_test_token, Permission},
         test_utils::*,
         users::{
             merge::requests::test_utils::{

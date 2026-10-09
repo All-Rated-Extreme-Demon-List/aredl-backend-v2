@@ -1,0 +1,449 @@
+use crate::app_data::db::DbConnection;
+use crate::error_handler::ApiError;
+use crate::list::levels::records::LevelResolvedRecord;
+use crate::list::records::Record;
+use crate::list::List;
+use crate::schema::{levels, position_history, position_history_full_view, records, users};
+use crate::users::{BaseUser, BaseUserWithBanLevel};
+use chrono::{DateTime, Utc};
+use diesel_derive_enum::DbEnum;
+use serde::{Deserialize, Serialize};
+use serde_with::rust::double_option;
+use std::collections::HashSet;
+use utoipa::ToSchema;
+use uuid::Uuid;
+
+use diesel::prelude::*;
+#[derive(Serialize, Deserialize, Clone, Debug, ToSchema, PartialEq, Eq, Hash, DbEnum)]
+#[ExistingTypePath = "crate::schema::sql_types::LevelStatus"]
+#[DbValueStyle = "PascalCase"]
+pub enum LevelStatus {
+    Pending,
+    MainList,
+    Legacy,
+    Removed,
+}
+
+#[derive(Serialize, Deserialize, Clone, Queryable, Selectable, Debug, ToSchema)]
+#[diesel(table_name=levels)]
+pub struct BaseLevel {
+    /// Internal level UUID
+    pub id: Uuid,
+    /// Name of the level in the game. If multiple levels share the same name, their creator's name is appended at the end. 2P levels both have (2P) or (Solo) appended at the end.
+    pub name: String,
+    /// Level ID in the game. May not be unique for 2P levels.
+    pub level_id: i32,
+    /// Whether this is the 2P version of a level or not.
+    pub two_player: bool,
+}
+
+#[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema, Clone)]
+#[diesel(table_name=levels)]
+pub struct ExtendedBaseLevel {
+    /// Internal level UUID
+    pub id: Uuid,
+    /// Name of the level in the game. If multiple levels share the same name, their creator's name is appended at the end. 2P levels both have (2P) or (Solo) appended at the end.
+    pub name: String,
+    /// Level ID in the game. May not be unique for 2P levels.
+    pub level_id: i32,
+    /// Whether this is the 2P version of a level or not.
+    pub two_player: bool,
+    /// The 1-indexed position of the level on the list.
+    pub position: Option<i32>,
+    /// Points awarded for completing the level.
+    pub points: i32,
+    /// The current status of the level.
+    pub status: LevelStatus,
+    /// Whether this level requires raw footage while pending.
+    pub requires_raw_footage: bool,
+}
+
+#[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema, Clone)]
+#[diesel(table_name=levels)]
+pub struct Level {
+    /// Internal level UUID
+    pub id: Uuid,
+    /// Name of the level in the game. If multiple levels share the same name, their creator's name is appended at the end. 2P levels both have (2P) or (Solo) appended at the end.
+    pub name: String,
+    /// The 1-indexed position of the level on the list.
+    pub position: Option<i32>,
+    /// Internal user UUID of the person who published the level in the game.
+    pub publisher_id: Uuid,
+    /// Points awarded for completing the level.
+    pub points: i32,
+    /// The current status of the level.
+    pub status: LevelStatus,
+    /// Whether this level requires raw footage while pending.
+    pub requires_raw_footage: bool,
+    /// Level ID in the game. May not be unique for 2P levels.
+    pub level_id: i32,
+    /// Whether this is the 2P version of a level or not.
+    pub two_player: bool,
+    /// Tags that describe the level. Includes gameplay, length, version, etc.. tags.
+    pub tags: Vec<Option<String>>,
+    /// Description of the level.
+    pub description: Option<String>,
+    /// Newground's song ID for the level.
+    pub song: Option<i32>,
+    /// Enjoyment rating for the level, fetched from EDEL (Extreme Demon Enjoyments List).
+    pub edel_enjoyment: Option<f64>,
+    /// Whether the EDEL enjoyment rating is pending (considered unreliable) or not.
+    pub is_edel_pending: bool,
+    /// GDDL tier for the level, fetched from GDDL (GD Demon Ladder).
+    pub gddl_tier: Option<f64>,
+    /// NLW tier for the level, fetched from NLW (Non List Worthy).
+    pub nlw_tier: Option<String>,
+    /// Estimated NLW tier for pending levels without an NLW tier or list position yet.
+    pub nlw_tier_estimate: Option<String>,
+}
+
+#[derive(Serialize, Debug, ToSchema)]
+pub struct LevelWithUserCompletionStatus {
+    #[serde(flatten)]
+    pub level: Level,
+    /// Whether the requesting user has completed this level or not.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed_by_user: Option<bool>,
+}
+
+#[derive(Serialize, Deserialize, Insertable, ToSchema, Debug)]
+#[diesel(table_name=levels)]
+pub struct LevelPlace {
+    /// The 1-indexed position of the level on the list.
+    pub position: Option<i32>,
+    /// Name of the level in the game. If multiple levels share the same name, their creator's name is appended at the end. 2P levels both have (2P) or (Solo) appended at the end.
+    pub name: String,
+    /// Internal user UUID of the person who published the level in the game.
+    pub publisher_id: Uuid,
+    /// The current status of the level.
+    pub status: LevelStatus,
+    /// Whether this level requires raw footage while pending.
+    pub requires_raw_footage: Option<bool>, // Default: false
+    /// Level ID in the game. May not be unique for 2P levels.
+    pub level_id: i32,
+    /// Whether this is the 2P version of a level or not.
+    pub two_player: bool,
+    /// Newground's song ID for the level.
+    pub song: Option<i32>,
+    /// Tags that describe the level. Includes gameplay, length, version, etc.. tags.
+    pub tags: Option<Vec<Option<String>>>,
+    /// Description of the level.
+    pub description: Option<String>,
+    /// Estimated NLW tier for pending levels without an NLW tier or list position yet.
+    pub nlw_tier_estimate: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, AsChangeset, ToSchema, Debug)]
+#[diesel(table_name=levels)]
+pub struct LevelUpdate {
+    /// The 1-indexed position of the level on the list.
+    #[serde(default, with = "double_option")]
+    pub position: Option<Option<i32>>,
+    /// Name of the level in the game. If multiple levels share the same name, their creator's name is appended at the end. 2P levels both have (2P) or (Solo) appended at the end.
+    pub name: Option<String>,
+    /// Internal user UUID of the person who published the level in the game.
+    pub publisher_id: Option<Uuid>,
+    /// The current status of the level.
+    pub status: Option<LevelStatus>,
+    /// Whether this level requires raw footage while pending.
+    pub requires_raw_footage: Option<bool>,
+    /// Level ID in the game. May not be unique for 2P levels.
+    pub level_id: Option<i32>,
+    /// Whether this is the 2P version of a level or not.
+    pub two_player: Option<bool>,
+    /// Newground's song ID for the level.
+    #[serde(default, with = "double_option")]
+    pub song: Option<Option<i32>>,
+    /// Tags that describe the level. Includes gameplay, length, version, etc.. tags.
+    pub tags: Option<Vec<Option<String>>>,
+    /// Description of the level.
+    #[serde(default, with = "double_option")]
+    pub description: Option<Option<String>>,
+    /// Estimated NLW tier for pending levels without an NLW tier or list position yet.
+    #[serde(default, with = "double_option")]
+    pub nlw_tier_estimate: Option<Option<String>>,
+}
+
+// Level struct that has publisher and verification resolved
+#[derive(Serialize, Debug, ToSchema)]
+pub struct ResolvedLevel {
+    /// Internal level UUID
+    pub id: Uuid,
+    /// The 1-indexed position of the level on the list.
+    pub position: Option<i32>,
+    /// Name of the level in the game. If multiple levels share the same name, their creator's name is appended at the end. 2P levels both have (2P) or (Solo) appended at the end.
+    pub name: String,
+    /// Points awarded for completing the level.
+    pub points: i32,
+    /// The current status of the level.
+    pub status: LevelStatus,
+    /// Whether this level requires raw footage while pending.
+    pub requires_raw_footage: bool,
+    /// Level ID in the game. May not be unique for 2P levels.
+    pub level_id: i32,
+    /// Whether this is the 2P version of a level or not.
+    pub two_player: bool,
+    /// Tags that describe the level. Includes gameplay, length, version, etc.. tags.
+    pub tags: Vec<Option<String>>,
+    /// Description of the level.
+    pub description: Option<String>,
+    /// Newground's song ID for the level.
+    pub song: Option<i32>,
+    /// Enjoyment rating for the level, fetched from EDEL (Extreme Demon Enjoyments List).
+    pub edel_enjoyment: Option<f64>,
+    /// Whether the EDEL enjoyment rating is pending (considered unreliable) or not.
+    pub is_edel_pending: bool,
+    /// GDDL tier for the level, fetched from GDDL (GD Demon Ladder).
+    pub gddl_tier: Option<f64>,
+    /// NLW tier for the level, fetched from NLW (Non List Worthy).
+    pub nlw_tier: Option<String>,
+    /// Estimated NLW tier for pending levels without an NLW tier or list position yet.
+    pub nlw_tier_estimate: Option<String>,
+    /// User who published the level.
+    pub publisher: BaseUser,
+    /// Records that are marked as verifications for the level.
+    pub verifications: Vec<LevelResolvedRecord>,
+}
+#[derive(Serialize, Deserialize, Debug, ToSchema, Default)]
+pub struct LevelQueryOptions {
+    pub exclude_legacy: Option<bool>,
+    pub exclude_pending: Option<bool>,
+    pub exclude_removed: Option<bool>,
+    pub at: Option<DateTime<Utc>>,
+}
+
+impl Level {
+    pub fn find_all(
+        conn: &mut DbConnection,
+        list: List,
+        query: &LevelQueryOptions,
+    ) -> Result<Vec<Self>, ApiError> {
+        let mut levels = if let Some(at) = query.at {
+            Self::get_all_levels_at_timestamp(conn, list, at)?
+        } else {
+            levels::table
+                .filter(levels::list_id.eq(list))
+                .select(Level::as_select())
+                .order_by((
+                    levels::position.asc().nulls_last(),
+                    levels::status.asc(),
+                    levels::name.asc(),
+                ))
+                .load::<Self>(conn)?
+        };
+
+        levels.retain(|level| {
+            !((query.exclude_legacy == Some(true) && level.status == LevelStatus::Legacy)
+                || (query.exclude_pending.unwrap_or(true) && level.status == LevelStatus::Pending)
+                || (query.exclude_removed.unwrap_or(true) && level.status == LevelStatus::Removed))
+        });
+        Ok(levels)
+    }
+
+    fn get_all_levels_at_timestamp(
+        conn: &mut DbConnection,
+        list: List,
+        at: DateTime<Utc>,
+    ) -> Result<Vec<Self>, ApiError> {
+        let cutoff = position_history::table
+            .filter(position_history::list_id.eq(list))
+            .filter(position_history::created_at.le(at))
+            .count()
+            .get_result::<i64>(conn)?;
+
+        let cutoff = i32::try_from(cutoff).map_err(|error| {
+            ApiError::InternalServerError(format!(
+                "Position history exceeds supported range: {error}"
+            ))
+        })?;
+
+        if cutoff == 0 {
+            return Ok(Vec::new());
+        }
+
+        let mut time_machine_levels = position_history_full_view::table
+            .filter(position_history_full_view::list_id.eq(list))
+            .filter(position_history_full_view::ord.le(cutoff))
+            .distinct_on(position_history_full_view::affected_level)
+            .order_by((
+                position_history_full_view::affected_level.asc(),
+                position_history_full_view::ord.desc(),
+            ))
+            .inner_join(levels::table)
+            .select((
+                levels::id,
+                levels::name,
+                position_history_full_view::position,
+                levels::publisher_id,
+                levels::points,
+                position_history_full_view::status,
+                levels::requires_raw_footage,
+                levels::level_id,
+                levels::two_player,
+                levels::tags,
+                levels::description,
+                levels::song,
+                levels::edel_enjoyment,
+                levels::is_edel_pending,
+                levels::gddl_tier,
+                levels::nlw_tier,
+                levels::nlw_tier_estimate,
+            ))
+            .load::<Self>(conn)?;
+
+        time_machine_levels.sort_by(|left, right| {
+            (
+                left.position.is_none(),
+                left.position,
+                match left.status {
+                    LevelStatus::MainList => 0,
+                    LevelStatus::Legacy => 1,
+                    LevelStatus::Pending => 2,
+                    LevelStatus::Removed => 3,
+                },
+                left.name.as_str(),
+                left.id,
+            )
+                .cmp(&(
+                    right.position.is_none(),
+                    right.position,
+                    match right.status {
+                        LevelStatus::MainList => 0,
+                        LevelStatus::Legacy => 1,
+                        LevelStatus::Pending => 2,
+                        LevelStatus::Removed => 3,
+                    },
+                    right.name.as_str(),
+                    right.id,
+                ))
+        });
+
+        Ok(time_machine_levels)
+    }
+
+    pub fn create(
+        conn: &mut DbConnection,
+        list: List,
+        level: LevelPlace,
+    ) -> Result<Self, ApiError> {
+        let level = diesel::insert_into(levels::table)
+            .values((level, levels::list_id.eq(list)))
+            .returning(Self::as_select())
+            .get_result(conn)?;
+        Ok(level)
+    }
+
+    pub fn update(
+        conn: &mut DbConnection,
+        list: List,
+        id: Uuid,
+        level: LevelUpdate,
+    ) -> Result<Self, ApiError> {
+        let level = diesel::update(levels::table)
+            .set(level)
+            .filter(levels::list_id.eq(list))
+            .filter(levels::id.eq(id))
+            .returning(Self::as_select())
+            .get_result(conn)?;
+        Ok(level)
+    }
+}
+
+impl LevelWithUserCompletionStatus {
+    pub fn find_all(
+        conn: &mut DbConnection,
+        list: List,
+        query: &LevelQueryOptions,
+        user_id: Option<Uuid>,
+    ) -> Result<Vec<Self>, ApiError> {
+        let levels = Level::find_all(conn, list, query)?;
+
+        let completed_level_ids = match user_id {
+            Some(user_id) if !levels.is_empty() => {
+                let level_ids = levels.iter().map(|level| level.id).collect::<Vec<_>>();
+                records::table
+                    .filter(records::list_id.eq(list))
+                    .filter(records::submitted_by.eq(user_id))
+                    .filter(records::level_id.eq_any(level_ids))
+                    .select(records::level_id)
+                    .distinct()
+                    .load::<Uuid>(conn)?
+                    .into_iter()
+                    .collect::<HashSet<_>>()
+            }
+            _ => HashSet::new(),
+        };
+
+        Ok(levels
+            .into_iter()
+            .map(|level| Self {
+                completed_by_user: user_id.map(|_| completed_level_ids.contains(&level.id)),
+                level,
+            })
+            .collect())
+    }
+}
+
+impl ResolvedLevel {
+    pub fn find(conn: &mut DbConnection, list: List, id: Uuid) -> Result<Self, ApiError> {
+        let (level, publisher) = levels::table
+            .filter(levels::list_id.eq(list))
+            .filter(levels::id.eq(id))
+            .inner_join(users::table)
+            .select((Level::as_select(), BaseUserWithBanLevel::as_select()))
+            .first::<(Level, BaseUserWithBanLevel)>(conn)?;
+
+        let verifications_rows = records::table
+            .filter(records::list_id.eq(list))
+            .filter(records::level_id.eq(id))
+            .filter(records::is_verification.eq(true))
+            .order(records::achieved_at.asc())
+            .inner_join(users::table)
+            .select((Record::as_select(), BaseUserWithBanLevel::as_select()))
+            .load::<(Record, BaseUserWithBanLevel)>(conn)?;
+
+        let verifications = verifications_rows
+            .into_iter()
+            .map(|(record, user)| {
+                LevelResolvedRecord::from_data(
+                    record,
+                    BaseUser::from_base_user_with_ban_level(user),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let resolved_level = Self::from_data(
+            level,
+            BaseUser::from_base_user_with_ban_level(publisher),
+            verifications,
+        );
+        Ok(resolved_level)
+    }
+
+    pub fn from_data(
+        level: Level,
+        publisher: BaseUser,
+        verifications: Vec<LevelResolvedRecord>,
+    ) -> Self {
+        Self {
+            id: level.id,
+            position: level.position,
+            name: level.name,
+            points: level.points,
+            status: level.status,
+            requires_raw_footage: level.requires_raw_footage,
+            level_id: level.level_id,
+            two_player: level.two_player,
+            tags: level.tags,
+            description: level.description,
+            song: level.song,
+            edel_enjoyment: level.edel_enjoyment,
+            is_edel_pending: level.is_edel_pending,
+            gddl_tier: level.gddl_tier,
+            nlw_tier: level.nlw_tier,
+            nlw_tier_estimate: level.nlw_tier_estimate,
+            publisher,
+            verifications,
+        }
+    }
+}

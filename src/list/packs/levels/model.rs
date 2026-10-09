@@ -1,0 +1,113 @@
+use crate::app_data::db::DbConnection;
+use crate::error_handler::ApiError;
+use crate::list::levels::BaseLevel;
+use crate::list::List;
+use crate::schema::{levels, pack_levels};
+use diesel::insert_into;
+use uuid::Uuid;
+
+use diesel::prelude::*;
+impl BaseLevel {
+    pub fn pack_add_all(
+        conn: &mut DbConnection,
+        list: List,
+        pack_id: Uuid,
+        levels: Vec<Uuid>,
+    ) -> Result<Vec<Self>, ApiError> {
+        conn.transaction(move |connection| -> Result<Vec<Self>, ApiError> {
+            Self::add_levels(list, pack_id, levels.as_ref(), connection)?;
+
+            let levels: Vec<BaseLevel> = pack_levels::table
+                .filter(pack_levels::list_id.eq(list))
+                .filter(pack_levels::pack_id.eq(pack_id))
+                .inner_join(levels::table)
+                .select(BaseLevel::as_select())
+                .load(connection)?;
+            Ok(levels)
+        })
+    }
+
+    pub fn pack_set_all(
+        conn: &mut DbConnection,
+        list: List,
+        pack_id: Uuid,
+        levels: Vec<Uuid>,
+    ) -> Result<Vec<Self>, ApiError> {
+        conn.transaction(move |connection| -> Result<Vec<Self>, ApiError> {
+            diesel::delete(
+                pack_levels::table
+                    .filter(pack_levels::list_id.eq(list))
+                    .filter(pack_levels::pack_id.eq(pack_id)),
+            )
+            .execute(connection)?;
+
+            Self::add_levels(list, pack_id, &levels, connection)?;
+
+            let levels: Vec<BaseLevel> = pack_levels::table
+                .filter(pack_levels::list_id.eq(list))
+                .filter(pack_levels::pack_id.eq(pack_id))
+                .inner_join(levels::table)
+                .select(BaseLevel::as_select())
+                .load(connection)?;
+            Ok(levels)
+        })
+    }
+
+    pub fn pack_delete_all(
+        conn: &mut DbConnection,
+        list: List,
+        pack_id: Uuid,
+        levels: Vec<Uuid>,
+    ) -> Result<Vec<Self>, ApiError> {
+        conn.transaction(move |connection| -> Result<Vec<Self>, ApiError> {
+            Self::delete_levels(list, pack_id, &levels, connection)?;
+
+            let levels: Vec<BaseLevel> = pack_levels::table
+                .filter(pack_levels::list_id.eq(list))
+                .filter(pack_levels::pack_id.eq(pack_id))
+                .inner_join(levels::table)
+                .select(BaseLevel::as_select())
+                .load(connection)?;
+            Ok(levels)
+        })
+    }
+
+    fn add_levels(
+        list: List,
+        pack_id: Uuid,
+        levels: &[Uuid],
+        conn: &mut DbConnection,
+    ) -> Result<(), ApiError> {
+        insert_into(pack_levels::table)
+            .values(
+                levels
+                    .iter()
+                    .map(|level| {
+                        (
+                            pack_levels::list_id.eq(list),
+                            pack_levels::pack_id.eq(pack_id),
+                            pack_levels::level_id.eq(level),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .execute(conn)?;
+        Ok(())
+    }
+
+    pub fn delete_levels(
+        list: List,
+        pack_id: Uuid,
+        levels: &[Uuid],
+        conn: &mut DbConnection,
+    ) -> Result<(), ApiError> {
+        diesel::delete(
+            pack_levels::table
+                .filter(pack_levels::list_id.eq(list))
+                .filter(pack_levels::pack_id.eq(pack_id))
+                .filter(pack_levels::level_id.eq_any(levels)),
+        )
+        .execute(conn)?;
+        Ok(())
+    }
+}

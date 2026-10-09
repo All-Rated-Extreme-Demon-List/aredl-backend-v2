@@ -2,17 +2,11 @@ use crate::app_data::db::DbConnection;
 use crate::auth::{permission, Authenticated, Permission};
 use crate::clans::Clan;
 use crate::error_handler::ApiError;
+use crate::list::submissions::SubmissionStatus;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::roles::Role;
-use crate::schema::{
-    aredl::submissions, arepl::submissions as plat_submissions, clan_members, clans, roles,
-    user_roles, users,
-};
+use crate::schema::{clan_members, clans, roles, submissions, user_roles, users};
 use crate::users::badges::UserBadge;
-use crate::{
-    aredl::submissions::SubmissionStatus,
-    arepl::submissions::SubmissionStatus as PlatSubmissionStatus,
-};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::pg::Pg;
 use serde::{Deserialize, Serialize};
@@ -405,7 +399,7 @@ impl User {
             .get_result::<Self>(conn)?;
 
         if ban_level >= 3 {
-            // Set user's pending classic submissions to `Denied`
+            // Set user's pending submissions to `Denied`
             diesel::update(
                 submissions::table
                     .filter(submissions::submitted_by.eq(user_id))
@@ -415,19 +409,6 @@ impl User {
                 submissions::status.eq(SubmissionStatus::Denied),
                 submissions::reviewer_id.eq(Some(authenticated.user_id)),
                 submissions::reviewer_notes.eq("This submission has been automatically rejected because this player has been list banned."),
-            ))
-            .execute(conn)?;
-
-            // Set user's pending platformer submissions to `Denied`
-            diesel::update(
-                plat_submissions::table
-                    .filter(plat_submissions::submitted_by.eq(user_id))
-                    .filter(plat_submissions::status.eq(PlatSubmissionStatus::Pending)),
-            )
-            .set((
-                plat_submissions::status.eq(PlatSubmissionStatus::Denied),
-                plat_submissions::reviewer_id.eq(Some(authenticated.user_id)),
-                plat_submissions::reviewer_notes.eq("This submission has been automatically rejected because this player has been list banned."),
             ))
             .execute(conn)?;
         }

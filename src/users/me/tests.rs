@@ -1,15 +1,16 @@
 #[cfg(test)]
 use {
     crate::{
-        aredl::levels::test_utils::{
-            create_test_level as create_test_aredl_level,
-            create_test_level_with_record as create_test_aredl_level_with_record,
-            get_test_level as get_test_aredl_level,
-        },
-        arepl::levels::test_utils::{
-            create_test_level_with_record, get_test_level as get_test_arepl_level,
-        },
         auth::create_test_token,
+        list::{
+            levels::test_utils::{
+                create_test_level as create_test_aredl_level,
+                create_test_level_with_record as create_test_aredl_level_with_record,
+                create_test_level_with_record_for_list, get_test_level as get_test_aredl_level,
+                get_test_level as get_test_arepl_level,
+            },
+            List,
+        },
         test_utils::init_test_app,
         users::test_utils::{
             create_test_user, set_test_user_background_level, set_test_user_ban_level,
@@ -204,7 +205,8 @@ async fn update_background_level_arepl() {
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    let (level_uuid, _) = create_test_level_with_record(&db, user_id).await;
+    let (level_uuid, _) =
+        create_test_level_with_record_for_list(&db, List::Platformer, user_id).await;
 
     let level_id = get_test_arepl_level(&db, level_uuid).await.level_id;
 

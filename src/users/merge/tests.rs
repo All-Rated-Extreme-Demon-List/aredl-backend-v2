@@ -1,7 +1,8 @@
 #[cfg(test)]
 use {
     crate::{
-        aredl::{
+        auth::{create_test_token, Permission},
+        list::{
             levels::test_utils::{create_test_level, create_test_level_with_record},
             records::test_utils::{
                 create_test_record, get_test_record, test_records_for_level, test_records_for_user,
@@ -11,7 +12,6 @@ use {
                 test_submission_history_count,
             },
         },
-        auth::{create_test_token, Permission},
         test_utils::*,
         users::{
             merge::test_utils::create_test_merge_log,

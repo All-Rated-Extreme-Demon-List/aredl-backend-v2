@@ -1,0 +1,75 @@
+use crate::list::submissions::routes::SubmissionPath;
+use crate::list::List;
+use crate::{
+    app_data::db::DbAppState,
+    auth::{Authenticated, UserAuth},
+    cache_control::CacheController,
+    error_handler::{ApiError, ErrorResponse},
+    list::submissions::{
+        queue::{QueuePositionResponse, SubmissionQueue},
+        Submission,
+    },
+};
+use actix_web::{get, web, HttpResponse};
+use std::sync::Arc;
+use utoipa::OpenApi;
+
+#[utoipa::path(
+    get,
+    summary = "[Auth]Get queue position for a submission",
+    description = "Returns the position of a specific submission in the pending queue.",
+    tag = "List - Submissions",
+    responses(
+        (status = 200, description = "Queue position found", body = QueuePositionResponse),
+        (status = 404, description = "Submission not found or not pending", body = ErrorResponse),
+    ),
+    params(
+        ("list" = List, Path, description = "The selected list (classic / aredl or platformer / arepl)"),
+        ("id" = Uuid, description = "The ID of the submission to check position for")
+    ),
+    security(("bearer_token" = [])),
+)]
+#[get("{id}/queue", wrap = "UserAuth::load()")]
+async fn get_queue_position(
+    db: web::Data<Arc<DbAppState>>,
+    path: web::Path<SubmissionPath>,
+    _auth: Authenticated,
+) -> Result<HttpResponse, ApiError> {
+    let (position, priority) = web::block(move || {
+        Submission::get_queue_position(&mut db.connection()?, path.list, path.id)
+    })
+    .await??;
+
+    Ok(HttpResponse::Ok().json(QueuePositionResponse { position, priority }))
+}
+
+#[utoipa::path(
+    get,
+    summary = "Get submissions queue",
+    description = "Get the amount of pending submissions.",
+    tag = "List - Submissions",
+    params(("list" = List, Path, description = "The selected list (classic / aredl or platformer / arepl)")),
+    responses(
+        (status = 200, body = SubmissionQueue),
+    )
+)]
+#[get("queue", wrap = "CacheController::public_with_max_age(60)")]
+async fn get_queue(
+    list: web::Path<List>,
+    db: web::Data<Arc<DbAppState>>,
+) -> Result<HttpResponse, ApiError> {
+    let submission =
+        web::block(move || SubmissionQueue::get_queue(&mut db.connection()?, *list)).await??;
+    Ok(HttpResponse::Ok().json(submission))
+}
+
+#[derive(OpenApi)]
+#[openapi(
+    components(schemas(SubmissionQueue, QueuePositionResponse,)),
+    paths(get_queue, get_queue_position,)
+)]
+pub struct ApiDoc;
+
+pub fn init_routes(config: &mut web::ServiceConfig) {
+    config.service(get_queue).service(get_queue_position);
+}

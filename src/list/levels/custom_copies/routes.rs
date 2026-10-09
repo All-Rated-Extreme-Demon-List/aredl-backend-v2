@@ -1,0 +1,189 @@
+use crate::{
+    app_data::db::DbAppState,
+    auth::{Authenticated, Permission, UserAuth},
+    error_handler::{ApiError, ErrorResponse},
+    list::{
+        levels::{
+            custom_copies::{
+                LevelCustomCopy, LevelCustomCopyBody, LevelCustomCopyQueryOptions,
+                LevelCustomCopyResolved, LevelCustomCopyStatus, LevelCustomCopyType,
+                LevelCustomCopyUpdate,
+            },
+            id_resolver::resolve_level_id,
+            routes::LevelPath,
+        },
+        List,
+    },
+    CacheController,
+};
+use actix_web::{delete, get, patch, post, web, HttpResponse};
+use std::sync::Arc;
+use utoipa::OpenApi;
+use uuid::Uuid;
+
+#[utoipa::path(
+    get,
+    summary = "List Custom Copies",
+    description = "List all custom copies for a level",
+    tag = "List - Levels (Custom Copies)",
+    responses(
+        (status = 200, body = [LevelCustomCopyResolved]),
+        (status = 400, description = "Invalid level ID", body = ErrorResponse),
+    ),
+    params(
+        ("list" = List, Path, description = "The selected list. (classic / aredl or platformer / arepl)"),
+        ("level_id" = String, Path, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)"),
+        ("type_filter" = Option<LevelCustomCopyType>, Query, description = "The type of custom copy to filter by."),
+        ("status_filter" = Option<LevelCustomCopyStatus>, Query, description = "The status of a custom copy to filter by."),
+        ("description_filter" = Option<Option<String>>, Query, description = "Filter for the description of this custom copy. Use SQL LIKE syntax."),
+        ("added_by" = Option<Uuid>, Query, description = "Filter by the moderator that added a custom copy."),
+    )
+)]
+#[get("", wrap = "CacheController::public_with_max_age(900)")]
+async fn find_all(
+    db: web::Data<Arc<DbAppState>>,
+    query: web::Query<LevelCustomCopyQueryOptions>,
+    path: web::Path<LevelPath>,
+) -> Result<HttpResponse, ApiError> {
+    let custom_copies = web::block(move || {
+        LevelCustomCopy::find_all_level(
+            &mut db.connection()?,
+            &query.into_inner(),
+            path.list,
+            &path.level_id,
+        )
+    })
+    .await??;
+    Ok(HttpResponse::Ok().json(custom_copies))
+}
+
+#[utoipa::path(
+    post,
+    summary = "[Staff]Add Custom Copy",
+    description = "Add a custom copy to a level",
+    tag = "List - Levels (Custom Copies)",
+    params(
+        ("list" = List, Path, description = "The selected list. (classic / aredl or platformer / arepl)"),
+        ("level_id" = String, Path, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
+    ),
+    responses(
+        (status = 201, body = LevelCustomCopy),
+        (status = 400, description = "Invalid level ID", body = ErrorResponse),
+        (status = 404, description = "Level not found", body = ErrorResponse)
+    ),
+    security(("bearer_token" = ["LevelCustomCopiesModify"])),
+)]
+#[post("", wrap = "UserAuth::require(Permission::LevelCustomCopiesModify)")]
+async fn create(
+    db: web::Data<Arc<DbAppState>>,
+    body: web::Json<LevelCustomCopyBody>,
+    path: web::Path<LevelPath>,
+    auth: Authenticated,
+) -> Result<HttpResponse, ApiError> {
+    let custom_copies = web::block(move || {
+        let conn = &mut db.connection()?;
+        let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
+        LevelCustomCopy::create(conn, body.into_inner(), path.list, level_id, &auth)
+    })
+    .await??;
+    Ok(HttpResponse::Created().json(custom_copies))
+}
+
+#[derive(serde::Deserialize)]
+struct CustomCopyPath {
+    list: List,
+    level_id: String,
+    copy_id: Uuid,
+}
+
+#[utoipa::path(
+    patch,
+    summary = "[Staff]Update Custom Copy",
+    description = "Update a custom copy's info",
+    tag = "List - Levels (Custom Copies)",
+    params(
+        ("list" = List, Path, description = "The selected list. (classic / aredl or platformer / arepl)"),
+        ("level_id" = String, Path, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)"),
+        ("copy_id" = Uuid, description = "The internal ID of this custom copy")
+    ),
+    responses(
+        (status = 200, body = LevelCustomCopy),
+        (status = 404, description = "Custom copy not found", body = ErrorResponse)
+    ),
+    security(("bearer_token" = ["LevelCustomCopiesModify"])),
+)]
+#[patch(
+    "/{copy_id}",
+    wrap = "UserAuth::require(Permission::LevelCustomCopiesModify)"
+)]
+async fn update(
+    db: web::Data<Arc<DbAppState>>,
+    body: web::Json<LevelCustomCopyUpdate>,
+    path: web::Path<CustomCopyPath>,
+) -> Result<HttpResponse, ApiError> {
+    let custom_copies = web::block(move || {
+        let conn = &mut db.connection()?;
+        let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
+        LevelCustomCopy::update(conn, body.into_inner(), path.list, level_id, &path.copy_id)
+    })
+    .await??;
+    Ok(HttpResponse::Ok().json(custom_copies))
+}
+
+#[utoipa::path(
+    delete,
+    summary = "[Staff]Delete Custom Copy",
+    description = "Deletes a custom copy",
+    tag = "List - Levels (Custom Copies)",
+    params(
+        ("list" = List, Path, description = "The selected list. (classic / aredl or platformer / arepl)"),
+        ("level_id" = String, Path, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)"),
+        ("copy_id" = Uuid, Path, description = "The internal ID of this custom copy")
+    ),
+    responses(
+        (status = 204),
+    ),
+    security(("bearer_token" = ["LevelCustomCopiesModify"])),
+)]
+#[delete(
+    "/{copy_id}",
+    wrap = "UserAuth::require(Permission::LevelCustomCopiesModify)"
+)]
+async fn delete(
+    db: web::Data<Arc<DbAppState>>,
+    path: web::Path<CustomCopyPath>,
+) -> Result<HttpResponse, ApiError> {
+    web::block(move || {
+        let conn = &mut db.connection()?;
+        let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
+        LevelCustomCopy::delete(conn, path.list, level_id, &path.copy_id)
+    })
+    .await??;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+#[derive(OpenApi)]
+#[openapi(
+    tags((
+        name = "List - Levels (Custom Copies)",
+        description = "Endpoints for fetching and managing level custom copies on the AREDL",
+    )),
+    components(schemas(
+        LevelCustomCopy,
+        LevelCustomCopyBody,
+        LevelCustomCopyUpdate,
+
+    )),
+    paths(find_all, create, update, delete)
+)]
+pub struct ApiDoc;
+
+pub fn init_routes(config: &mut web::ServiceConfig) {
+    config.service(
+        web::scope("/{level_id}/custom-copies")
+            .service(find_all)
+            .service(create)
+            .service(update)
+            .service(delete),
+    );
+}

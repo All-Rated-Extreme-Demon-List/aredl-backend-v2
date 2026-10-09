@@ -5,7 +5,7 @@ use crate::providers::ProvidersAppState;
 use crate::scheduled::{parse_startup_schedule, sleep_until_next};
 use crate::schema::{oauth_connected_accounts, user_roles};
 use crate::utils::patreon::{patreon_plus_role_id, set_users_submissions_to_priority};
-use crate::{get_optional_secret, get_secret};
+use crate::{create_client, get_optional_secret, get_secret};
 use serde::Deserialize;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -18,8 +18,7 @@ use diesel::prelude::*;
 pub struct PatreonPlusSyncResult {
     pub matched_user_ids: Vec<Uuid>,
     pub removed_user_count: usize,
-    pub aredl_prioritized_count: usize,
-    pub arepl_prioritized_count: usize,
+    pub prioritized_count: usize,
 }
 
 struct PatreonActiveMembers {
@@ -93,12 +92,9 @@ pub async fn start_patreon_plus_sync(
         return Ok(());
     };
 
-    let client = reqwest::Client::builder()
-        .user_agent("AredlBackend/2.0 (+https://api.aredl.net)")
-        .build()
-        .map_err(|error| {
-            StartupError::Init(format!("Failed to start Patreon sync HTTP client: {error}"))
-        })?;
+    let client = create_client().map_err(|error| {
+        StartupError::Init(format!("Failed to start Patreon sync HTTP client: {error}"))
+    })?;
     let patreon_base = patreon_auth.api_base_uri.clone();
 
     task::spawn(async move {
@@ -126,8 +122,7 @@ pub async fn start_patreon_plus_sync(
                                 patreon_members = active_members.total_member_count,
                                 linked_members = result.matched_user_ids.len(),
                                 removed_members = result.removed_user_count,
-                                aredl_prioritized = result.aredl_prioritized_count,
-                                arepl_prioritized = result.arepl_prioritized_count,
+                                prioritized = result.prioritized_count,
                                 "Synced Patreon AREDL+ users"
                             ),
                             Err(e) => tracing::error!("Failed to apply Patreon AREDL+ sync: {e}"),
@@ -261,14 +256,12 @@ pub fn apply_patreon_plus_sync(
                 .execute(conn)?;
         }
 
-        let (aredl_prioritized_count, arepl_prioritized_count) =
-            set_users_submissions_to_priority(conn, &matched_user_ids)?;
+        let prioritized_count = set_users_submissions_to_priority(conn, &matched_user_ids)?;
 
         Ok::<_, ApiError>(PatreonPlusSyncResult {
             matched_user_ids,
             removed_user_count,
-            aredl_prioritized_count,
-            arepl_prioritized_count,
+            prioritized_count,
         })
     })
 }

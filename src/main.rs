@@ -14,13 +14,12 @@ mod tests;
 #[cfg(test)]
 mod test_utils;
 
-mod aredl;
-mod arepl;
 mod auth;
 mod cache_control;
 mod clans;
 mod docs;
 mod health;
+mod list;
 mod notifications;
 mod page_helper;
 mod roles;
@@ -159,8 +158,6 @@ async fn main() -> Result<(), StartupError> {
                     .wrap(NormalizePath::trim())
                     .wrap(TracingLogger::<AppRootSpanBuilder>::new())
                     .wrap(cors)
-                    .configure(aredl::init_routes)
-                    .configure(arepl::init_routes)
                     .configure(auth::init_routes)
                     .configure(users::init_routes)
                     .configure(roles::init_routes)
@@ -168,7 +165,8 @@ async fn main() -> Result<(), StartupError> {
                     .configure(notifications::init_routes)
                     .configure(health::init_routes)
                     .configure(shifts::init_routes)
-                    .configure(utils::init_routes),
+                    .configure(utils::init_routes)
+                    .configure(list::init_routes),
             )
             .service(
                 RapiDoc::with_openapi("/openapi.json", ApiDoc::openapi())
@@ -241,4 +239,12 @@ pub fn get_optional_secret(var_name: &str) -> Option<String> {
     } else {
         Some(value)
     }
+}
+
+pub fn create_client() -> Result<reqwest::Client, reqwest::Error> {
+    let client = reqwest::Client::builder()
+        .user_agent("AredlBackend/2.2 (+https://api.aredl.net)")
+        .build()?;
+
+    Ok(client)
 }

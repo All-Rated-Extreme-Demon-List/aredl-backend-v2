@@ -1,8 +1,9 @@
 use crate::app_data::db::DbAppState;
 use crate::error_handler::StartupError;
+use crate::list::submissions::SubmissionStatus;
 use crate::notifications::WebsocketNotification;
 use crate::scheduled::{sleep_until_next, startup_schedule};
-use crate::schema::shifts;
+use crate::schema::{notifications, shifts, submissions};
 use crate::shifts::Shift;
 use crate::shifts::ShiftStatus;
 
@@ -11,6 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast;
 use tokio::task;
+use uuid::Uuid;
 
 use diesel::prelude::*;
 pub async fn start_data_cleaner(
@@ -35,41 +37,39 @@ pub async fn start_data_cleaner(
 
                 tracing::info!("Cleaning old notifications");
 
-                if let Err(error) = diesel::sql_query(
-                    "DELETE FROM notifications WHERE created_at < NOW() - INTERVAL '1 month'",
+                diesel::delete(
+                    notifications::table.filter(
+                        notifications::created_at.lt(Utc::now() - chrono::Duration::days(30)),
+                    ),
                 )
                 .execute(conn)
-                {
-                    tracing::error!("Failed to clean notifications {error}");
-                }
+                .unwrap_or_else(|error| {
+                    tracing::error!("Failed to clean stale notifications: {error}",);
+                    0
+                });
 
                 tracing::info!("Cleaning stale submissions claims");
 
-                if let Err(error) = diesel::sql_query(
-                    "UPDATE aredl.submissions \
-                 SET status = 'Pending', reviewer_id = NULL \
-                 WHERE status = 'Claimed' \
-                   AND updated_at < NOW() - INTERVAL '120 minutes';",
+                diesel::update(
+                    submissions::table
+                        .filter(submissions::status.eq(SubmissionStatus::Claimed))
+                        .filter(
+                            submissions::updated_at.lt(Utc::now() - chrono::Duration::minutes(120)),
+                        ),
                 )
+                .set((
+                    submissions::status.eq(SubmissionStatus::Pending),
+                    submissions::reviewer_id.eq(None::<Uuid>),
+                ))
                 .execute(conn)
-                {
-                    tracing::error!("Failed to clean stale submissions claims for AREDL: {error}");
-                }
-
-                if let Err(error) = diesel::sql_query(
-                    "UPDATE arepl.submissions \
-                 SET status = 'Pending', reviewer_id = NULL \
-                 WHERE status = 'Claimed' \
-                   AND updated_at < NOW() - INTERVAL '120 minutes';",
-                )
-                .execute(conn)
-                {
-                    tracing::error!("Failed to clean stale submissions claims for AREPL: {error}");
-                }
+                .unwrap_or_else(|error| {
+                    tracing::error!("Failed to clean stale submissions claims: {error}",);
+                    0
+                });
 
                 tracing::info!("Expiring overdue shifts");
 
-                let aredl_expired_shifts: Vec<Shift> = shifts::table
+                let expired_shifts: Vec<Shift> = shifts::table
                     .filter(shifts::status.eq(ShiftStatus::Running))
                     .filter(shifts::end_at.lt(Utc::now()))
                     .load(conn)
@@ -92,9 +92,7 @@ pub async fn start_data_cleaner(
                     tracing::error!("Failed to expire shifts: {}", e);
                 }
 
-                let missed_shifts_payload = serde_json::json!({
-                    "aredl": aredl_expired_shifts,
-                });
+                let missed_shifts_payload = serde_json::json!(expired_shifts);
 
                 WebsocketNotification::send(&notify_tx, "SHIFTS_MISSED", &missed_shifts_payload);
 

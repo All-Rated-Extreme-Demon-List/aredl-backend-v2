@@ -1,10 +1,9 @@
-use crate::app_data::db::DbConnection;
-use crate::aredl::levels::Level as AredlLevel;
-use crate::arepl::levels::Level as AreplLevel;
 use crate::error_handler::ApiError;
-use crate::schema::{aredl, arepl, users};
+use crate::list::levels::Level;
+use crate::schema::{levels, users};
 use crate::users::badges::UserBadge;
 use crate::users::User;
+use crate::{app_data::db::DbConnection, schema::records};
 use chrono::{DateTime, Utc};
 use diesel::dsl::now;
 use serde::{Deserialize, Serialize};
@@ -82,23 +81,15 @@ impl User {
         }
 
         if let Some(Some(background_level)) = user.background_level {
-            let beaten_aredl_level: Option<AredlLevel> = aredl::records::table
-                .filter(aredl::records::submitted_by.eq(id))
-                .inner_join(aredl::levels::table)
-                .filter(aredl::levels::level_id.eq(background_level))
-                .select(AredlLevel::as_select())
+            let beaten_level: Option<Level> = records::table
+                .filter(records::submitted_by.eq(id))
+                .inner_join(levels::table)
+                .filter(levels::level_id.eq(background_level))
+                .select(Level::as_select())
                 .get_result(conn)
                 .optional()?;
 
-            let beaten_arepl_level: Option<AreplLevel> = arepl::records::table
-                .filter(arepl::records::submitted_by.eq(id))
-                .inner_join(arepl::levels::table)
-                .filter(arepl::levels::level_id.eq(background_level))
-                .select(AreplLevel::as_select())
-                .get_result(conn)
-                .optional()?;
-
-            if beaten_aredl_level.is_none() && beaten_arepl_level.is_none() {
+            if beaten_level.is_none() {
                 return Err(ApiError::BadRequest(
                     "You have not beaten the selected level.",
                 ));

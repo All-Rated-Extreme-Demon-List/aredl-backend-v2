@@ -195,28 +195,14 @@ impl UserStatistics {
         };
 
         match (*scope, kind) {
-            (_, ["level_completion", threshold]) => {
-                threshold.parse::<usize>().ok().is_some_and(|threshold| {
-                    scope_statistics
-                        .levels_records
-                        .iter()
-                        .map(|level| (level.scope, level.id, level.publisher_id))
-                        .collect::<HashSet<_>>()
-                        .len()
-                        >= threshold
-                })
-            }
-            (_, ["pack_completion", threshold]) => {
-                threshold.parse::<usize>().ok().is_some_and(|threshold| {
-                    scope_statistics
-                        .packs
-                        .iter()
-                        .map(|pack| (pack.scope, pack.id, pack.name.as_str()))
-                        .collect::<HashSet<_>>()
-                        .len()
-                        >= threshold
-                })
-            }
+            (_, ["level_completion", threshold]) => threshold
+                .parse::<usize>()
+                .ok()
+                .is_some_and(|threshold| scope_statistics.level_completion_count >= threshold),
+            (_, ["pack_completion", threshold]) => threshold
+                .parse::<usize>()
+                .ok()
+                .is_some_and(|threshold| scope_statistics.pack_completion_count >= threshold),
             ("global", ["bounty_board", bounty_type, threshold]) => {
                 threshold.parse::<i64>().ok().is_some_and(|threshold| {
                     scope_statistics
@@ -348,7 +334,7 @@ impl UserStatistics {
                 let mut level_versions = HashMap::new();
                 for level in &scope_statistics.levels_records {
                     let versions = level_versions
-                        .entry((level.scope, level.level_id))
+                        .entry((level.list_id, level.level_id))
                         .or_insert((false, false));
 
                     if level.two_player {

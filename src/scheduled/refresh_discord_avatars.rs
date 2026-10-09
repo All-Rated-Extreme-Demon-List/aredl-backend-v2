@@ -1,9 +1,9 @@
 use crate::app_data::db::DbAppState;
 use crate::error_handler::{ApiError, StartupError};
-use crate::get_secret;
 use crate::providers::ProvidersAppState;
 use crate::scheduled::{sleep_until_next, startup_schedule};
 use crate::schema::users;
+use crate::{create_client, get_secret};
 use chrono::Utc;
 use reqwest::header::{HeaderMap, AUTHORIZATION};
 use reqwest::StatusCode;
@@ -63,14 +63,11 @@ pub async fn start_discord_avatars_refresher(
         |discord_auth| discord_auth.api_base_uri.clone(),
     );
 
-    let client = reqwest::Client::builder()
-        .user_agent("AredlBackend/2.0 (+https://api.aredl.net)")
-        .build()
-        .map_err(|error| {
-            StartupError::Init(format!(
-                "Failed to start Discord avatar refresh HTTP client: {error}"
-            ))
-        })?;
+    let client = create_client().map_err(|error| {
+        StartupError::Init(format!(
+            "Failed to start Discord avatar refresh HTTP client: {error}"
+        ))
+    })?;
 
     let discord_bot_token = get_secret("DISCORD_BOT_TOKEN")?;
 
