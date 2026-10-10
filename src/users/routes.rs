@@ -15,7 +15,7 @@ use utoipa::OpenApi;
 #[utoipa::path(
     get,
     summary = "[AuthPublic]Get user",
-    description = "Get a specific user by their internal UUID, username or discord ID",
+    description = "Get a specific user by their internal UUID, username or discord ID. The UUID of a user who has been merged will resolve to the user they were merged into.",
     tag = "Users",
     params(
         ("id" = String, Path, description = "The internal UUID, username or discord ID of the user to lookup"),

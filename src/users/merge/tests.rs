@@ -14,7 +14,7 @@ use {
         },
         test_utils::*,
         users::{
-            merge::test_utils::create_test_merge_log,
+            merge::test_utils::{create_test_merge_log, merge_test_users},
             test_utils::{create_test_placeholder_user, create_test_user},
         },
     },
@@ -22,6 +22,40 @@ use {
     actix_web::test::{self, read_body_json},
     serde_json::json,
 };
+
+#[actix_web::test]
+async fn fetch_merged_user_by_previous_uuid() {
+    let (app, db, _, _) = init_test_app().await;
+    let (primary_user, primary_username) = create_test_user(&db, None).await;
+    let (secondary_user, secondary_username) = create_test_placeholder_user(&db).await;
+    let (_, profile_record) = create_test_level_with_record(&db, secondary_user).await;
+
+    merge_test_users(&db, primary_user, secondary_user);
+
+    for (path, record) in [("/users", None), ("/classic/profile", Some(profile_record))] {
+        let req = test::TestRequest::get()
+            .uri(&format!("{path}/{secondary_user}"))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: serde_json::Value = read_body_json(resp).await;
+        assert_eq!(body["id"], primary_user.to_string());
+        assert_eq!(body["username"], primary_username);
+        if let Some(record) = record {
+            assert!(body["records"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|entry| entry["id"] == record.to_string()));
+        }
+
+        let req = test::TestRequest::get()
+            .uri(&format!("{path}/{secondary_username}"))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_error_response!(resp, StatusCode::NOT_FOUND, Some("Not found"));
+    }
+}
 
 #[actix_web::test]
 async fn direct_merge() {

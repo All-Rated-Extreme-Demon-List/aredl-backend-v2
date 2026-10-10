@@ -5,7 +5,7 @@ use crate::error_handler::ApiError;
 use crate::list::submissions::SubmissionStatus;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::roles::Role;
-use crate::schema::{clan_members, clans, roles, submissions, user_roles, users};
+use crate::schema::{clan_members, clans, merge_logs, roles, submissions, user_roles, users};
 use crate::users::badges::UserBadge;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::pg::Pg;
@@ -266,6 +266,32 @@ impl User {
         }
     }
 
+    /// tries to fallback merge logs if the given uuid can't be found in the current users table
+    pub fn from_str_with_merge_log_fallback(
+        conn: &mut DbConnection,
+        user_id: &str,
+    ) -> Result<Self, ApiError> {
+        let Ok(uuid) = Uuid::parse_str(user_id) else {
+            return Self::from_str(conn, user_id);
+        };
+
+        if let Some(user) = users::table
+            .filter(users::id.eq(uuid))
+            .select(Self::as_select())
+            .first::<Self>(conn)
+            .optional()?
+        {
+            return Ok(user);
+        }
+
+        Ok(merge_logs::table
+            .inner_join(users::table)
+            .filter(merge_logs::secondary_user.eq(uuid))
+            .order((merge_logs::merged_at.desc(), merge_logs::id.desc()))
+            .select(Self::as_select())
+            .first::<Self>(conn)?)
+    }
+
     pub fn is_banned(user_id: Uuid, conn: &mut DbConnection) -> Result<bool, ApiError> {
         let user = users::table
             .filter(users::id.eq(user_id))
@@ -441,7 +467,7 @@ impl UserResolved {
         user_id: &str,
         authenticated: Option<&Authenticated>,
     ) -> Result<Self, ApiError> {
-        let user = User::from_str(conn, user_id)?;
+        let user = User::from_str_with_merge_log_fallback(conn, user_id)?;
         Self::from_user(conn, user, authenticated)
     }
 

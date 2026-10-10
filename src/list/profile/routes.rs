@@ -20,7 +20,7 @@ struct ProfilePath {
 #[utoipa::path(
     get,
     summary = "[AuthPublic]Profile",
-    description = "Get a user profile for the selected list",
+    description = "Get a user profile for the selected list. The UUID of a user who has been merged will resolve to the user they were merged into.",
     tag = "List",
     params(
         ("list" = List, Path, description = "The selected list. (classic / aredl or platformer / arepl)"),
