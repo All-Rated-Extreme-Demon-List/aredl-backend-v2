@@ -4,6 +4,7 @@ use crate::app_data::{
     providers::init_app_state as providers_init_app_state,
 };
 use crate::error_handler::configure_extractor_errors;
+use crate::users::avatar::AvatarRefresher;
 use actix_http::{Request, StatusCode};
 #[cfg(test)]
 use {crate::providers::ProvidersAppState, tokio::sync::broadcast::Sender};
@@ -88,6 +89,9 @@ pub async fn init_test_app() -> (
     let db_app_state = init_test_db_state();
 
     let providers_app_state = providers_init_app_state(db_app_state.clone()).await;
+    let avatar_refresher = AvatarRefresher::new(&providers_app_state)
+        .ok()
+        .map(Arc::new);
 
     let app = test::init_service(
         App::new()
@@ -96,6 +100,11 @@ pub async fn init_test_app() -> (
             .app_data(Data::new(auth_app_state.clone()))
             .app_data(Data::new(notify_tx.clone()))
             .app_data(Data::new(providers_app_state.clone()))
+            .configure(move |config| {
+                if let Some(avatar_refresher) = avatar_refresher {
+                    config.app_data(Data::new(avatar_refresher));
+                }
+            })
             .wrap(NormalizePath::trim())
             .wrap(TracingLogger::<AppRootSpanBuilder>::new())
             .wrap(BoxResponse)
@@ -136,6 +145,9 @@ pub async fn init_test_app_with_providers(
         }
         Err(providers_app_state) => providers_app_state,
     };
+    let avatar_refresher = AvatarRefresher::new(&providers_app_state)
+        .ok()
+        .map(Arc::new);
 
     let app = test::init_service(
         App::new()
@@ -144,6 +156,11 @@ pub async fn init_test_app_with_providers(
             .app_data(Data::new(auth_app_state.clone()))
             .app_data(Data::new(notify_tx.clone()))
             .app_data(Data::new(providers_app_state.clone()))
+            .configure(move |config| {
+                if let Some(avatar_refresher) = avatar_refresher {
+                    config.app_data(Data::new(avatar_refresher));
+                }
+            })
             .wrap(NormalizePath::trim())
             .wrap(TracingLogger::<AppRootSpanBuilder>::new())
             .wrap(BoxResponse)

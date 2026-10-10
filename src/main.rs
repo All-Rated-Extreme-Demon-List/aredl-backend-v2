@@ -51,11 +51,13 @@ use listenfd::ListenFd;
 use notifications::WebsocketNotification;
 use std::env;
 use std::fs;
+use std::sync::Arc;
 use tokio::sync::broadcast;
 use tracing::Span;
 use tracing_actix_web::{root_span, DefaultRootSpanBuilder, RootSpanBuilder, TracingLogger};
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::EnvFilter;
+use users::avatar::AvatarRefresher;
 use utoipa::OpenApi as _;
 use utoipa_rapidoc::RapiDoc;
 
@@ -101,6 +103,8 @@ async fn main() -> Result<(), StartupError> {
 
     let providers_app_state = providers::init_app_state(db_app_state.clone()).await;
 
+    let avatar_refresher = Arc::new(AvatarRefresher::new(&providers_app_state)?);
+
     db_app_state.run_pending_migrations()?;
 
     start_matviews_refresher(db_app_state.clone()).await?;
@@ -111,7 +115,7 @@ async fn main() -> Result<(), StartupError> {
 
     start_recurrent_shift_creator(db_app_state.clone(), notify_tx.clone()).await?;
 
-    start_discord_avatars_refresher(db_app_state.clone(), providers_app_state.clone()).await?;
+    start_discord_avatars_refresher(db_app_state.clone(), avatar_refresher.clone()).await?;
 
     start_patreon_plus_sync(db_app_state.clone(), providers_app_state.clone()).await?;
 
@@ -153,6 +157,7 @@ async fn main() -> Result<(), StartupError> {
                     .app_data(web::Data::new(auth_app_state.clone()))
                     .app_data(web::Data::new(db_app_state.clone()))
                     .app_data(web::Data::new(providers_app_state.clone()))
+                    .app_data(web::Data::new(avatar_refresher.clone()))
                     .app_data(web::Data::new(notify_tx.clone()))
                     .wrap(CacheController::default_no_store())
                     .wrap(NormalizePath::trim())

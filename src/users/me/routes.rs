@@ -1,6 +1,7 @@
 use crate::app_data::db::DbAppState;
 use crate::auth::{Authenticated, UserAuth};
 use crate::error_handler::{ApiError, ErrorResponse};
+use crate::users::avatar::{AvatarRefresher, RefreshError};
 use crate::users::badges::UserBadge;
 use crate::users::me::{clan, notifications, UserMeUpdate};
 use crate::users::{User, UserResolved};
@@ -100,6 +101,31 @@ async fn sync(
     Ok(HttpResponse::Ok().json(badges))
 }
 
+#[utoipa::path(
+    post,
+    summary = "[Auth]Refresh my Discord avatar",
+    description = "Fetch the authenticated user's current Discord avatar and decoration, including removals. Bypasses the scheduled refresh staleness check.",
+    tag = "Users - Me",
+    responses(
+        (status = 200, body = User),
+        (status = 400, description = "User has no linked Discord account", body = ErrorResponse),
+        (status = 429, description = "Refresh rate limited", body = ErrorResponse, headers(("Retry-After" = String, description = "Seconds until another refresh can be attempted"))),
+        (status = 502, description = "Discord request failed", body = ErrorResponse)
+    ),
+    security(("bearer_token" = []))
+)]
+#[post("/avatar/refresh", wrap = "UserAuth::load()")]
+async fn refresh_avatar(
+    db: web::Data<Arc<DbAppState>>,
+    refresher: web::Data<Arc<AvatarRefresher>>,
+    authenticated: Authenticated,
+) -> Result<HttpResponse, RefreshError> {
+    let user = refresher
+        .refresh_user(db.get_ref().clone(), authenticated.user_id)
+        .await?;
+    Ok(HttpResponse::Ok().json(user))
+}
+
 #[derive(OpenApi)]
 #[openapi(
     nest(
@@ -116,6 +142,7 @@ async fn sync(
         sync,
         find,
         update,
+        refresh_avatar,
     )
 )]
 pub struct ApiDoc;
@@ -126,6 +153,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .configure(clan::init_routes)
             .configure(notifications::init_routes)
             .service(sync)
+            .service(refresh_avatar)
             .service(find)
             .service(update),
     );
