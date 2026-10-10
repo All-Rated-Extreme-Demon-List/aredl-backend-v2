@@ -7,7 +7,7 @@ use utoipa::openapi::{
     path::ParameterIn,
     schema::Components,
     security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
-    OpenApi, Required, Server,
+    OpenApi, RefOr, Required, Server,
 };
 use utoipa::Modify;
 
@@ -126,9 +126,9 @@ impl Modify for ExtractorResponsesAddon {
                     .iter()
                     .flatten()
                     .chain(path_parameters.iter().flatten());
-                let has_query = parameters
-                    .clone()
-                    .any(|parameter| matches!(parameter.parameter_in, ParameterIn::Query));
+                let has_query = parameters.clone().any(|parameter| {
+                    matches!(parameter, RefOr::T(parameter) if matches!(parameter.parameter_in, ParameterIn::Query))
+                });
                 if has_query {
                     if let Some(content) =
                         add_error_response(operation, "400", "Invalid query parameters")
@@ -141,8 +141,9 @@ impl Modify for ExtractorResponsesAddon {
                     }
                 }
                 if operation.request_body.as_ref().is_some_and(|body| {
-                    body.required == Some(Required::True)
-                        && body.content.contains_key("application/json")
+                    matches!(body, RefOr::T(body)
+                        if body.required == Some(Required::True)
+                            && body.content.contains_key("application/json"))
                 }) {
                     add_error_response(operation, "400", "Invalid JSON body");
                 }

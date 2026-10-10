@@ -6,9 +6,7 @@ use utoipa::openapi::{
 };
 use utoipa::PartialSchema as _;
 
-pub(super) fn operations(
-    item: &mut PathItem,
-) -> impl Iterator<Item = (&'static str, &mut Operation)> {
+pub(super) fn operations(item: &mut PathItem) -> impl Iterator<Item = (&str, &mut Operation)> {
     [
         ("get", &mut item.get),
         ("post", &mut item.post),
@@ -18,9 +16,15 @@ pub(super) fn operations(
         ("head", &mut item.head),
         ("options", &mut item.options),
         ("trace", &mut item.trace),
+        ("query", &mut item.query),
     ]
     .into_iter()
     .filter_map(|(method, operation)| operation.as_mut().map(|operation| (method, operation)))
+    .chain(
+        item.additional_operations
+            .iter_mut()
+            .map(|(method, operation)| (method.as_str(), operation)),
+    )
 }
 
 pub(super) fn add_error_response<'a>(
@@ -46,16 +50,19 @@ pub(super) fn add_error_response<'a>(
         }
         response.description.push_str(description);
     }
-    Some(
-        response
-            .content
-            .entry("application/json".to_owned())
-            .or_insert_with(|| {
-                ContentBuilder::new()
-                    .schema(Some(ErrorResponse::schema()))
-                    .build()
-            }),
-    )
+    let content = response
+        .content
+        .entry("application/json".to_owned())
+        .or_insert_with(|| {
+            ContentBuilder::new()
+                .schema(Some(ErrorResponse::schema()))
+                .build()
+                .into()
+        });
+    let RefOr::T(content) = content else {
+        return None;
+    };
+    Some(content)
 }
 
 pub(super) fn add_error_example(content: &mut Content, name: &str, message: &str) {
