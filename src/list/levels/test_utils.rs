@@ -3,7 +3,9 @@ use {
     crate::app_data::db::DbAppState,
     crate::list::levels::{Level, LevelStatus},
     crate::list::List,
-    crate::schema::{levels, levels_created, pack_levels, position_history},
+    crate::schema::{
+        levels, levels_created, pack_levels, position_history, position_history_full_view,
+    },
     crate::{
         list::records::test_utils::{create_test_record, create_test_record_for_list},
         users::test_utils::create_test_user,
@@ -126,6 +128,16 @@ pub async fn refresh_test_position_history(db: &Arc<DbAppState>) {
         .bind::<diesel::sql_types::SmallInt, _>(List::Classic)
         .execute(&mut db.connection().unwrap())
         .expect("Failed to rebuild position history table");
+}
+
+#[cfg(test)]
+pub fn clear_test_position_history(db: &Arc<DbAppState>) {
+    diesel::delete(
+        position_history_full_view::table
+            .filter(position_history_full_view::list_id.eq(List::Classic)),
+    )
+    .execute(&mut db.connection().unwrap())
+    .expect("Failed to clear test position history");
 }
 
 #[cfg(test)]

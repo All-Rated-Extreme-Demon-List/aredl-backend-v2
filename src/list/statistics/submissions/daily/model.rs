@@ -99,6 +99,13 @@ pub struct DailyStatsPage {
 }
 
 impl ResolvedDailyStats {
+    pub fn rebuild(conn: &mut DbConnection, list: List) -> Result<(), ApiError> {
+        diesel::sql_query("SELECT public.rebuild_submission_daily_stats($1)")
+            .bind::<diesel::sql_types::SmallInt, _>(list)
+            .execute(conn)?;
+        Ok(())
+    }
+
     pub fn from_total_stats(stats: &TotalDailyStats) -> Self {
         Self {
             date: stats.day,

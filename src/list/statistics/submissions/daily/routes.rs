@@ -1,3 +1,4 @@
+use crate::list::statistics::submissions::daily::ResolvedDailyStats;
 use crate::list::List;
 use crate::{
     app_data::db::DbAppState,
@@ -8,7 +9,7 @@ use crate::{
     },
     page_helper::{PageQuery, Paginated},
 };
-use actix_web::{get, web, HttpResponse};
+use actix_web::{get, post, web, HttpResponse};
 use chrono::NaiveDate;
 use serde::Deserialize;
 use std::sync::Arc;
@@ -59,6 +60,28 @@ pub async fn stats(
     })
     .await??;
     Ok(HttpResponse::Ok().json(stats))
+}
+
+#[utoipa::path(
+    post,
+    summary = "[Staff]Rebuild daily submission statistics",
+    description = "Rebuild all daily submissions statistics (total, level, reviewer) based on the current submission history data.",
+    tag = "List - Statistics",
+    params(
+        ("list" = List, Path, description = "The selected list. (classic / aredl or platformer / arepl)"),
+    ),
+    responses(
+        (status = 204),
+    ),
+    security(("bearer_token" = ["MaintenanceRun"])),
+)]
+#[post("/rebuild", wrap = "UserAuth::require(Permission::MaintenanceRun)")]
+async fn rebuild(
+    db: web::Data<Arc<DbAppState>>,
+    list: web::Path<List>,
+) -> Result<HttpResponse, ApiError> {
+    web::block(move || ResolvedDailyStats::rebuild(&mut db.connection()?, *list)).await??;
+    Ok(HttpResponse::NoContent().finish())
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -113,7 +136,7 @@ pub async fn leaderboard_route(
 #[derive(OpenApi)]
 #[openapi(
     components(schemas(DailyStatsPage, ResolvedLeaderboardRow, StatsQuery, LeaderboardQuery)),
-    paths(stats, leaderboard_route)
+    paths(stats, leaderboard_route, rebuild)
 )]
 pub struct ApiDoc;
 
@@ -121,6 +144,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/daily")
             .service(stats)
+            .service(rebuild)
             .service(leaderboard_route),
     );
 }

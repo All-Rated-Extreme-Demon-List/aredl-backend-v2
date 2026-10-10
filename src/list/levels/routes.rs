@@ -2,12 +2,14 @@ use crate::app_data::db::DbAppState;
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::cache_control::CacheController;
 use crate::error_handler::{ApiError, ErrorResponse};
+use crate::list::levels::history::HistoryLevelFull;
 use crate::list::levels::{
     creators, custom_copies, history, id_resolver::resolve_level_id, packs, records, Level,
     LevelPlace, LevelUpdate, LevelWithUserCompletionStatus, ResolvedLevel,
 };
 use crate::list::levels::{notes, updates, LevelQueryOptions};
 use crate::list::List;
+use crate::scheduled::refresh_level_data;
 use actix_web::{get, patch, post, web, HttpResponse};
 use serde::Deserialize;
 use std::sync::Arc;
@@ -122,6 +124,65 @@ async fn update(
 }
 
 #[utoipa::path(
+    post,
+    summary = "[Staff]Refresh GDDL",
+    description = "Forces a refresh of the level's GDDL tier.",
+    tag = "List - Levels",
+    params(
+        ("list" = List, Path, description = "The selected list. (classic / aredl or platformer / arepl)"),
+        ("level_id" = String, Path, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)")
+    ),
+    responses(
+        (status = 204, description = "GDDL tier refreshed"),
+        (status = 400, description = "Invalid level ID", body = ErrorResponse),
+        (status = 404, description = "Level not found", body = ErrorResponse),
+        (status = 502, description = "GDDL request failed", body = ErrorResponse),
+    ),
+    security(("bearer_token" = ["MaintenanceRun"])),
+)]
+#[post(
+    "/{level_id}/gddl/refresh",
+    wrap = "UserAuth::require(Permission::MaintenanceRun)"
+)]
+async fn refresh_gddl(
+    db: web::Data<Arc<DbAppState>>,
+    path: web::Path<LevelPath>,
+) -> Result<HttpResponse, ApiError> {
+    let list = path.list;
+    let db_level = db.get_ref().clone();
+    let id =
+        web::block(move || resolve_level_id(&mut db_level.connection()?, list, &path.level_id))
+            .await??;
+    refresh_level_data::refresh_gddl(db.get_ref().clone(), list, id).await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+#[utoipa::path(
+    post,
+    summary = "[Staff]Rebuild position history",
+    description = "Regenerates the position history full table based on the current changelog data",
+    tag = "List - Levels",
+    params(
+        ("list" = List, Path, description = "The selected list. (classic / aredl or platformer / arepl)"),
+    ),
+    responses(
+        (status = 204),
+    ),
+    security(("bearer_token" = ["MaintenanceRun"])),
+)]
+#[post(
+    "/history/rebuild",
+    wrap = "UserAuth::require(Permission::MaintenanceRun)"
+)]
+async fn rebuild_history(
+    db: web::Data<Arc<DbAppState>>,
+    list: web::Path<List>,
+) -> Result<HttpResponse, ApiError> {
+    web::block(move || HistoryLevelFull::rebuild(&mut db.connection()?, *list)).await??;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+#[utoipa::path(
     get,
     summary = "Get level details",
     description = "Get more detailed information about a level",
@@ -175,6 +236,8 @@ async fn find(
         create,
         update,
         find,
+        refresh_gddl,
+        rebuild_history,
     )
 )]
 pub struct ApiDoc;
@@ -191,6 +254,8 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .service(list_all)
             .service(create)
             .service(update)
+            .service(refresh_gddl)
+            .service(rebuild_history)
             .service(find),
     );
 }

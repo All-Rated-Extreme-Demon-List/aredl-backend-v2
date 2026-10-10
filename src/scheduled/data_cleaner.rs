@@ -1,20 +1,28 @@
-use crate::app_data::db::DbAppState;
-use crate::error_handler::StartupError;
-use crate::list::submissions::SubmissionStatus;
-use crate::notifications::WebsocketNotification;
-use crate::scheduled::{sleep_until_next, startup_schedule};
-use crate::schema::{notifications, shifts, submissions};
-use crate::shifts::Shift;
-use crate::shifts::ShiftStatus;
-
+use crate::{
+    app_data::db::DbAppState,
+    error_handler::{ApiError, StartupError},
+    list::submissions::SubmissionStatus,
+    notifications::WebsocketNotification,
+    scheduled::{sleep_until_next, startup_schedule},
+    schema::{notifications, shifts, submissions},
+    shifts::{Shift, ShiftStatus},
+};
+use actix_web::web;
 use chrono::Utc;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::broadcast;
-use tokio::task;
+use diesel::prelude::*;
+use serde::Serialize;
+use std::{sync::Arc, time::Duration};
+use tokio::{sync::broadcast, task};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-use diesel::prelude::*;
+#[derive(Serialize, ToSchema)]
+pub struct CleanupResult {
+    pub deleted_notifications: usize,
+    pub released_claimed_submissions: usize,
+    pub expired_shifts: usize,
+}
+
 pub async fn start_data_cleaner(
     db: Arc<DbAppState>,
     notify_tx: broadcast::Sender<WebsocketNotification>,
@@ -24,84 +32,62 @@ pub async fn start_data_cleaner(
     task::spawn(async move {
         loop {
             tokio::time::sleep(Duration::from_secs(10)).await;
+            if let Err(error) = cleanup(db.clone(), notify_tx.clone()).await {
+                tracing::error!("Failed to clean data: {error}");
+            }
+            sleep_until_next(&schedule).await;
+        }
+    });
+    Ok(())
+}
 
-            tracing::info!("Running data cleaner");
-            {
-                let conn = &mut match db.connection() {
-                    Ok(c) => c,
-                    Err(e) => {
-                        tracing::error!("DB connection failed: {e}");
-                        continue;
-                    }
-                };
+pub async fn cleanup(
+    db: Arc<DbAppState>,
+    notify_tx: broadcast::Sender<WebsocketNotification>,
+) -> Result<CleanupResult, ApiError> {
+    let (deleted_notifications, released_claimed_submissions, expired_shifts) =
+        web::block(move || {
+            let conn = &mut db.connection()?;
+            let now = Utc::now();
 
-                tracing::info!("Cleaning old notifications");
-
-                diesel::delete(
-                    notifications::table.filter(
-                        notifications::created_at.lt(Utc::now() - chrono::Duration::days(30)),
-                    ),
+            conn.transaction::<_, ApiError, _>(|conn| {
+                let deleted = diesel::delete(
+                    notifications::table
+                        .filter(notifications::created_at.lt(now - chrono::Duration::days(30))),
                 )
-                .execute(conn)
-                .unwrap_or_else(|error| {
-                    tracing::error!("Failed to clean stale notifications: {error}",);
-                    0
-                });
+                .execute(conn)?;
 
-                tracing::info!("Cleaning stale submissions claims");
-
-                diesel::update(
+                let released = diesel::update(
                     submissions::table
                         .filter(submissions::status.eq(SubmissionStatus::Claimed))
-                        .filter(
-                            submissions::updated_at.lt(Utc::now() - chrono::Duration::minutes(120)),
-                        ),
+                        .filter(submissions::updated_at.lt(now - chrono::Duration::minutes(120))),
                 )
                 .set((
                     submissions::status.eq(SubmissionStatus::Pending),
                     submissions::reviewer_id.eq(None::<Uuid>),
                 ))
-                .execute(conn)
-                .unwrap_or_else(|error| {
-                    tracing::error!("Failed to clean stale submissions claims: {error}",);
-                    0
-                });
+                .execute(conn)?;
 
-                tracing::info!("Expiring overdue shifts");
-
-                let expired_shifts: Vec<Shift> = shifts::table
-                    .filter(shifts::status.eq(ShiftStatus::Running))
-                    .filter(shifts::end_at.lt(Utc::now()))
-                    .load(conn)
-                    .unwrap_or_else(|e| {
-                        tracing::error!("Failed to load expired shifts: {}", e);
-                        vec![]
-                    });
-
-                if let Err(e) = diesel::update(
+                let expired = diesel::update(
                     shifts::table
                         .filter(shifts::status.eq(ShiftStatus::Running))
-                        .filter(shifts::end_at.lt(Utc::now())),
+                        .filter(shifts::end_at.lt(now)),
                 )
                 .set((
                     shifts::status.eq(ShiftStatus::Expired),
-                    shifts::updated_at.eq(Utc::now()),
+                    shifts::updated_at.eq(now),
                 ))
-                .execute(conn)
-                {
-                    tracing::error!("Failed to expire shifts: {}", e);
-                }
+                .get_results::<Shift>(conn)?;
+                Ok((deleted, released, expired))
+            })
+        })
+        .await??;
 
-                let missed_shifts_payload = serde_json::json!(expired_shifts);
+    WebsocketNotification::send(&notify_tx, "SHIFTS_MISSED", &expired_shifts);
 
-                WebsocketNotification::send(&notify_tx, "SHIFTS_MISSED", &missed_shifts_payload);
-
-                tracing::info!("Cleaned data successfully");
-            }
-
-            sleep_until_next(&schedule).await;
-        }
-    });
-
-    Ok(())
+    Ok(CleanupResult {
+        deleted_notifications,
+        released_claimed_submissions,
+        expired_shifts: expired_shifts.len(),
+    })
 }

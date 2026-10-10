@@ -115,6 +115,7 @@ pub async fn init_test_app() -> (
             .configure(crate::notifications::init_routes)
             .configure(crate::shifts::init_routes)
             .configure(crate::health::init_routes)
+            .configure(crate::scheduled::init_routes)
             .configure(crate::list::init_routes),
     )
     .await;
@@ -171,6 +172,7 @@ pub async fn init_test_app_with_providers(
             .configure(crate::notifications::init_routes)
             .configure(crate::shifts::init_routes)
             .configure(crate::health::init_routes)
+            .configure(crate::scheduled::init_routes)
             .configure(crate::list::init_routes),
     )
     .await;

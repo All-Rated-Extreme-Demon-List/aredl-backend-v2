@@ -6,24 +6,20 @@ use crate::scheduled::{parse_startup_schedule, sleep_until_next};
 use crate::schema::{oauth_connected_accounts, user_roles};
 use crate::utils::patreon::{patreon_plus_role_id, set_users_submissions_to_priority};
 use crate::{create_client, get_optional_secret, get_secret};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::task;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use diesel::prelude::*;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize, ToSchema)]
 pub struct PatreonPlusSyncResult {
     pub matched_user_ids: Vec<Uuid>,
     pub removed_user_count: usize,
     pub prioritized_count: usize,
-}
-
-struct PatreonActiveMembers {
-    total_member_count: usize,
-    active_user_ids: HashSet<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -85,59 +81,41 @@ pub async fn start_patreon_plus_sync(
         return Ok(());
     };
     let schedule = parse_startup_schedule("PATREON_SYNC_SCHEDULE", &schedule_config)?;
-    let campaign_id = get_secret("PATREON_CAMPAIGN_ID")?;
-
-    let Some(patreon_auth) = providers.context.patreon_auth.clone() else {
+    get_secret("PATREON_CAMPAIGN_ID")?;
+    if providers.context.patreon_auth.is_none() {
         tracing::warn!("Patreon sync is enabled, but Patreon auth is not configured");
         return Ok(());
-    };
-
-    let client = create_client().map_err(|error| {
-        StartupError::Init(format!("Failed to start Patreon sync HTTP client: {error}"))
-    })?;
-    let patreon_base = patreon_auth.api_base_uri.clone();
-
+    }
     task::spawn(async move {
         loop {
-            tracing::info!("Syncing Patreon AREDL+ users");
-
-            let active_members = match patreon_auth.get_access_token(&db).await {
-                Ok(access_token) => {
-                    fetch_active_patreon_user_ids(
-                        &client,
-                        &access_token,
-                        &patreon_base,
-                        &campaign_id,
-                    )
-                    .await
-                }
-                Err(e) => Err(e),
-            };
-
-            match active_members {
-                Ok(active_members) => match db.connection() {
-                    Ok(mut conn) => {
-                        match apply_patreon_plus_sync(&mut conn, &active_members.active_user_ids) {
-                            Ok(result) => tracing::info!(
-                                patreon_members = active_members.total_member_count,
-                                linked_members = result.matched_user_ids.len(),
-                                removed_members = result.removed_user_count,
-                                prioritized = result.prioritized_count,
-                                "Synced Patreon AREDL+ users"
-                            ),
-                            Err(e) => tracing::error!("Failed to apply Patreon AREDL+ sync: {e}"),
-                        }
-                    }
-                    Err(e) => tracing::error!("DB connection failed: {e}"),
-                },
-                Err(e) => tracing::error!("Failed to fetch Patreon members: {e}"),
+            if let Err(error) = sync(db.clone(), providers.clone()).await {
+                tracing::error!("Failed to apply Patreon AREDL+ sync: {error}");
             }
-
             sleep_until_next(&schedule).await;
         }
     });
-
     Ok(())
+}
+
+pub async fn sync(
+    db: Arc<DbAppState>,
+    providers: Arc<ProvidersAppState>,
+) -> Result<PatreonPlusSyncResult, ApiError> {
+    let patreon_auth = providers
+        .context
+        .patreon_auth
+        .as_ref()
+        .ok_or_else(|| ApiError::BadRequest("Patreon auth is not configured"))?;
+
+    let campaign_id = get_secret("PATREON_CAMPAIGN_ID").map_err(ApiError::InternalServerError)?;
+    let client = create_client().map_err(ApiError::InternalServerError)?;
+    let token = patreon_auth.get_access_token(&db).await?;
+
+    let active_user_ids =
+        fetch_active_patreon_user_ids(&client, &token, &patreon_auth.api_base_uri, &campaign_id)
+            .await?;
+    actix_web::web::block(move || apply_patreon_plus_sync(&mut db.connection()?, &active_user_ids))
+        .await?
 }
 
 async fn fetch_active_patreon_user_ids(
@@ -145,9 +123,8 @@ async fn fetch_active_patreon_user_ids(
     access_token: &str,
     patreon_base: &str,
     campaign_id: &str,
-) -> Result<PatreonActiveMembers, ApiError> {
+) -> Result<HashSet<String>, ApiError> {
     let mut active_user_ids = HashSet::new();
-    let mut total_member_count = 0;
     let mut cursor: Option<String> = None;
 
     loop {
@@ -183,8 +160,6 @@ async fn fetch_active_patreon_user_ids(
                 ApiError::BadGateway(format!("Failed to parse Patreon members response: {e}"))
             })?;
 
-        total_member_count += page.data.len();
-
         for member in page.data {
             if !member.is_active() {
                 continue;
@@ -204,10 +179,7 @@ async fn fetch_active_patreon_user_ids(
         }
     }
 
-    Ok(PatreonActiveMembers {
-        total_member_count,
-        active_user_ids,
-    })
+    Ok(active_user_ids)
 }
 
 pub fn apply_patreon_plus_sync(

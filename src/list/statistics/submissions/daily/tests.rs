@@ -5,7 +5,8 @@ use {
         list::{
             levels::test_utils::create_test_level,
             statistics::submissions::daily::{
-                test_utils::refresh_test_submission_stats, ResolvedLeaderboardRow,
+                test_utils::{clear_test_submission_daily_stats, refresh_test_submission_stats},
+                ResolvedLeaderboardRow,
             },
             submissions::{
                 test_utils::{
@@ -17,7 +18,7 @@ use {
         test_utils::{assert_error_response, init_test_app},
         users::test_utils::{
             create_test_auditor, create_test_full_reviewer, create_test_hidden_reviewer,
-            create_test_user,
+            create_test_user, create_test_user_with_permissions,
         },
     },
     actix_http::StatusCode,
@@ -59,6 +60,43 @@ async fn submission_stats_filter_reviewer() {
     assert_eq!(entry["accepted"].as_i64().unwrap(), 1);
     assert_eq!(entry["denied"].as_i64().unwrap(), 1);
     assert_eq!(entry["reviewed"].as_i64().unwrap(), 2);
+}
+
+#[actix_web::test]
+async fn rebuild_daily_stats() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (reviewer, _) = create_test_user_with_permissions(
+        &db,
+        &[
+            Permission::MaintenanceRun,
+            Permission::SubmissionSeeStatistics,
+        ],
+    )
+    .await;
+    let token = create_test_token(reviewer, &auth.jwt_encoding_key).unwrap();
+    let level = create_test_level(&db).await;
+    let submission = create_test_submission_with_user(level, &db).await;
+    insert_history_entry(submission, Some(reviewer), SubmissionStatus::Accepted, &db).await;
+    insert_history_entry(submission, Some(reviewer), SubmissionStatus::Denied, &db).await;
+    clear_test_submission_daily_stats(&db);
+
+    let request = test::TestRequest::post()
+        .uri("/classic/statistics/submissions/daily/rebuild")
+        .insert_header((header::AUTHORIZATION, format!("Bearer {token}")))
+        .to_request();
+    let response = test::call_service(&app, request).await;
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert!(test::read_body(response).await.is_empty());
+    let request = test::TestRequest::get()
+        .uri("/classic/statistics/submissions/daily")
+        .insert_header((header::AUTHORIZATION, format!("Bearer {token}")))
+        .to_request();
+    let response = test::call_service(&app, request).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body: Value = read_body_json(response).await;
+    assert_eq!(body["data"][0]["submitted"], 1);
+    assert_eq!(body["data"][0]["accepted"], 1);
+    assert_eq!(body["data"][0]["denied"], 1);
 }
 
 #[actix_web::test]

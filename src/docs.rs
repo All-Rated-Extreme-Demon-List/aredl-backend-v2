@@ -3,7 +3,8 @@ mod auth_responses_addon;
 mod utils;
 
 use crate::{
-    auth, clans, health, list, notifications, roles, shifts, users, utils as utils_routes,
+    auth, clans, health, list, notifications, roles, scheduled, shifts, users,
+    utils as utils_routes,
 };
 use addons::{
     ExtractorResponsesAddon, OperationIdAddon, SecurityAddon, ServerAddon, StaffBadgeAddon,
@@ -42,6 +43,7 @@ You can find below each category of endpoints and their description:
 | **Shifts** | Staff endpoints to fetch and manage staff shifts for reviewing records |
 | **Notifications** | Endpoints for opening a web socket to receive real time data from the API |
 | **Health** | Endpoints for checking whether the API is online or not |
+| **Scheduled** | Staff endpoints for running scheduled actions |
 
 In addition to that, endpoints are also categorized by the type of authentication they require:
 
@@ -169,6 +171,7 @@ Permissions are explicit grants on roles. A role can inherit grants from another
 		(path = "/health", api = health::ApiDoc),
         (path = "/shifts", api=shifts::ApiDoc),
         (path = "/utils", api=utils_routes::ApiDoc),
+        (path = "/scheduled", api=scheduled::ApiDoc),
 	)
 )]
 struct MainApiDoc;

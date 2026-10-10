@@ -4,9 +4,10 @@ use {
         auth::{create_test_token, Permission},
         list::{
             levels::test_utils::{
-                add_test_level_creators, add_test_level_to_pack, create_test_level,
-                create_test_level_with_record, latest_test_position_history_created_at,
-                refresh_test_position_history, set_test_level_gd_id,
+                add_test_level_creators, add_test_level_to_pack, clear_test_position_history,
+                create_test_level, create_test_level_with_record,
+                latest_test_position_history_created_at, refresh_test_position_history,
+                set_test_level_gd_id,
             },
             packs::test_utils::create_test_pack,
         },
@@ -48,6 +49,31 @@ async fn create_level() {
         body["level_id"].as_i64().unwrap(),
         "Level IDs do not match!"
     );
+}
+
+#[actix_web::test]
+async fn rebuild_position_history() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user, _) = create_test_user(&db, Some(Permission::MaintenanceRun)).await;
+    let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
+    let level = create_test_level(&db).await;
+    refresh_test_position_history(&db).await;
+    let uri = format!("/classic/levels/{level}/history");
+    let response = test::call_service(&app, test::TestRequest::get().uri(&uri).to_request()).await;
+    assert_eq!(response.status(), actix_http::StatusCode::OK);
+    let expected: serde_json::Value = read_body_json(response).await;
+    assert!(!expected.as_array().unwrap().is_empty());
+
+    clear_test_position_history(&db);
+    let request = test::TestRequest::post()
+        .uri("/classic/levels/history/rebuild")
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .to_request();
+    let response = test::call_service(&app, request).await;
+    assert_eq!(response.status(), actix_http::StatusCode::NO_CONTENT);
+    let response = test::call_service(&app, test::TestRequest::get().uri(&uri).to_request()).await;
+    let restored: serde_json::Value = read_body_json(response).await;
+    assert_eq!(restored, expected);
 }
 
 #[actix_web::test]

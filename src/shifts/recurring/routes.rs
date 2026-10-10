@@ -1,3 +1,5 @@
+use crate::notifications::WebsocketNotification;
+use crate::scheduled::shifts_creator::{self, CreateShiftsResult};
 use crate::{
     app_data::db::DbAppState,
     auth::{Authenticated, Permission, UserAuth},
@@ -9,7 +11,10 @@ use crate::{
     },
 };
 use actix_web::{delete, get, patch, post, web, HttpResponse};
+use chrono::{NaiveDate, Utc};
+use serde::Deserialize;
 use std::sync::Arc;
+use tokio::sync::broadcast;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
 use uuid::Uuid;
@@ -121,14 +126,54 @@ async fn delete_recurring_shift(
     Ok(HttpResponse::Ok().json(deleted))
 }
 
+#[derive(Deserialize)]
+struct CreateShiftsQuery {
+    date: Option<NaiveDate>,
+}
+
+#[utoipa::path(
+    post,
+    summary = "[Staff]Create recurring shifts",
+    description = "Manually create shifts based on recurring ones for a specific date.",
+    tag = "Shifts",
+    params(
+        ("date" = Option<NaiveDate>, Query, description = "UTC date to create shifts for (defaults to today"),
+    ),
+    responses(
+        (status = 200, body = CreateShiftsResult),
+    ),
+    security(("bearer_token" = ["MaintenanceRun"])),
+)]
+#[post(
+    "/create-shifts",
+    wrap = "UserAuth::require(Permission::MaintenanceRun)"
+)]
+async fn create_shifts(
+    db: web::Data<Arc<DbAppState>>,
+    notify_tx: web::Data<broadcast::Sender<WebsocketNotification>>,
+    query: web::Query<CreateShiftsQuery>,
+) -> Result<HttpResponse, ApiError> {
+    let date = query.date.unwrap_or_else(|| Utc::now().date_naive());
+    let result =
+        shifts_creator::create_shifts(db.get_ref().clone(), notify_tx.get_ref().clone(), date)
+            .await?;
+    Ok(HttpResponse::Ok().json(result))
+}
+
 #[derive(OpenApi)]
 #[openapi(
-    components(schemas(ResolvedRecurringShift, RecurringShift, RecurringShiftPatch,)),
+    components(schemas(
+        ResolvedRecurringShift,
+        RecurringShift,
+        RecurringShiftPatch,
+        CreateShiftsResult
+    )),
     paths(
         find_all_recurring_shifts,
         patch_recurring_shift,
         delete_recurring_shift,
         create_new_recurring_shift,
+        create_shifts,
     )
 )]
 pub struct ApiDoc;
@@ -137,6 +182,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
         web::scope("/recurring")
             .service(find_all_recurring_shifts)
             .service(create_new_recurring_shift)
+            .service(create_shifts)
             .service(patch_recurring_shift)
             .service(delete_recurring_shift),
     );

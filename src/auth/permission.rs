@@ -71,6 +71,8 @@ pub enum Permission {
     ExternalConnectionsManage,
     /// Allows editing weekly, monthly, event and bounty levels
     BountyManage,
+    /// Allows manually running scheduled actions
+    MaintenanceRun,
 }
 
 pub fn get_highest_role_privilege_level(conn: &mut DbConnection, user_id: Uuid) -> i32 {

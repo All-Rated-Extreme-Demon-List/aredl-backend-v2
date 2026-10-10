@@ -83,6 +83,15 @@ pub struct HistoryLevelFull {
     pub action_at: DateTime<Utc>,
     pub cause: Uuid,
 }
+
+impl HistoryLevelFull {
+    pub fn rebuild(conn: &mut DbConnection, list: List) -> Result<(), ApiError> {
+        diesel::sql_query("SELECT public.rebuild_position_history_full_view($1)")
+            .bind::<diesel::sql_types::SmallInt, _>(list)
+            .execute(conn)?;
+        Ok(())
+    }
+}
 #[derive(Serialize, Deserialize, Queryable)]
 pub struct HistoryLevelFullResolved {
     pub position: Option<i32>,

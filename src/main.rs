@@ -171,6 +171,7 @@ async fn main() -> Result<(), StartupError> {
                     .configure(health::init_routes)
                     .configure(shifts::init_routes)
                     .configure(utils::init_routes)
+                    .configure(scheduled::init_routes)
                     .configure(list::init_routes),
             )
             .service(
