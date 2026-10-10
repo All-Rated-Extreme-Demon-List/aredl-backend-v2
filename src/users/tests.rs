@@ -519,6 +519,25 @@ async fn upsert_creates_and_updates_user() {
         updated.discord_avatar_decoration.as_deref(),
         Some("newdecoration")
     );
+
+    let remove_decoration = UserUpsert {
+        username: "updated".to_owned(),
+        global_name: "Updated".to_owned(),
+        discord_id: Some("123".to_owned()),
+        placeholder: false,
+        country: Some(2),
+        discord_avatar: Some("newavatar".to_owned()),
+        discord_avatar_decoration: None,
+        last_discord_avatar_update: Some(Utc::now().naive_utc()),
+    };
+    let updated =
+        User::upsert(&mut db.connection().unwrap(), remove_decoration).expect("remove decoration");
+    assert_eq!(updated.id, created.id);
+    assert_eq!(updated.discord_avatar_decoration, None);
+    assert_eq!(
+        get_test_user(&db, created.id).discord_avatar_decoration,
+        None
+    );
 }
 
 #[actix_web::test]

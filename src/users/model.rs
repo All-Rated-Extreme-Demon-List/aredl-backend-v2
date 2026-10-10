@@ -109,6 +109,7 @@ pub struct UserUpdateOnLogin {
     pub username: String,
     pub discord_id: Option<String>,
     pub discord_avatar: Option<String>,
+    #[diesel(treat_none_as_null = true)]
     pub discord_avatar_decoration: Option<String>,
     pub last_discord_avatar_update: Option<NaiveDateTime>,
 }
