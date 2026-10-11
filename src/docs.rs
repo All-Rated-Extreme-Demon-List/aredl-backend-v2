@@ -162,7 +162,7 @@ Permissions are explicit grants on roles. A role can inherit grants from another
 #[derive(OpenApi)]
 #[openapi(
     nest(
-        (path = "/audit", api = audit::ApiDoc),
+        (path = "/audit-log", api = audit::ApiDoc),
         (path = "/{list}", api = list::ApiDoc),
         (path = "/users", api = users::ApiDoc),
         (path = "/auth", api = auth::ApiDoc),
