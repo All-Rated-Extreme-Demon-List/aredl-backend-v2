@@ -1,4 +1,5 @@
 use crate::app_data::db::DbConnection;
+use crate::audit::{AuditEntityType, Auditable};
 use crate::auth::Authenticated;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
@@ -96,6 +97,18 @@ pub struct ClanPage {
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct ClanListQueryOptions {
     pub name_filter: Option<String>,
+}
+
+impl Auditable for Clan {
+    const ENTITY_TYPE: AuditEntityType = AuditEntityType::Clan;
+
+    fn entity_id(&self) -> Uuid {
+        self.id
+    }
+
+    fn redacted_fields() -> &'static [&'static str] {
+        &[]
+    }
 }
 
 impl Clan {
@@ -215,6 +228,14 @@ impl Clan {
             total_count,
             ClanPage { data: entries },
         ))
+    }
+
+    pub fn by_id(conn: &mut DbConnection, clan_id: Uuid) -> Result<Self, ApiError> {
+        let clan = clans::table
+            .filter(clans::id.eq(clan_id))
+            .select(Self::as_select())
+            .get_result::<Self>(conn)?;
+        Ok(clan)
     }
 
     pub fn update(

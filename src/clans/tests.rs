@@ -1,3 +1,4 @@
+use {crate::{audit::AuditAction, clans::test_utils::latest_audit_entry_for_clan}};
 #[cfg(test)]
 use {
     crate::{
@@ -30,6 +31,16 @@ async fn create_and_join() {
     let clan_id = Uuid::parse_str(clan["id"].as_str().unwrap()).unwrap();
     let count = count_test_clan_members(&db, clan_id, user_id);
     assert_eq!(count, 1);
+
+    let audit = latest_audit_entry_for_clan(&db, clan_id, AuditAction::Create);
+    assert_eq!(audit.entity_id, clan_id);
+    if let Some(diff) = audit.diff {
+        assert_eq!(diff["global_name"].as_str().unwrap(), "Test Clan");
+        assert_eq!(diff["tag"].as_str().unwrap(), "TC");
+
+    } else {
+        panic!("No diff found for clan creation");
+    }
 }
 
 #[actix_web::test]
@@ -67,6 +78,18 @@ async fn create_empty_clan() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), actix_http::StatusCode::CREATED);
+
+    let body: serde_json::Value = read_body_json(resp).await;
+    let clan_id = Uuid::parse_str(body["id"].as_str().unwrap()).unwrap();
+
+    let audit = latest_audit_entry_for_clan(&db, clan_id, AuditAction::Create);
+    assert_eq!(audit.entity_id, clan_id);
+    if let Some(diff) = audit.diff {
+        assert_eq!(diff["global_name"].as_str().unwrap(), "Empty Clan");
+        assert_eq!(diff["tag"].as_str().unwrap(), "EC");
+    } else {
+        panic!("No diff found for clan creation");
+    }
 }
 
 #[actix_web::test]
@@ -87,6 +110,14 @@ async fn update_clan() {
     assert!(resp.status().is_success());
     let clan: serde_json::Value = read_body_json(resp).await;
     assert_eq!(clan["global_name"], "Updated");
+
+    let audit = latest_audit_entry_for_clan(&db, clan_id, AuditAction::Update);
+    assert_eq!(audit.entity_id, clan_id);
+    if let Some(diff) = audit.diff {
+        assert_eq!(diff["global_name"].as_str().unwrap(), "Updated");
+    } else {
+        panic!("No diff found for clan creation");
+    }
 }
 
 #[actix_web::test]
@@ -103,6 +134,9 @@ async fn delete_clan() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
+
+    let audit = latest_audit_entry_for_clan(&db, clan_id, AuditAction::Delete);
+    assert_eq!(audit.entity_id, clan_id);
 }
 
 #[actix_web::test]

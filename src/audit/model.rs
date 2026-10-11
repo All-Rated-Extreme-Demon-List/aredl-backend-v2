@@ -187,17 +187,16 @@ impl AuditLogEntry {
         Ok(())
     }
 
-    #[expect(dead_code, reason = "Only users is implemented rn")]
     pub fn log_delete<T: Auditable>(
         conn: &mut DbConnection,
         actor_id: Option<Uuid>,
-        entity: &T,
+        entity_id: Uuid,
     ) -> Result<(), ApiError> {
         let entry = NewAuditLogEntry {
             action_type: AuditAction::Delete,
             actor_id,
             entity_type: T::ENTITY_TYPE,
-            entity_id: entity.entity_id(),
+            entity_id,
             diff: None,
         };
 

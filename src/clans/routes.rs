@@ -1,4 +1,5 @@
 use crate::app_data::db::DbAppState;
+use crate::audit::AuditLogEntry;
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::cache_control::CacheController;
 use crate::clans::{members, Clan, ClanCreate, ClanListQueryOptions, ClanPage, ClanUpdate};
@@ -69,7 +70,10 @@ async fn create_and_join(
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&clan));
     let result = web::block(move || {
-        Clan::create_and_join(&mut db.connection()?, &clan.into_inner(), &authenticated)
+        let conn = &mut db.connection()?;
+        let clan = Clan::create_and_join(conn, &clan.into_inner(), &authenticated)?;
+        AuditLogEntry::log_create(conn, Some(authenticated.user_id), &clan)?;
+        Ok::<_, ApiError>(clan)
     })
     .await??;
     Ok(HttpResponse::Created().json(result))
@@ -96,10 +100,16 @@ async fn create_empty(
     db: web::Data<Arc<DbAppState>>,
     clan: web::Json<ClanCreate>,
     root_span: RootSpan,
+    authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&clan));
-    let result =
-        web::block(move || Clan::create_empty(&mut db.connection()?, &clan.into_inner())).await??;
+    let result = web::block(move || {
+        let conn = &mut db.connection()?;
+        let clan = Clan::create_empty(conn, &clan.into_inner())?;
+        AuditLogEntry::log_create(conn, Some(authenticated.user_id), &clan)?;
+        Ok::<_, ApiError>(clan)
+    })
+    .await??;
     Ok(HttpResponse::Created().json(result))
 }
 
@@ -137,7 +147,12 @@ async fn update(
     let result = web::block(move || {
         let conn = &mut db.connection()?;
         authenticated.ensure_has_clan_permission(conn, clan_id, 2)?;
-        Clan::update(conn, clan_id, &clan.into_inner())
+        let old_clan = Clan::by_id(conn, clan_id)?;
+        let new_clan = Clan::update(conn, clan_id, &clan.into_inner())?;
+
+        AuditLogEntry::log_update(conn, Some(authenticated.user_id), &old_clan, &new_clan)?;
+
+        Ok::<_, ApiError>(new_clan)
     })
     .await??;
 
@@ -185,7 +200,15 @@ async fn delete(
             ));
         }
 
-        Clan::delete(conn, clan_id)
+        let deleted_clan = Clan::delete(conn, clan_id)?;
+
+        AuditLogEntry::log_delete::<Clan>(
+            conn,
+            Some(authenticated.user_id),
+            deleted_clan.id,
+        )?;
+
+        Ok::<_, ApiError>(deleted_clan)
     })
     .await??;
 
