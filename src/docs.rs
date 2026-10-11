@@ -3,7 +3,7 @@ mod auth_responses_addon;
 mod utils;
 
 use crate::{
-    auth, audit, clans, health, list, notifications, roles, scheduled, shifts, users,
+    audit, auth, clans, health, list, notifications, roles, scheduled, shifts, users,
     utils as utils_routes,
 };
 use addons::{
