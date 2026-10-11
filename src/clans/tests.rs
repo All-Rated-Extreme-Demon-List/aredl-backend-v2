@@ -1,4 +1,4 @@
-use {crate::{audit::AuditAction, clans::test_utils::latest_audit_entry_for_clan}};
+use crate::{audit::AuditAction, clans::test_utils::latest_audit_entry_for_clan};
 #[cfg(test)]
 use {
     crate::{
@@ -37,7 +37,6 @@ async fn create_and_join() {
     if let Some(diff) = audit.diff {
         assert_eq!(diff["global_name"].as_str().unwrap(), "Test Clan");
         assert_eq!(diff["tag"].as_str().unwrap(), "TC");
-
     } else {
         panic!("No diff found for clan creation");
     }
