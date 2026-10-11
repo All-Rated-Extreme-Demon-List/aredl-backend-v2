@@ -1,5 +1,3 @@
--- Your SQL goes here
-
 CREATE TYPE audit_action AS ENUM ('Create', 'Update', 'Delete');
 CREATE TYPE audit_entity_type AS ENUM (
     'User',
