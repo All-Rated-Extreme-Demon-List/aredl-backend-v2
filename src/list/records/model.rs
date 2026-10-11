@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::app_data::db::{DbAppState, DbConnection};
+use crate::audit::{AuditEntityType, Auditable};
 use crate::auth::Authenticated;
 use crate::error_handler::ApiError;
 use crate::list::levels::{ExtendedBaseLevel, Level};
@@ -27,6 +28,8 @@ use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema, Clone)]
 #[diesel(table_name=records, check_for_backend(Pg))]
 pub struct Record {
+    /// The list this record belongs to.
+    pub list_id: List,
     /// Internal UUID of the record.
     pub id: Uuid,
     /// Internal UUID of the submission this record is linked to.
@@ -284,6 +287,32 @@ impl Submission {
                 .returning(Submission::as_select())
                 .get_result::<Self>(conn)?)
         }
+    }
+}
+
+impl Auditable for Record {
+    const ENTITY_TYPE: AuditEntityType = AuditEntityType::Record;
+
+    fn entity_id(&self) -> Uuid {
+        self.id
+    }
+
+    fn display_name(&self, conn: &mut DbConnection) -> Result<String, ApiError> {
+        let level_name = levels::table
+            .filter(levels::list_id.eq(self.list_id))
+            .find(self.level_id)
+            .select(levels::name)
+            .first::<String>(conn)?;
+        let user_name = users::table
+            .find(self.submitted_by)
+            .select(users::global_name)
+            .first::<String>(conn)?;
+
+        Ok(format!("{user_name} on {level_name}"))
+    }
+
+    fn list_id(&self) -> Option<List> {
+        Some(self.list_id)
     }
 }
 

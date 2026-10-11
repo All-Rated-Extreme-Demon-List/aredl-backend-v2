@@ -1,6 +1,7 @@
 use crate::list::List;
 use crate::{
     app_data::db::DbConnection,
+    audit::{AuditEntityType, Auditable},
     error_handler::ApiError,
     schema::{submissions_enabled, users},
     users::BaseUser,
@@ -15,6 +16,9 @@ use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Queryable, Insertable, Selectable, Debug, ToSchema, Clone)]
 #[diesel(table_name = submissions_enabled, check_for_backend(Pg))]
 pub struct SubmissionsEnabled {
+    id: Uuid,
+    /// The list for which submissions were enabled or disabled
+    list_id: List,
     /// Whether submissions have been enabled or disabled.
     enabled: bool,
     /// The moderator that performed this change
@@ -31,6 +35,27 @@ pub struct SubmissionsEnabledFull {
     moderator: BaseUser,
     /// Timestamp of when submissions were toggled on or off
     created_at: DateTime<Utc>,
+}
+
+impl Auditable for SubmissionsEnabled {
+    const ENTITY_TYPE: AuditEntityType = AuditEntityType::SubmissionStatus;
+
+    fn entity_id(&self) -> Uuid {
+        self.id
+    }
+
+    fn display_name(&self, _conn: &mut DbConnection) -> Result<String, ApiError> {
+        Ok(if self.enabled {
+            "Submissions enabled"
+        } else {
+            "Submissions disabled"
+        }
+        .to_owned())
+    }
+
+    fn list_id(&self) -> Option<List> {
+        Some(self.list_id)
+    }
 }
 
 impl SubmissionsEnabled {

@@ -105,7 +105,7 @@ async fn sync(
 #[utoipa::path(
     post,
     summary = "[Auth]Refresh my Discord avatar",
-    description = "Fetch the authenticated user's current Discord avatar and decoration, including removals. Bypasses the scheduled refresh staleness check.",
+    description = "Fetch the authenticated user's current Discord avatar and decoration. ",
     tag = "Users - Me",
     responses(
         (status = 200, body = User),

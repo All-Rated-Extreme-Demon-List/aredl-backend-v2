@@ -1,4 +1,5 @@
 use crate::app_data::db::DbConnection;
+use crate::audit::{AuditEntityType, Auditable};
 use crate::error_handler::ApiError;
 use crate::list::packtiers::BasePackTier;
 use crate::list::List;
@@ -23,6 +24,8 @@ pub struct BasePack {
 #[derive(Serialize, Selectable, Queryable, Debug, ToSchema)]
 #[diesel(table_name=packs, check_for_backend(Pg))]
 pub struct Pack {
+    /// The list this pack belongs to.
+    pub list_id: List,
     /// Internal UUID of the pack.
     pub id: Uuid,
     /// Name of the pack.
@@ -55,6 +58,22 @@ pub struct PackUpdate {
     pub name: Option<String>,
     /// New tier of the pack.
     pub tier: Option<Uuid>,
+}
+
+impl Auditable for Pack {
+    const ENTITY_TYPE: AuditEntityType = AuditEntityType::Pack;
+
+    fn entity_id(&self) -> Uuid {
+        self.id
+    }
+
+    fn display_name(&self, _conn: &mut DbConnection) -> Result<String, ApiError> {
+        Ok(self.name.clone())
+    }
+
+    fn list_id(&self) -> Option<List> {
+        Some(self.list_id)
+    }
 }
 
 impl Pack {

@@ -106,6 +106,10 @@ impl Auditable for Clan {
         self.id
     }
 
+    fn display_name(&self, _conn: &mut DbConnection) -> Result<String, ApiError> {
+        Ok(format!("{} [{}]", self.global_name, self.tag))
+    }
+
     fn redacted_fields() -> &'static [&'static str] {
         &[]
     }

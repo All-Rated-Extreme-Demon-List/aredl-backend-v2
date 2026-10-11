@@ -67,10 +67,12 @@ pub mod public {
         audit_logs (id) {
             id -> Uuid,
             timestamp -> Timestamptz,
+            list_id -> Nullable<Int2>,
             actor_id -> Nullable<Uuid>,
             action_type -> AuditAction,
             entity_id -> Uuid,
             entity_type -> AuditEntityType,
+            display_name -> Text,
             diff -> Nullable<Jsonb>,
         }
     }
@@ -594,6 +596,7 @@ pub mod public {
         }
     }
 
+    diesel::joinable!(audit_logs -> lists (list_id));
     diesel::joinable!(bounties -> lists (list_id));
     diesel::joinable!(bounty_completed -> lists (list_id));
     diesel::joinable!(bounty_completed -> users (user_id));

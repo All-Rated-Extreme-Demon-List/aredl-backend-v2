@@ -202,7 +202,7 @@ async fn delete(
 
         let deleted_clan = Clan::delete(conn, clan_id)?;
 
-        AuditLogEntry::log_delete::<Clan>(conn, Some(authenticated.user_id), deleted_clan.id)?;
+        AuditLogEntry::log_delete(conn, Some(authenticated.user_id), &deleted_clan)?;
 
         Ok::<_, ApiError>(deleted_clan)
     })

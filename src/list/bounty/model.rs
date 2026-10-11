@@ -1,4 +1,5 @@
 use crate::app_data::db::DbConnection;
+use crate::audit::{AuditEntityType, Auditable};
 use crate::auth::{Authenticated, Permission};
 use crate::error_handler::ApiError;
 use crate::list::levels::ExtendedBaseLevel;
@@ -39,6 +40,8 @@ pub enum BountyDifficulty {
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
 #[diesel(table_name=bounties, check_for_backend(Pg))]
 pub struct Bounty {
+    /// The list this bounty belongs to.
+    pub list_id: List,
     /// Internal UUID for the bounty.
     pub id: Uuid,
     /// The internal UUID of the level associated with this bounty.
@@ -213,6 +216,28 @@ pub struct BountyPatch {
     pub target_submissions: Option<Option<i32>>,
     /// Whether or not the target number of submissions for this bounty should be displayed publicly, or kept private to staff only.
     pub is_target_public: Option<bool>,
+}
+
+impl Auditable for Bounty {
+    const ENTITY_TYPE: AuditEntityType = AuditEntityType::Bounty;
+
+    fn entity_id(&self) -> Uuid {
+        self.id
+    }
+
+    fn display_name(&self, conn: &mut DbConnection) -> Result<String, ApiError> {
+        let level_name = levels::table
+            .filter(levels::list_id.eq(self.list_id))
+            .find(self.level_id)
+            .select(levels::name)
+            .first::<String>(conn)?;
+
+        Ok(format!("{level_name} ({:?})", self.bounty_type))
+    }
+
+    fn list_id(&self) -> Option<List> {
+        Some(self.list_id)
+    }
 }
 
 impl Bounty {

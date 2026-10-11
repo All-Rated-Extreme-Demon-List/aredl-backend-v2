@@ -1,14 +1,12 @@
 use crate::{
     app_data::db::DbConnection,
     error_handler::ApiError,
+    list::List,
     page_helper::{PageQuery, Paginated},
     schema::audit_logs,
 };
 use chrono::{DateTime, Utc};
-use diesel::{
-    pg::Pg, ExpressionMethods as _, Insertable, QueryDsl as _, Queryable, RunQueryDsl as _,
-    Selectable, SelectableHelper as _,
-};
+use diesel::{pg::Pg, prelude::*};
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -46,11 +44,21 @@ pub enum AuditEntityType {
 #[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
 #[diesel(table_name = audit_logs, check_for_backend(Pg))]
 pub struct AuditLogEntry {
+    /// Which type of action triggered this entry
     pub action_type: AuditAction,
+    /// The ID of the user who performed the action (or None if automated)
     pub actor_id: Option<Uuid>,
+    /// Which type of entity this entry was performed on
     pub entity_type: AuditEntityType,
+    /// The ID of the entity this entry was performed on
     pub entity_id: Uuid,
+    /// For list-scoped entities, the list it applies to (or None for global entities i.e. users clans etc)
+    pub list_id: Option<List>,
+    /// Display name of the entity at the time of the action.
+    pub display_name: String,
+    /// The fields of the entity that were changed
     pub diff: Option<Value>,
+    /// When this entry was created
     pub timestamp: DateTime<Utc>,
 }
 
@@ -61,12 +69,19 @@ struct NewAuditLogEntry {
     pub actor_id: Option<Uuid>,
     pub entity_type: AuditEntityType,
     pub entity_id: Uuid,
+    pub list_id: Option<List>,
+    pub display_name: String,
     pub diff: Option<Value>,
 }
 
 pub trait Auditable: Serialize {
     const ENTITY_TYPE: AuditEntityType;
     fn entity_id(&self) -> Uuid;
+    ///
+    fn display_name(&self, conn: &mut DbConnection) -> Result<String, ApiError>;
+    fn list_id(&self) -> Option<List> {
+        None
+    }
     fn redacted_fields() -> &'static [&'static str] {
         &[]
     }
@@ -74,6 +89,7 @@ pub trait Auditable: Serialize {
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct AuditLogQueryOpts {
+    pub list_filter: Option<List>,
     pub actor_filter: Option<Uuid>,
     pub entity_type_filter: Option<AuditEntityType>,
     pub entity_filter: Option<Uuid>,
@@ -150,6 +166,8 @@ impl AuditLogEntry {
             actor_id,
             entity_type: T::ENTITY_TYPE,
             entity_id: entity.entity_id(),
+            list_id: entity.list_id(),
+            display_name: entity.display_name(conn)?,
             diff: Some(Self::serialize_auditable(entity)?),
         };
 
@@ -177,6 +195,8 @@ impl AuditLogEntry {
             actor_id,
             entity_type: T::ENTITY_TYPE,
             entity_id: after.entity_id(),
+            list_id: after.list_id(),
+            display_name: after.display_name(conn)?,
             diff: Some(diff),
         };
 
@@ -190,13 +210,15 @@ impl AuditLogEntry {
     pub fn log_delete<T: Auditable>(
         conn: &mut DbConnection,
         actor_id: Option<Uuid>,
-        entity_id: Uuid,
+        entity: &T,
     ) -> Result<(), ApiError> {
         let entry = NewAuditLogEntry {
             action_type: AuditAction::Delete,
             actor_id,
             entity_type: T::ENTITY_TYPE,
-            entity_id,
+            entity_id: entity.entity_id(),
+            list_id: entity.list_id(),
+            display_name: entity.display_name(conn)?,
             diff: None,
         };
 
@@ -214,6 +236,10 @@ impl AuditLogEntry {
     ) -> Result<Paginated<AuditLogPage>, ApiError> {
         let build_query = || {
             let mut q = audit_logs::table.into_boxed::<Pg>();
+
+            if let Some(list) = opts.list_filter {
+                q = q.filter(audit_logs::list_id.eq(list));
+            }
 
             if let Some(actor_id) = opts.actor_filter {
                 q = q.filter(audit_logs::actor_id.eq(actor_id));

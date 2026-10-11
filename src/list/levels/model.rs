@@ -1,4 +1,5 @@
 use crate::app_data::db::DbConnection;
+use crate::audit::{AuditEntityType, Auditable};
 use crate::error_handler::ApiError;
 use crate::list::levels::records::LevelResolvedRecord;
 use crate::list::records::Record;
@@ -61,6 +62,8 @@ pub struct ExtendedBaseLevel {
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema, Clone)]
 #[diesel(table_name=levels)]
 pub struct Level {
+    /// The list this level belongs to.
+    pub list_id: List,
     /// Internal level UUID
     pub id: Uuid,
     /// Name of the level in the game. If multiple levels share the same name, their creator's name is appended at the end. 2P levels both have (2P) or (Solo) appended at the end.
@@ -212,6 +215,22 @@ pub struct LevelQueryOptions {
     pub at: Option<DateTime<Utc>>,
 }
 
+impl Auditable for Level {
+    const ENTITY_TYPE: AuditEntityType = AuditEntityType::Level;
+
+    fn entity_id(&self) -> Uuid {
+        self.id
+    }
+
+    fn display_name(&self, _conn: &mut DbConnection) -> Result<String, ApiError> {
+        Ok(self.name.clone())
+    }
+
+    fn list_id(&self) -> Option<List> {
+        Some(self.list_id)
+    }
+}
+
 impl Level {
     pub fn find_all(
         conn: &mut DbConnection,
@@ -271,6 +290,7 @@ impl Level {
             ))
             .inner_join(levels::table)
             .select((
+                levels::list_id,
                 levels::id,
                 levels::name,
                 position_history_full_view::position,

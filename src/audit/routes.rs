@@ -3,6 +3,7 @@ use crate::{
     auth::{Permission, UserAuth},
     db::DbAppState,
     error_handler::ApiError,
+    list::List,
     page_helper::{PageQuery, Paginated},
 };
 use actix_web::{get, web, HttpResponse};
@@ -19,10 +20,11 @@ use utoipa::OpenApi;
     ),
     params(
         PageQuery<50>,
+        ("list_filter" = Option<List>, Query, description = "Filter by the selected list."),
         ("actor_filter" = Option<Uuid>, Query, description = "Filter by which user is performing the action"),
         ("entity_type_filter" = Option<AuditEntityType>, Query, description = "Filter by the type of entity affected by the action"),
         ("entity_filter" = Option<Uuid>, Query, description = "Filter by the ID of the entity affected by the action"),
-        ("action_filter" = Option<AuditAction>, Query, description = "Filter by the type of action performed"),
+        ("action_type_filter" = Option<AuditAction>, Query, description = "Filter by the type of action performed"),
 ),
     security(("bearer_token" = ["ViewAuditLog"])),
 )]

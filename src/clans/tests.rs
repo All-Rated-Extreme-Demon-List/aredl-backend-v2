@@ -1,9 +1,12 @@
-use crate::{audit::AuditAction, clans::test_utils::latest_audit_entry_for_clan};
 #[cfg(test)]
 use {
     crate::{
+        audit::AuditAction,
         auth::{create_test_token, Permission},
-        clans::test_utils::{count_test_clan_members, create_test_clan, create_test_clan_member},
+        clans::test_utils::{
+            count_test_clan_members, create_test_clan, create_test_clan_member,
+            latest_audit_entry_for_clan,
+        },
         test_utils::{assert_error_response, init_test_app},
         users::test_utils::create_test_user,
     },
@@ -34,6 +37,7 @@ async fn create_and_join() {
 
     let audit = latest_audit_entry_for_clan(&db, clan_id, AuditAction::Create);
     assert_eq!(audit.entity_id, clan_id);
+    assert_eq!(audit.display_name, "Test Clan [TC]");
     if let Some(diff) = audit.diff {
         assert_eq!(diff["global_name"].as_str().unwrap(), "Test Clan");
         assert_eq!(diff["tag"].as_str().unwrap(), "TC");
@@ -112,6 +116,13 @@ async fn update_clan() {
 
     let audit = latest_audit_entry_for_clan(&db, clan_id, AuditAction::Update);
     assert_eq!(audit.entity_id, clan_id);
+    assert_eq!(
+        audit.display_name,
+        format!(
+            "Updated [{}]",
+            clan["tag"].as_str().expect("Expected clan tag")
+        )
+    );
     if let Some(diff) = audit.diff {
         assert_eq!(diff["global_name"].as_str().unwrap(), "Updated");
     } else {
@@ -133,9 +144,20 @@ async fn delete_clan() {
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success());
+    let deleted_clan: serde_json::Value = read_body_json(resp).await;
 
     let audit = latest_audit_entry_for_clan(&db, clan_id, AuditAction::Delete);
     assert_eq!(audit.entity_id, clan_id);
+    assert_eq!(
+        audit.display_name,
+        format!(
+            "{} [{}]",
+            deleted_clan["global_name"]
+                .as_str()
+                .expect("Expected clan name"),
+            deleted_clan["tag"].as_str().expect("Expected clan tag"),
+        )
+    );
 }
 
 #[actix_web::test]

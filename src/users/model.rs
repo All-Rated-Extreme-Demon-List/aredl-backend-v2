@@ -465,6 +465,10 @@ impl Auditable for User {
         self.id
     }
 
+    fn display_name(&self, _conn: &mut DbConnection) -> Result<String, ApiError> {
+        Ok(self.global_name.clone())
+    }
+
     fn redacted_fields() -> &'static [&'static str] {
         &[]
     }

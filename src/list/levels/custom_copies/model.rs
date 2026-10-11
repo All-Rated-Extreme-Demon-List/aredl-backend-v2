@@ -1,5 +1,6 @@
 use crate::{
     app_data::db::DbConnection,
+    audit::{AuditEntityType, Auditable},
     auth::Authenticated,
     error_handler::ApiError,
     list::{levels::id_resolver::level_filter, List},
@@ -43,6 +44,8 @@ pub enum LevelCustomCopyType {
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
 #[diesel(table_name = level_custom_copies, check_for_backend(Pg))]
 pub struct LevelCustomCopy {
+    /// The list this custom copy belongs to.
+    pub list_id: List,
     /// The internal ID of this custom copy entry
     pub id: Uuid,
     /// The internal ID this custom copy is for
@@ -124,6 +127,31 @@ pub struct LevelCustomCopyQueryOptions {
     pub status_filter: Option<LevelCustomCopyStatus>,
     pub description_filter: Option<Option<String>>,
     pub added_by: Option<Uuid>,
+}
+
+impl Auditable for LevelCustomCopy {
+    const ENTITY_TYPE: AuditEntityType = AuditEntityType::CustomCopy;
+
+    fn entity_id(&self) -> Uuid {
+        self.id
+    }
+
+    fn display_name(&self, conn: &mut DbConnection) -> Result<String, ApiError> {
+        let level_name = levels::table
+            .filter(levels::list_id.eq(self.list_id))
+            .find(self.level_id)
+            .select(levels::name)
+            .first::<String>(conn)?;
+
+        Ok(format!(
+            "{level_name} ({}, {:?})",
+            self.copy_id, self.id_type
+        ))
+    }
+
+    fn list_id(&self) -> Option<List> {
+        Some(self.list_id)
+    }
 }
 
 impl LevelCustomCopy {
