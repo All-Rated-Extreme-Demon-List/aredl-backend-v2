@@ -1,9 +1,12 @@
 #[cfg(test)]
 use {
-    crate::app_data::db::DbAppState,
-    crate::auth::Permission,
-    crate::schema::{role_permissions, roles, user_roles, users},
-    crate::users::User,
+    crate::{
+        app_data::db::DbAppState,
+        audit::{AuditAction, AuditEntityType, AuditLogEntry},
+        auth::Permission,
+        schema::{audit_logs, role_permissions, roles, user_roles, users},
+        users::User,
+    },
     chrono::{DateTime, Utc},
     diesel::prelude::*,
     std::sync::Arc,
@@ -211,4 +214,20 @@ pub fn get_test_user(db: &Arc<DbAppState>, user_id: Uuid) -> User {
         .select(User::as_select())
         .first::<User>(&mut db.connection().unwrap())
         .expect("Failed to read test user")
+}
+
+#[cfg(test)]
+pub fn latest_audit_entry_for_user(
+    db: &Arc<DbAppState>,
+    user_id: Uuid,
+    action: AuditAction,
+) -> AuditLogEntry {
+    audit_logs::table
+        .filter(audit_logs::entity_id.eq(user_id))
+        .filter(audit_logs::entity_type.eq(AuditEntityType::User))
+        .filter(audit_logs::action_type.eq(action))
+        .order(audit_logs::timestamp.desc())
+        .select(AuditLogEntry::as_select())
+        .first(&mut db.connection().expect("Failed to get DB connection"))
+        .expect("Expected audit entry for user")
 }

@@ -71,6 +71,8 @@ pub enum Permission {
     ExternalConnectionsManage,
     /// Allows editing weekly, monthly, event and bounty levels
     BountyManage,
+    /// Allows viewing the website audit log
+    ViewAuditLog,
     /// Allows manually running scheduled actions
     MaintenanceRun,
 }

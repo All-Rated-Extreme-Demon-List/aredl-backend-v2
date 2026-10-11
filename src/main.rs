@@ -14,6 +14,7 @@ mod tests;
 #[cfg(test)]
 mod test_utils;
 
+mod audit;
 mod auth;
 mod cache_control;
 mod clans;
@@ -171,6 +172,7 @@ async fn main() -> Result<(), StartupError> {
                     .configure(health::init_routes)
                     .configure(shifts::init_routes)
                     .configure(utils::init_routes)
+                    .configure(audit::init_routes)
                     .configure(scheduled::init_routes)
                     .configure(list::init_routes),
             )

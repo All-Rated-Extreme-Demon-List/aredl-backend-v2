@@ -2,9 +2,10 @@
 use {
     crate::app_data::db::DbAppState,
     crate::{
+        audit::{AuditAction, AuditEntityType, AuditLogEntry},
         clans::Clan,
         clans::ClanMember,
-        schema::{clan_invites, clan_members, clans},
+        schema::{audit_logs, clan_invites, clan_members, clans},
     },
     diesel::prelude::*,
     diesel::result::{DatabaseErrorKind, Error},
@@ -129,6 +130,22 @@ pub fn test_clan_member(db: &Arc<DbAppState>, clan_id: Uuid, user_id: Uuid) -> C
         .select(ClanMember::as_select())
         .first(&mut db.connection().unwrap())
         .expect("Failed to get test clan member")
+}
+
+#[cfg(test)]
+pub fn latest_audit_entry_for_clan(
+    db: &Arc<DbAppState>,
+    clan_id: Uuid,
+    action: AuditAction,
+) -> AuditLogEntry {
+    audit_logs::table
+        .filter(audit_logs::entity_id.eq(clan_id))
+        .filter(audit_logs::entity_type.eq(AuditEntityType::Clan))
+        .filter(audit_logs::action_type.eq(action))
+        .order(audit_logs::timestamp.desc())
+        .select(AuditLogEntry::as_select())
+        .first(&mut db.connection().expect("Failed to get DB connection"))
+        .expect("Expected audit entry for clan")
 }
 
 #[cfg(test)]

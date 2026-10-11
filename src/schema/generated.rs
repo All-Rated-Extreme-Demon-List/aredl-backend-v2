@@ -3,6 +3,14 @@
 pub mod public {
     pub mod sql_types {
         #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+        #[diesel(postgres_type(name = "audit_action"))]
+        pub struct AuditAction;
+
+        #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+        #[diesel(postgres_type(name = "audit_entity_type"))]
+        pub struct AuditEntityType;
+
+        #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
         #[diesel(postgres_type(name = "bounty_difficulty"))]
         pub struct BountyDifficulty;
 
@@ -49,6 +57,22 @@ pub mod public {
         #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
         #[diesel(postgres_type(name = "weekday"))]
         pub struct Weekday;
+    }
+
+    diesel::table! {
+        use diesel::sql_types::*;
+        use super::sql_types::AuditAction;
+        use super::sql_types::AuditEntityType;
+
+        audit_logs (id) {
+            id -> Uuid,
+            timestamp -> Timestamptz,
+            actor_id -> Nullable<Uuid>,
+            action_type -> AuditAction,
+            entity_id -> Uuid,
+            entity_type -> AuditEntityType,
+            diff -> Nullable<Jsonb>,
+        }
     }
 
     diesel::table! {
@@ -615,6 +639,7 @@ pub mod public {
     diesel::joinable!(user_roles -> users (user_id));
 
     diesel::allow_tables_to_appear_in_same_query!(
+        audit_logs,
         bounties,
         bounty_completed,
         clan_invites,
