@@ -9,8 +9,8 @@ actix-ws = "0.4"
 actix-rt = "2.11"
 actix-cors = "0.7.1"
 actix-http = "3.13"
-utoipa = { version = "5", features = ["actix_extras", "uuid", "chrono", "preserve_order", "preserve_path_order", "openapi_extensions", "macros"] }
-utoipa-rapidoc = { version = "6", features = ["actix-web"] }
+utoipa = { version = "6", features = ["actix_extras", "uuid", "chrono", "preserve_order", "preserve_path_order", "openapi_extensions", "macros"] }
+utoipa-rapidoc = { version = "7", features = ["actix-web"] }
 cron = "0.17"
 tokio = { version = "1.39", features = ["full"]}
 chrono = {version = "0.4", features = ["serde"]}
@@ -23,7 +23,7 @@ futures-util = "0.3"
 tracing-actix-web = "0.7"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
 tracing = "0.1"
-serial_test = "3"
+serial_test = "4"
 log = "0.4"
 listenfd = "1.0"
 reqwest = { version = "0.12", features = ["cookies", "json", "blocking"] }
@@ -36,14 +36,14 @@ strum_macros = "0.28.0"
 itertools = "0.15.0"
 prometheus = "0.14.0"
 actix-web-prom = "0.10.0"
-rand = "0.10.1"
-chacha20poly1305 = "0.10.1"
-base64 = "0.22"
+rand = "0.10"
+chacha20poly1305 = "0.11"
+base64 = "0.23"
 httpmock = "0.8.2"
 tempfile = "3.23.0"
 async-trait = "0.1.89"
 url = "2.5.7"
-indexmap = "2.14.0"
+indexmap = "2.14"
 dotenvy = "0.15.7"
 serde_with = "3.21.0"
 chrono-tz = "0.10.4"

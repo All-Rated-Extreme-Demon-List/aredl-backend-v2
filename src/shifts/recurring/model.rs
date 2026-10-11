@@ -79,20 +79,6 @@ pub struct RecurringShiftInsert {
     pub target_count: i32,
 }
 
-#[derive(Serialize, Deserialize, Debug, ToSchema)]
-pub struct SelfRecurringShiftInsert {
-    /// The day of the week this shift is assigned at.
-    pub weekday: Weekday,
-    /// The start time of the shift on the assigned day.
-    pub start_hour: i32,
-    /// The timezone this user is in, as an IANA timezone string (e.g., "America/New_York").
-    pub timezone: String,
-    /// How long this shift should last, in hours.
-    pub duration: i32,
-    /// The target number of submissions to review for this shift.
-    pub target_count: i32,
-}
-
 #[derive(Deserialize, ToSchema, AsChangeset, Debug)]
 #[diesel(table_name = recurrent_shifts)]
 pub struct RecurringShiftPatch {
@@ -138,7 +124,7 @@ impl ResolvedRecurringShift {
         authenticated: &Authenticated,
     ) -> Result<Vec<Self>, ApiError> {
         let result_rows = recurrent_shifts::table
-            .inner_join(users::table.on(recurrent_shifts::user_id.eq(users::id)))
+            .inner_join(users::table)
             .order((
                 recurrent_shifts::weekday.asc(),
                 recurrent_shifts::start_hour.asc(),

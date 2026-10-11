@@ -149,7 +149,7 @@ impl RoleResolved {
         let role_ids = roles_by_id.keys().copied().collect::<Vec<_>>();
 
         let users_by_role = user_roles::table
-            .inner_join(users::table.on(users::id.eq(user_roles::user_id)))
+            .inner_join(users::table)
             .filter(user_roles::role_id.eq_any(&role_ids))
             .select((user_roles::role_id, BaseUser::as_select()))
             .order_by(user_roles::role_id.asc())

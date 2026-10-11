@@ -9,7 +9,7 @@ use base64::{
     engine::general_purpose::STANDARD, engine::general_purpose::URL_SAFE_NO_PAD, Engine as _,
 };
 use chacha20poly1305::{
-    aead::{Aead as _, AeadCore as _, KeyInit as _, OsRng, Payload},
+    aead::{Aead as _, Generate as _, KeyInit as _, Payload},
     XChaCha20Poly1305, XNonce,
 };
 use chrono::{Duration as ChronoDuration, Utc};
@@ -326,7 +326,9 @@ fn token_cipher() -> Result<&'static XChaCha20Poly1305, ApiError> {
 
 fn encrypt_db_token_value(value: &str, aad: &[u8]) -> Result<String, ApiError> {
     let cipher = token_cipher()?;
-    let nonce = XChaCha20Poly1305::generate_nonce(&mut OsRng);
+    let nonce = XNonce::try_generate().map_err(|_err| {
+        ApiError::InternalServerError("Failed to generate backend OAuth token encryption nonce")
+    })?;
 
     let ciphertext = cipher
         .encrypt(

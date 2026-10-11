@@ -1,7 +1,7 @@
 use {
     crate::{
-        aredl::levels::test_utils::create_test_level_with_record,
         auth::create_test_token,
+        list::levels::test_utils::create_test_level_with_record,
         test_utils::{assert_error_response, init_test_app},
         users::test_utils::create_test_user,
     },
@@ -157,4 +157,44 @@ async fn grant_user_badge_rejects_invalid_code() {
         StatusCode::BAD_REQUEST,
         Some("Unknown badge code: global.invalid_badge"),
     );
+}
+
+#[actix_web::test]
+async fn sync_user_badges_combines_classic_and_platformer_records() {
+    use crate::list::{levels::test_utils::create_test_level_with_record_for_list, List};
+
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let (staff_id, _) = create_test_user(&db, Some(crate::auth::Permission::UserModify)).await;
+    let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
+
+    for _ in 0..4 {
+        create_test_level_with_record(&db, user_id).await;
+    }
+    create_test_level_with_record_for_list(&db, List::Platformer, user_id).await;
+
+    let req = test::TestRequest::post()
+        .uri(&format!("/users/{user_id}/badges/sync"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let badges: serde_json::Value = read_body_json(resp).await;
+    let badges = badges.as_array().unwrap();
+    assert!(badges
+        .iter()
+        .any(|badge| badge["badge_code"] == "global.level_completion.5"));
+    assert!(!badges
+        .iter()
+        .any(|badge| badge["badge_code"] == "global.level_completion.10"));
+    assert!(badges
+        .iter()
+        .any(|badge| badge["badge_code"] == "classic.hardest_level.10"));
+    assert!(badges
+        .iter()
+        .any(|badge| badge["badge_code"] == "platformer.hardest_level.10"));
+    assert!(badges
+        .iter()
+        .any(|badge| badge["badge_code"] == "platformer.fastest_time"));
 }

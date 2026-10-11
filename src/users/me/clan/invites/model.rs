@@ -28,7 +28,7 @@ impl ClanInvite {
     ) -> Result<Vec<ClanInviteResolved>, ApiError> {
         let invites = clan_invites::table
             .filter(clan_invites::user_id.eq(user_id))
-            .inner_join(clans::table.on(clan_invites::clan_id.eq(clans::id)))
+            .inner_join(clans::table)
             .select((ClanInvite::as_select(), Clan::as_select()))
             .load::<ClanInviteResolved>(conn)?;
         Ok(invites)

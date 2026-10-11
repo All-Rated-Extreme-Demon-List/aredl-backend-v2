@@ -2,8 +2,11 @@ pub mod data_cleaner;
 pub mod refresh_discord_avatars;
 pub mod refresh_level_data;
 pub mod refresh_matviews;
+mod routes;
 pub mod shifts_creator;
 pub mod sync_patreon_plus;
+
+pub use routes::{init_routes, ApiDoc};
 
 use crate::error_handler::{ConfigError, StartupError};
 use crate::get_secret;
@@ -13,6 +16,8 @@ use std::str::FromStr as _;
 use std::sync::Arc;
 use std::time::Duration;
 
+#[cfg(test)]
+mod test_utils;
 #[cfg(test)]
 mod tests;
 

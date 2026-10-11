@@ -1,0 +1,56 @@
+use crate::app_data::db::DbConnection;
+use crate::error_handler::ApiError;
+use crate::list::List;
+use crate::schema::levels;
+use diesel::pg::Pg;
+use uuid::Uuid;
+
+use diesel::prelude::*;
+fn parse_gd_id(string: &str) -> Result<(i32, bool), ApiError> {
+    let (parsed_id, two_player) = if let Some(stripped) = string.strip_suffix("_2p") {
+        (stripped.parse::<i32>(), true)
+    } else {
+        (string.parse::<i32>(), false)
+    };
+
+    let id = parsed_id.map_err(|error| {
+        ApiError::BadRequest(format!("Failed to parse {string}: {error}").as_str())
+    })?;
+
+    Ok((id, two_player))
+}
+
+pub fn level_filter(list: List, input: &str) -> Result<levels::BoxedQuery<'static, Pg>, ApiError> {
+    let mut query = levels::table
+        .filter(levels::list_id.eq(list))
+        .into_boxed::<Pg>();
+
+    if let Ok(uuid) = Uuid::parse_str(input) {
+        query = query.filter(levels::id.eq(uuid));
+    } else {
+        let (id_or_position, two_player) = parse_gd_id(input)?;
+        query = query.filter(
+            levels::level_id
+                .eq(id_or_position)
+                .and(levels::two_player.eq(two_player))
+                .or(levels::position.eq(id_or_position)),
+        );
+    }
+
+    Ok(query)
+}
+
+pub fn resolve_level_id(
+    conn: &mut DbConnection,
+    list: List,
+    level_id: &str,
+) -> Result<Uuid, ApiError> {
+    level_filter(list, level_id)?
+        .select(levels::id)
+        .first::<Uuid>(conn)
+        .map_err(|error| {
+            ApiError::NotFound(
+                format!("Failed to resolve {level_id} on list {list}: {error}").as_str(),
+            )
+        })
+}

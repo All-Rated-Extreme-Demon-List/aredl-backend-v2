@@ -81,7 +81,7 @@ impl ClanMember {
     ) -> Result<Vec<ClanMemberResolved>, ApiError> {
         let members = clan_members::table
             .filter(clan_members::clan_id.eq(clan_id))
-            .inner_join(users::table.on(clan_members::user_id.eq(users::id)))
+            .inner_join(users::table)
             .select((ExtendedBaseUser::as_select(), ClanMemberMeta::as_select()))
             .load::<ClanMemberResolved>(conn)?;
         Ok(members)

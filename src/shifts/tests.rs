@@ -3,6 +3,7 @@ use {
     crate::{
         auth::{create_test_token, Permission},
         roles::test_utils::{add_user_to_role, create_test_role_with_permission},
+        scheduled::shifts_creator::CreateShiftsResult,
         shifts::{
             recurring::{parse_timezone, RecurringShift},
             test_utils::{create_test_recurring_shift, create_test_shift, test_shifts_for_user},
@@ -40,6 +41,27 @@ async fn list_shifts_returns_created_shift_for_shift_manager() {
     assert!(resp.status().is_success(), "status is {}", resp.status());
     let body: serde_json::Value = read_body_json(resp).await;
     assert_ne!(body["data"].as_array().unwrap().len(), 0);
+}
+
+#[actix_web::test]
+async fn create_recurring_shifts_route() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user, _) = create_test_user(&db, Some(Permission::MaintenanceRun)).await;
+    let token = create_test_token(user, &auth.jwt_encoding_key).unwrap();
+    create_test_recurring_shift(&db, user, None).await;
+    let uri = "/shifts/recurring/create-shifts?date=2026-10-09";
+    for expected in [1, 0] {
+        let request = test::TestRequest::post()
+            .uri(uri)
+            .insert_header(("Authorization", format!("Bearer {token}")))
+            .to_request();
+        let response = test::call_service(&app, request).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body: CreateShiftsResult = read_body_json(response).await;
+        assert_eq!(body.created_shifts, expected);
+        assert_eq!(body.date, NaiveDate::from_ymd_opt(2026, 10, 9).unwrap());
+    }
+    assert_eq!(test_shifts_for_user(&db, user).len(), 1);
 }
 
 #[actix_web::test]

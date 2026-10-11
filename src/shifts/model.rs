@@ -237,7 +237,7 @@ impl ShiftPage {
             .get_result::<i64>(conn)?;
 
         let shift_rows = shifts::table
-            .inner_join(users::table.on(shifts::user_id.eq(users::id)))
+            .inner_join(users::table)
             .filter(shifts::user_id.eq(user_id))
             .order(shifts::start_at.desc())
             .limit(page_query.per_page())
@@ -278,7 +278,7 @@ impl ShiftPage {
         let total_count: i64 = build_filtered().count().get_result(conn)?;
 
         let shift_rows: Vec<(Shift, ExtendedBaseUser)> = build_filtered()
-            .inner_join(users::table.on(shifts::user_id.eq(users::id)))
+            .inner_join(users::table)
             .order(shifts::start_at.desc())
             .limit(page_query.per_page())
             .offset(page_query.offset())

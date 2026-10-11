@@ -1,16 +1,15 @@
 use crate::app_data::db::DbConnection;
-use crate::aredl::submissions::SubmissionStatus as AredlSubmissionStatus;
-use crate::arepl::submissions::SubmissionStatus as AreplSubmissionStatus;
 use crate::auth::Permission;
 use crate::error_handler::ApiError;
-use crate::schema::{aredl, arepl, role_permissions_full, user_roles};
+use crate::list::submissions::SubmissionStatus;
+use crate::schema::{role_permissions_full, submissions, user_roles};
 use diesel::prelude::*;
 use uuid::Uuid;
 
 pub(crate) fn grant_patreon_plus(
     conn: &mut DbConnection,
     user_id: Uuid,
-) -> Result<(usize, usize), ApiError> {
+) -> Result<usize, ApiError> {
     let role_id = patreon_plus_role_id(conn)?;
 
     diesel::insert_into(user_roles::table)
@@ -39,28 +38,19 @@ pub(crate) fn patreon_plus_role_id(conn: &mut DbConnection) -> Result<i32, ApiEr
 pub(crate) fn set_users_submissions_to_priority(
     conn: &mut DbConnection,
     user_ids: &[Uuid],
-) -> Result<(usize, usize), ApiError> {
+) -> Result<usize, ApiError> {
     if user_ids.is_empty() {
-        return Ok((0, 0));
+        return Ok(0);
     }
 
-    let aredl_prioritized_count = diesel::update(
-        aredl::submissions::table
-            .filter(aredl::submissions::status.eq(AredlSubmissionStatus::Pending))
-            .filter(aredl::submissions::submitted_by.eq_any(user_ids))
-            .filter(aredl::submissions::priority.eq(false)),
+    let prioritized_count = diesel::update(
+        submissions::table
+            .filter(submissions::status.eq(SubmissionStatus::Pending))
+            .filter(submissions::submitted_by.eq_any(user_ids))
+            .filter(submissions::priority.eq(false)),
     )
-    .set(aredl::submissions::priority.eq(true))
+    .set(submissions::priority.eq(true))
     .execute(conn)?;
 
-    let arepl_prioritized_count = diesel::update(
-        arepl::submissions::table
-            .filter(arepl::submissions::status.eq(AreplSubmissionStatus::Pending))
-            .filter(arepl::submissions::submitted_by.eq_any(user_ids))
-            .filter(arepl::submissions::priority.eq(false)),
-    )
-    .set(arepl::submissions::priority.eq(true))
-    .execute(conn)?;
-
-    Ok((aredl_prioritized_count, arepl_prioritized_count))
+    Ok(prioritized_count)
 }

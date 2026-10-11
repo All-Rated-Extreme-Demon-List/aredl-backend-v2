@@ -3,17 +3,11 @@ use crate::audit::{AuditEntityType, AuditLogEntry, Auditable};
 use crate::auth::{permission, Authenticated, Permission};
 use crate::clans::Clan;
 use crate::error_handler::ApiError;
+use crate::list::submissions::SubmissionStatus;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::roles::Role;
-use crate::schema::{
-    aredl::submissions, arepl::submissions as plat_submissions, clan_members, clans, roles,
-    user_roles, users,
-};
+use crate::schema::{clan_members, clans, merge_logs, roles, submissions, user_roles, users};
 use crate::users::badges::UserBadge;
-use crate::{
-    aredl::submissions::SubmissionStatus,
-    arepl::submissions::SubmissionStatus as PlatSubmissionStatus,
-};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::pg::Pg;
 use serde::{Deserialize, Serialize};
@@ -116,6 +110,7 @@ pub struct UserUpdateOnLogin {
     pub username: String,
     pub discord_id: Option<String>,
     pub discord_avatar: Option<String>,
+    #[diesel(treat_none_as_null = true)]
     pub discord_avatar_decoration: Option<String>,
     pub last_discord_avatar_update: Option<NaiveDateTime>,
 }
@@ -273,6 +268,32 @@ impl User {
         }
     }
 
+    /// tries to fallback merge logs if the given uuid can't be found in the current users table
+    pub fn from_str_with_merge_log_fallback(
+        conn: &mut DbConnection,
+        user_id: &str,
+    ) -> Result<Self, ApiError> {
+        let Ok(uuid) = Uuid::parse_str(user_id) else {
+            return Self::from_str(conn, user_id);
+        };
+
+        if let Some(user) = users::table
+            .filter(users::id.eq(uuid))
+            .select(Self::as_select())
+            .first::<Self>(conn)
+            .optional()?
+        {
+            return Ok(user);
+        }
+
+        Ok(merge_logs::table
+            .inner_join(users::table)
+            .filter(merge_logs::secondary_user.eq(uuid))
+            .order((merge_logs::merged_at.desc(), merge_logs::id.desc()))
+            .select(Self::as_select())
+            .first::<Self>(conn)?)
+    }
+
     pub fn is_banned(user_id: Uuid, conn: &mut DbConnection) -> Result<bool, ApiError> {
         let user = users::table
             .filter(users::id.eq(user_id))
@@ -410,7 +431,7 @@ impl User {
             .get_result::<Self>(conn)?;
 
         if ban_level >= 3 {
-            // Set user's pending classic submissions to `Denied`
+            // Set user's pending submissions to `Denied`
             diesel::update(
                 submissions::table
                     .filter(submissions::submitted_by.eq(user_id))
@@ -420,19 +441,6 @@ impl User {
                 submissions::status.eq(SubmissionStatus::Denied),
                 submissions::reviewer_id.eq(Some(authenticated.user_id)),
                 submissions::reviewer_notes.eq("This submission has been automatically rejected because this player has been list banned."),
-            ))
-            .execute(conn)?;
-
-            // Set user's pending platformer submissions to `Denied`
-            diesel::update(
-                plat_submissions::table
-                    .filter(plat_submissions::submitted_by.eq(user_id))
-                    .filter(plat_submissions::status.eq(PlatSubmissionStatus::Pending)),
-            )
-            .set((
-                plat_submissions::status.eq(PlatSubmissionStatus::Denied),
-                plat_submissions::reviewer_id.eq(Some(authenticated.user_id)),
-                plat_submissions::reviewer_notes.eq("This submission has been automatically rejected because this player has been list banned."),
             ))
             .execute(conn)?;
         }
@@ -477,7 +485,7 @@ impl UserResolved {
         user_id: &str,
         authenticated: Option<&Authenticated>,
     ) -> Result<Self, ApiError> {
-        let user = User::from_str(conn, user_id)?;
+        let user = User::from_str_with_merge_log_fallback(conn, user_id)?;
         Self::from_user(conn, user, authenticated)
     }
 
@@ -487,14 +495,14 @@ impl UserResolved {
         authenticated: Option<&Authenticated>,
     ) -> Result<Self, ApiError> {
         let clan = clans::table
-            .inner_join(clan_members::table.on(clans::id.eq(clan_members::clan_id)))
+            .inner_join(clan_members::table)
             .filter(clan_members::user_id.eq(user.id))
             .select(Clan::as_select())
             .first::<Clan>(conn)
             .optional()?;
 
         let mut roles = user_roles::table
-            .inner_join(roles::table.on(user_roles::role_id.eq(roles::id)))
+            .inner_join(roles::table)
             .filter(user_roles::user_id.eq(user.id))
             .select(Role::as_select())
             .load::<Role>(conn)?;

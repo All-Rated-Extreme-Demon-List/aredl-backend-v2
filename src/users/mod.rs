@@ -1,3 +1,4 @@
+pub mod avatar;
 pub mod badges;
 pub mod me;
 mod merge;

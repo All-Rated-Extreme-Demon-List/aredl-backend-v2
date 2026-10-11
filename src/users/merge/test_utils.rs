@@ -26,3 +26,9 @@ pub async fn create_test_merge_log(
         .get_result::<Uuid>(&mut db.connection().unwrap())
         .expect("Failed to create test merge log")
 }
+
+#[cfg(test)]
+pub fn merge_test_users(db: &Arc<DbAppState>, primary_user: Uuid, secondary_user: Uuid) {
+    super::merge_users(&mut db.connection().unwrap(), primary_user, secondary_user)
+        .expect("Failed to merge test users");
+}
