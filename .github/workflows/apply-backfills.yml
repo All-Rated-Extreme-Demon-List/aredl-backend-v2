@@ -16,6 +16,11 @@ on:
         required: false
         default: "main"
         type: string
+      migrations_timeout_seconds:
+        description: "Maximum time to wait for the deployed commit's migrations"
+        required: false
+        default: 1800
+        type: number
     secrets:
       DEPLOY_HOST:
         required: true
@@ -35,6 +40,13 @@ jobs:
   backfill:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout deployed backend migrations
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: backend
+          sparse-checkout: migrations
+
       - uses: actions/checkout@v4
         with:
           repository: ${{ inputs.backfill_repo }}
@@ -59,6 +71,8 @@ jobs:
 
       - name: Apply backfills
         shell: bash
+        env:
+          MIGRATIONS_TIMEOUT_SECONDS: ${{ inputs.migrations_timeout_seconds }}
         run: |
           set -euo pipefail
 
@@ -74,13 +88,53 @@ jobs:
           echo "::add-mask::$PGUSER"
           echo "::add-mask::$PGPASSWORD"
 
-          ssh -i ~/.ssh/id_rsa -N -L 55432:127.0.0.1:${{ secrets.API_DB_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} &
+          ssh -i ~/.ssh/id_rsa -o ExitOnForwardFailure=yes -N -L 55432:127.0.0.1:${{ secrets.API_DB_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} &
           TUNNEL_PID=$!
-          trap 'kill $TUNNEL_PID' EXIT
-          sleep 3
+          trap 'kill "$TUNNEL_PID" 2>/dev/null || true' EXIT
 
-          echo "Waiting 60 seconds for the API to start and finish migrations"
-          sleep 60
+          PGUSER="$PGUSER" PGPASSWORD="$PGPASSWORD" python -u - <<'EOF'
+          import os
+          import time
+          from pathlib import Path
+
+          import psycopg
+
+          required_migrations = {
+              path.name.split("_", 1)[0].replace("-", "")
+              for path in Path("backend/migrations").iterdir()
+              if path.is_dir() and (path / "up.sql").is_file()
+          }
+          if not required_migrations:
+              raise SystemExit("::error:: No backend migrations")
+
+          timeout = float(os.environ["MIGRATIONS_TIMEOUT_SECONDS"])
+          timeout_at = time.monotonic() + timeout
+          print("Waiting for migrations to run")
+
+          while time.monotonic() < timeout_at:
+              try:
+                  with psycopg.connect(
+                      host="127.0.0.1", port=55432, dbname="aredl",
+                      connect_timeout=5, options="-c statement_timeout=5000",
+                      autocommit=True,
+                  ) as conn:
+                      applied_migrations = {
+                          row[0] for row in conn.execute(
+                              "SELECT version FROM public.__diesel_schema_migrations"
+                          )
+                      }
+                  pending_migrations = sorted(required_migrations - applied_migrations)
+                  if not pending_migrations:
+                      print("Done, running backfills")
+                      break
+                  print("Waiting for migrations to run")
+              except psycopg.Error as error:
+                  print(f"Db error ({type(error).__name__}); retrying")
+
+              time.sleep(min(5, max(0, timeout_at - time.monotonic())))
+          else:
+              raise SystemExit("::error:: Timed out while waiting for migrated db")
+          EOF
 
           python backfill-repo/run_backfill.py \
             --db-url "postgresql://${PGUSER}:${PGPASSWORD}@127.0.0.1:55432/aredl" \
