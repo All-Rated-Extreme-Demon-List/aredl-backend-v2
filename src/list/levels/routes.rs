@@ -1,4 +1,5 @@
 use crate::app_data::db::DbAppState;
+use crate::audit::AuditLogEntry;
 use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::cache_control::CacheController;
 use crate::error_handler::{ApiError, ErrorResponse};
@@ -11,6 +12,7 @@ use crate::list::levels::{notes, updates, LevelQueryOptions};
 use crate::list::List;
 use crate::scheduled::refresh_level_data;
 use actix_web::{get, patch, post, web, HttpResponse};
+use diesel::Connection as _;
 use serde::Deserialize;
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
@@ -82,10 +84,17 @@ async fn create(
     list: web::Path<List>,
     level: web::Json<LevelPlace>,
     root_span: RootSpan,
+    authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&level));
-    let level = web::block(move || Level::create(&mut db.connection()?, *list, level.into_inner()))
-        .await??;
+    let level = web::block(move || {
+        db.connection()?.transaction(|conn| {
+            let level = Level::create(conn, *list, level.into_inner())?;
+            AuditLogEntry::log_create(conn, Some(authenticated.user_id), &level)?;
+            Ok::<_, ApiError>(level)
+        })
+    })
+    .await??;
     Ok(HttpResponse::Created().json(level))
 }
 
@@ -112,12 +121,18 @@ async fn update(
     path: web::Path<LevelPath>,
     level: web::Json<LevelUpdate>,
     root_span: RootSpan,
+    authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&level));
     let level = web::block(move || {
         let conn = &mut db.connection()?;
-        let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
-        Level::update(conn, path.list, level_id, level.into_inner())
+        conn.transaction(|conn| {
+            let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
+            let before = Level::find_for_update(conn, path.list, level_id)?;
+            let after = Level::update(conn, path.list, level_id, level.into_inner())?;
+            AuditLogEntry::log_update(conn, Some(authenticated.user_id), &before, &after)?;
+            Ok::<_, ApiError>(after)
+        })
     })
     .await??;
     Ok(HttpResponse::Ok().json(level))

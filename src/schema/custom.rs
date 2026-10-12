@@ -2,10 +2,11 @@
 // diesel won't autogenerate in schema.rs
 
 use crate::schema::{
-    bounties, bounty_completed, clan_invites, clans, last_gddl_update, level_custom_copies,
-    level_notes, level_updates, levels, levels_created, merge_requests, pack_levels, pack_tiers,
-    packs, permissions, position_history, position_history_full_view, records, roles,
-    submission_daily_level_stats, submission_history, submissions, user_roles, users,
+    audit_logs, bounties, bounty_completed, clan_invites, clans, last_gddl_update,
+    level_custom_copies, level_notes, level_updates, levels, levels_created, merge_requests,
+    pack_levels, pack_tiers, packs, permissions, position_history, position_history_full_view,
+    records, roles, submission_daily_level_stats, submission_history, submissions, user_roles,
+    users,
 };
 
 diesel::table! {
@@ -257,6 +258,7 @@ diesel::joinable!(submission_totals -> levels (level_id));
 diesel::joinable!(position_history -> levels (affected_level));
 diesel::joinable!(position_history_full_view -> levels (affected_level));
 diesel::joinable!(clan_invites -> users (user_id));
+diesel::joinable!(audit_logs -> users (actor_id));
 diesel::joinable!(merge_requests -> users (primary_user));
 diesel::joinable!(bounties -> levels (level_id));
 diesel::joinable!(bounty_completed -> bounties (bounty_id));

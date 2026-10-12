@@ -155,6 +155,21 @@ impl Auditable for LevelCustomCopy {
 }
 
 impl LevelCustomCopy {
+    pub fn find_for_update(
+        conn: &mut DbConnection,
+        list: List,
+        level_id: Uuid,
+        id: Uuid,
+    ) -> Result<Self, ApiError> {
+        Ok(level_custom_copies::table
+            .filter(level_custom_copies::list_id.eq(list))
+            .filter(level_custom_copies::level_id.eq(level_id))
+            .find(id)
+            .for_update()
+            .select(Self::as_select())
+            .first(conn)?)
+    }
+
     pub fn find_all_level(
         conn: &mut DbConnection,
         filters: &LevelCustomCopyQueryOptions,
@@ -253,13 +268,15 @@ impl LevelCustomCopy {
         list: List,
         level_id: Uuid,
         id: &Uuid,
-    ) -> Result<(), ApiError> {
-        diesel::delete(level_custom_copies::table)
+    ) -> Result<Option<Self>, ApiError> {
+        let deleted = diesel::delete(level_custom_copies::table)
             .filter(level_custom_copies::list_id.eq(list))
             .filter(level_custom_copies::level_id.eq(level_id))
             .filter(level_custom_copies::id.eq(id))
-            .execute(conn)?;
+            .returning(Self::as_select())
+            .get_result(conn)
+            .optional()?;
 
-        Ok(())
+        Ok(deleted)
     }
 }

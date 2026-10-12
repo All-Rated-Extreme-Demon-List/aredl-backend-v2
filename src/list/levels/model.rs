@@ -232,6 +232,19 @@ impl Auditable for Level {
 }
 
 impl Level {
+    pub fn find_for_update(
+        conn: &mut DbConnection,
+        list: List,
+        id: Uuid,
+    ) -> Result<Self, ApiError> {
+        Ok(levels::table
+            .filter(levels::list_id.eq(list))
+            .find(id)
+            .for_update()
+            .select(Self::as_select())
+            .first(conn)?)
+    }
+
     pub fn find_all(
         conn: &mut DbConnection,
         list: List,

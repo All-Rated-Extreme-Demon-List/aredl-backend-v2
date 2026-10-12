@@ -3,7 +3,8 @@ use crate::{
     error_handler::ApiError,
     list::List,
     page_helper::{PageQuery, Paginated},
-    schema::audit_logs,
+    schema::{audit_logs, users},
+    users::ExtendedBaseUser,
 };
 use chrono::{DateTime, Utc};
 use diesel::{pg::Pg, prelude::*};
@@ -62,6 +63,26 @@ pub struct AuditLogEntry {
     pub timestamp: DateTime<Utc>,
 }
 
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct AuditLogEntryResolved {
+    /// Which type of action triggered this entry
+    pub action_type: AuditAction,
+    /// The user who performed the action (or None if automated)
+    pub actor_id: Option<ExtendedBaseUser>,
+    /// Which type of entity this entry was performed on
+    pub entity_type: AuditEntityType,
+    /// The ID of the entity this entry was performed on
+    pub entity_id: Uuid,
+    /// For list-scoped entities, the list it applies to (or None for global entities i.e. users clans etc)
+    pub list_id: Option<List>,
+    /// Display name of the entity at the time of the action.
+    pub display_name: String,
+    /// The fields of the entity that were changed
+    pub diff: Option<Value>,
+    /// When this entry was created
+    pub timestamp: DateTime<Utc>,
+}
+
 #[derive(Insertable)]
 #[diesel(table_name = audit_logs)]
 struct NewAuditLogEntry {
@@ -77,7 +98,6 @@ struct NewAuditLogEntry {
 pub trait Auditable: Serialize {
     const ENTITY_TYPE: AuditEntityType;
     fn entity_id(&self) -> Uuid;
-    ///
     fn display_name(&self, conn: &mut DbConnection) -> Result<String, ApiError>;
     fn list_id(&self) -> Option<List> {
         None
@@ -99,7 +119,7 @@ pub struct AuditLogQueryOpts {
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct AuditLogPage {
     /// List of found logs
-    pub data: Vec<AuditLogEntry>,
+    pub data: Vec<AuditLogEntryResolved>,
 }
 
 impl AuditLogEntry {
@@ -261,16 +281,35 @@ impl AuditLogEntry {
         let total_count = build_query().count().get_result::<i64>(conn)?;
 
         let logs = build_query()
+            .left_join(users::table)
             .order(audit_logs::timestamp.desc())
             .limit(page_query.per_page())
             .offset(page_query.offset())
-            .select(AuditLogEntry::as_select())
-            .load::<Self>(conn)?;
+            .select(<(AuditLogEntry, Option<ExtendedBaseUser>)>::as_select())
+            .load::<(AuditLogEntry, Option<ExtendedBaseUser>)>(conn)?
+            .into_iter()
+            .map(AuditLogEntryResolved::from)
+            .collect::<Vec<_>>();
 
         Ok(Paginated::from_data(
             page_query,
             total_count,
             AuditLogPage { data: logs },
         ))
+    }
+}
+
+impl From<(AuditLogEntry, Option<ExtendedBaseUser>)> for AuditLogEntryResolved {
+    fn from((entry, user): (AuditLogEntry, Option<ExtendedBaseUser>)) -> Self {
+        Self {
+            action_type: entry.action_type,
+            actor_id: user,
+            entity_type: entry.entity_type,
+            entity_id: entry.entity_id,
+            list_id: entry.list_id,
+            display_name: entry.display_name,
+            diff: entry.diff,
+            timestamp: entry.timestamp,
+        }
     }
 }

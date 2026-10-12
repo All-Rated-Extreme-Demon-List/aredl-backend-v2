@@ -1,5 +1,6 @@
 use crate::{
     app_data::db::DbAppState,
+    audit::AuditLogEntry,
     auth::{Authenticated, Permission, UserAuth},
     error_handler::{ApiError, ErrorResponse},
     list::{
@@ -17,6 +18,7 @@ use crate::{
     CacheController,
 };
 use actix_web::{delete, get, patch, post, web, HttpResponse};
+use diesel::Connection as _;
 use std::sync::Arc;
 use utoipa::OpenApi;
 use uuid::Uuid;
@@ -82,8 +84,13 @@ async fn create(
 ) -> Result<HttpResponse, ApiError> {
     let custom_copies = web::block(move || {
         let conn = &mut db.connection()?;
-        let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
-        LevelCustomCopy::create(conn, body.into_inner(), path.list, level_id, &auth)
+        conn.transaction(|conn| {
+            let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
+            let custom_copy =
+                LevelCustomCopy::create(conn, body.into_inner(), path.list, level_id, &auth)?;
+            AuditLogEntry::log_create(conn, Some(auth.user_id), &custom_copy)?;
+            Ok::<_, ApiError>(custom_copy)
+        })
     })
     .await??;
     Ok(HttpResponse::Created().json(custom_copies))
@@ -120,11 +127,23 @@ async fn update(
     db: web::Data<Arc<DbAppState>>,
     body: web::Json<LevelCustomCopyUpdate>,
     path: web::Path<CustomCopyPath>,
+    auth: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let custom_copies = web::block(move || {
         let conn = &mut db.connection()?;
-        let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
-        LevelCustomCopy::update(conn, body.into_inner(), path.list, level_id, &path.copy_id)
+        conn.transaction(|conn| {
+            let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
+            let before = LevelCustomCopy::find_for_update(conn, path.list, level_id, path.copy_id)?;
+            let after = LevelCustomCopy::update(
+                conn,
+                body.into_inner(),
+                path.list,
+                level_id,
+                &path.copy_id,
+            )?;
+            AuditLogEntry::log_update(conn, Some(auth.user_id), &before, &after)?;
+            Ok::<_, ApiError>(after)
+        })
     })
     .await??;
     Ok(HttpResponse::Ok().json(custom_copies))
@@ -152,11 +171,19 @@ async fn update(
 async fn delete(
     db: web::Data<Arc<DbAppState>>,
     path: web::Path<CustomCopyPath>,
+    auth: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     web::block(move || {
         let conn = &mut db.connection()?;
-        let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
-        LevelCustomCopy::delete(conn, path.list, level_id, &path.copy_id)
+        conn.transaction(|conn| {
+            let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
+            if let Some(deleted) =
+                LevelCustomCopy::delete(conn, path.list, level_id, &path.copy_id)?
+            {
+                AuditLogEntry::log_delete(conn, Some(auth.user_id), &deleted)?;
+            }
+            Ok::<_, ApiError>(())
+        })
     })
     .await??;
     Ok(HttpResponse::NoContent().finish())
