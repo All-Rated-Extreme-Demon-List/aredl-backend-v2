@@ -77,6 +77,19 @@ impl Auditable for Pack {
 }
 
 impl Pack {
+    pub fn find_for_update(
+        conn: &mut DbConnection,
+        list: List,
+        id: Uuid,
+    ) -> Result<Self, ApiError> {
+        Ok(packs::table
+            .filter(packs::list_id.eq(list))
+            .find(id)
+            .for_update()
+            .select(Self::as_select())
+            .first(conn)?)
+    }
+
     pub fn create(conn: &mut DbConnection, list: List, pack: PackCreate) -> Result<Self, ApiError> {
         let pack = diesel::insert_into(packs::table)
             .values((packs::list_id.eq(list), pack))

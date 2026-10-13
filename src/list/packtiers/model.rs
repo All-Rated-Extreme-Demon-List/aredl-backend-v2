@@ -1,4 +1,5 @@
 use crate::app_data::db::DbConnection;
+use crate::audit::{AuditEntityType, Auditable};
 use crate::error_handler::ApiError;
 use crate::list::levels::ExtendedBaseLevel;
 use crate::list::List;
@@ -24,6 +25,8 @@ pub struct BasePackTier {
 #[derive(Serialize, Identifiable, Selectable, Queryable, Debug, ToSchema)]
 #[diesel(table_name=pack_tiers, check_for_backend(Pg))]
 pub struct PackTier {
+    /// The list this pack tier belongs to.
+    pub list_id: List,
     /// Internal UUID of the pack tier.
     pub id: Uuid,
     /// Name of the pack tier.
@@ -199,6 +202,19 @@ impl PackTierResolved {
 }
 
 impl PackTier {
+    pub fn find_for_update(
+        conn: &mut DbConnection,
+        list: List,
+        id: Uuid,
+    ) -> Result<Self, ApiError> {
+        Ok(pack_tiers::table
+            .filter(pack_tiers::list_id.eq(list))
+            .find(id)
+            .for_update()
+            .select(Self::as_select())
+            .first(conn)?)
+    }
+
     pub fn create(
         conn: &mut DbConnection,
         list: List,
@@ -233,5 +249,21 @@ impl PackTier {
             .returning(Self::as_select())
             .get_result(conn)?;
         Ok(tier)
+    }
+}
+
+impl Auditable for PackTier {
+    const ENTITY_TYPE: AuditEntityType = AuditEntityType::PackTier;
+
+    fn entity_id(&self) -> Uuid {
+        self.id
+    }
+
+    fn list_id(&self) -> Option<List> {
+        Some(self.list_id)
+    }
+
+    fn display_name(&self, _conn: &mut DbConnection) -> Result<String, ApiError> {
+        Ok(self.name.clone())
     }
 }

@@ -1,5 +1,6 @@
 use crate::{
     app_data::db::DbAppState,
+    audit::AuditLogEntry,
     auth::{Authenticated, Permission, UserAuth},
     error_handler::{ApiError, ErrorResponse},
     page_helper::{PageQuery, Paginated},
@@ -9,6 +10,7 @@ use crate::{
     },
 };
 use actix_web::{delete, get, patch, post, web, HttpResponse};
+use diesel::Connection as _;
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
@@ -109,7 +111,11 @@ async fn create_shift_now(
                 "You can only create shifts for yourself.",
             ));
         }
-        Shift::create(&mut conn, &data, &authenticated)
+        conn.transaction(|conn| {
+            let shift = Shift::create(conn, &data, &authenticated)?;
+            AuditLogEntry::log_create(conn, Some(authenticated.user_id), &shift)?;
+            Ok::<_, ApiError>(shift)
+        })
     })
     .await??;
 
@@ -137,10 +143,17 @@ async fn patch_shift(
     body: web::Json<ShiftPatch>,
     id: web::Path<Uuid>,
     root_span: RootSpan,
+    authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&body));
     let updated = web::block(move || {
-        Shift::patch(&mut db.connection()?, id.into_inner(), &body.into_inner())
+        db.connection()?.transaction(|conn| {
+            let id = id.into_inner();
+            let before = Shift::find_for_update(conn, id)?;
+            let after = Shift::patch(conn, id, &body.into_inner())?;
+            AuditLogEntry::log_update(conn, Some(authenticated.user_id), &before, &after)?;
+            Ok::<_, ApiError>(after)
+        })
     })
     .await??;
     Ok(HttpResponse::Ok().json(updated))
@@ -164,9 +177,16 @@ async fn patch_shift(
 async fn delete_shift(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
+    authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let deleted =
-        web::block(move || Shift::delete(&mut db.connection()?, id.into_inner())).await??;
+    let deleted = web::block(move || {
+        db.connection()?.transaction(|conn| {
+            let deleted = Shift::delete(conn, id.into_inner())?;
+            AuditLogEntry::log_delete(conn, Some(authenticated.user_id), &deleted)?;
+            Ok::<_, ApiError>(deleted)
+        })
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(deleted))
 }
 

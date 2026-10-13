@@ -7,7 +7,7 @@ CREATE TYPE audit_entity_type AS ENUM (
     'Role',
     'Permission',
     'Bounty',
-    'CustomCopy',
+    'LevelCustomCopy',
     'SubmissionStatus',
     'Clan',
     'Shift'

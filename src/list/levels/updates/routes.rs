@@ -1,7 +1,8 @@
 use crate::list::{levels::routes::LevelPath, List};
 use crate::{
     app_data::db::DbAppState,
-    auth::{Permission, UserAuth},
+    audit::AuditLogEntry,
+    auth::{Authenticated, Permission, UserAuth},
     error_handler::{ApiError, ErrorResponse},
     list::levels::{
         id_resolver::resolve_level_id,
@@ -13,6 +14,7 @@ use crate::{
     CacheController,
 };
 use actix_web::{delete, get, patch, post, web, HttpResponse};
+use diesel::Connection as _;
 use std::sync::Arc;
 use utoipa::OpenApi;
 use uuid::Uuid;
@@ -71,11 +73,16 @@ async fn create(
     db: web::Data<Arc<DbAppState>>,
     body: web::Json<LevelUpdateEntryPost>,
     path: web::Path<LevelPath>,
+    auth: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let created = web::block(move || {
         let conn = &mut db.connection()?;
-        let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
-        LevelUpdateEntry::create(conn, body.into_inner(), path.list, level_id)
+        conn.transaction(|conn| {
+            let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
+            let entry = LevelUpdateEntry::create(conn, body.into_inner(), path.list, level_id)?;
+            AuditLogEntry::log_create(conn, Some(auth.user_id), &entry)?;
+            Ok::<_, ApiError>(entry)
+        })
     })
     .await??;
     Ok(HttpResponse::Created().json(created))
@@ -113,17 +120,24 @@ async fn update(
     db: web::Data<Arc<DbAppState>>,
     body: web::Json<LevelUpdateEntryUpdate>,
     path: web::Path<UpdatePath>,
+    auth: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let updated = web::block(move || {
         let conn = &mut db.connection()?;
-        let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
-        LevelUpdateEntry::update(
-            conn,
-            body.into_inner(),
-            path.list,
-            level_id,
-            &path.update_id,
-        )
+        conn.transaction(|conn| {
+            let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
+            let before =
+                LevelUpdateEntry::find_for_update(conn, path.list, level_id, path.update_id)?;
+            let after = LevelUpdateEntry::update(
+                conn,
+                body.into_inner(),
+                path.list,
+                level_id,
+                &path.update_id,
+            )?;
+            AuditLogEntry::log_update(conn, Some(auth.user_id), &before, &after)?;
+            Ok::<_, ApiError>(after)
+        })
     })
     .await??;
     Ok(HttpResponse::Ok().json(updated))
@@ -153,11 +167,19 @@ async fn update(
 async fn delete(
     db: web::Data<Arc<DbAppState>>,
     path: web::Path<UpdatePath>,
+    auth: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     web::block(move || {
         let conn = &mut db.connection()?;
-        let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
-        LevelUpdateEntry::delete(conn, path.list, level_id, &path.update_id)
+        conn.transaction(|conn| {
+            let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
+            if let Some(deleted) =
+                LevelUpdateEntry::delete(conn, path.list, level_id, &path.update_id)?
+            {
+                AuditLogEntry::log_delete(conn, Some(auth.user_id), &deleted)?;
+            }
+            Ok::<_, ApiError>(())
+        })
     })
     .await??;
     Ok(HttpResponse::NoContent().finish())

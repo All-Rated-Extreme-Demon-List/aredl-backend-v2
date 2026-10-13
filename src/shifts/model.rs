@@ -1,5 +1,6 @@
 use crate::{
     app_data::db::DbConnection,
+    audit::{AuditEntityType, Auditable},
     auth::Authenticated,
     error_handler::ApiError,
     page_helper::{PageQuery, Paginated},
@@ -171,6 +172,14 @@ pub struct ShiftCreate {
 }
 
 impl Shift {
+    pub fn find_for_update(conn: &mut DbConnection, id: Uuid) -> Result<Self, ApiError> {
+        Ok(shifts::table
+            .find(id)
+            .for_update()
+            .select(Self::as_select())
+            .first(conn)?)
+    }
+
     pub fn create(
         conn: &mut DbConnection,
         new_shift: &ShiftCreate,
@@ -205,6 +214,29 @@ impl Shift {
         let deleted =
             diesel::delete(shifts::table.filter(shifts::id.eq(id))).get_result::<Shift>(conn)?;
         Ok(deleted)
+    }
+}
+
+impl Auditable for Shift {
+    const ENTITY_TYPE: AuditEntityType = AuditEntityType::Shift;
+
+    fn entity_id(&self) -> Uuid {
+        self.id
+    }
+
+    fn parent_entity_id(&self) -> Option<Uuid> {
+        Some(self.user_id)
+    }
+
+    fn display_name(&self, conn: &mut DbConnection) -> Result<String, ApiError> {
+        let user_global_name = users::table
+            .find(self.user_id)
+            .select(users::global_name)
+            .first::<String>(conn)?;
+        Ok(format!(
+            "{user_global_name} ({})",
+            self.start_at.to_rfc3339()
+        ))
     }
 }
 

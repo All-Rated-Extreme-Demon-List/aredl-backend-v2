@@ -241,6 +241,19 @@ impl Auditable for Bounty {
 }
 
 impl Bounty {
+    pub fn find_for_update(
+        conn: &mut DbConnection,
+        list: List,
+        id: Uuid,
+    ) -> Result<Self, ApiError> {
+        Ok(bounties::table
+            .filter(bounties::list_id.eq(list))
+            .find(id)
+            .for_update()
+            .select(Self::as_select())
+            .first(conn)?)
+    }
+
     pub fn find_by_id(conn: &mut DbConnection, list: List, id: Uuid) -> Result<Self, ApiError> {
         let bounty = bounties::table
             .filter(bounties::list_id.eq(list))
@@ -277,7 +290,7 @@ impl Bounty {
     }
 
     pub fn update(
-        self,
+        &self,
         conn: &mut DbConnection,
         list: List,
         patch: BountyPatch,

@@ -36,10 +36,15 @@ pub enum AuditEntityType {
     Role,
     Permission,
     Bounty,
-    CustomCopy,
     SubmissionStatus,
     Clan,
     Shift,
+    LevelCustomCopy,
+    LevelCreator,
+    LevelNote,
+    LevelUpdate,
+    PackTier,
+    RoleUser,
 }
 
 #[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
@@ -53,11 +58,13 @@ pub struct AuditLogEntry {
     pub entity_type: AuditEntityType,
     /// The ID of the entity this entry was performed on
     pub entity_id: Uuid,
+    /// The ID of this entity's related parent, if applicable (e.g. the level for a custom copy)
+    pub parent_entity_id: Option<Uuid>,
     /// For list-scoped entities, the list it applies to (or None for global entities i.e. users clans etc)
     pub list_id: Option<List>,
     /// Display name of the entity at the time of the action.
     pub display_name: String,
-    /// The fields of the entity that were changed
+    /// The changed entity fields, or added and removed ID arrays for a list change.
     pub diff: Option<Value>,
     /// When this entry was created
     pub timestamp: DateTime<Utc>,
@@ -73,11 +80,13 @@ pub struct AuditLogEntryResolved {
     pub entity_type: AuditEntityType,
     /// The ID of the entity this entry was performed on
     pub entity_id: Uuid,
+    /// The ID of this entity's related parent, if applicable (e.g. the level for a custom copy)
+    pub parent_entity_id: Option<Uuid>,
     /// For list-scoped entities, the list it applies to (or None for global entities i.e. users clans etc)
     pub list_id: Option<List>,
     /// Display name of the entity at the time of the action.
     pub display_name: String,
-    /// The fields of the entity that were changed
+    /// The changed entity fields, or added and removed ID arrays for a list change.
     pub diff: Option<Value>,
     /// When this entry was created
     pub timestamp: DateTime<Utc>,
@@ -90,6 +99,7 @@ struct NewAuditLogEntry {
     pub actor_id: Option<Uuid>,
     pub entity_type: AuditEntityType,
     pub entity_id: Uuid,
+    pub parent_entity_id: Option<Uuid>,
     pub list_id: Option<List>,
     pub display_name: String,
     pub diff: Option<Value>,
@@ -98,6 +108,9 @@ struct NewAuditLogEntry {
 pub trait Auditable: Serialize {
     const ENTITY_TYPE: AuditEntityType;
     fn entity_id(&self) -> Uuid;
+    fn parent_entity_id(&self) -> Option<Uuid> {
+        None
+    }
     fn display_name(&self, conn: &mut DbConnection) -> Result<String, ApiError>;
     fn list_id(&self) -> Option<List> {
         None
@@ -123,6 +136,45 @@ pub struct AuditLogPage {
 }
 
 impl AuditLogEntry {
+    /// log differences in a uuid list (e.g. level creators)
+    pub fn log_list_change<T: Auditable>(
+        conn: &mut DbConnection,
+        actor_id: Option<Uuid>,
+        parent: &T,
+        entity_type: AuditEntityType,
+        before: &[Uuid],
+        after: &[Uuid],
+    ) -> Result<(), ApiError> {
+        let before = before
+            .iter()
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>();
+        let after = after
+            .iter()
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>();
+        if before == after {
+            return Ok(());
+        }
+        let added = after.difference(&before).copied().collect::<Vec<_>>();
+        let removed = before.difference(&after).copied().collect::<Vec<_>>();
+
+        let entry = NewAuditLogEntry {
+            action_type: AuditAction::Update,
+            actor_id,
+            entity_type,
+            entity_id: parent.entity_id(),
+            parent_entity_id: Some(parent.entity_id()),
+            list_id: parent.list_id(),
+            display_name: parent.display_name(conn)?,
+            diff: Some(serde_json::json!({ "added": added, "removed": removed })),
+        };
+        diesel::insert_into(audit_logs::table)
+            .values(entry)
+            .execute(conn)?;
+        Ok(())
+    }
+
     fn serialize_auditable<T: Auditable>(entity: &T) -> Result<Value, ApiError> {
         let mut value = serde_json::to_value(entity).map_err(|err| {
             ApiError::InternalServerError(format!("Failed to serialize audit log entity: {err}"))
@@ -176,6 +228,21 @@ impl AuditLogEntry {
         Ok(Value::Object(diff))
     }
 
+    /// Choose the audit action from the snapshots already read by the operation.
+    pub fn log_change<T: Auditable>(
+        conn: &mut DbConnection,
+        actor_id: Option<Uuid>,
+        before: Option<&T>,
+        after: Option<&T>,
+    ) -> Result<(), ApiError> {
+        match (before, after) {
+            (None, Some(after)) => Self::log_create(conn, actor_id, after),
+            (Some(before), Some(after)) => Self::log_update(conn, actor_id, before, after),
+            (Some(before), None) => Self::log_delete(conn, actor_id, before),
+            (None, None) => Ok(()),
+        }
+    }
+
     pub fn log_create<T: Auditable>(
         conn: &mut DbConnection,
         actor_id: Option<Uuid>,
@@ -186,6 +253,7 @@ impl AuditLogEntry {
             actor_id,
             entity_type: T::ENTITY_TYPE,
             entity_id: entity.entity_id(),
+            parent_entity_id: entity.parent_entity_id(),
             list_id: entity.list_id(),
             display_name: entity.display_name(conn)?,
             diff: Some(Self::serialize_auditable(entity)?),
@@ -215,6 +283,7 @@ impl AuditLogEntry {
             actor_id,
             entity_type: T::ENTITY_TYPE,
             entity_id: after.entity_id(),
+            parent_entity_id: after.parent_entity_id(),
             list_id: after.list_id(),
             display_name: after.display_name(conn)?,
             diff: Some(diff),
@@ -237,6 +306,7 @@ impl AuditLogEntry {
             actor_id,
             entity_type: T::ENTITY_TYPE,
             entity_id: entity.entity_id(),
+            parent_entity_id: entity.parent_entity_id(),
             list_id: entity.list_id(),
             display_name: entity.display_name(conn)?,
             diff: None,
@@ -306,6 +376,7 @@ impl From<(AuditLogEntry, Option<ExtendedBaseUser>)> for AuditLogEntryResolved {
             actor_id: user,
             entity_type: entry.entity_type,
             entity_id: entry.entity_id,
+            parent_entity_id: entry.parent_entity_id,
             list_id: entry.list_id,
             display_name: entry.display_name,
             diff: entry.diff,

@@ -1,6 +1,7 @@
 use crate::list::List;
 use crate::{
     app_data::db::DbConnection,
+    audit::{AuditEntityType, Auditable},
     error_handler::ApiError,
     list::levels::id_resolver::level_filter,
     schema::{level_updates, levels},
@@ -28,6 +29,8 @@ pub enum LevelUpdateType {
 #[derive(Debug, Serialize, Deserialize, Queryable, Selectable, ToSchema)]
 #[diesel(table_name = level_updates, check_for_backend(Pg))]
 pub struct LevelUpdateEntry {
+    /// The list this update belongs to.
+    pub list_id: List,
     /// The internal ID of this update
     pub id: Uuid,
     /// The internal ID of the level this update is for
@@ -79,6 +82,21 @@ pub struct LevelUpdateEntryQueryOptions {
 }
 
 impl LevelUpdateEntry {
+    pub fn find_for_update(
+        conn: &mut DbConnection,
+        list: List,
+        level_id: Uuid,
+        id: Uuid,
+    ) -> Result<Self, ApiError> {
+        Ok(level_updates::table
+            .filter(level_updates::list_id.eq(list))
+            .filter(level_updates::level_id.eq(level_id))
+            .find(id)
+            .for_update()
+            .select(Self::as_select())
+            .first(conn)?)
+    }
+
     pub fn find_all_level(
         conn: &mut DbConnection,
         filters: &LevelUpdateEntryQueryOptions,
@@ -150,12 +168,39 @@ impl LevelUpdateEntry {
         list: List,
         level_id: Uuid,
         id: &Uuid,
-    ) -> Result<(), ApiError> {
-        diesel::delete(level_updates::table)
+    ) -> Result<Option<Self>, ApiError> {
+        let deleted = diesel::delete(level_updates::table)
             .filter(level_updates::list_id.eq(list))
             .filter(level_updates::level_id.eq(level_id))
             .filter(level_updates::id.eq(id))
-            .execute(conn)?;
-        Ok(())
+            .returning(Self::as_select())
+            .get_result(conn)
+            .optional()?;
+        Ok(deleted)
+    }
+}
+
+impl Auditable for LevelUpdateEntry {
+    const ENTITY_TYPE: AuditEntityType = AuditEntityType::LevelUpdate;
+
+    fn entity_id(&self) -> Uuid {
+        self.id
+    }
+
+    fn parent_entity_id(&self) -> Option<Uuid> {
+        Some(self.level_id)
+    }
+
+    fn list_id(&self) -> Option<List> {
+        Some(self.list_id)
+    }
+
+    fn display_name(&self, conn: &mut DbConnection) -> Result<String, ApiError> {
+        let level_name = levels::table
+            .filter(levels::list_id.eq(self.list_id))
+            .find(self.level_id)
+            .select(levels::name)
+            .first::<String>(conn)?;
+        Ok(format!("{level_name} ({:?})", self.update_type))
     }
 }

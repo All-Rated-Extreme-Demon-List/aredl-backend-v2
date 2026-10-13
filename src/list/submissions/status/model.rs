@@ -59,26 +59,28 @@ impl Auditable for SubmissionsEnabled {
 }
 
 impl SubmissionsEnabled {
-    pub fn enable(conn: &mut DbConnection, list: List, user_id: Uuid) -> Result<(), ApiError> {
-        diesel::insert_into(submissions_enabled::table)
+    pub fn enable(conn: &mut DbConnection, list: List, user_id: Uuid) -> Result<Self, ApiError> {
+        let status = diesel::insert_into(submissions_enabled::table)
             .values((
                 submissions_enabled::list_id.eq(list),
                 submissions_enabled::enabled.eq(true),
                 submissions_enabled::moderator.eq(user_id),
             ))
-            .execute(conn)?;
-        Ok(())
+            .returning(Self::as_select())
+            .get_result(conn)?;
+        Ok(status)
     }
 
-    pub fn disable(conn: &mut DbConnection, list: List, user_id: Uuid) -> Result<(), ApiError> {
-        diesel::insert_into(submissions_enabled::table)
+    pub fn disable(conn: &mut DbConnection, list: List, user_id: Uuid) -> Result<Self, ApiError> {
+        let status = diesel::insert_into(submissions_enabled::table)
             .values((
                 submissions_enabled::list_id.eq(list),
                 submissions_enabled::enabled.eq(false),
                 submissions_enabled::moderator.eq(user_id),
             ))
-            .execute(conn)?;
-        Ok(())
+            .returning(Self::as_select())
+            .get_result(conn)?;
+        Ok(status)
     }
 
     pub fn is_enabled(conn: &mut DbConnection, list: List) -> Result<bool, ApiError> {

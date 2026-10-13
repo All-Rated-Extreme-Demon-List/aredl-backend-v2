@@ -1,5 +1,5 @@
 use crate::app_data::db::DbAppState;
-use crate::auth::{Permission, UserAuth};
+use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::cache_control::CacheController;
 use crate::error_handler::{ApiError, ErrorResponse};
 use crate::list::levels::id_resolver::resolve_level_id;
@@ -63,12 +63,19 @@ async fn set(
     path: web::Path<LevelPath>,
     creators: web::Json<Vec<Uuid>>,
     root_span: RootSpan,
+    authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&creators));
     let creators = web::block(move || {
         let conn = &mut db.connection()?;
         let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
-        BaseUser::set_all_creators(conn, path.list, level_id, &creators.into_inner())
+        BaseUser::set_all_creators(
+            conn,
+            path.list,
+            level_id,
+            &creators.into_inner(),
+            &authenticated,
+        )
     })
     .await??;
     Ok(HttpResponse::Ok().json(creators))
@@ -96,12 +103,19 @@ async fn add(
     path: web::Path<LevelPath>,
     creators: web::Json<Vec<Uuid>>,
     root_span: RootSpan,
+    authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&creators));
     let creators = web::block(move || {
         let conn = &mut db.connection()?;
         let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
-        BaseUser::add_all_creators(conn, path.list, level_id, &creators.into_inner())
+        BaseUser::add_all_creators(
+            conn,
+            path.list,
+            level_id,
+            &creators.into_inner(),
+            &authenticated,
+        )
     })
     .await??;
     Ok(HttpResponse::Ok().json(creators))
@@ -129,12 +143,19 @@ async fn delete(
     path: web::Path<LevelPath>,
     creators: web::Json<Vec<Uuid>>,
     root_span: RootSpan,
+    authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&creators));
     let creators = web::block(move || {
         let conn = &mut db.connection()?;
         let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
-        BaseUser::delete_all_creators(conn, path.list, level_id, &creators.into_inner())
+        BaseUser::delete_all_creators(
+            conn,
+            path.list,
+            level_id,
+            &creators.into_inner(),
+            &authenticated,
+        )
     })
     .await??;
     Ok(HttpResponse::Ok().json(creators))

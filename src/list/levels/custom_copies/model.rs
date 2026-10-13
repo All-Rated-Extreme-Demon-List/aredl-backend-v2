@@ -130,10 +130,14 @@ pub struct LevelCustomCopyQueryOptions {
 }
 
 impl Auditable for LevelCustomCopy {
-    const ENTITY_TYPE: AuditEntityType = AuditEntityType::CustomCopy;
+    const ENTITY_TYPE: AuditEntityType = AuditEntityType::LevelCustomCopy;
 
     fn entity_id(&self) -> Uuid {
         self.id
+    }
+
+    fn parent_entity_id(&self) -> Option<Uuid> {
+        Some(self.level_id)
     }
 
     fn display_name(&self, conn: &mut DbConnection) -> Result<String, ApiError> {

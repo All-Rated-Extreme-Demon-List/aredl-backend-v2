@@ -1,12 +1,14 @@
 use crate::list::List;
 use crate::{
     app_data::db::DbAppState,
+    audit::AuditLogEntry,
     auth::{Authenticated, Permission, UserAuth},
     cache_control::CacheController,
     error_handler::{ApiError, ErrorResponse},
     list::submissions::status::{SubmissionsEnabled, SubmissionsEnabledFull},
 };
 use actix_web::{get, post, web, HttpResponse};
+use diesel::Connection as _;
 use std::sync::Arc;
 use utoipa::OpenApi;
 
@@ -31,7 +33,10 @@ async fn enable(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     web::block(move || {
-        SubmissionsEnabled::enable(&mut db.connection()?, *list, authenticated.user_id)
+        db.connection()?.transaction(|conn| {
+            let status = SubmissionsEnabled::enable(conn, *list, authenticated.user_id)?;
+            AuditLogEntry::log_create(conn, Some(authenticated.user_id), &status)
+        })
     })
     .await??;
     Ok(HttpResponse::NoContent().finish())
@@ -58,7 +63,10 @@ async fn disable(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     web::block(move || {
-        SubmissionsEnabled::disable(&mut db.connection()?, *list, authenticated.user_id)
+        db.connection()?.transaction(|conn| {
+            let status = SubmissionsEnabled::disable(conn, *list, authenticated.user_id)?;
+            AuditLogEntry::log_create(conn, Some(authenticated.user_id), &status)
+        })
     })
     .await??;
     Ok(HttpResponse::NoContent().finish())

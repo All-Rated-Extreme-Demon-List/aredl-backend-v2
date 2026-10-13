@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::app_data::db::{DbAppState, DbConnection};
-use crate::audit::{AuditEntityType, Auditable};
+use crate::audit::{AuditEntityType, AuditLogEntry, Auditable};
 use crate::auth::Authenticated;
 use crate::error_handler::ApiError;
 use crate::list::levels::{ExtendedBaseLevel, Level};
@@ -317,6 +317,35 @@ impl Auditable for Record {
 }
 
 impl Record {
+    pub fn find_for_update(
+        conn: &mut DbConnection,
+        list: List,
+        id: Uuid,
+    ) -> Result<Self, ApiError> {
+        Ok(records::table
+            .filter(records::list_id.eq(list))
+            .find(id)
+            .for_update()
+            .select(Self::as_select())
+            .first(conn)?)
+    }
+
+    pub fn find_by_user_level_for_update(
+        conn: &mut DbConnection,
+        list: List,
+        user_id: Uuid,
+        level_id: Uuid,
+    ) -> Result<Option<Self>, ApiError> {
+        Ok(records::table
+            .filter(records::list_id.eq(list))
+            .filter(records::submitted_by.eq(user_id))
+            .filter(records::level_id.eq(level_id))
+            .for_update()
+            .select(Self::as_select())
+            .first(conn)
+            .optional()?)
+    }
+
     pub fn create(
         conn: &mut DbConnection,
         list: List,
@@ -329,6 +358,12 @@ impl Record {
                     "You cannot create records for yourself",
                 ));
             }
+            let before = Self::find_by_user_level_for_update(
+                conn,
+                list,
+                record.submitted_by,
+                record.level_id,
+            )?;
             // Create the corresponding submission first and let triggers initialize the record
             let submission =
                 Submission::upsert_from_record_insert(conn, list, record.clone(), authenticated)?;
@@ -344,6 +379,13 @@ impl Record {
                 .get_result::<Self>(conn)?;
 
             UserBadge::update_user_badges(conn, result.submitted_by)?;
+
+            AuditLogEntry::log_change(
+                conn,
+                Some(authenticated.user_id),
+                before.as_ref(),
+                Some(&result),
+            )?;
 
             Ok(result)
         })
@@ -363,13 +405,9 @@ impl Record {
                 submissions::reviewer_id.eq(Some(authenticated.user_id)),
             );
 
-            let (submission_id, submitted_by): (Uuid, Uuid) = records::table
-                .filter(records::list_id.eq(list))
-                .filter(records::id.eq(record_id))
-                .select((records::submission_id, records::submitted_by))
-                .first(conn)?;
+            let before = Self::find_for_update(conn, list, record_id)?;
 
-            if authenticated.user_id == submitted_by {
+            if authenticated.user_id == before.submitted_by {
                 return Err(ApiError::Forbidden(
                     "You cannot update records for yourself",
                 ));
@@ -377,7 +415,7 @@ impl Record {
 
             diesel::update(submissions::table)
                 .filter(submissions::list_id.eq(list))
-                .filter(submissions::id.eq(submission_id))
+                .filter(submissions::id.eq(before.submission_id))
                 .set(submission_patch)
                 .execute(conn)?;
 
@@ -401,7 +439,14 @@ impl Record {
                 .get_result::<Self>(conn)?
             };
 
-            UserBadge::update_user_badges(conn, submitted_by)?;
+            UserBadge::update_user_badges(conn, before.submitted_by)?;
+
+            AuditLogEntry::log_change(
+                conn,
+                Some(authenticated.user_id),
+                Some(&before),
+                Some(&result),
+            )?;
 
             Ok(result)
         })
@@ -412,8 +457,8 @@ impl Record {
         list: List,
         record_id: Uuid,
         authenticated: &Authenticated,
-    ) -> Result<(), ApiError> {
-        conn.transaction(|conn| -> Result<(), ApiError> {
+    ) -> Result<Self, ApiError> {
+        conn.transaction(|conn| -> Result<Self, ApiError> {
             let record = diesel::delete(
                 records::table
                     .filter(records::list_id.eq(list))
@@ -433,7 +478,8 @@ impl Record {
                         .eq(Some("Record removed by a moderator".to_owned())),
                 ))
                 .execute(conn)?;
-            Ok(())
+            AuditLogEntry::log_change(conn, Some(authenticated.user_id), Some(&record), None)?;
+            Ok(record)
         })
     }
 }

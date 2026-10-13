@@ -1,10 +1,12 @@
 use crate::app_data::db::DbAppState;
-use crate::auth::{Permission, UserAuth};
+use crate::audit::AuditLogEntry;
+use crate::auth::{Authenticated, Permission, UserAuth};
 use crate::cache_control::CacheController;
 use crate::error_handler::{ApiError, ErrorResponse};
 use crate::list::packs::{levels, CompletedPackVictor, Pack, PackCreate, PackUpdate};
 use crate::list::List;
 use actix_web::{delete, get, patch, post, web, HttpResponse};
+use diesel::Connection as _;
 use serde::Deserialize;
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
@@ -36,10 +38,17 @@ async fn create(
     list: web::Path<List>,
     pack: web::Json<PackCreate>,
     root_span: RootSpan,
+    authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&pack));
-    let pack =
-        web::block(move || Pack::create(&mut db.connection()?, *list, pack.into_inner())).await??;
+    let pack = web::block(move || {
+        db.connection()?.transaction(|conn| {
+            let pack = Pack::create(conn, *list, pack.into_inner())?;
+            AuditLogEntry::log_create(conn, Some(authenticated.user_id), &pack)?;
+            Ok::<_, ApiError>(pack)
+        })
+    })
+    .await??;
     Ok(HttpResponse::Created().json(pack))
 }
 
@@ -65,15 +74,16 @@ async fn update(
     path: web::Path<PackPath>,
     pack: web::Json<PackUpdate>,
     root_span: RootSpan,
+    authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&pack));
     let pack = web::block(move || {
-        Pack::update(
-            &mut db.connection()?,
-            path.list,
-            path.pack_id,
-            pack.into_inner(),
-        )
+        db.connection()?.transaction(|conn| {
+            let before = Pack::find_for_update(conn, path.list, path.pack_id)?;
+            let after = Pack::update(conn, path.list, path.pack_id, pack.into_inner())?;
+            AuditLogEntry::log_update(conn, Some(authenticated.user_id), &before, &after)?;
+            Ok::<_, ApiError>(after)
+        })
     })
     .await??;
     Ok(HttpResponse::Ok().json(pack))
@@ -98,9 +108,16 @@ async fn update(
 async fn delete(
     db: web::Data<Arc<DbAppState>>,
     path: web::Path<PackPath>,
+    authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let pack =
-        web::block(move || Pack::delete(&mut db.connection()?, path.list, path.pack_id)).await??;
+    let pack = web::block(move || {
+        db.connection()?.transaction(|conn| {
+            let deleted = Pack::delete(conn, path.list, path.pack_id)?;
+            AuditLogEntry::log_delete(conn, Some(authenticated.user_id), &deleted)?;
+            Ok::<_, ApiError>(deleted)
+        })
+    })
+    .await??;
     Ok(HttpResponse::Ok().json(pack))
 }
 
