@@ -24,6 +24,7 @@ use utoipa::OpenApi;
         ("actor_filter" = Option<Uuid>, Query, description = "Filter by which user is performing the action"),
         ("entity_type_filter" = Option<AuditEntityType>, Query, description = "Filter by the type of entity affected by the action"),
         ("entity_filter" = Option<Uuid>, Query, description = "Filter by the ID of the entity affected by the action"),
+        ("parent_id" = Option<Uuid>, Query, description = "Filter by the ID of the related parent entity"),
         ("action_type_filter" = Option<AuditAction>, Query, description = "Filter by the type of action performed"),
 ),
     security(("bearer_token" = ["ViewAuditLog"])),

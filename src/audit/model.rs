@@ -126,6 +126,7 @@ pub struct AuditLogQueryOpts {
     pub actor_filter: Option<Uuid>,
     pub entity_type_filter: Option<AuditEntityType>,
     pub entity_filter: Option<Uuid>,
+    pub parent_id: Option<Uuid>,
     pub action_type_filter: Option<AuditAction>,
 }
 
@@ -339,6 +340,9 @@ impl AuditLogEntry {
             }
             if let Some(entity_id) = opts.entity_filter {
                 q = q.filter(audit_logs::entity_id.eq(entity_id));
+            }
+            if let Some(parent_id) = opts.parent_id {
+                q = q.filter(audit_logs::parent_entity_id.eq(parent_id));
             }
 
             if let Some(action_type) = &opts.action_type_filter {

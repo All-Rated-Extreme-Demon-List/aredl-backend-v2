@@ -37,7 +37,7 @@ async fn create_and_join() {
 
     let audit = latest_audit_entry_for_clan(&db, clan_id, AuditAction::Create);
     assert_eq!(audit.entity_id, clan_id);
-    assert_eq!(audit.display_name, "Test Clan [TC]");
+    assert_eq!(audit.display_name, "[TC] Test Clan");
     if let Some(diff) = audit.diff {
         assert_eq!(diff["global_name"].as_str().unwrap(), "Test Clan");
         assert_eq!(diff["tag"].as_str().unwrap(), "TC");
@@ -119,7 +119,7 @@ async fn update_clan() {
     assert_eq!(
         audit.display_name,
         format!(
-            "Updated [{}]",
+            "[{}] Updated",
             clan["tag"].as_str().expect("Expected clan tag")
         )
     );
@@ -151,11 +151,11 @@ async fn delete_clan() {
     assert_eq!(
         audit.display_name,
         format!(
-            "{} [{}]",
+            "[{}] {}",
+            deleted_clan["tag"].as_str().expect("Expected clan tag"),
             deleted_clan["global_name"]
                 .as_str()
                 .expect("Expected clan name"),
-            deleted_clan["tag"].as_str().expect("Expected clan tag"),
         )
     );
 }
