@@ -9,6 +9,7 @@ use {
         self,
         test::{self, read_body_json},
     },
+    uuid::Uuid,
 };
 
 #[actix_web::test]
@@ -26,15 +27,19 @@ async fn list_names() {
     let names: Vec<RoleResolved> = read_body_json(res).await;
 
     assert_eq!(names.len(), 2, "Expected 2 entries, found {}", names.len());
-    let returned_role_ids: Vec<i32> = names.iter().map(|r| r.role.id).collect();
+    let returned_role_ids: Vec<Uuid> = names.iter().map(|r| r.role.id).collect();
+    let mut expected_role_ids = vec![role_id_1, role_id_2];
+    expected_role_ids.sort_unstable();
     assert_eq!(
-        returned_role_ids,
-        vec![role_id_1, role_id_2],
+        returned_role_ids, expected_role_ids,
         "Expected role IDs [{role_id_1}, {role_id_2}], got {returned_role_ids:?}"
     );
 
-    for (idx, expected_user_id) in [user_id_1, user_id_2].iter().enumerate() {
-        let resolved = &names[idx];
+    for (expected_role_id, expected_user_id) in [(role_id_1, user_id_1), (role_id_2, user_id_2)] {
+        let resolved = names
+            .iter()
+            .find(|resolved| resolved.role.id == expected_role_id)
+            .expect("Expected role in public names");
         assert_eq!(
             resolved.users.len(),
             1,
@@ -43,7 +48,7 @@ async fn list_names() {
             resolved.users.len()
         );
         assert_eq!(
-            &resolved.users[0].id, expected_user_id,
+            resolved.users[0].id, expected_user_id,
             "Role {}: expected user ID {}, got {}",
             resolved.role.id, expected_user_id, resolved.users[0].id
         );

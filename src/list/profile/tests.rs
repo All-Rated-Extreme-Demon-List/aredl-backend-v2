@@ -60,13 +60,13 @@ async fn get_profile_hides_hidden_roles_except_for_role_assign() {
 
     let assert_hidden_role_is_not_exposed = |roles: &Vec<serde_json::Value>| {
         assert!(
-            !roles.iter().any(|r| r["id"] == hidden_role_id),
+            !roles.iter().any(|r| r["id"] == hidden_role_id.to_string()),
             "Hidden role should not be present in profile response"
         );
 
         let visible_role = roles
             .iter()
-            .find(|r| r["id"] == visible_role_id)
+            .find(|r| r["id"] == visible_role_id.to_string())
             .expect("Visible role should be present in profile response");
 
         assert!(!visible_role["hide"].as_bool().unwrap());
@@ -75,11 +75,11 @@ async fn get_profile_hides_hidden_roles_except_for_role_assign() {
     let assert_hidden_role_is_exposed = |roles: &Vec<serde_json::Value>| {
         let hidden_role = roles
             .iter()
-            .find(|r| r["id"] == hidden_role_id)
+            .find(|r| r["id"] == hidden_role_id.to_string())
             .expect("Hidden role should be present for role_assign users");
         let visible_role = roles
             .iter()
-            .find(|r| r["id"] == visible_role_id)
+            .find(|r| r["id"] == visible_role_id.to_string())
             .expect("Visible role should be present in profile response");
 
         assert!(hidden_role["hide"].as_bool().unwrap());

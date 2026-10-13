@@ -11,7 +11,7 @@ use diesel::prelude::*;
 impl BaseUser {
     pub fn role_add_all(
         conn: &mut DbConnection,
-        role_id: i32,
+        role_id: Uuid,
         authenticated: Authenticated,
         users: Vec<Uuid>,
     ) -> Result<Vec<Self>, ApiError> {
@@ -30,7 +30,7 @@ impl BaseUser {
 
     pub fn role_set_all(
         conn: &mut DbConnection,
-        role_id: i32,
+        role_id: Uuid,
         authenticated: Authenticated,
         users: Vec<Uuid>,
     ) -> Result<Vec<Self>, ApiError> {
@@ -52,7 +52,7 @@ impl BaseUser {
 
     pub fn role_delete_all(
         conn: &mut DbConnection,
-        role_id: i32,
+        role_id: Uuid,
         authenticated: Authenticated,
         users: Vec<Uuid>,
     ) -> Result<Vec<Self>, ApiError> {
@@ -69,7 +69,7 @@ impl BaseUser {
         })
     }
 
-    fn add_users(role_id: i32, users: &[Uuid], conn: &mut DbConnection) -> Result<(), ApiError> {
+    fn add_users(role_id: Uuid, users: &[Uuid], conn: &mut DbConnection) -> Result<(), ApiError> {
         insert_into(user_roles::table)
             .values(
                 users
@@ -87,7 +87,7 @@ impl BaseUser {
     }
 
     pub fn delete_users(
-        role_id: i32,
+        role_id: Uuid,
         users: &[Uuid],
         conn: &mut DbConnection,
     ) -> Result<(), ApiError> {

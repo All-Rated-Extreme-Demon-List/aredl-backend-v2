@@ -8,10 +8,11 @@ use std::collections::HashSet;
 use std::str::FromStr as _;
 
 use diesel::prelude::*;
+use uuid::Uuid;
 impl Role {
     pub fn permission_find_all(
         conn: &mut DbConnection,
-        role_id: i32,
+        role_id: Uuid,
         authenticated: &Authenticated,
     ) -> Result<Vec<String>, ApiError> {
         Self::user_can_edit(conn, authenticated, role_id)?;
@@ -20,7 +21,7 @@ impl Role {
 
     pub fn permission_find_all_resolved(
         conn: &mut DbConnection,
-        role_id: i32,
+        role_id: Uuid,
         authenticated: &Authenticated,
     ) -> Result<Vec<String>, ApiError> {
         Self::user_can_edit(conn, authenticated, role_id)?;
@@ -34,7 +35,7 @@ impl Role {
 
     pub fn permission_add_all(
         conn: &mut DbConnection,
-        role_id: i32,
+        role_id: Uuid,
         authenticated: Authenticated,
         permissions: Vec<String>,
     ) -> Result<Vec<String>, ApiError> {
@@ -66,7 +67,7 @@ impl Role {
 
     pub fn permission_set_all(
         conn: &mut DbConnection,
-        role_id: i32,
+        role_id: Uuid,
         authenticated: Authenticated,
         permissions: Vec<String>,
     ) -> Result<Vec<String>, ApiError> {
@@ -99,7 +100,7 @@ impl Role {
 
     pub fn permission_delete_all(
         conn: &mut DbConnection,
-        role_id: i32,
+        role_id: Uuid,
         authenticated: Authenticated,
         permissions: Vec<String>,
     ) -> Result<Vec<String>, ApiError> {
@@ -118,7 +119,7 @@ impl Role {
         })
     }
 
-    fn direct_permissions(conn: &mut DbConnection, role_id: i32) -> Result<Vec<String>, ApiError> {
+    fn direct_permissions(conn: &mut DbConnection, role_id: Uuid) -> Result<Vec<String>, ApiError> {
         let mut permissions = role_permissions::table
             .filter(role_permissions::role_id.eq(role_id))
             .select(role_permissions::permission)

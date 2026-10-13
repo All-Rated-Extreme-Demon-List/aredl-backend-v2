@@ -96,11 +96,11 @@ pub fn get_user_permissions(
         .inner_join(roles::table)
         .filter(user_roles::user_id.eq(user_id))
         .select((roles::id, roles::hide))
-        .load::<(i32, bool)>(conn)?
+        .load::<(Uuid, bool)>(conn)?
         .into_iter()
         .filter(|(_, hide)| !exclude_hidden_roles || !hide)
         .map(|(role_id, _)| role_id)
-        .collect::<Vec<i32>>();
+        .collect::<Vec<Uuid>>();
 
     let mut scopes = role_permissions_full::table
         .filter(role_permissions_full::role_id.eq_any(roles))

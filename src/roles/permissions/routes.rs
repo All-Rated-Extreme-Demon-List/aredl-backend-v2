@@ -6,6 +6,7 @@ use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
+use uuid::Uuid;
 
 #[utoipa::path(
     get,
@@ -13,7 +14,7 @@ use utoipa::OpenApi;
     description = "Get the direct permissions assigned to a role",
     tag = "Roles",
     params(
-        ("id" = i32, description = "Internal role ID")
+        ("id" = Uuid, description = "Internal role UUID")
     ),
     responses(
         (status = 200, body = [String]),
@@ -27,7 +28,7 @@ use utoipa::OpenApi;
 #[get("", wrap = "UserAuth::require(Permission::RoleModify)")]
 async fn find_all(
     db: web::Data<Arc<DbAppState>>,
-    id: web::Path<i32>,
+    id: web::Path<Uuid>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let permissions =
@@ -43,7 +44,7 @@ async fn find_all(
     description = "Get the direct and inherited permissions assigned to a role",
     tag = "Roles",
     params(
-        ("id" = i32, description = "Internal role ID")
+        ("id" = Uuid, description = "Internal role UUID")
     ),
     responses(
         (status = 200, body = [String]),
@@ -57,7 +58,7 @@ async fn find_all(
 #[get("/resolved", wrap = "UserAuth::require(Permission::RoleModify)")]
 async fn find_all_resolved(
     db: web::Data<Arc<DbAppState>>,
-    id: web::Path<i32>,
+    id: web::Path<Uuid>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let permissions = web::block(move || {
@@ -73,7 +74,7 @@ async fn find_all_resolved(
     description = "Set all direct permissions assigned to a role",
     tag = "Roles",
     params(
-        ("id" = i32, description = "Internal role ID")
+        ("id" = Uuid, description = "Internal role UUID")
     ),
     request_body = [String],
     responses(
@@ -89,7 +90,7 @@ async fn find_all_resolved(
 #[post("", wrap = "UserAuth::require(Permission::RoleModify)")]
 async fn set(
     db: web::Data<Arc<DbAppState>>,
-    id: web::Path<i32>,
+    id: web::Path<Uuid>,
     authenticated: Authenticated,
     permissions: web::Json<Vec<String>>,
     root_span: RootSpan,
@@ -113,7 +114,7 @@ async fn set(
     description = "Assign direct permissions to a role",
     tag = "Roles",
     params(
-        ("id" = i32, description = "Internal role ID")
+        ("id" = Uuid, description = "Internal role UUID")
     ),
     request_body = [String],
     responses(
@@ -129,7 +130,7 @@ async fn set(
 #[patch("", wrap = "UserAuth::require(Permission::RoleModify)")]
 async fn add(
     db: web::Data<Arc<DbAppState>>,
-    id: web::Path<i32>,
+    id: web::Path<Uuid>,
     authenticated: Authenticated,
     permissions: web::Json<Vec<String>>,
     root_span: RootSpan,
@@ -153,7 +154,7 @@ async fn add(
     description = "Removes direct permissions from a role",
     tag = "Roles",
     params(
-        ("id" = i32, description = "Internal role ID")
+        ("id" = Uuid, description = "Internal role UUID")
     ),
     request_body = [String],
     responses(
@@ -169,7 +170,7 @@ async fn add(
 #[delete("", wrap = "UserAuth::require(Permission::RoleModify)")]
 async fn delete(
     db: web::Data<Arc<DbAppState>>,
-    id: web::Path<i32>,
+    id: web::Path<Uuid>,
     authenticated: Authenticated,
     permissions: web::Json<Vec<String>>,
     root_span: RootSpan,

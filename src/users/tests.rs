@@ -265,11 +265,15 @@ async fn find_user_hides_hidden_roles_and_hidden_scopes_except_for_role_assign()
             .expect("scopes should be an array in user response");
 
         assert!(
-            !roles.iter().any(|role| role["id"] == hidden_role_id),
+            !roles
+                .iter()
+                .any(|role| role["id"] == hidden_role_id.to_string()),
             "Hidden role should not be present in user response"
         );
         assert!(
-            roles.iter().any(|role| role["id"] == visible_role_id),
+            roles
+                .iter()
+                .any(|role| role["id"] == visible_role_id.to_string()),
             "Visible role should be present in user response"
         );
         assert!(
@@ -287,7 +291,9 @@ async fn find_user_hides_hidden_roles_and_hidden_scopes_except_for_role_assign()
             .expect("scopes should be an array in user response");
 
         assert!(
-            roles.iter().any(|role| role["id"] == hidden_role_id),
+            roles
+                .iter()
+                .any(|role| role["id"] == hidden_role_id.to_string()),
             "Hidden role should be present for role_assign users"
         );
         assert!(

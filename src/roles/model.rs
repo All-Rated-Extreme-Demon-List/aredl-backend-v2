@@ -19,7 +19,7 @@ use diesel::prelude::*;
 #[diesel(table_name = roles)]
 pub struct Role {
     /// Internal ID of the role.
-    pub id: i32,
+    pub id: Uuid,
     /// Privilege level of the role. Refer to [API Overview](#overview) for more information.
     pub privilege_level: i32,
     /// Name of the role.
@@ -27,7 +27,7 @@ pub struct Role {
     /// Whether this role should be hidden from public listings and only used to grant permissions.
     pub hide: bool,
     /// Role whose permissions are inherited by this role.
-    pub inherits_from_role_id: Option<i32>,
+    pub inherits_from_role_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Insertable, AsChangeset, ToSchema)]
@@ -40,7 +40,7 @@ pub struct RoleCreate {
     /// Whether this role should be hidden from public listings and only used to grant permissions.
     pub hide: bool,
     /// Role whose permissions are inherited by this role.
-    pub inherits_from_role_id: Option<i32>,
+    pub inherits_from_role_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Insertable, AsChangeset, ToSchema)]
@@ -54,7 +54,7 @@ pub struct RoleUpdate {
     pub hide: Option<bool>,
     /// Role whose permissions are inherited by this role.
     #[serde(default, with = "double_option")]
-    pub inherits_from_role_id: Option<Option<i32>>,
+    pub inherits_from_role_id: Option<Option<Uuid>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
@@ -73,7 +73,7 @@ impl Role {
     pub fn user_can_edit(
         conn: &mut DbConnection,
         authenticated: &Authenticated,
-        target_role_id: i32,
+        target_role_id: Uuid,
     ) -> Result<(), ApiError> {
         let target_role = roles::table
             .filter(roles::id.eq(target_role_id))
@@ -111,7 +111,7 @@ impl Role {
     pub fn update(
         conn: &mut DbConnection,
         authenticated: &Authenticated,
-        id: i32,
+        id: Uuid,
         role: RoleUpdate,
     ) -> Result<Self, ApiError> {
         Self::user_can_edit(conn, authenticated, id)?;
@@ -125,7 +125,7 @@ impl Role {
     pub fn delete(
         conn: &mut DbConnection,
         authenticated: &Authenticated,
-        id: i32,
+        id: Uuid,
     ) -> Result<Self, ApiError> {
         Self::user_can_edit(conn, authenticated, id)?;
         let role = diesel::delete(roles::table)
@@ -154,7 +154,7 @@ impl RoleResolved {
             .select((user_roles::role_id, BaseUser::as_select()))
             .order_by(user_roles::role_id.asc())
             .then_order_by(users::id.asc())
-            .load::<(i32, BaseUser)>(conn)?
+            .load::<(Uuid, BaseUser)>(conn)?
             .into_iter()
             .into_group_map();
 
@@ -163,7 +163,7 @@ impl RoleResolved {
             .select((role_permissions::role_id, role_permissions::permission))
             .order_by(role_permissions::role_id.asc())
             .then_order_by(role_permissions::permission.asc())
-            .load::<(i32, String)>(conn)?
+            .load::<(Uuid, String)>(conn)?
             .into_iter()
             .into_group_map();
 

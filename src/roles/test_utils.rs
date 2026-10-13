@@ -12,7 +12,7 @@ use {
 };
 
 #[cfg(test)]
-pub async fn create_test_role(db: &Arc<DbAppState>, privilege_level: i32) -> i32 {
+pub async fn create_test_role(db: &Arc<DbAppState>, privilege_level: i32) -> Uuid {
     let role_name = format!("Test Role {privilege_level}");
     create_test_role_with_desc(db, privilege_level, &role_name).await
 }
@@ -22,14 +22,14 @@ pub async fn create_test_role_with_desc(
     db: &Arc<DbAppState>,
     privilege_level: i32,
     role_desc: &str,
-) -> i32 {
+) -> Uuid {
     diesel::insert_into(roles::table)
         .values((
             roles::role_desc.eq(role_desc),
             roles::privilege_level.eq(privilege_level),
         ))
         .returning(roles::id)
-        .get_result::<i32>(&mut db.connection().unwrap())
+        .get_result::<Uuid>(&mut db.connection().unwrap())
         .expect("Failed to create test role!")
 }
 
@@ -38,7 +38,7 @@ pub async fn create_test_role_with_permission(
     db: &Arc<DbAppState>,
     privilege_level: i32,
     permission: Permission,
-) -> i32 {
+) -> Uuid {
     let role_id = create_test_role(db, privilege_level).await;
     add_permission_to_role(db, role_id, permission).await;
     role_id
@@ -48,8 +48,8 @@ pub async fn create_test_role_with_permission(
 pub async fn create_test_role_inheriting(
     db: &Arc<DbAppState>,
     privilege_level: i32,
-    inherits_from_role_id: i32,
-) -> i32 {
+    inherits_from_role_id: Uuid,
+) -> Uuid {
     let role_name = format!("Test Role {privilege_level}");
     diesel::insert_into(roles::table)
         .values((
@@ -58,12 +58,12 @@ pub async fn create_test_role_inheriting(
             roles::inherits_from_role_id.eq(inherits_from_role_id),
         ))
         .returning(roles::id)
-        .get_result::<i32>(&mut db.connection().unwrap())
+        .get_result::<Uuid>(&mut db.connection().unwrap())
         .expect("Failed to create inheriting test role!")
 }
 
 #[cfg(test)]
-pub async fn add_permission_to_role(db: &Arc<DbAppState>, role_id: i32, permission: Permission) {
+pub async fn add_permission_to_role(db: &Arc<DbAppState>, role_id: Uuid, permission: Permission) {
     diesel::insert_into(role_permissions::table)
         .values((
             role_permissions::role_id.eq(role_id),
@@ -74,7 +74,7 @@ pub async fn add_permission_to_role(db: &Arc<DbAppState>, role_id: i32, permissi
 }
 
 #[cfg(test)]
-pub async fn create_test_hidden_role(db: &Arc<DbAppState>, privilege_level: i32) -> i32 {
+pub async fn create_test_hidden_role(db: &Arc<DbAppState>, privilege_level: i32) -> Uuid {
     let role_id = create_test_role(db, privilege_level).await;
 
     diesel::update(roles::table.filter(roles::id.eq(role_id)))
@@ -86,7 +86,10 @@ pub async fn create_test_hidden_role(db: &Arc<DbAppState>, privilege_level: i32)
 }
 
 #[cfg(test)]
-pub async fn create_test_role_with_user(db: &Arc<DbAppState>, privilege_level: i32) -> (i32, Uuid) {
+pub async fn create_test_role_with_user(
+    db: &Arc<DbAppState>,
+    privilege_level: i32,
+) -> (Uuid, Uuid) {
     use crate::users::test_utils::create_test_user;
 
     let role_id = create_test_role(db, privilege_level).await;
@@ -105,7 +108,7 @@ pub async fn create_test_role_with_user(db: &Arc<DbAppState>, privilege_level: i
 pub async fn create_test_hidden_role_with_user(
     db: &Arc<DbAppState>,
     privilege_level: i32,
-) -> (i32, Uuid) {
+) -> (Uuid, Uuid) {
     use crate::users::test_utils::create_test_user;
 
     let role_id = create_test_hidden_role(db, privilege_level).await;
@@ -115,7 +118,7 @@ pub async fn create_test_hidden_role_with_user(
 }
 
 #[cfg(test)]
-pub async fn add_user_to_role(db: &Arc<DbAppState>, role_id: i32, user_id: Uuid) {
+pub async fn add_user_to_role(db: &Arc<DbAppState>, role_id: Uuid, user_id: Uuid) {
     diesel::insert_into(user_roles::table)
         .values((
             user_roles::user_id.eq(user_id),
@@ -126,7 +129,7 @@ pub async fn add_user_to_role(db: &Arc<DbAppState>, role_id: i32, user_id: Uuid)
 }
 
 #[cfg(test)]
-pub fn users_with_role(db: &Arc<DbAppState>, role_id: i32) -> HashSet<Uuid> {
+pub fn users_with_role(db: &Arc<DbAppState>, role_id: Uuid) -> HashSet<Uuid> {
     user_roles::table
         .filter(user_roles::role_id.eq(role_id))
         .select(user_roles::user_id)

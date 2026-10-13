@@ -18,6 +18,7 @@ use {
     actix_http::StatusCode,
     actix_web::test::{self, read_body_json},
     serde_json::json,
+    uuid::Uuid,
 };
 
 #[actix_web::test]
@@ -36,7 +37,7 @@ async fn list_roles() {
     assert!(resp.status().is_success());
 
     let roles: Vec<RoleResolved> = read_body_json(resp).await;
-    let ids: Vec<i32> = roles.iter().map(|r| r.role.id).collect();
+    let ids: Vec<Uuid> = roles.iter().map(|r| r.role.id).collect();
     assert!(ids.contains(&role1));
     assert!(ids.contains(&role2));
 
@@ -98,7 +99,7 @@ async fn delete_role() {
         create_test_user_with_permissions(&db, &[Permission::RoleModify, Permission::RoleAssign])
             .await;
     let token = create_test_token(staff_id, &auth.jwt_encoding_key).unwrap();
-    let role_id: i32 = create_test_role(&db, 30).await;
+    let role_id: Uuid = create_test_role(&db, 30).await;
 
     let req = test::TestRequest::delete()
         .uri(&format!("/roles/{role_id}"))

@@ -11,7 +11,7 @@ use crate::schema::{
 
 diesel::table! {
     role_permissions_full (role_id, permission) {
-        role_id -> Int4,
+        role_id -> Uuid,
         permission -> Varchar,
     }
 }

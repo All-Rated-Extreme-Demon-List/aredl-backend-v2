@@ -48,7 +48,7 @@ pub async fn create_test_user_with_permissions(
         .expect("Failed to create fake user");
 
     if !permissions.is_empty() {
-        let role_id: i32 = diesel::insert_into(roles::table)
+        let role_id: Uuid = diesel::insert_into(roles::table)
             .values((
                 roles::privilege_level.eq(TEST_STAFF_ROLE_PRIVILEGE_LEVEL),
                 roles::role_desc.eq("Test Role"),

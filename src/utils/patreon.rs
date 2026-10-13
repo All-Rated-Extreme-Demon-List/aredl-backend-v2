@@ -23,7 +23,7 @@ pub(crate) fn grant_patreon_plus(
     set_users_submissions_to_priority(conn, &[user_id])
 }
 
-pub(crate) fn patreon_plus_role_id(conn: &mut DbConnection) -> Result<i32, ApiError> {
+pub(crate) fn patreon_plus_role_id(conn: &mut DbConnection) -> Result<Uuid, ApiError> {
     Ok(role_permissions_full::table
         .select(role_permissions_full::role_id)
         .group_by(role_permissions_full::role_id)
@@ -32,7 +32,7 @@ pub(crate) fn patreon_plus_role_id(conn: &mut DbConnection) -> Result<i32, ApiEr
             diesel::dsl::max(role_permissions_full::permission)
                 .eq(Permission::SubmissionPriority.to_string()),
         )
-        .first::<i32>(conn)?)
+        .first::<Uuid>(conn)?)
 }
 
 pub(crate) fn set_users_submissions_to_priority(

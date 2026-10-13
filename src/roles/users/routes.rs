@@ -14,7 +14,7 @@ use uuid::Uuid;
     description = "Set all the users of a role",
     tag = "Roles",
     params(
-        ("id" = i32, description = "Internal role ID")
+        ("id" = Uuid, description = "Internal role UUID")
     ),
     request_body = [Uuid],
     responses(
@@ -29,7 +29,7 @@ use uuid::Uuid;
 #[post("", wrap = "UserAuth::require(Permission::RoleAssign)")]
 async fn set(
     db: web::Data<Arc<DbAppState>>,
-    id: web::Path<i32>,
+    id: web::Path<Uuid>,
     authenticated: Authenticated,
     users: web::Json<Vec<Uuid>>,
     root_span: RootSpan,
@@ -53,7 +53,7 @@ async fn set(
     description = "Assign this role to the given users",
     tag = "Roles",
     params(
-        ("id" = i32, description = "Internal role ID")
+        ("id" = Uuid, description = "Internal role UUID")
     ),
     request_body = [Uuid],
     responses(
@@ -68,7 +68,7 @@ async fn set(
 #[patch("", wrap = "UserAuth::require(Permission::RoleAssign)")]
 async fn add(
     db: web::Data<Arc<DbAppState>>,
-    id: web::Path<i32>,
+    id: web::Path<Uuid>,
     authenticated: Authenticated,
     users: web::Json<Vec<Uuid>>,
     root_span: RootSpan,
@@ -92,7 +92,7 @@ async fn add(
     description = "Removes this role from the given users",
     tag = "Roles",
     params(
-        ("id" = i32, description = "Internal role ID")
+        ("id" = Uuid, description = "Internal role UUID")
     ),
     request_body = [Uuid],
     responses(
@@ -107,7 +107,7 @@ async fn add(
 #[delete("", wrap = "UserAuth::require(Permission::RoleAssign)")]
 async fn delete(
     db: web::Data<Arc<DbAppState>>,
-    id: web::Path<i32>,
+    id: web::Path<Uuid>,
     authenticated: Authenticated,
 
     users: web::Json<Vec<Uuid>>,

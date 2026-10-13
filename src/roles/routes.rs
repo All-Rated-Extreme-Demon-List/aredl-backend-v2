@@ -6,6 +6,7 @@ use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
+use uuid::Uuid;
 
 #[utoipa::path(
 	get,
@@ -58,7 +59,7 @@ async fn create(
     description = "Edit a role information",
     tag = "Roles",
     params(
-        ("id" = i32, description = "Internal role ID")
+        ("id" = Uuid, description = "Internal role UUID")
     ),
     request_body = RoleUpdate,
     responses(
@@ -74,7 +75,7 @@ async fn create(
 #[patch("/{id}", wrap = "UserAuth::require(Permission::RoleModify)")]
 async fn update(
     db: web::Data<Arc<DbAppState>>,
-    id: web::Path<i32>,
+    id: web::Path<Uuid>,
     authenticated: Authenticated,
     role: web::Json<RoleUpdate>,
     root_span: RootSpan,
@@ -98,7 +99,7 @@ async fn update(
     description = "Delete an existing role",
     tag = "Roles",
     params(
-        ("id" = i32, description = "Internal role ID")
+        ("id" = Uuid, description = "Internal role UUID")
     ),
     responses(
         (status = 200, body = Role),
@@ -113,7 +114,7 @@ async fn update(
 async fn delete(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,
-    id: web::Path<i32>,
+    id: web::Path<Uuid>,
 ) -> Result<HttpResponse, ApiError> {
     let role =
         web::block(move || Role::delete(&mut db.connection()?, &authenticated, id.into_inner()))

@@ -427,18 +427,18 @@ pub mod public {
 
     diesel::table! {
         role_permissions (role_id, permission) {
-            role_id -> Int4,
+            role_id -> Uuid,
             permission -> Varchar,
         }
     }
 
     diesel::table! {
         roles (id) {
-            id -> Int4,
+            id -> Uuid,
             privilege_level -> Int4,
             role_desc -> Varchar,
             hide -> Bool,
-            inherits_from_role_id -> Nullable<Int4>,
+            inherits_from_role_id -> Nullable<Uuid>,
         }
     }
 
@@ -570,7 +570,7 @@ pub mod public {
 
     diesel::table! {
         user_roles (role_id, user_id) {
-            role_id -> Int4,
+            role_id -> Uuid,
             user_id -> Uuid,
         }
     }
