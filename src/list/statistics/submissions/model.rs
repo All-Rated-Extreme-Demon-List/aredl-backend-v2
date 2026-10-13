@@ -37,6 +37,7 @@ pub fn total_submissions(
         .filter(submission_totals::list_id.eq(list))
         .left_join(levels::table)
         .order_by(submission_totals::submissions.desc())
+        .then_order_by(submission_totals::level_id.asc().nulls_first())
         .select((
             QueueLevelSubmissionsRow::as_select(),
             Option::<ExtendedBaseLevel>::as_select(),
