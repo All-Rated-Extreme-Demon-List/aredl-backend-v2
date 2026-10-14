@@ -77,7 +77,8 @@ pub struct LevelCustomCopyResolved {
     /// The status of this custom copy on the site
     pub status: LevelCustomCopyStatus,
     /// The moderator who added this custom copy
-    pub added_by: BaseUser,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub added_by: Option<BaseUser>,
     /// The description of what this custom copy changes, if any
     pub description: Option<String>,
     /// The time this custom copy was added
@@ -159,6 +160,19 @@ impl Auditable for LevelCustomCopy {
 }
 
 impl LevelCustomCopy {
+    pub fn find_all(
+        conn: &mut DbConnection,
+        list: List,
+        level_id: Uuid,
+    ) -> Result<Vec<Self>, ApiError> {
+        Ok(level_custom_copies::table
+            .filter(level_custom_copies::list_id.eq(list))
+            .filter(level_custom_copies::level_id.eq(level_id))
+            .order(level_custom_copies::created_at.desc())
+            .select(Self::as_select())
+            .load(conn)?)
+    }
+
     pub fn find_for_update(
         conn: &mut DbConnection,
         list: List,
@@ -174,12 +188,71 @@ impl LevelCustomCopy {
             .first(conn)?)
     }
 
-    pub fn find_all_level(
+    pub fn create(
+        conn: &mut DbConnection,
+        body: LevelCustomCopyBody,
+        list: List,
+        level_id: Uuid,
+        auth: &Authenticated,
+    ) -> Result<Self, ApiError> {
+        let data = LevelCustomCopyInsert {
+            level_id,
+            status: body.status,
+            id_type: body.id_type,
+            copy_id: body.copy_id,
+            description: body.description,
+            added_by: auth.user_id,
+        };
+        let custom_copy = diesel::insert_into(level_custom_copies::table)
+            .values((level_custom_copies::list_id.eq(list), data))
+            .returning(Self::as_select())
+            .get_result(conn)?;
+
+        Ok(custom_copy)
+    }
+    pub fn update(
+        conn: &mut DbConnection,
+        data: LevelCustomCopyUpdate,
+        list: List,
+        level_id: Uuid,
+        id: &Uuid,
+    ) -> Result<Self, ApiError> {
+        let custom_copy = diesel::update(level_custom_copies::table)
+            .filter(level_custom_copies::list_id.eq(list))
+            .filter(level_custom_copies::level_id.eq(level_id))
+            .filter(level_custom_copies::id.eq(id))
+            .set(data)
+            .returning(Self::as_select())
+            .get_result(conn)?;
+
+        Ok(custom_copy)
+    }
+
+    pub fn delete(
+        conn: &mut DbConnection,
+        list: List,
+        level_id: Uuid,
+        id: &Uuid,
+    ) -> Result<Option<Self>, ApiError> {
+        let deleted = diesel::delete(level_custom_copies::table)
+            .filter(level_custom_copies::list_id.eq(list))
+            .filter(level_custom_copies::level_id.eq(level_id))
+            .filter(level_custom_copies::id.eq(id))
+            .returning(Self::as_select())
+            .get_result(conn)
+            .optional()?;
+
+        Ok(deleted)
+    }
+}
+
+impl LevelCustomCopyResolved {
+    pub fn find_all(
         conn: &mut DbConnection,
         filters: &LevelCustomCopyQueryOptions,
         list: List,
         level_id: &str,
-    ) -> Result<Vec<LevelCustomCopyResolved>, ApiError> {
+    ) -> Result<Vec<Self>, ApiError> {
         let mut query = level_custom_copies::table
             .filter(level_custom_copies::list_id.eq(list))
             .filter(
@@ -212,75 +285,18 @@ impl LevelCustomCopy {
             .select((LevelCustomCopy::as_select(), BaseUser::as_select()))
             .load::<(LevelCustomCopy, BaseUser)>(conn)?
             .into_iter()
-            .map(|(custom_copy, moderator)| LevelCustomCopyResolved {
+            .map(|(custom_copy, moderator)| Self {
                 id: custom_copy.id,
                 level_id: custom_copy.level_id,
                 copy_id: custom_copy.copy_id,
                 id_type: custom_copy.id_type,
                 status: custom_copy.status,
-                added_by: moderator,
+                added_by: Some(moderator),
                 description: custom_copy.description,
                 created_at: custom_copy.created_at,
             })
-            .collect::<Vec<LevelCustomCopyResolved>>();
+            .collect::<Vec<Self>>();
 
         Ok(custom_copies)
-    }
-
-    pub fn create(
-        conn: &mut DbConnection,
-        body: LevelCustomCopyBody,
-        list: List,
-        level_id: Uuid,
-        auth: &Authenticated,
-    ) -> Result<LevelCustomCopy, ApiError> {
-        let data = LevelCustomCopyInsert {
-            level_id,
-            status: body.status,
-            id_type: body.id_type,
-            copy_id: body.copy_id,
-            description: body.description,
-            added_by: auth.user_id,
-        };
-        let custom_copy = diesel::insert_into(level_custom_copies::table)
-            .values((level_custom_copies::list_id.eq(list), data))
-            .returning(LevelCustomCopy::as_select())
-            .get_result(conn)?;
-
-        Ok(custom_copy)
-    }
-    pub fn update(
-        conn: &mut DbConnection,
-        data: LevelCustomCopyUpdate,
-        list: List,
-        level_id: Uuid,
-        id: &Uuid,
-    ) -> Result<LevelCustomCopy, ApiError> {
-        let custom_copy = diesel::update(level_custom_copies::table)
-            .filter(level_custom_copies::list_id.eq(list))
-            .filter(level_custom_copies::level_id.eq(level_id))
-            .filter(level_custom_copies::id.eq(id))
-            .set(data)
-            .returning(LevelCustomCopy::as_select())
-            .get_result(conn)?;
-
-        Ok(custom_copy)
-    }
-
-    pub fn delete(
-        conn: &mut DbConnection,
-        list: List,
-        level_id: Uuid,
-        id: &Uuid,
-    ) -> Result<Option<Self>, ApiError> {
-        let deleted = diesel::delete(level_custom_copies::table)
-            .filter(level_custom_copies::list_id.eq(list))
-            .filter(level_custom_copies::level_id.eq(level_id))
-            .filter(level_custom_copies::id.eq(id))
-            .returning(Self::as_select())
-            .get_result(conn)
-            .optional()?;
-
-        Ok(deleted)
     }
 }

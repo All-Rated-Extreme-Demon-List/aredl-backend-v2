@@ -48,7 +48,7 @@ async fn find_all(
     path: web::Path<LevelPath>,
 ) -> Result<HttpResponse, ApiError> {
     let custom_copies = web::block(move || {
-        LevelCustomCopy::find_all_level(
+        LevelCustomCopyResolved::find_all(
             &mut db.connection()?,
             &query.into_inner(),
             path.list,

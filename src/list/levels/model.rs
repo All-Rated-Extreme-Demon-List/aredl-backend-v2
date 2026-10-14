@@ -1,9 +1,7 @@
 use crate::app_data::db::DbConnection;
 use crate::audit::{AuditEntityType, Auditable};
 use crate::error_handler::ApiError;
-use crate::list::levels::custom_copies::{
-    LevelCustomCopy, LevelCustomCopyQueryOptions, LevelCustomCopyResolved,
-};
+use crate::list::levels::custom_copies::LevelCustomCopy;
 use crate::list::levels::records::LevelResolvedRecord;
 use crate::list::levels::updates::{LevelUpdateEntry, LevelUpdateEntryQueryOptions};
 use crate::list::packs::PackWithTierResolved;
@@ -217,8 +215,8 @@ pub struct ResolvedLevel {
     pub updates: Vec<LevelUpdateEntry>,
     /// Packs this level is in, with their tiers resolved.
     pub packs: Vec<PackWithTierResolved>,
-    /// Custom copies for the level, with the moderators who added them resolved.
-    pub custom_copies: Vec<LevelCustomCopyResolved>,
+    /// Custom copies for the level.
+    pub custom_copies: Vec<LevelCustomCopy>,
 }
 #[derive(Serialize, Deserialize, Debug, ToSchema, Default)]
 pub struct LevelQueryOptions {
@@ -466,12 +464,8 @@ impl ResolvedLevel {
             &id.to_string(),
         )?;
         let packs = PackWithTierResolved::find_all(conn, list, id)?;
-        let custom_copies = LevelCustomCopy::find_all_level(
-            conn,
-            &LevelCustomCopyQueryOptions::default(),
-            list,
-            &id.to_string(),
-        )?;
+
+        let custom_copies = LevelCustomCopy::find_all(conn, list, id)?;
 
         let resolved_level = Self::from_data(
             level,
@@ -492,7 +486,7 @@ impl ResolvedLevel {
         creators: Vec<BaseUser>,
         updates: Vec<LevelUpdateEntry>,
         packs: Vec<PackWithTierResolved>,
-        custom_copies: Vec<LevelCustomCopyResolved>,
+        custom_copies: Vec<LevelCustomCopy>,
     ) -> Self {
         Self {
             id: level.id,

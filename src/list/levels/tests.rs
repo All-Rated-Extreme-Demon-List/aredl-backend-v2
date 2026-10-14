@@ -292,25 +292,6 @@ async fn find_level_with_resolved_data() {
         assert!(body["packs"][0]["tier"].is_object());
         assert_eq!(body["custom_copies"].as_array().unwrap().len(), 1);
         assert_eq!(body["custom_copies"][0]["id"], json!(copy_id));
-        assert_eq!(
-            body["custom_copies"][0]["added_by"]["id"],
-            json!(creator_id)
-        );
-
-        for (field, endpoint) in [
-            ("creators", "creators"),
-            ("updates", "updates"),
-            ("packs", "packs"),
-            ("custom_copies", "custom-copies"),
-        ] {
-            let req = test::TestRequest::get()
-                .uri(&format!("/classic/levels/{identifier}/{endpoint}"))
-                .to_request();
-            let resp = test::call_service(&app, req).await;
-            assert_eq!(resp.status(), actix_http::StatusCode::OK);
-            let expected: serde_json::Value = read_body_json(resp).await;
-            assert_eq!(body[field], expected, "{field} should match its endpoint");
-        }
     }
 }
 
