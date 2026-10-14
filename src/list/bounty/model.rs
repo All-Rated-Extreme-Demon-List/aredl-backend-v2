@@ -6,6 +6,7 @@ use crate::list::levels::ExtendedBaseLevel;
 use crate::list::records::Record;
 use crate::list::List;
 use crate::schema::{bounties, bounty_completed, levels, users};
+use crate::users::AccountStatus;
 use chrono::{DateTime, Utc};
 use diesel::dsl::count;
 use diesel::pg::Pg;
@@ -108,7 +109,7 @@ impl BountyResolved {
             .filter(bounty_completed::list_id.eq(list))
             .inner_join(users::table)
             .filter(bounty_completed::bounty_id.eq_any(&bounty_ids))
-            .filter(users::ban_level.le(2))
+            .filter(users::account_status.le(AccountStatus::Unranked))
             .group_by(bounty_completed::bounty_id)
             .select((
                 bounty_completed::bounty_id,
@@ -124,7 +125,7 @@ impl BountyResolved {
                 .inner_join(users::table)
                 .filter(bounty_completed::bounty_id.eq_any(&bounty_ids))
                 .filter(bounty_completed::user_id.eq(user))
-                .filter(users::ban_level.le(2))
+                .filter(users::account_status.le(AccountStatus::Unranked))
                 .select(bounty_completed::bounty_id)
                 .load::<Uuid>(conn)?
                 .into_iter()

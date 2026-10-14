@@ -10,7 +10,7 @@ use crate::schema::{
     clan_member_points, clan_members, clans, clans_created_levels, clans_leaderboard, levels,
     min_placement_clans_records, records, users,
 };
-use crate::users::{BaseUser, ExtendedBaseUser};
+use crate::users::{AccountStatus, BaseUser, ExtendedBaseUser};
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use indexmap::map::Entry;
@@ -234,7 +234,7 @@ impl ClanProfileResolved {
                 .filter(clans_created_levels::clan_id.eq(clan_id))
                 .inner_join(levels::table)
                 .inner_join(users::table)
-                .filter(users::ban_level.ne(4))
+                .filter(users::account_status.lt(AccountStatus::Redacted))
                 .order_by((
                     clans_created_levels::order_pos.asc(),
                     users::global_name.asc(),
@@ -267,7 +267,7 @@ impl ClanProfileResolved {
             .filter(levels::list_id.eq(list))
             .inner_join(users::table.inner_join(clan_members::table))
             .filter(clan_members::clan_id.eq(clan_id))
-            .filter(users::ban_level.ne(4))
+            .filter(users::account_status.lt(AccountStatus::Redacted))
             .order_by(levels::position.asc())
             .select((ExtendedBaseLevel::as_select(), BaseUser::as_select()))
             .load(conn)?
@@ -300,7 +300,7 @@ impl ClanProfileResolved {
             .inner_join(users::table.inner_join(clan_members::table))
             .inner_join(levels::table)
             .filter(clan_members::clan_id.eq(clan_id))
-            .filter(users::ban_level.le(1))
+            .filter(users::account_status.le(AccountStatus::SemiUnranked))
             .filter(levels::status.ne(LevelStatus::Removed))
             .order(records::achieved_at.asc())
             .select((Record::as_select(), ExtendedBaseUser::as_select()))

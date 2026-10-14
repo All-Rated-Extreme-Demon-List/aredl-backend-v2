@@ -9,7 +9,7 @@ use crate::schema::{
     country_created_levels, country_leaderboard, levels, min_placement_country_records, records,
     users,
 };
-use crate::users::{BaseUser, ExtendedBaseUser};
+use crate::users::{AccountStatus, BaseUser, ExtendedBaseUser};
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use indexmap::map::Entry;
@@ -178,7 +178,7 @@ impl CountryProfileResolved {
                 .filter(country_created_levels::country.eq(country))
                 .inner_join(levels::table)
                 .inner_join(users::table)
-                .filter(users::ban_level.ne(4))
+                .filter(users::account_status.lt(AccountStatus::Redacted))
                 .order_by((
                     country_created_levels::order_pos.asc(),
                     users::global_name.asc(),
@@ -212,7 +212,7 @@ impl CountryProfileResolved {
             .filter(levels::list_id.eq(list))
             .inner_join(users::table)
             .filter(users::country.eq(country))
-            .filter(users::ban_level.ne(4))
+            .filter(users::account_status.lt(AccountStatus::Redacted))
             .order_by(levels::position.asc())
             .select((ExtendedBaseLevel::as_select(), BaseUser::as_select()))
             .load(conn)?
@@ -244,7 +244,7 @@ impl CountryProfileResolved {
             .inner_join(users::table)
             .inner_join(levels::table)
             .filter(users::country.eq(country))
-            .filter(users::ban_level.le(1))
+            .filter(users::account_status.le(AccountStatus::SemiUnranked))
             .filter(levels::status.ne(LevelStatus::Removed))
             .order(records::achieved_at.asc())
             .select((Record::as_select(), ExtendedBaseUser::as_select()))

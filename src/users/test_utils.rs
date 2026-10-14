@@ -4,10 +4,13 @@ use {
         app_data::db::DbAppState,
         audit::{AuditAction, AuditEntityType, AuditLogEntry},
         auth::Permission,
-        schema::{audit_logs, role_permissions, roles, user_roles, users},
-        users::User,
+        schema::{
+            audit_logs, oauth_connected_accounts, oauth_requests, records, role_permissions, roles,
+            user_roles, users,
+        },
+        users::{AccountStatus, User},
     },
-    chrono::{DateTime, Utc},
+    chrono::{DateTime, NaiveDateTime, Utc},
     diesel::prelude::*,
     std::sync::Arc,
     uuid::Uuid,
@@ -164,12 +167,16 @@ pub async fn set_test_user_country(db: &Arc<DbAppState>, user_id: Uuid, country:
 }
 
 #[cfg(test)]
-pub async fn set_test_user_ban_level(db: &Arc<DbAppState>, user_id: Uuid, ban_level: i32) {
+pub async fn set_test_user_account_status(
+    db: &Arc<DbAppState>,
+    user_id: Uuid,
+    account_status: AccountStatus,
+) {
     diesel::update(users::table)
         .filter(users::id.eq(user_id))
-        .set(users::ban_level.eq(ban_level))
+        .set(users::account_status.eq(account_status))
         .execute(&mut db.connection().unwrap())
-        .expect("Failed to set user ban level");
+        .expect("Failed to set user account status");
 }
 
 #[cfg(test)]
@@ -214,6 +221,59 @@ pub fn get_test_user(db: &Arc<DbAppState>, user_id: Uuid) -> User {
         .select(User::as_select())
         .first::<User>(&mut db.connection().unwrap())
         .expect("Failed to read test user")
+}
+
+#[cfg(test)]
+pub fn set_test_user_discord_profile(db: &Arc<DbAppState>, user_id: Uuid) {
+    diesel::update(users::table.find(user_id))
+        .set((
+            users::discord_id.eq("123456789012345678"),
+            users::discord_avatar.eq("avatar_hash"),
+            users::discord_avatar_decoration.eq("decoration_asset"),
+            users::last_discord_avatar_update.eq(Utc::now().naive_utc()),
+            users::description.eq("Personal profile"),
+        ))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to set test Discord profile");
+}
+
+#[cfg(test)]
+pub struct TestUserDataState {
+    pub record_count: i64,
+    pub connected_account_count: i64,
+    pub oauth_request_count: i64,
+    pub last_discord_avatar_update: Option<NaiveDateTime>,
+}
+
+#[cfg(test)]
+pub fn get_test_user_data_state(db: &Arc<DbAppState>, user_id: Uuid) -> TestUserDataState {
+    let conn = &mut db.connection().unwrap();
+    let record_count: i64 = records::table
+        .filter(records::submitted_by.eq(user_id))
+        .count()
+        .get_result(conn)
+        .expect("Failed to count user records");
+    let connected_account_count = oauth_connected_accounts::table
+        .filter(oauth_connected_accounts::user_id.eq(user_id))
+        .count()
+        .get_result(conn)
+        .expect("Failed to count connected accounts");
+    let oauth_request_count = oauth_requests::table
+        .filter(oauth_requests::user_id.eq(user_id))
+        .count()
+        .get_result(conn)
+        .expect("Failed to count OAuth requests");
+    let last_discord_avatar_update = users::table
+        .find(user_id)
+        .select(users::last_discord_avatar_update)
+        .first(conn)
+        .expect("Failed to read avatar update time");
+    TestUserDataState {
+        record_count,
+        connected_account_count,
+        oauth_request_count,
+        last_discord_avatar_update,
+    }
 }
 
 #[cfg(test)]

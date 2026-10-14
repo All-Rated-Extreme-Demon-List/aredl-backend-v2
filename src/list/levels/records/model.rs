@@ -4,7 +4,7 @@ use crate::list::records::Record;
 use crate::list::List;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::{records, users};
-use crate::users::{user_ilike_filter, BaseUser, ExtendedBaseUser};
+use crate::users::{user_ilike_filter, AccountStatus, BaseUser, ExtendedBaseUser};
 use chrono::{DateTime, Utc};
 use diesel::dsl::count;
 use serde::{Deserialize, Serialize};
@@ -102,7 +102,7 @@ impl LevelResolvedRecordExtended {
                 .filter(records::level_id.eq(level_id))
                 .filter(records::is_verification.eq(false))
                 .inner_join(users::table)
-                .filter(users::ban_level.le(2))
+                .filter(users::account_status.le(AccountStatus::Unranked))
                 .into_boxed();
 
             if let Some(submitter_filter) = &opts.submitter_filter {

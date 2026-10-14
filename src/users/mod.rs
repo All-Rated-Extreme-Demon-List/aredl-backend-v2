@@ -1,3 +1,4 @@
+mod account_status;
 pub mod avatar;
 pub mod badges;
 pub mod me;
@@ -11,5 +12,6 @@ pub mod test_utils;
 #[cfg(test)]
 mod tests;
 
+pub use account_status::AccountStatus;
 pub use model::*;
 pub use routes::{init_routes, ApiDoc};

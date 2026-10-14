@@ -10,7 +10,10 @@ use crate::{
     providers::ProvidersAppState,
     schema::{levels, shifts, submissions, users},
     shifts::{Shift, ShiftStatus},
-    users::me::notifications::{Notification, NotificationType},
+    users::{
+        me::notifications::{Notification, NotificationType},
+        AccountStatus,
+    },
 };
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -187,12 +190,12 @@ impl SubmissionPatchUser {
             )?));
         }
 
-        let submitter_ban = users::table
+        let submitter_status = users::table
             .filter(users::id.eq(user))
-            .select(users::ban_level)
-            .first::<i32>(conn)?;
+            .select(users::account_status)
+            .first::<AccountStatus>(conn)?;
 
-        if submitter_ban >= 3 {
+        if submitter_status >= AccountStatus::ListBanned {
             return Err(ApiError::Forbidden(
                 "You have been banned from submitting records.",
             ));

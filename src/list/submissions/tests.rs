@@ -1,6 +1,7 @@
 #[cfg(test)]
 use {
     crate::users::test_utils::create_test_user_with_priority_submissions,
+    crate::users::AccountStatus,
     crate::{
         auth::{create_test_token, oauth::OAuthProvider, Permission},
         list::{
@@ -41,7 +42,7 @@ use {
         test_utils::*,
         users::test_utils::{
             create_test_auditor, create_test_full_reviewer, create_test_hidden_reviewer,
-            create_test_user, create_test_user_with_permissions, set_test_user_ban_level,
+            create_test_user, create_test_user_with_permissions, set_test_user_account_status,
         },
     },
     actix_http::StatusCode,
@@ -768,7 +769,7 @@ async fn submission_banned_player() {
 
     let (banned, _) = create_test_user(&db, None).await;
 
-    set_test_user_ban_level(&db, banned, 3).await;
+    set_test_user_account_status(&db, banned, AccountStatus::ListBanned).await;
 
     let banned_token =
         create_test_token(banned, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -1218,7 +1219,7 @@ async fn patch_submission_banned_submitter() {
     let level = create_test_level(&db).await;
     let submission = create_test_submission(level, user, &db).await;
 
-    set_test_user_ban_level(&db, user, 3).await;
+    set_test_user_account_status(&db, user, AccountStatus::ListBanned).await;
 
     let req = test::TestRequest::patch()
         .uri(&format!("/classic/submissions/{submission}"))

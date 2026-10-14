@@ -5,7 +5,7 @@ use crate::error_handler::ApiError;
 use crate::list::{levels::Level, List};
 use crate::schema::levels_created;
 use crate::schema::users;
-use crate::users::{BaseUser, BaseUserWithBanLevel};
+use crate::users::{BaseUser, BaseUserWithAccountStatus};
 use diesel::{delete, insert_into};
 use std::collections::HashSet;
 use uuid::Uuid;
@@ -22,11 +22,11 @@ impl BaseUser {
             .filter(levels_created::list_id.eq(list))
             .filter(levels_created::level_id.eq(level_id))
             .inner_join(users::table)
-            .select(BaseUserWithBanLevel::as_select())
-            .load::<BaseUserWithBanLevel>(conn)?;
+            .select(BaseUserWithAccountStatus::as_select())
+            .load::<BaseUserWithAccountStatus>(conn)?;
         let creators = creators
             .into_iter()
-            .map(BaseUser::from_base_user_with_ban_level)
+            .map(BaseUser::from_base_user_with_account_status)
             .collect();
         Ok(creators)
     }

@@ -5,10 +5,10 @@ use crate::cache_control::CacheController;
 use crate::error_handler::{ApiError, ErrorResponse};
 use crate::page_helper::{PageQuery, Paginated};
 use crate::users::{
-    avatar, badges, me, merge, names, PlaceholderOptions, User, UserBanUpdate,
-    UserListQueryOptions, UserPage, UserResolved, UserUpdate,
+    avatar, badges, me, merge, names, AccountStatus, PlaceholderOptions, User,
+    UserAccountStatusUpdate, UserListQueryOptions, UserPage, UserResolved, UserUpdate,
 };
-use actix_web::{get, patch, post, web, HttpResponse};
+use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
@@ -54,7 +54,7 @@ async fn find(
     description = "Get paginated list of users",
     tag = "Users",
     params(
-        ("ban_level" = Option<i32>, Query, description = "The ban level to filter by"),
+        ("account_status" = Option<AccountStatus>, Query, description = "The account status to filter by"),
         PageQuery<100>,
         ("name_filter" = Option<String>, Query, description = "The search filter to apply. Uses the SQL LIKE operator syntax."),
         ("placeholder" = Option<bool>, Query, description = "If specified, will only fetch users that are/are not placeholders. If not, all types of users are returned.")
@@ -130,7 +130,7 @@ async fn create_placeholder(
     request_body = UserUpdate,
     responses(
         (status = 200, body = User),
-        (status = 403, description = "You do not have sufficient privilege to affect this user", body = ErrorResponse, examples(
+        (status = 403, description = "You do not have sufficient privilege to affect this user, or the user has been deleted", body = ErrorResponse, examples(
             ("user_privilege" = (value = json!({"message": "You do not have sufficient privilege to affect this user."})))
         )),
         (status = 404, description = "User not found", body = ErrorResponse)
@@ -162,25 +162,27 @@ async fn update(
 
 #[utoipa::path(
     patch,
-    summary = "[Staff]Edit ban level",
-    description = "Edit a user's ban level. Your privilege level needs to be strictly higher than the one of the user you are trying to edit.    \n\
+    summary = "[Staff]Edit account status",
+    description = "Edit a user's account status. Your privilege level needs to be strictly higher than the one of the user you are trying to edit.    \n\
         \n\
-        | Ban level | Account status |    \n\
+        | Value | Account status |    \n\
         |---|---|    \n\
         | 0 | Normal (No restriction)|    \n\
         | 1 | Semi-unranked (Does not appear on user leaderboards, but still contributes records to country and clan leaderboards)|    \n\
         | 2 | Unranked (Does not want to appear on leaderboards, but is still able to submit records)|    \n\
         | 3 | List banned (Has been banned from the list. Does not appear on leaderboards, and isn't able to submit records)|    \n\
         | 4 | Redacted (Hidden users that have been removed from the site for various reasons, but whose account are kept for internal purposes)|    \n\
+        | 5 | Deleted (Accounts that have been removed from the site. Cannot be manually set through this endpoint.)|    \n\
     ",
     tag = "Users",
     params(
         ("id" = String, description = "The internal UUID, username or discord ID of the user")
     ),
-    request_body = UserBanUpdate,
+    request_body = UserAccountStatusUpdate,
     responses(
         (status = 200, body = User),
-        (status = 403, description = "Insufficient privilege to affect this user, or missing UserRedact permission", body = ErrorResponse, examples(
+        (status = 400, description = "Account status cannot be manually set to deleted, use the delete endpoint instead.", body = ErrorResponse),
+        (status = 403, description = "Insufficient privilege to affect this user, missing UserRedact permission, or the user has been deleted", body = ErrorResponse, examples(
             ("user_privilege" = (value = json!({"message": "You do not have sufficient privilege to affect this user."}))),
             ("redact_permission" = (value = json!({"message": "You do not have the required permission (UserRedact) to perform this action"})))
         )),
@@ -189,10 +191,10 @@ async fn update(
     security(("bearer_token" = ["UserBan"])),
 )]
 #[patch("/{id}/ban", wrap = "UserAuth::require(Permission::UserBan)")]
-async fn ban(
+async fn update_account_status(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<String>,
-    user: web::Json<UserBanUpdate>,
+    user: web::Json<UserAccountStatusUpdate>,
     authenticated: Authenticated,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
@@ -201,17 +203,51 @@ async fn ban(
         let conn = &mut db.connection()?;
         let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
         authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
-        if user.ban_level == 4 {
+        if user.account_status == AccountStatus::Redacted {
             authenticated.ensure_has_permission(conn, Permission::UserRedact)?;
         }
         let before = User::from_uuid(conn, user_id)?;
-        let updated_user = User::ban(conn, &authenticated, user_id, user.into_inner().ban_level)?;
+        let updated_user = User::update_account_status(
+            conn,
+            &authenticated,
+            user_id,
+            user.into_inner().account_status,
+        )?;
         AuditLogEntry::log_update(conn, Some(authenticated.user_id), &before, &updated_user)?;
         Ok::<_, ApiError>(updated_user)
     })
     .await??;
 
     Ok(HttpResponse::Ok().json(result))
+}
+
+#[utoipa::path(
+    delete,
+    summary = "[Staff]Delete user",
+    description = "Soft delete a user: anonymize their profile, clear Discord data and connected accounts, invalidate their tokens, delete their records, and deny their submissions. Sets account status to 5 (Deleted). Your privilege level must be strictly higher than the target user's.",
+    tag = "Users",
+    params(("id" = String, Path, description = "The internal UUID, username or Discord ID of the user")),
+    responses(
+        (status = 204, description = "User deleted"),
+        (status = 403, description = "Insufficient permission or privilege to affect this user", body = ErrorResponse),
+        (status = 404, description = "User not found", body = ErrorResponse)
+    ),
+    security(("bearer_token" = ["UserDelete"])),
+)]
+#[delete("/{id}", wrap = "UserAuth::require(Permission::UserDelete)")]
+async fn delete(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<String>,
+    authenticated: Authenticated,
+) -> Result<HttpResponse, ApiError> {
+    web::block(move || {
+        let conn = &mut db.connection()?;
+        let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
+        authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
+        User::soft_delete(conn, user_id, &authenticated)
+    })
+    .await??;
+    Ok(HttpResponse::NoContent().finish())
 }
 
 #[derive(OpenApi)]
@@ -228,7 +264,7 @@ async fn ban(
             User,
             PlaceholderOptions,
             UserUpdate,
-            UserBanUpdate,
+            UserAccountStatusUpdate,
         )
     ),
     paths(
@@ -236,7 +272,8 @@ async fn ban(
         list,
         create_placeholder,
         update,
-        ban
+        update_account_status,
+        delete
     )
 )]
 pub struct ApiDoc;
@@ -252,6 +289,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .service(list)
             .service(create_placeholder)
             .service(update)
-            .service(ban),
+            .service(update_account_status)
+            .service(delete),
     );
 }

@@ -586,7 +586,7 @@ pub mod public {
             description -> Nullable<Text>,
             country -> Nullable<Int4>,
             last_country_update -> Timestamptz,
-            ban_level -> Int4,
+            account_status -> Int4,
             discord_avatar -> Nullable<Varchar>,
             access_valid_after -> Timestamptz,
             created_at -> Timestamptz,

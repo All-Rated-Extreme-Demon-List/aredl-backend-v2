@@ -1,7 +1,7 @@
 use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
 use crate::schema::users;
-use crate::users::User;
+use crate::users::{AccountStatus, User};
 use chrono::{DateTime, Duration, TimeZone as _, Utc};
 use diesel::result::Error as DieselError;
 use jsonwebtoken::{
@@ -111,7 +111,9 @@ pub fn check_token_valid(
         }
     };
 
-    if token_issue_time < user_record.access_valid_after {
+    if user_record.account_status == AccountStatus::Deleted
+        || token_issue_time < user_record.access_valid_after
+    {
         return Err(ApiError::Unauthorized("Token has been invalidated"));
     }
 

@@ -1,5 +1,6 @@
 #[cfg(test)]
 use {
+    crate::users::AccountStatus,
     crate::{
         list::{
             country::test_utils::refresh_test_country_created_levels,
@@ -13,7 +14,9 @@ use {
             },
         },
         test_utils::*,
-        users::test_utils::{create_test_user, set_test_user_ban_level, set_test_user_country},
+        users::test_utils::{
+            create_test_user, set_test_user_account_status, set_test_user_country,
+        },
     },
     actix_web::test::{self, read_body_json},
     chrono::{DateTime, Utc},
@@ -148,8 +151,8 @@ async fn get_country_includes_completion_counts_and_level_records() {
     create_test_record(&db, member_a, removed_level).await;
 
     set_test_record_verification(&db, member_b_shared, true).await;
-    set_test_user_ban_level(&db, semi_unranked_member, 1).await;
-    set_test_user_ban_level(&db, unranked_member, 2).await;
+    set_test_user_account_status(&db, semi_unranked_member, AccountStatus::SemiUnranked).await;
+    set_test_user_account_status(&db, unranked_member, AccountStatus::Unranked).await;
     set_test_level_status(&db, legacy_level, LevelStatus::Legacy, Some(3)).await;
     set_test_level_status(&db, removed_level, LevelStatus::Removed, None).await;
 

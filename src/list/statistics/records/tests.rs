@@ -1,6 +1,7 @@
 #[cfg(test)]
 use {
     super::test_utils::refresh_test_record_totals,
+    crate::users::AccountStatus,
     crate::{
         auth::create_test_token,
         list::{
@@ -9,7 +10,7 @@ use {
             statistics::records::ResolvedLevelTotalRecordsRow,
         },
         test_utils::init_test_app,
-        users::test_utils::{create_test_user, set_test_user_ban_level},
+        users::test_utils::{create_test_user, set_test_user_account_status},
     },
     actix_web::{
         http::header,
@@ -34,7 +35,7 @@ async fn total_records_counts_and_ordering() {
     set_test_record_verification(&db, verification, true).await;
     let banned_verification = create_test_record(&db, user_3, level2).await;
     set_test_record_verification(&db, banned_verification, true).await;
-    set_test_user_ban_level(&db, user_3, 3).await;
+    set_test_user_account_status(&db, user_3, AccountStatus::ListBanned).await;
 
     refresh_test_record_totals(&db);
 

@@ -2,7 +2,7 @@ use crate::error_handler::ApiError;
 use crate::list::levels::Level;
 use crate::schema::{levels, users};
 use crate::users::badges::UserBadge;
-use crate::users::User;
+use crate::users::{AccountStatus, User};
 use crate::{app_data::db::DbConnection, schema::records};
 use chrono::{DateTime, Utc};
 use diesel::dsl::now;
@@ -23,8 +23,9 @@ pub struct UserMeUpdate {
     /// Your new country. Uses the ISO 3166-1 numeric country code. Has a 90-day cooldown.
     #[serde(default, with = "double_option")]
     pub country: Option<Option<i32>>,
-    /// Your new ban level.
-    pub ban_level: Option<i32>,
+    /// Your new account status: normal, semi-unranked, or unranked.
+    #[schema(minimum = 0, maximum = 2)]
+    pub account_status: Option<AccountStatus>,
     /// Your new background level. Must be the GD level ID of a level you have beaten. Can be a classic or platformer level. If null, it will be reset to default (uses the hardest beaten level)
     #[serde(default, with = "double_option")]
     pub background_level: Option<Option<i32>>,
@@ -39,13 +40,27 @@ impl User {
         id: Uuid,
         user: &UserMeUpdate,
     ) -> Result<User, ApiError> {
-        let (current_ban_level, last_country_update): (i32, DateTime<Utc>) = users::table
-            .filter(users::id.eq(id))
-            .select((users::ban_level, users::last_country_update))
-            .first(conn)?;
+        let (current_account_status, last_country_update): (AccountStatus, DateTime<Utc>) =
+            users::table
+                .filter(users::id.eq(id))
+                .select((users::account_status, users::last_country_update))
+                .first(conn)?;
 
-        if user.ban_level.is_some() && current_ban_level >= 3 {
+        if current_account_status == AccountStatus::Deleted {
+            return Err(ApiError::Forbidden("Deleted users cannot be edited."));
+        }
+
+        if user.account_status.is_some() && current_account_status >= AccountStatus::ListBanned {
             return Err(ApiError::Forbidden("You have been banned from the list."));
+        }
+
+        if user
+            .account_status
+            .is_some_and(|account_status| account_status > AccountStatus::Unranked)
+        {
+            return Err(ApiError::BadRequest(
+                "You can only set your account status to normal, semi-unranked, or unranked.",
+            ));
         }
 
         if user.country.is_some() {
@@ -104,13 +119,17 @@ impl User {
             }
         }
 
-        let result = diesel::update(users::table.filter(users::id.eq(id)))
-            .set((
-                user,
-                user.country.map(|_| users::last_country_update.eq(now)),
-            ))
-            .returning(User::as_select())
-            .get_result::<User>(conn)?;
+        let result = diesel::update(
+            users::table
+                .filter(users::id.eq(id))
+                .filter(users::account_status.ne(AccountStatus::Deleted)),
+        )
+        .set((
+            user,
+            user.country.map(|_| users::last_country_update.eq(now)),
+        ))
+        .returning(User::as_select())
+        .get_result::<User>(conn)?;
         Ok(result)
     }
 }

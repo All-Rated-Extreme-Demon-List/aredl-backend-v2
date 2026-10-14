@@ -9,7 +9,7 @@ use crate::{
     error_handler::ApiError,
     list::bounty::Bounty,
     schema::{bounty_completed, records, users},
-    users::ExtendedBaseUser,
+    users::{AccountStatus, ExtendedBaseUser},
 };
 
 use diesel::prelude::*;
@@ -31,7 +31,7 @@ impl Bounty {
             .filter(bounty_completed::list_id.eq(list))
             .inner_join(users::table)
             .filter(bounty_completed::bounty_id.eq(self.id))
-            .filter(users::ban_level.le(2))
+            .filter(users::account_status.le(AccountStatus::Unranked))
             .count()
             .get_result(conn)?;
         Ok(count)
@@ -46,7 +46,7 @@ impl Bounty {
             .filter(bounty_completed::list_id.eq(list))
             .inner_join(users::table)
             .filter(bounty_completed::bounty_id.eq(bounty_id))
-            .filter(users::ban_level.le(2))
+            .filter(users::account_status.le(AccountStatus::Unranked))
             .select((
                 ExtendedBaseUser::as_select(),
                 bounty_completed::completed_at,
@@ -84,7 +84,7 @@ impl Bounty {
             .filter(records::achieved_at.ge(self.start_date))
             .filter(records::achieved_at.le(self.end_date.unwrap_or(Utc::now())))
             .filter(records::submitted_by.ne_all(existing_completions))
-            .filter(users::ban_level.le(2))
+            .filter(users::account_status.le(AccountStatus::Unranked))
             .limit(max_missing_completions)
             .select((records::submitted_by, records::achieved_at))
             .load::<(Uuid, DateTime<Utc>)>(conn)?;

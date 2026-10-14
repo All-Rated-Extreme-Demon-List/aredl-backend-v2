@@ -2,15 +2,36 @@
 use {
     crate::app_data::db::DbAppState,
     crate::auth::oauth::OAuthProvider,
+    crate::auth::token::{create_token, UserClaims},
     crate::schema::{
         oauth_connected_accounts, oauth_requests,
         users::dsl::{access_valid_after, id as user_id_col, users},
     },
-    chrono::{DateTime, Utc},
+    chrono::{DateTime, Duration, Utc},
     diesel::prelude::*,
+    jsonwebtoken::EncodingKey,
     std::sync::Arc,
     uuid::Uuid,
 };
+
+pub fn create_test_auth_token(
+    user_id: Uuid,
+    encoding_key: &EncodingKey,
+    is_api_key: bool,
+    token_type: &str,
+) -> String {
+    create_token(
+        &UserClaims {
+            user_id,
+            is_api_key,
+        },
+        encoding_key,
+        Duration::days(1),
+        token_type,
+    )
+    .expect("Failed to create test auth token")
+    .0
+}
 
 pub fn access_valid_after_for_user(db: &Arc<DbAppState>, user_id: Uuid) -> DateTime<Utc> {
     users

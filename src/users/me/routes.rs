@@ -6,7 +6,7 @@ use crate::users::avatar::{AvatarRefresher, RefreshError};
 use crate::users::badges::UserBadge;
 use crate::users::me::{clan, notifications, UserMeUpdate};
 use crate::users::{User, UserResolved};
-use actix_web::{get, patch, post, web, HttpResponse};
+use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
@@ -46,14 +46,14 @@ async fn find(
     request_body = UserMeUpdate,
     responses(
         (status = 200, body = User),
-        (status = 400, description = "Display name or description is too long, country changes are on cooldown, or the selected level or badge is not unlocked", body = ErrorResponse, examples(
+        (status = 400, description = "Display name or description is too long, account status is invalid, country changes are on cooldown, or the selected level or badge is not unlocked", body = ErrorResponse, examples(
             ("display_name_too_long" = (value = json!({"message": "The display name can at most be 35 characters long."}))),
             ("description_too_long" = (value = json!({"message": "The description can at most be 300 characters long."}))),
             ("country_cooldown" = (value = json!({"message": "You have recently changed your country, please wait 30 days and 0 hours before changing it again."}))),
             ("background_level" = (value = json!({"message": "You have not beaten the selected level."}))),
             ("featured_badge" = (value = json!({"message": "You have not unlocked the selected badge."})))
         )),
-        (status = 403, description = "You cannot change your ban level while banned from the list", body = ErrorResponse),
+        (status = 403, description = "You cannot change your account status while banned from the list", body = ErrorResponse),
         (status = 404, description = "User not found", body = ErrorResponse)
     ),
     security(("bearer_token" = [])),
@@ -127,6 +127,26 @@ async fn refresh_avatar(
     Ok(HttpResponse::Ok().json(user))
 }
 
+#[utoipa::path(
+    delete,
+    summary = "[Auth]Delete authenticated user",
+    description = "Soft delete the authenticated user: anonymize their profile, clear Discord data and connected accounts, invalidate their tokens, delete their records, and deny their submissions. Sets account status to 5 (Deleted).",
+    tag = "Users - Me",
+    responses((status = 204, description = "User deleted")),
+    security(("bearer_token" = [])),
+)]
+#[delete("", wrap = "UserAuth::load()")]
+async fn delete(
+    db: web::Data<Arc<DbAppState>>,
+    authenticated: Authenticated,
+) -> Result<HttpResponse, ApiError> {
+    web::block(move || {
+        User::soft_delete(&mut db.connection()?, authenticated.user_id, &authenticated)
+    })
+    .await??;
+    Ok(HttpResponse::NoContent().finish())
+}
+
 #[derive(OpenApi)]
 #[openapi(
     nest(
@@ -144,6 +164,7 @@ async fn refresh_avatar(
         find,
         update,
         refresh_avatar,
+        delete,
     )
 )]
 pub struct ApiDoc;
@@ -156,6 +177,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .service(sync)
             .service(refresh_avatar)
             .service(find)
-            .service(update),
+            .service(update)
+            .service(delete),
     );
 }

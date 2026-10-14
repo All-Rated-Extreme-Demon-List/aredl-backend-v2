@@ -8,7 +8,7 @@ use crate::list::packs::PackWithTierResolved;
 use crate::list::records::Record;
 use crate::list::List;
 use crate::schema::{levels, position_history, position_history_full_view, records, users};
-use crate::users::{BaseUser, BaseUserWithBanLevel};
+use crate::users::{BaseUser, BaseUserWithAccountStatus};
 use chrono::{DateTime, Utc};
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
@@ -434,8 +434,8 @@ impl ResolvedLevel {
             .filter(levels::list_id.eq(list))
             .filter(levels::id.eq(id))
             .inner_join(users::table)
-            .select((Level::as_select(), BaseUserWithBanLevel::as_select()))
-            .first::<(Level, BaseUserWithBanLevel)>(conn)?;
+            .select((Level::as_select(), BaseUserWithAccountStatus::as_select()))
+            .first::<(Level, BaseUserWithAccountStatus)>(conn)?;
 
         let verifications_rows = records::table
             .filter(records::list_id.eq(list))
@@ -443,15 +443,15 @@ impl ResolvedLevel {
             .filter(records::is_verification.eq(true))
             .order(records::achieved_at.asc())
             .inner_join(users::table)
-            .select((Record::as_select(), BaseUserWithBanLevel::as_select()))
-            .load::<(Record, BaseUserWithBanLevel)>(conn)?;
+            .select((Record::as_select(), BaseUserWithAccountStatus::as_select()))
+            .load::<(Record, BaseUserWithAccountStatus)>(conn)?;
 
         let verifications = verifications_rows
             .into_iter()
             .map(|(record, user)| {
                 LevelResolvedRecord::from_data(
                     record,
-                    BaseUser::from_base_user_with_ban_level(user),
+                    BaseUser::from_base_user_with_account_status(user),
                 )
             })
             .collect::<Vec<_>>();
@@ -469,7 +469,7 @@ impl ResolvedLevel {
 
         let resolved_level = Self::from_data(
             level,
-            BaseUser::from_base_user_with_ban_level(publisher),
+            BaseUser::from_base_user_with_account_status(publisher),
             verifications,
             creators,
             updates,

@@ -29,10 +29,12 @@ pub enum Permission {
     PlaceholderCreate,
     /// Allows editing user names, country, etc
     UserModify,
-    /// Allows banning a user (ban_level 3)
+    /// Allows banning a user (account_status 3)
     UserBan,
-    /// Allows redacting a user (ban_level 4)
+    /// Allows redacting a user (account_status 4)
     UserRedact,
+    /// Allows deleting a user (account_status 5)
+    UserDelete,
     /// Allows assigning roles below your highest role to users
     RoleAssign,
     /// Allows editing roles and permissions below your highest role

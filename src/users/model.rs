@@ -3,11 +3,16 @@ use crate::audit::{AuditEntityType, AuditLogEntry, Auditable};
 use crate::auth::{permission, Authenticated, Permission};
 use crate::clans::Clan;
 use crate::error_handler::ApiError;
+use crate::list::records::Record;
 use crate::list::submissions::SubmissionStatus;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::roles::Role;
-use crate::schema::{clan_members, clans, merge_logs, roles, submissions, user_roles, users};
+use crate::schema::{
+    clan_members, clans, merge_logs, oauth_connected_accounts, oauth_requests, records, roles,
+    submissions, user_roles, users,
+};
 use crate::users::badges::UserBadge;
+use crate::users::AccountStatus;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::pg::Pg;
 use serde::{Deserialize, Serialize};
@@ -16,13 +21,14 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use diesel::prelude::*;
+
 #[derive(Queryable, Selectable, Debug)]
 #[diesel(table_name = users)]
-pub struct BaseUserWithBanLevel {
+pub struct BaseUserWithAccountStatus {
     pub id: Uuid,
     pub username: String,
     pub global_name: String,
-    pub ban_level: i32,
+    pub account_status: AccountStatus,
 }
 
 #[derive(Debug, Serialize, Deserialize, Queryable, Selectable, ToSchema, Clone)]
@@ -74,8 +80,8 @@ pub struct User {
     pub description: Option<String>,
     /// Country of the user. Uses the ISO 3166-1 numeric country code.
     pub country: Option<i32>,
-    /// Ban level of the user.
-    pub ban_level: i32,
+    /// Account status of the user.
+    pub account_status: AccountStatus,
     /// Discord avatar hash of the user. Updated on every login.
     pub discord_avatar: Option<String>,
     /// Discord avatar decoration asset of the user. Updated on every login.
@@ -143,9 +149,10 @@ pub struct UserUpdate {
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
-pub struct UserBanUpdate {
-    /// New ban level of the user.
-    pub ban_level: i32,
+pub struct UserAccountStatusUpdate {
+    /// New account status of the user.
+    #[schema(minimum = 0, maximum = 4)]
+    pub account_status: AccountStatus,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -158,7 +165,7 @@ pub struct PlaceholderOptions {
 pub struct UserListQueryOptions {
     pub name_filter: Option<String>,
     pub placeholder: Option<bool>,
-    pub ban_level: Option<i32>,
+    pub account_status: Option<AccountStatus>,
 }
 
 #[derive(Serialize, Debug, ToSchema)]
@@ -212,8 +219,8 @@ impl BaseUser {
         }
     }
 
-    pub fn from_base_user_with_ban_level(user: BaseUserWithBanLevel) -> Self {
-        if user.ban_level == 4 {
+    pub fn from_base_user_with_account_status(user: BaseUserWithAccountStatus) -> Self {
+        if user.account_status == AccountStatus::Redacted {
             BaseUser {
                 id: user.id,
                 username: "-".to_owned(),
@@ -297,12 +304,12 @@ impl User {
     pub fn is_banned(user_id: Uuid, conn: &mut DbConnection) -> Result<bool, ApiError> {
         let user = users::table
             .filter(users::id.eq(user_id))
-            .select(users::ban_level)
-            .first::<i32>(conn)
+            .select(users::account_status)
+            .first::<AccountStatus>(conn)
             .optional()?;
 
         match user {
-            Some(ban_level) => Ok(ban_level >= 3),
+            Some(account_status) => Ok(account_status >= AccountStatus::ListBanned),
             None => Err(ApiError::NotFound("User not found")),
         }
     }
@@ -357,12 +364,12 @@ impl User {
             if let Some(placeholder) = options.placeholder {
                 q = q.filter(users::placeholder.eq(placeholder));
             }
-            if let Some(ban_level) = options.ban_level {
-                q = q.filter(users::ban_level.eq(ban_level));
+            if let Some(account_status) = options.account_status {
+                q = q.filter(users::account_status.eq(account_status));
             }
 
             if !has_permission {
-                q = q.filter(users::ban_level.eq(0));
+                q = q.filter(users::account_status.eq(AccountStatus::Normal));
             }
             q
         };
@@ -412,25 +419,97 @@ impl User {
         user_id: Uuid,
         user: &UserUpdate,
     ) -> Result<Self, ApiError> {
-        let updated_user = diesel::update(users::table.filter(users::id.eq(user_id)))
-            .set(user)
-            .returning(Self::as_select())
-            .get_result::<Self>(conn)?;
+        let updated_user = diesel::update(
+            users::table
+                .filter(users::id.eq(user_id))
+                .filter(users::account_status.ne(AccountStatus::Deleted)),
+        )
+        .set(user)
+        .returning(Self::as_select())
+        .get_result::<Self>(conn)?;
         Ok(updated_user)
     }
 
-    pub fn ban(
+    pub fn soft_delete(
+        conn: &mut DbConnection,
+        user_id: Uuid,
+        authenticated: &Authenticated,
+    ) -> Result<(), ApiError> {
+        conn.transaction(|conn| {
+            let before = users::table
+                .find(user_id)
+                .for_update()
+                .select(Self::as_select())
+                .first::<Self>(conn)?;
+
+            if before.account_status == AccountStatus::Deleted {
+                return Ok(());
+            }
+
+            let deleted_records = diesel::delete(records::table.filter(records::submitted_by.eq(user_id)))
+                .returning(Record::as_select())
+                .get_results::<Record>(conn)?;
+            for record in &deleted_records {
+                AuditLogEntry::log_delete(conn, Some(authenticated.user_id), record)?;
+            }
+
+            diesel::update(submissions::table.filter(submissions::submitted_by.eq(user_id)))
+                .filter(submissions::status.ne(SubmissionStatus::Denied))
+                .set((
+                    submissions::status.eq(SubmissionStatus::Denied),
+                    submissions::reviewer_id.eq(Some(authenticated.user_id)),
+                    submissions::reviewer_notes.eq("This submission has been automatically rejected because this user has been deleted."),
+                ))
+                .execute(conn)?;
+
+            diesel::delete(oauth_connected_accounts::table.filter(oauth_connected_accounts::user_id.eq(user_id)))
+                .execute(conn)?;
+            diesel::delete(oauth_requests::table.filter(oauth_requests::user_id.eq(user_id)))
+                .execute(conn)?;
+
+            let deleted_user = diesel::update(users::table.find(user_id))
+                .set((
+                    users::username.eq(diesel::dsl::sql::<diesel::sql_types::VarChar>("DEFAULT")),
+                    users::global_name.eq("Deleted User"),
+                    users::account_status.eq(AccountStatus::Deleted),
+                    users::discord_id.eq(None::<String>),
+                    users::discord_avatar.eq(None::<String>),
+                    users::discord_avatar_decoration.eq(None::<String>),
+                    users::last_discord_avatar_update.eq(None::<NaiveDateTime>),
+                    users::description.eq(None::<String>),
+                    users::country.eq(None::<i32>),
+                    users::background_level.eq(None::<i32>),
+                    users::featured_badge_code.eq(None::<String>),
+                    users::access_valid_after.eq(Utc::now()),
+                ))
+                .returning(Self::as_select())
+                .get_result::<Self>(conn)?;
+            AuditLogEntry::log_update(conn, Some(authenticated.user_id), &before, &deleted_user)?;
+            Ok(())
+        })
+    }
+
+    pub fn update_account_status(
         conn: &mut DbConnection,
         authenticated: &Authenticated,
         user_id: Uuid,
-        ban_level: i32,
+        account_status: AccountStatus,
     ) -> Result<User, ApiError> {
-        let user = diesel::update(users::table.filter(users::id.eq(user_id)))
-            .set(users::ban_level.eq(ban_level))
-            .returning(Self::as_select())
-            .get_result::<Self>(conn)?;
+        if account_status == AccountStatus::Deleted {
+            return Err(ApiError::BadRequest(
+                "Account status cannot be manually set to deleted, use the delete endpoint instead.",
+            ));
+        }
+        let user = diesel::update(
+            users::table
+                .filter(users::id.eq(user_id))
+                .filter(users::account_status.ne(AccountStatus::Deleted)),
+        )
+        .set(users::account_status.eq(account_status))
+        .returning(Self::as_select())
+        .get_result::<Self>(conn)?;
 
-        if ban_level >= 3 {
+        if account_status >= AccountStatus::ListBanned {
             // Set user's pending submissions to `Denied`
             diesel::update(
                 submissions::table

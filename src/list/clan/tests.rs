@@ -1,5 +1,6 @@
 #[cfg(test)]
 use {
+    crate::users::AccountStatus,
     crate::{
         clans::test_utils::{create_test_clan, create_test_clan_member},
         list::{
@@ -14,7 +15,7 @@ use {
             },
         },
         test_utils::*,
-        users::test_utils::{create_test_user, set_test_user_ban_level},
+        users::test_utils::{create_test_user, set_test_user_account_status},
     },
     actix_web::test::{self, read_body_json},
     chrono::{DateTime, Utc},
@@ -145,8 +146,8 @@ async fn get_clan_includes_completion_counts_and_member_points() {
     create_test_record(&db, member_a, removed_level).await;
 
     set_test_record_verification(&db, member_b_shared, true).await;
-    set_test_user_ban_level(&db, semi_unranked_member, 1).await;
-    set_test_user_ban_level(&db, unranked_member, 2).await;
+    set_test_user_account_status(&db, semi_unranked_member, AccountStatus::SemiUnranked).await;
+    set_test_user_account_status(&db, unranked_member, AccountStatus::Unranked).await;
     set_test_level_status(&db, legacy_level, LevelStatus::Legacy, Some(4)).await;
     set_test_level_status(&db, removed_level, LevelStatus::Removed, None).await;
 

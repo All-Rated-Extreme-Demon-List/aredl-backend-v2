@@ -1,5 +1,6 @@
 #[cfg(test)]
 use {
+    crate::users::AccountStatus,
     crate::{
         audit::AuditAction,
         auth::create_test_token,
@@ -14,8 +15,8 @@ use {
         },
         test_utils::init_test_app,
         users::test_utils::{
-            create_test_user, latest_audit_entry_for_user, set_test_user_background_level,
-            set_test_user_ban_level, set_test_user_last_country_update,
+            create_test_user, latest_audit_entry_for_user, set_test_user_account_status,
+            set_test_user_background_level, set_test_user_last_country_update,
         },
     },
     actix_web::test::{self, read_body_json},
@@ -52,7 +53,7 @@ async fn update_authenticated_user() {
     let update_payload = json!({
         "global_name": "Updated Name",
         "description": "Updated description",
-        "ban_level": 1,
+        "account_status": 1,
         "country": 10
     });
 
@@ -69,7 +70,7 @@ async fn update_authenticated_user() {
 
     assert_eq!(updated_user["global_name"], "Updated Name");
     assert_eq!(updated_user["description"], "Updated description");
-    assert_eq!(updated_user["ban_level"], 1);
+    assert_eq!(updated_user["account_status"], 1);
     assert_eq!(updated_user["country"], 10);
 
     let req = test::TestRequest::get()
@@ -83,7 +84,7 @@ async fn update_authenticated_user() {
     let user: serde_json::Value = read_body_json(resp).await;
     assert_eq!(user["global_name"], "Updated Name");
     assert_eq!(user["description"], "Updated description");
-    assert_eq!(user["ban_level"], 1);
+    assert_eq!(user["account_status"], 1);
     assert_eq!(user["country"], 10);
 
     let audit_log = latest_audit_entry_for_user(&db, user_id, AuditAction::Update);
@@ -146,10 +147,10 @@ async fn update_authenticated_user_banned() {
     let user_token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    set_test_user_ban_level(&db, user_id, 3).await;
+    set_test_user_account_status(&db, user_id, AccountStatus::ListBanned).await;
 
     let update_payload = json!({
-        "ban_level": 1
+        "account_status": 1
     });
 
     let req = test::TestRequest::patch()
