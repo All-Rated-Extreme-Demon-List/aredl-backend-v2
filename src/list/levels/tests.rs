@@ -3,13 +3,16 @@ use {
     crate::{
         auth::{create_test_token, Permission},
         list::{
+            levels::custom_copies::test_utils::create_test_custom_copy,
             levels::test_utils::{
                 add_test_level_creators, add_test_level_to_pack, clear_test_position_history,
                 create_test_level, create_test_level_with_record,
                 latest_test_position_history_created_at, refresh_test_position_history,
                 set_test_level_gd_id,
             },
+            levels::updates::test_utils::create_test_update,
             packs::test_utils::create_test_pack,
+            List,
         },
         test_utils::*,
         users::test_utils::create_test_user,
@@ -237,6 +240,78 @@ async fn find_level() {
         body["id"].as_str().unwrap().to_owned(),
         "IDs do not match!"
     );
+    for field in ["creators", "updates", "packs", "custom_copies"] {
+        assert_eq!(body[field], json!([]), "{field} should be an empty array");
+    }
+}
+
+#[actix_web::test]
+async fn find_level_with_resolved_data() {
+    let (app, db, _, _) = init_test_app().await;
+    let level_id = create_test_level(&db).await;
+    set_test_level_gd_id(&db, level_id, 123_456_789).await;
+    let (creator_id, _) = create_test_user(&db, None).await;
+    let (second_creator_id, _) = create_test_user(&db, None).await;
+    add_test_level_creators(&db, level_id, &[creator_id, second_creator_id]).await;
+    let update_id = create_test_update(&db, level_id).await;
+    let pack_id = create_test_pack(&db).await;
+    add_test_level_to_pack(&db, level_id, pack_id);
+    let copy_id = create_test_custom_copy(&db, List::Classic, level_id, creator_id).await;
+
+    let other_level_id = create_test_level(&db).await;
+    let (other_creator_id, _) = create_test_user(&db, None).await;
+    add_test_level_creators(&db, other_level_id, &[other_creator_id]).await;
+    create_test_update(&db, other_level_id).await;
+    let other_pack_id = create_test_pack(&db).await;
+    add_test_level_to_pack(&db, other_level_id, other_pack_id);
+    create_test_custom_copy(&db, List::Classic, other_level_id, other_creator_id).await;
+
+    for identifier in [level_id.to_string(), "2".to_owned(), "123456789".to_owned()] {
+        let req = test::TestRequest::get()
+            .uri(&format!("/classic/levels/{identifier}"))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), actix_http::StatusCode::OK);
+        let body: serde_json::Value = read_body_json(resp).await;
+        assert_eq!(body["id"], json!(level_id));
+        assert_eq!(body["creators"].as_array().unwrap().len(), 2);
+        assert!(body["creators"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|creator| creator["id"] == json!(creator_id)));
+        assert!(body["creators"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|creator| creator["id"] == json!(second_creator_id)));
+        assert_eq!(body["updates"].as_array().unwrap().len(), 1);
+        assert_eq!(body["updates"][0]["id"], json!(update_id));
+        assert_eq!(body["packs"].as_array().unwrap().len(), 1);
+        assert_eq!(body["packs"][0]["id"], json!(pack_id));
+        assert!(body["packs"][0]["tier"].is_object());
+        assert_eq!(body["custom_copies"].as_array().unwrap().len(), 1);
+        assert_eq!(body["custom_copies"][0]["id"], json!(copy_id));
+        assert_eq!(
+            body["custom_copies"][0]["added_by"]["id"],
+            json!(creator_id)
+        );
+
+        for (field, endpoint) in [
+            ("creators", "creators"),
+            ("updates", "updates"),
+            ("packs", "packs"),
+            ("custom_copies", "custom-copies"),
+        ] {
+            let req = test::TestRequest::get()
+                .uri(&format!("/classic/levels/{identifier}/{endpoint}"))
+                .to_request();
+            let resp = test::call_service(&app, req).await;
+            assert_eq!(resp.status(), actix_http::StatusCode::OK);
+            let expected: serde_json::Value = read_body_json(resp).await;
+            assert_eq!(body[field], expected, "{field} should match its endpoint");
+        }
+    }
 }
 
 #[actix_web::test]

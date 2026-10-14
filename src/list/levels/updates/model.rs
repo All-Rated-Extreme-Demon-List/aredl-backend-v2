@@ -76,7 +76,7 @@ pub struct LevelUpdateEntryPost {
     pub timestamp: DateTime<Utc>,
 }
 
-#[derive(Serialize, Deserialize, Debug, ToSchema)]
+#[derive(Serialize, Deserialize, Debug, ToSchema, Default)]
 pub struct LevelUpdateEntryQueryOptions {
     pub type_filter: Option<LevelUpdateType>,
 }

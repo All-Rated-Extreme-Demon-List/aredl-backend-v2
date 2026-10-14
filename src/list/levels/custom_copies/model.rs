@@ -121,7 +121,7 @@ pub struct LevelCustomCopyBody {
     pub description: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, ToSchema)]
+#[derive(Serialize, Deserialize, Debug, ToSchema, Default)]
 pub struct LevelCustomCopyQueryOptions {
     pub type_filter: Option<LevelCustomCopyType>,
     pub status_filter: Option<LevelCustomCopyStatus>,

@@ -1,7 +1,12 @@
 use crate::app_data::db::DbConnection;
 use crate::audit::{AuditEntityType, Auditable};
 use crate::error_handler::ApiError;
+use crate::list::levels::custom_copies::{
+    LevelCustomCopy, LevelCustomCopyQueryOptions, LevelCustomCopyResolved,
+};
 use crate::list::levels::records::LevelResolvedRecord;
+use crate::list::levels::updates::{LevelUpdateEntry, LevelUpdateEntryQueryOptions};
+use crate::list::packs::PackWithTierResolved;
 use crate::list::records::Record;
 use crate::list::List;
 use crate::schema::{levels, position_history, position_history_full_view, records, users};
@@ -167,7 +172,7 @@ pub struct LevelUpdate {
     pub nlw_tier_estimate: Option<Option<String>>,
 }
 
-// Level struct that has publisher and verification resolved
+// Level struct with related data resolved
 #[derive(Serialize, Debug, ToSchema)]
 pub struct ResolvedLevel {
     /// Internal level UUID
@@ -206,6 +211,14 @@ pub struct ResolvedLevel {
     pub publisher: BaseUser,
     /// Records that are marked as verifications for the level.
     pub verifications: Vec<LevelResolvedRecord>,
+    /// Creators of the level.
+    pub creators: Vec<BaseUser>,
+    /// Updates for the level, ordered from newest to oldest.
+    pub updates: Vec<LevelUpdateEntry>,
+    /// Packs this level is in, with their tiers resolved.
+    pub packs: Vec<PackWithTierResolved>,
+    /// Custom copies for the level, with the moderators who added them resolved.
+    pub custom_copies: Vec<LevelCustomCopyResolved>,
 }
 #[derive(Serialize, Deserialize, Debug, ToSchema, Default)]
 pub struct LevelQueryOptions {
@@ -445,10 +458,29 @@ impl ResolvedLevel {
             })
             .collect::<Vec<_>>();
 
+        let creators = BaseUser::find_all_creators(conn, list, id)?;
+        let updates = LevelUpdateEntry::find_all_level(
+            conn,
+            &LevelUpdateEntryQueryOptions::default(),
+            list,
+            &id.to_string(),
+        )?;
+        let packs = PackWithTierResolved::find_all(conn, list, id)?;
+        let custom_copies = LevelCustomCopy::find_all_level(
+            conn,
+            &LevelCustomCopyQueryOptions::default(),
+            list,
+            &id.to_string(),
+        )?;
+
         let resolved_level = Self::from_data(
             level,
             BaseUser::from_base_user_with_ban_level(publisher),
             verifications,
+            creators,
+            updates,
+            packs,
+            custom_copies,
         );
         Ok(resolved_level)
     }
@@ -457,6 +489,10 @@ impl ResolvedLevel {
         level: Level,
         publisher: BaseUser,
         verifications: Vec<LevelResolvedRecord>,
+        creators: Vec<BaseUser>,
+        updates: Vec<LevelUpdateEntry>,
+        packs: Vec<PackWithTierResolved>,
+        custom_copies: Vec<LevelCustomCopyResolved>,
     ) -> Self {
         Self {
             id: level.id,
@@ -477,6 +513,10 @@ impl ResolvedLevel {
             nlw_tier_estimate: level.nlw_tier_estimate,
             publisher,
             verifications,
+            creators,
+            updates,
+            packs,
+            custom_copies,
         }
     }
 }
