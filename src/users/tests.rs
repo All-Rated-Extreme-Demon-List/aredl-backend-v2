@@ -11,7 +11,9 @@ use {
         },
         list::{
             levels::test_utils::create_test_level,
-            records::test_utils::{create_test_record, get_test_record},
+            records::test_utils::{
+                create_test_record, get_test_record, set_test_record_verification,
+            },
             submissions::{
                 test_utils::{
                     create_test_submission, get_test_submission, latest_test_submission_history,
@@ -107,6 +109,7 @@ async fn delete_user() {
     assert_eq!(deleted.username.len(), 9);
     assert!(deleted.username.chars().all(|c| c.is_ascii_hexdigit()));
     assert_eq!(deleted.account_status, AccountStatus::Deleted);
+    assert!(!deleted.placeholder);
     assert_eq!(deleted.discord_id, None);
     assert_eq!(deleted.discord_avatar, None);
     assert_eq!(deleted.discord_avatar_decoration, None);
@@ -157,14 +160,111 @@ async fn delete_user() {
 }
 
 #[actix_web::test]
+async fn delete_user_keeps_verifications_visible_as_placeholder() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, username) = create_test_user(&db, None).await;
+    set_test_user_discord_profile(&db, user_id);
+    let (staff_id, _) = create_test_user(&db, Some(Permission::UserDelete)).await;
+    let token =
+        create_test_token(staff_id, &auth.jwt_encoding_key).expect("Failed to create token");
+    let mut verifications = Vec::new();
+    for _ in 0..2 {
+        let level_id = create_test_level(&db).await;
+        let record_id = create_test_record(&db, user_id, level_id).await;
+        set_test_record_verification(&db, record_id, true).await;
+        let record = get_test_record(&db, record_id);
+        let submission = get_test_submission(&db, record.submission_id);
+        let history = latest_test_submission_history(&db, submission.id);
+        verifications.push((
+            level_id,
+            record_id,
+            submission.id,
+            json!(record),
+            json!(submission),
+            history.id,
+        ));
+    }
+    let other_level_id = create_test_level(&db).await;
+    let other_record_id = create_test_record(&db, user_id, other_level_id).await;
+    let other_submission_id = get_test_record(&db, other_record_id).submission_id;
+    let req = test::TestRequest::delete()
+        .uri(&format!("/users/{user_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, req).await.status(),
+        StatusCode::NO_CONTENT
+    );
+
+    let deleted = get_test_user(&db, user_id);
+    assert!(deleted.placeholder);
+    assert_eq!(deleted.account_status, AccountStatus::Normal);
+    assert_eq!(deleted.global_name, username);
+    assert_ne!(deleted.username, username);
+    assert_eq!(deleted.discord_id, None);
+    assert_eq!(deleted.discord_avatar, None);
+    assert_eq!(deleted.discord_avatar_decoration, None);
+    let data = get_test_user_data_state(&db, user_id);
+    assert_eq!(data.record_count, 2);
+    assert_eq!(data.last_discord_avatar_update, None);
+    assert_eq!(
+        get_test_submission(&db, other_submission_id).status,
+        SubmissionStatus::Denied
+    );
+    for (level_id, record_id, submission_id, before_record, before_submission, history_id) in
+        &verifications
+    {
+        assert_eq!(json!(get_test_record(&db, *record_id)), *before_record);
+        assert_eq!(
+            json!(get_test_submission(&db, *submission_id)),
+            *before_submission
+        );
+        assert_eq!(
+            latest_test_submission_history(&db, *submission_id).id,
+            *history_id
+        );
+        let req = test::TestRequest::get()
+            .uri(&format!("/classic/levels/{level_id}"))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let level: serde_json::Value = read_body_json(resp).await;
+        let verification = level["verifications"]
+            .as_array()
+            .expect("Expected verifications")
+            .first()
+            .expect("Expected preserved verification");
+        assert_eq!(verification["id"], json!(record_id));
+        assert_eq!(verification["submitted_by"]["id"], json!(user_id));
+        assert_eq!(verification["submitted_by"]["global_name"], username);
+        assert_eq!(verification["video_url"], before_record["video_url"]);
+    }
+    let req = test::TestRequest::delete()
+        .uri(&format!("/users/{user_id}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .to_request();
+    assert_eq!(
+        test::call_service(&app, req).await.status(),
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(get_test_user(&db, user_id).username, deleted.username);
+    assert_eq!(get_test_user_data_state(&db, user_id).record_count, 2);
+}
+
+#[actix_web::test]
 async fn delete_me_invalidates_access_refresh_and_api_key_tokens() {
     let (app, db, auth, _) = init_test_app().await;
-    let (user_id, _) = create_test_user(&db, None).await;
+    let (user_id, username) = create_test_user(&db, None).await;
     let token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
     let level_id = create_test_level(&db).await;
     let record_id = create_test_record(&db, user_id, level_id).await;
     let submission_id = get_test_record(&db, record_id).submission_id;
+    let verification_level_id = create_test_level(&db).await;
+    let verification_record_id = create_test_record(&db, user_id, verification_level_id).await;
+    set_test_record_verification(&db, verification_record_id, true).await;
+    let verification = get_test_record(&db, verification_record_id);
+    let verification_submission = get_test_submission(&db, verification.submission_id);
     let refresh_token = create_test_auth_token(user_id, &auth.jwt_encoding_key, false, "refresh");
     let api_key = create_test_auth_token(user_id, &auth.jwt_encoding_key, true, "access");
     let req = test::TestRequest::delete()
@@ -175,13 +275,22 @@ async fn delete_me_invalidates_access_refresh_and_api_key_tokens() {
         test::call_service(&app, req).await.status(),
         StatusCode::NO_CONTENT
     );
-    assert_eq!(get_test_user(&db, user_id).global_name, "Deleted User");
+    assert_eq!(get_test_user(&db, user_id).global_name, username);
+    assert!(get_test_user(&db, user_id).placeholder);
+    assert_eq!(
+        json!(get_test_record(&db, verification_record_id)),
+        json!(verification)
+    );
+    assert_eq!(
+        json!(get_test_submission(&db, verification_submission.id)),
+        json!(verification_submission)
+    );
     assert_eq!(
         get_test_submission(&db, submission_id).status,
         SubmissionStatus::Denied
     );
     let data = get_test_user_data_state(&db, user_id);
-    assert_eq!(data.record_count, 0);
+    assert_eq!(data.record_count, 1);
     assert_eq!(data.connected_account_count, 0);
     assert_eq!(data.oauth_request_count, 0);
     assert_eq!(data.last_discord_avatar_update, None);

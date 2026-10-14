@@ -130,7 +130,7 @@ async fn refresh_avatar(
 #[utoipa::path(
     delete,
     summary = "[Auth]Delete authenticated user",
-    description = "Soft delete the authenticated user: anonymize their profile, clear Discord data and connected accounts, invalidate their tokens, delete their records, and deny their submissions. Sets account status to 5 (Deleted).",
+    description = "Soft delete the authenticated user: anonymize their profile, clear Discord data and connected accounts, invalidate their tokens, delete their records, and deny their submissions. Sets account status to 5 (Deleted). If they have verifications, those will be kept, and the account will be converted to a placeholder one.",
     tag = "Users - Me",
     responses((status = 204, description = "User deleted")),
     security(("bearer_token" = [])),

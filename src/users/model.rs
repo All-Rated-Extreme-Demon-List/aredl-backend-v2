@@ -15,6 +15,7 @@ use crate::users::badges::UserBadge;
 use crate::users::AccountStatus;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::pg::Pg;
+use diesel::sql_types::VarChar;
 use serde::{Deserialize, Serialize};
 use serde_with::rust::double_option;
 use utoipa::ToSchema;
@@ -446,7 +447,20 @@ impl User {
                 return Ok(());
             }
 
-            let deleted_records = diesel::delete(records::table.filter(records::submitted_by.eq(user_id)))
+            // only delete non verifications records/submissions
+
+            let verification_submission_ids = records::table
+                .filter(records::submitted_by.eq(user_id))
+                .filter(records::is_verification.eq(true))
+                .select(records::submission_id)
+                .load::<Uuid>(conn)?;
+            let has_verifications = !verification_submission_ids.is_empty();
+
+            let deleted_records = diesel::delete(
+                records::table
+                    .filter(records::submitted_by.eq(user_id))
+                    .filter(records::is_verification.eq(false)),
+            )
                 .returning(Record::as_select())
                 .get_results::<Record>(conn)?;
             for record in &deleted_records {
@@ -454,6 +468,7 @@ impl User {
             }
 
             diesel::update(submissions::table.filter(submissions::submitted_by.eq(user_id)))
+                .filter(submissions::id.ne_all(&verification_submission_ids))
                 .filter(submissions::status.ne(SubmissionStatus::Denied))
                 .set((
                     submissions::status.eq(SubmissionStatus::Denied),
@@ -469,9 +484,11 @@ impl User {
 
             let deleted_user = diesel::update(users::table.find(user_id))
                 .set((
-                    users::username.eq(diesel::dsl::sql::<diesel::sql_types::VarChar>("DEFAULT")),
-                    users::global_name.eq("Deleted User"),
-                    users::account_status.eq(AccountStatus::Deleted),
+                    (!before.placeholder || !has_verifications)
+                        .then_some(users::username.eq(diesel::dsl::sql::<VarChar>("DEFAULT"))),
+                    users::global_name.eq(if has_verifications { before.global_name.clone() } else { "Deleted User".to_owned() }),
+                    users::account_status.eq(if has_verifications { before.account_status } else { AccountStatus::Deleted }),
+                    users::placeholder.eq(before.placeholder || has_verifications),
                     users::discord_id.eq(None::<String>),
                     users::discord_avatar.eq(None::<String>),
                     users::discord_avatar_decoration.eq(None::<String>),

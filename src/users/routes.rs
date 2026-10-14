@@ -224,7 +224,7 @@ async fn update_account_status(
 #[utoipa::path(
     delete,
     summary = "[Staff]Delete user",
-    description = "Soft delete a user: anonymize their profile, clear Discord data and connected accounts, invalidate their tokens, delete their records, and deny their submissions. Sets account status to 5 (Deleted). Your privilege level must be strictly higher than the target user's.",
+    description = "Soft delete a user: anonymize their profile, clear Discord data and connected accounts, invalidate their tokens, delete their records, and deny their submissions. Sets account status to 5 (Deleted). If they have verifications, those will be kept, but the account will be converted to a placeholder one. Your privilege level must be strictly higher than the target user's.",
     tag = "Users",
     params(("id" = String, Path, description = "The internal UUID, username or Discord ID of the user")),
     responses(
