@@ -1,3 +1,4 @@
+use crate::audit::{AuditEntityType, AuditLogEntry, Auditable};
 use crate::auth::permission;
 use crate::auth::Permission;
 use crate::error_handler::ApiError;
@@ -69,15 +70,33 @@ pub struct RoleResolved {
     pub permissions: Vec<String>,
 }
 
+impl Auditable for Role {
+    const ENTITY_TYPE: AuditEntityType = AuditEntityType::Role;
+
+    fn entity_id(&self) -> Uuid {
+        self.id
+    }
+
+    fn display_name(&self, _conn: &mut DbConnection) -> Result<String, ApiError> {
+        Ok(self.role_desc.clone())
+    }
+}
+
 impl Role {
+    pub fn find_for_update(conn: &mut DbConnection, id: Uuid) -> Result<Self, ApiError> {
+        Ok(roles::table
+            .find(id)
+            .for_update()
+            .select(Self::as_select())
+            .first(conn)?)
+    }
+
     pub fn user_can_edit(
         conn: &mut DbConnection,
         authenticated: &Authenticated,
         target_role_id: Uuid,
-    ) -> Result<(), ApiError> {
-        let target_role = roles::table
-            .filter(roles::id.eq(target_role_id))
-            .first::<Role>(conn)?;
+    ) -> Result<Self, ApiError> {
+        let target_role = Self::find_for_update(conn, target_role_id)?;
 
         authenticated
             .has_higher_privilege_than(conn, target_role.privilege_level)
@@ -86,7 +105,7 @@ impl Role {
                 ApiError::Forbidden("You do not have sufficient permissions to edit this role.")
             })?;
 
-        Ok(())
+        Ok(target_role)
     }
 
     pub fn create(
@@ -102,10 +121,13 @@ impl Role {
                     "You can not create a role with higher permissions than yourself.",
                 )
             })?;
-        let role = diesel::insert_into(roles::table)
-            .values(role)
-            .get_result(conn)?;
-        Ok(role)
+        conn.transaction(|conn| {
+            let role = diesel::insert_into(roles::table)
+                .values(role)
+                .get_result::<Self>(conn)?;
+            AuditLogEntry::log_create(conn, Some(authenticated.user_id), &role)?;
+            Ok(role)
+        })
     }
 
     pub fn update(
@@ -114,12 +136,15 @@ impl Role {
         id: Uuid,
         role: RoleUpdate,
     ) -> Result<Self, ApiError> {
-        Self::user_can_edit(conn, authenticated, id)?;
-        let role = diesel::update(roles::table)
-            .filter(roles::id.eq(id))
-            .set(role)
-            .get_result(conn)?;
-        Ok(role)
+        conn.transaction(|conn| {
+            let before = Self::user_can_edit(conn, authenticated, id)?;
+            let after = diesel::update(roles::table)
+                .filter(roles::id.eq(id))
+                .set(role)
+                .get_result::<Self>(conn)?;
+            AuditLogEntry::log_update(conn, Some(authenticated.user_id), &before, &after)?;
+            Ok(after)
+        })
     }
 
     pub fn delete(
@@ -127,11 +152,14 @@ impl Role {
         authenticated: &Authenticated,
         id: Uuid,
     ) -> Result<Self, ApiError> {
-        Self::user_can_edit(conn, authenticated, id)?;
-        let role = diesel::delete(roles::table)
-            .filter(roles::id.eq(id))
-            .get_result(conn)?;
-        Ok(role)
+        conn.transaction(|conn| {
+            Self::user_can_edit(conn, authenticated, id)?;
+            let role = diesel::delete(roles::table)
+                .filter(roles::id.eq(id))
+                .get_result::<Self>(conn)?;
+            AuditLogEntry::log_delete(conn, Some(authenticated.user_id), &role)?;
+            Ok(role)
+        })
     }
 }
 

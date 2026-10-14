@@ -1,5 +1,6 @@
 use crate::{
     app_data::db::DbAppState,
+    audit::AuditLogEntry,
     error_handler::{ApiError, StartupError},
     list::submissions::SubmissionStatus,
     notifications::WebsocketNotification,
@@ -68,16 +69,28 @@ pub async fn cleanup(
                 ))
                 .execute(conn)?;
 
+                let shifts_to_expire = shifts::table
+                    .filter(shifts::status.eq(ShiftStatus::Running))
+                    .filter(shifts::end_at.lt(now))
+                    .for_update()
+                    .select(Shift::as_select())
+                    .load::<Shift>(conn)?
+                    .into_iter()
+                    .map(|shift| (shift.id, shift))
+                    .collect::<std::collections::HashMap<_, _>>();
                 let expired = diesel::update(
-                    shifts::table
-                        .filter(shifts::status.eq(ShiftStatus::Running))
-                        .filter(shifts::end_at.lt(now)),
+                    shifts::table.filter(shifts::id.eq_any(shifts_to_expire.keys().copied())),
                 )
                 .set((
                     shifts::status.eq(ShiftStatus::Expired),
                     shifts::updated_at.eq(now),
                 ))
                 .get_results::<Shift>(conn)?;
+                for after in &expired {
+                    if let Some(before) = shifts_to_expire.get(&after.id) {
+                        AuditLogEntry::log_update(conn, None, before, after)?;
+                    }
+                }
                 Ok((deleted, released, expired))
             })
         })

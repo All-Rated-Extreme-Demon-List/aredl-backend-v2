@@ -1,4 +1,5 @@
 use crate::app_data::db::DbConnection;
+use crate::audit::{AuditEntityType, AuditLogEntry};
 use crate::auth::{Authenticated, Permission};
 use crate::error_handler::ApiError;
 use crate::roles::Role;
@@ -40,11 +41,11 @@ impl Role {
         permissions: Vec<String>,
     ) -> Result<Vec<String>, ApiError> {
         conn.transaction(move |connection| -> Result<Vec<String>, ApiError> {
-            Self::user_can_edit(connection, &authenticated, role_id)?;
+            let role = Self::user_can_edit(connection, &authenticated, role_id)?;
             let permissions = Self::validated_permissions(permissions)?;
 
             if !permissions.is_empty() {
-                insert_into(role_permissions::table)
+                let added = insert_into(role_permissions::table)
                     .values(
                         permissions
                             .iter()
@@ -58,7 +59,17 @@ impl Role {
                     )
                     .on_conflict((role_permissions::role_id, role_permissions::permission))
                     .do_nothing()
-                    .execute(connection)?;
+                    .returning(role_permissions::permission)
+                    .get_results::<String>(connection)?;
+
+                AuditLogEntry::log_list_change(
+                    connection,
+                    Some(authenticated.user_id),
+                    &role,
+                    AuditEntityType::Permission,
+                    &[],
+                    &added,
+                )?;
             }
 
             Self::direct_permissions(connection, role_id)
@@ -72,11 +83,14 @@ impl Role {
         permissions: Vec<String>,
     ) -> Result<Vec<String>, ApiError> {
         conn.transaction(move |connection| -> Result<Vec<String>, ApiError> {
-            Self::user_can_edit(connection, &authenticated, role_id)?;
+            let role = Self::user_can_edit(connection, &authenticated, role_id)?;
             let permissions = Self::validated_permissions(permissions)?;
 
-            diesel::delete(role_permissions::table.filter(role_permissions::role_id.eq(role_id)))
-                .execute(connection)?;
+            let before = diesel::delete(
+                role_permissions::table.filter(role_permissions::role_id.eq(role_id)),
+            )
+            .returning(role_permissions::permission)
+            .get_results::<String>(connection)?;
 
             if !permissions.is_empty() {
                 insert_into(role_permissions::table)
@@ -94,7 +108,16 @@ impl Role {
                     .execute(connection)?;
             }
 
-            Self::direct_permissions(connection, role_id)
+            let after = Self::direct_permissions(connection, role_id)?;
+            AuditLogEntry::log_list_change(
+                connection,
+                Some(authenticated.user_id),
+                &role,
+                AuditEntityType::Permission,
+                &before,
+                &after,
+            )?;
+            Ok(after)
         })
     }
 
@@ -105,16 +128,25 @@ impl Role {
         permissions: Vec<String>,
     ) -> Result<Vec<String>, ApiError> {
         conn.transaction(move |connection| -> Result<Vec<String>, ApiError> {
-            Self::user_can_edit(connection, &authenticated, role_id)?;
+            let role = Self::user_can_edit(connection, &authenticated, role_id)?;
             let permissions = Self::validated_permissions(permissions)?;
 
-            diesel::delete(
+            let removed = diesel::delete(
                 role_permissions::table
                     .filter(role_permissions::role_id.eq(role_id))
                     .filter(role_permissions::permission.eq_any(permissions)),
             )
-            .execute(connection)?;
+            .returning(role_permissions::permission)
+            .get_results::<String>(connection)?;
 
+            AuditLogEntry::log_list_change(
+                connection,
+                Some(authenticated.user_id),
+                &role,
+                AuditEntityType::Permission,
+                &removed,
+                &[],
+            )?;
             Self::direct_permissions(connection, role_id)
         })
     }

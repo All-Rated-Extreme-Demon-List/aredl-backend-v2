@@ -602,18 +602,24 @@ impl Record {
         }
 
         let achieved_at = Record::fetch_completion_timestamp(record.clone(), providers).await;
+        if achieved_at == record.achieved_at {
+            return Ok(record);
+        }
 
         let result = web::block(move || -> Result<Record, ApiError> {
             let conn = &mut db_clone.connection()?;
-            let result = diesel::update(
-                records::table
-                    .filter(records::list_id.eq(list))
-                    .filter(records::id.eq(record.id)),
-            )
-            .set(records::achieved_at.eq(achieved_at))
-            .returning(Record::as_select())
-            .get_result::<Record>(conn)?;
-            Ok(result)
+            conn.transaction(|conn| {
+                let after = diesel::update(
+                    records::table
+                        .filter(records::list_id.eq(list))
+                        .filter(records::id.eq(record.id)),
+                )
+                .set(records::achieved_at.eq(achieved_at))
+                .returning(Record::as_select())
+                .get_result::<Record>(conn)?;
+                AuditLogEntry::log_update(conn, None, &record, &after)?;
+                Ok(after)
+            })
         })
         .await??;
 

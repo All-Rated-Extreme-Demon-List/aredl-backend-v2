@@ -71,9 +71,11 @@ async fn create_and_join(
     root_span.record("body", tracing::field::debug(&clan));
     let result = web::block(move || {
         let conn = &mut db.connection()?;
-        let clan = Clan::create_and_join(conn, &clan.into_inner(), &authenticated)?;
-        AuditLogEntry::log_create(conn, Some(authenticated.user_id), &clan)?;
-        Ok::<_, ApiError>(clan)
+        conn.transaction(|conn| {
+            let clan = Clan::create_and_join(conn, &clan.into_inner(), &authenticated)?;
+            AuditLogEntry::log_create(conn, Some(authenticated.user_id), &clan)?;
+            Ok::<_, ApiError>(clan)
+        })
     })
     .await??;
     Ok(HttpResponse::Created().json(result))

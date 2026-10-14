@@ -1,6 +1,7 @@
 use crate::list::List;
 use crate::{
     app_data::db::DbConnection,
+    audit::AuditLogEntry,
     auth::{Authenticated, Permission},
     error_handler::ApiError,
     list::levels::LevelStatus,
@@ -114,18 +115,19 @@ impl Submission {
         if from_ok && to_ok && old_status != new_status {
             let now = Utc::now();
 
-            let running_shift_id = shifts::table
+            let running_shift = shifts::table
                 .filter(shifts::user_id.eq(user_id))
                 .filter(shifts::status.eq(ShiftStatus::Running))
                 .filter(shifts::start_at.le(now))
                 .filter(shifts::end_at.gt(now))
                 .order(shifts::end_at.asc())
-                .select(shifts::id)
-                .first::<Uuid>(conn)
+                .for_update()
+                .select(Shift::as_select())
+                .first::<Shift>(conn)
                 .optional()?;
 
-            if let Some(shift_id) = running_shift_id {
-                let updated_shift = diesel::update(shifts::table.filter(shifts::id.eq(shift_id)))
+            if let Some(before) = running_shift {
+                let updated_shift = diesel::update(shifts::table.filter(shifts::id.eq(before.id)))
                     .set((
                         shifts::completed_count.eq(shifts::completed_count + 1),
                         shifts::updated_at.eq(now),
@@ -134,10 +136,13 @@ impl Submission {
                     .get_result::<Shift>(conn)?;
 
                 if updated_shift.completed_count >= updated_shift.target_count {
-                    diesel::update(shifts::table.filter(shifts::id.eq(shift_id)))
-                        .set(shifts::status.eq(ShiftStatus::Completed))
-                        .execute(conn)?;
-                    return Ok(Some(updated_shift));
+                    let completed_shift =
+                        diesel::update(shifts::table.filter(shifts::id.eq(before.id)))
+                            .set(shifts::status.eq(ShiftStatus::Completed))
+                            .returning(Shift::as_select())
+                            .get_result::<Shift>(conn)?;
+                    AuditLogEntry::log_update(conn, None, &before, &completed_shift)?;
+                    return Ok(Some(completed_shift));
                 }
             }
         }

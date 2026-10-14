@@ -1,17 +1,16 @@
 use crate::app_data::db::DbConnection;
-use crate::audit::{AuditEntityType, Auditable};
+use crate::audit::{AuditEntityType, AuditLogEntry, Auditable};
 use crate::auth::Authenticated;
 use crate::error_handler::ApiError;
 use crate::page_helper::{PageQuery, Paginated};
 use crate::schema::{clan_invites, clan_members, clans};
+use crate::users::User;
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use serde::{Deserialize, Serialize};
 use serde_with::rust::double_option;
 use utoipa::ToSchema;
 use uuid::Uuid;
-
-use super::members::ClanMemberAdd;
 
 use diesel::prelude::*;
 #[derive(Serialize, Deserialize, Selectable, Queryable, Debug, ToSchema)]
@@ -109,9 +108,21 @@ impl Auditable for Clan {
     fn display_name(&self, _conn: &mut DbConnection) -> Result<String, ApiError> {
         Ok(format!("[{}] {}", self.tag, self.global_name))
     }
+}
 
-    fn redacted_fields() -> &'static [&'static str] {
-        &[]
+impl Auditable for ClanMember {
+    const ENTITY_TYPE: AuditEntityType = AuditEntityType::ClanMember;
+
+    fn entity_id(&self) -> Uuid {
+        self.id
+    }
+
+    fn parent_entity_id(&self) -> Option<Uuid> {
+        Some(self.clan_id)
+    }
+
+    fn display_name(&self, conn: &mut DbConnection) -> Result<String, ApiError> {
+        Ok(User::from_uuid(conn, self.user_id)?.global_name)
     }
 }
 
@@ -187,18 +198,15 @@ impl Clan {
             .returning(Self::as_select())
             .get_result::<Self>(conn)?;
 
-        diesel::insert_into(clan_members::table)
-            .values(ClanMemberAdd {
-                clan_id: clan.id,
-                user_id: authenticated.user_id,
-            })
-            .execute(conn)?;
-
-        diesel::update(clan_members::table)
-            .filter(clan_members::clan_id.eq(clan.id))
-            .filter(clan_members::user_id.eq(authenticated.user_id))
-            .set(clan_members::role.eq(2))
-            .execute(conn)?;
+        let member = diesel::insert_into(clan_members::table)
+            .values((
+                clan_members::clan_id.eq(clan.id),
+                clan_members::user_id.eq(authenticated.user_id),
+                clan_members::role.eq(2),
+            ))
+            .returning(ClanMember::as_select())
+            .get_result::<ClanMember>(conn)?;
+        AuditLogEntry::log_create(conn, Some(authenticated.user_id), &member)?;
 
         Ok(clan)
     }

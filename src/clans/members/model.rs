@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 
 use crate::app_data::db::DbConnection;
+use crate::audit::AuditLogEntry;
+use crate::auth::Authenticated;
 use crate::clans::{Clan, ClanInvite, ClanMember};
 use crate::error_handler::ApiError;
 use crate::schema::{clan_invites, clan_members, clans, users};
@@ -91,9 +93,13 @@ impl ClanMember {
         conn: &mut DbConnection,
         clan_id: Uuid,
         members: &[Uuid],
+        authenticated: &Authenticated,
     ) -> Result<Vec<Uuid>, ApiError> {
         let result = conn.transaction(|connection| -> Result<Vec<Uuid>, ApiError> {
-            Self::add_members(clan_id, members, connection)?;
+            let added = Self::add_members(clan_id, members, connection)?;
+            for member in &added {
+                AuditLogEntry::log_create(connection, Some(authenticated.user_id), member)?;
+            }
 
             let members = clan_members::table
                 .filter(clan_members::clan_id.eq(clan_id))
@@ -110,12 +116,17 @@ impl ClanMember {
         conn: &mut DbConnection,
         clan_id: Uuid,
         members: &[Uuid],
+        authenticated: &Authenticated,
     ) -> Result<Vec<Uuid>, ApiError> {
         let result = conn.transaction(|connection| -> Result<Vec<Uuid>, ApiError> {
-            delete(clan_members::table)
+            let removed = delete(clan_members::table)
                 .filter(clan_members::clan_id.eq(clan_id))
                 .filter(clan_members::user_id.eq_any(members))
-                .execute(connection)?;
+                .returning(Self::as_select())
+                .get_results::<Self>(connection)?;
+            for member in &removed {
+                AuditLogEntry::log_delete(connection, Some(authenticated.user_id), member)?;
+            }
 
             let members = clan_members::table
                 .filter(clan_members::clan_id.eq(clan_id))
@@ -132,6 +143,7 @@ impl ClanMember {
         conn: &mut DbConnection,
         clan_id: Uuid,
         members: Vec<Uuid>,
+        authenticated: &Authenticated,
     ) -> Result<Vec<Uuid>, ApiError> {
         let result = conn.transaction(|connection| -> Result<Vec<Uuid>, ApiError> {
             let existing_members: Vec<ClanMember> = clan_members::table
@@ -150,10 +162,14 @@ impl ClanMember {
                 .copied()
                 .collect();
             if !users_to_remove.is_empty() {
-                delete(clan_members::table)
+                let removed = delete(clan_members::table)
                     .filter(clan_members::clan_id.eq(clan_id))
                     .filter(clan_members::user_id.eq_any(&users_to_remove))
-                    .execute(connection)?;
+                    .returning(Self::as_select())
+                    .get_results::<Self>(connection)?;
+                for member in &removed {
+                    AuditLogEntry::log_delete(connection, Some(authenticated.user_id), member)?;
+                }
             }
 
             let users_to_add: Vec<Uuid> = requested_user_ids
@@ -161,7 +177,10 @@ impl ClanMember {
                 .copied()
                 .collect();
             if !users_to_add.is_empty() {
-                Self::add_members(clan_id, &users_to_add, connection)?;
+                let added = Self::add_members(clan_id, &users_to_add, connection)?;
+                for member in &added {
+                    AuditLogEntry::log_create(connection, Some(authenticated.user_id), member)?;
+                }
             }
 
             Ok(members)
@@ -175,15 +194,29 @@ impl ClanMember {
         clan_id: Uuid,
         user_id: Uuid,
         member: &ClanMemberUpdate,
+        authenticated: &Authenticated,
     ) -> Result<Self, ApiError> {
         conn.transaction(|conn| {
+            let old_member = clan_members::table
+                .filter(clan_members::clan_id.eq(clan_id))
+                .filter(clan_members::user_id.eq(user_id))
+                .select(Self::as_select())
+                .first::<Self>(conn)?;
             if member.role == 2 {
-                diesel::update(clan_members::table)
+                let owner = clan_members::table
                     .filter(clan_members::clan_id.eq(clan_id))
                     .filter(clan_members::role.eq(2))
                     .filter(clan_members::user_id.ne(user_id))
-                    .set(clan_members::role.eq(1))
-                    .execute(conn)?;
+                    .select(Self::as_select())
+                    .first::<Self>(conn)
+                    .optional()?;
+                if let Some(owner) = owner {
+                    let demoted = diesel::update(clan_members::table.find(owner.id))
+                        .set(clan_members::role.eq(1))
+                        .returning(Self::as_select())
+                        .get_result::<Self>(conn)?;
+                    AuditLogEntry::log_update(conn, Some(authenticated.user_id), &owner, &demoted)?;
+                }
             }
 
             let updated_member = diesel::update(clan_members::table)
@@ -196,6 +229,12 @@ impl ClanMember {
                 .returning(Self::as_select())
                 .get_result(conn)?;
 
+            AuditLogEntry::log_update(
+                conn,
+                Some(authenticated.user_id),
+                &old_member,
+                &updated_member,
+            )?;
             Ok(updated_member)
         })
     }
@@ -204,8 +243,8 @@ impl ClanMember {
         clan_id: Uuid,
         members: &[Uuid],
         connection: &mut DbConnection,
-    ) -> Result<(), ApiError> {
-        insert_into(clan_members::table)
+    ) -> Result<Vec<Self>, ApiError> {
+        let added = insert_into(clan_members::table)
             .values(
                 members
                     .iter()
@@ -217,8 +256,9 @@ impl ClanMember {
                     })
                     .collect::<Vec<_>>(),
             )
-            .execute(connection)?;
-        Ok(())
+            .returning(Self::as_select())
+            .get_results(connection)?;
+        Ok(added)
     }
 }
 

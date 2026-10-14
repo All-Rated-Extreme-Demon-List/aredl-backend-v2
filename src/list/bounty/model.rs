@@ -1,5 +1,5 @@
 use crate::app_data::db::DbConnection;
-use crate::audit::{AuditEntityType, Auditable};
+use crate::audit::{AuditEntityType, AuditLogEntry, Auditable};
 use crate::auth::{Authenticated, Permission};
 use crate::error_handler::ApiError;
 use crate::list::levels::ExtendedBaseLevel;
@@ -412,13 +412,15 @@ impl Record {
 
                 if let Some(target) = bounty.target_submissions {
                     if bounty.count_completions(conn, list)? >= i64::from(target) {
-                        diesel::update(
+                        let closed = diesel::update(
                             bounties::table
                                 .filter(bounties::list_id.eq(list))
                                 .filter(bounties::id.eq(bounty.id)),
                         )
                         .set(bounties::end_date.eq(Utc::now()))
-                        .execute(conn)?;
+                        .returning(Bounty::as_select())
+                        .get_result::<Bounty>(conn)?;
+                        AuditLogEntry::log_update(conn, None, &bounty, &closed)?;
                     }
                 }
 

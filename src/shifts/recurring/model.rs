@@ -1,10 +1,11 @@
 use crate::{
     app_data::db::DbConnection,
+    audit::AuditLogEntry,
     auth::Authenticated,
     error_handler::ApiError,
     roles::ReviewerVisibility,
     schema::{recurrent_shifts, shifts, users},
-    shifts::{ShiftInsert, Weekday},
+    shifts::{Shift, ShiftInsert, Weekday},
     users::BaseUser,
 };
 use chrono::{DateTime, NaiveDate, TimeZone as _, Utc};
@@ -228,10 +229,14 @@ impl RecurringShift {
                     end_at,
                 };
 
-                new_shifts.push(new.clone());
-                diesel::insert_into(shifts::table)
-                    .values(&new)
-                    .execute(conn)?;
+                conn.transaction(|conn| {
+                    let created = diesel::insert_into(shifts::table)
+                        .values(&new)
+                        .returning(Shift::as_select())
+                        .get_result::<Shift>(conn)?;
+                    AuditLogEntry::log_create(conn, None, &created)
+                })?;
+                new_shifts.push(new);
             }
         }
 

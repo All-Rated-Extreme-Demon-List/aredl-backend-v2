@@ -38,6 +38,7 @@ pub enum AuditEntityType {
     Bounty,
     SubmissionStatus,
     Clan,
+    ClanMember,
     Shift,
     LevelCustomCopy,
     LevelCreator,
@@ -64,7 +65,7 @@ pub struct AuditLogEntry {
     pub list_id: Option<List>,
     /// Display name of the entity at the time of the action.
     pub display_name: String,
-    /// The changed entity fields, or added and removed ID arrays for a list change.
+    /// The changed entity fields, or added and removed values for a list change.
     pub diff: Option<Value>,
     /// When this entry was created
     pub timestamp: DateTime<Utc>,
@@ -86,7 +87,7 @@ pub struct AuditLogEntryResolved {
     pub list_id: Option<List>,
     /// Display name of the entity at the time of the action.
     pub display_name: String,
-    /// The changed entity fields, or added and removed ID arrays for a list change.
+    /// The changed entity fields, or added and removed values for a list change.
     pub diff: Option<Value>,
     /// When this entry was created
     pub timestamp: DateTime<Utc>,
@@ -137,28 +138,28 @@ pub struct AuditLogPage {
 }
 
 impl AuditLogEntry {
-    /// log differences in a uuid list (e.g. level creators)
-    pub fn log_list_change<T: Auditable>(
+    /// Log differences in a list (e.g. level creators or role permissions).
+    pub fn log_list_change<T: Auditable, I: Serialize + Ord + Clone>(
         conn: &mut DbConnection,
         actor_id: Option<Uuid>,
         parent: &T,
         entity_type: AuditEntityType,
-        before: &[Uuid],
-        after: &[Uuid],
+        before: &[I],
+        after: &[I],
     ) -> Result<(), ApiError> {
         let before = before
             .iter()
-            .copied()
+            .cloned()
             .collect::<std::collections::BTreeSet<_>>();
         let after = after
             .iter()
-            .copied()
+            .cloned()
             .collect::<std::collections::BTreeSet<_>>();
         if before == after {
             return Ok(());
         }
-        let added = after.difference(&before).copied().collect::<Vec<_>>();
-        let removed = before.difference(&after).copied().collect::<Vec<_>>();
+        let added = after.difference(&before).cloned().collect::<Vec<_>>();
+        let removed = before.difference(&after).cloned().collect::<Vec<_>>();
 
         let entry = NewAuditLogEntry {
             action_type: AuditAction::Update,

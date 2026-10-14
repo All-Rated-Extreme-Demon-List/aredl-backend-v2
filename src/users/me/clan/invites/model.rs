@@ -1,7 +1,8 @@
 use crate::app_data::db::DbConnection;
+use crate::audit::AuditLogEntry;
 use crate::auth::Authenticated;
 use crate::clans::members::ClanMemberAdd;
-use crate::clans::{Clan, ClanInvite};
+use crate::clans::{Clan, ClanInvite, ClanMember};
 use crate::error_handler::ApiError;
 use crate::schema::{clan_invites, clan_members, clans, users};
 use crate::users::me::notifications::{Notification, NotificationType};
@@ -53,6 +54,7 @@ impl ClanInvite {
 
             let clan = clans::table
                 .filter(clans::id.eq(invite.clan_id))
+                .for_update()
                 .select(Clan::as_select())
                 .first::<Clan>(connection)?;
 
@@ -65,12 +67,14 @@ impl ClanInvite {
                 .filter(clan_invites::user_id.eq(invite.user_id))
                 .execute(connection)?;
 
-            insert_into(clan_members::table)
+            let member = insert_into(clan_members::table)
                 .values(ClanMemberAdd {
                     clan_id: invite.clan_id,
                     user_id: invite.user_id,
                 })
-                .execute(connection)?;
+                .returning(ClanMember::as_select())
+                .get_result::<ClanMember>(connection)?;
+            AuditLogEntry::log_create(connection, Some(authenticated.user_id), &member)?;
 
             let content = format!(
                 "{} accepted your invite to join {}",

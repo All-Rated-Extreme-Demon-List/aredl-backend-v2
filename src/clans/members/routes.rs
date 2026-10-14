@@ -56,11 +56,17 @@ async fn add(
     db: web::Data<Arc<DbAppState>>,
     clan_id: web::Path<Uuid>,
     members: web::Json<Vec<Uuid>>,
+    authenticated: Authenticated,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&members));
     let result = web::block(move || {
-        ClanMember::add_all(&mut db.connection()?, *clan_id, &members.into_inner())
+        ClanMember::add_all(
+            &mut db.connection()?,
+            *clan_id,
+            &members.into_inner(),
+            &authenticated,
+        )
     })
     .await??;
     Ok(HttpResponse::Ok().json(result))
@@ -85,11 +91,17 @@ async fn set(
     db: web::Data<Arc<DbAppState>>,
     clan_id: web::Path<Uuid>,
     members: web::Json<Vec<Uuid>>,
+    authenticated: Authenticated,
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&members));
     let result = web::block(move || {
-        ClanMember::set_all(&mut db.connection()?, *clan_id, members.into_inner())
+        ClanMember::set_all(
+            &mut db.connection()?,
+            *clan_id,
+            members.into_inner(),
+            &authenticated,
+        )
     })
     .await??;
     Ok(HttpResponse::Ok().json(result))
@@ -128,7 +140,7 @@ async fn delete(
             authenticated.ensure_has_clan_higher_permission_than_user(conn, clan_id, *member_id)?;
         }
 
-        ClanMember::remove_all(conn, clan_id, &members.into_inner())
+        ClanMember::remove_all(conn, clan_id, &members.into_inner(), &authenticated)
     })
     .await??;
 
@@ -210,7 +222,13 @@ async fn edit(
     let result = web::block(move || {
         let conn = &mut db.connection()?;
         authenticated.ensure_has_clan_permission(conn, clan_id, 2)?;
-        let member = ClanMember::edit_member_role(conn, clan_id, user_id, &member.into_inner())?;
+        let member = ClanMember::edit_member_role(
+            conn,
+            clan_id,
+            user_id,
+            &member.into_inner(),
+            &authenticated,
+        )?;
         Ok::<ClanMember, ApiError>(member)
     })
     .await??;
