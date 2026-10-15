@@ -297,6 +297,10 @@ impl Auditable for Record {
         self.id
     }
 
+    fn parent_entity_id(&self) -> Option<Uuid> {
+        Some(self.submitted_by)
+    }
+
     fn display_name(&self, conn: &mut DbConnection) -> Result<String, ApiError> {
         let level_name = levels::table
             .filter(levels::list_id.eq(self.list_id))

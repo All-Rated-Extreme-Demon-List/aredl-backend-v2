@@ -226,6 +226,10 @@ impl Auditable for Bounty {
         self.id
     }
 
+    fn parent_entity_id(&self) -> Option<Uuid> {
+        Some(self.level_id)
+    }
+
     fn display_name(&self, conn: &mut DbConnection) -> Result<String, ApiError> {
         let level_name = levels::table
             .filter(levels::list_id.eq(self.list_id))
