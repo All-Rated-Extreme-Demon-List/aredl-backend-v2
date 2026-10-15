@@ -141,16 +141,17 @@ impl Auditable for LevelCustomCopy {
         Some(self.level_id)
     }
 
-    fn display_name(&self, conn: &mut DbConnection) -> Result<String, ApiError> {
-        let level_name = levels::table
-            .filter(levels::list_id.eq(self.list_id))
-            .find(self.level_id)
-            .select(levels::name)
-            .first::<String>(conn)?;
+    fn entity_display(&self, _conn: &mut DbConnection) -> Result<String, ApiError> {
+        Ok(format!("{} ({:?})", self.copy_id, self.id_type))
+    }
 
-        Ok(format!(
-            "{level_name} ({}, {:?})",
-            self.copy_id, self.id_type
+    fn parent_display(&self, conn: &mut DbConnection) -> Result<Option<String>, ApiError> {
+        Ok(Some(
+            levels::table
+                .filter(levels::list_id.eq(self.list_id))
+                .find(self.level_id)
+                .select(levels::name)
+                .first(conn)?,
         ))
     }
 

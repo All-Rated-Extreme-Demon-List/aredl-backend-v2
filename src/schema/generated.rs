@@ -72,8 +72,10 @@ pub mod public {
             action_type -> AuditAction,
             entity_id -> Uuid,
             entity_type -> AuditEntityType,
-            display_name -> Text,
-            diff -> Nullable<Jsonb>,
+            entity_display -> Text,
+            parent_display -> Nullable<Text>,
+            before -> Nullable<Jsonb>,
+            after -> Nullable<Jsonb>,
             parent_entity_id -> Nullable<Uuid>,
         }
     }

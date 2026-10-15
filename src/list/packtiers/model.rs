@@ -263,7 +263,7 @@ impl Auditable for PackTier {
         Some(self.list_id)
     }
 
-    fn display_name(&self, _conn: &mut DbConnection) -> Result<String, ApiError> {
+    fn entity_display(&self, _conn: &mut DbConnection) -> Result<String, ApiError> {
         Ok(self.name.clone())
     }
 }

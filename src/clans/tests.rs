@@ -37,12 +37,13 @@ async fn create_and_join() {
 
     let audit = latest_audit_entry_for_clan(&db, clan_id, AuditAction::Create);
     assert_eq!(audit.entity_id, clan_id);
-    assert_eq!(audit.display_name, "[TC] Test Clan");
-    if let Some(diff) = audit.diff {
-        assert_eq!(diff["global_name"].as_str().unwrap(), "Test Clan");
-        assert_eq!(diff["tag"].as_str().unwrap(), "TC");
+    assert_eq!(audit.entity_display, "[TC] Test Clan");
+    assert!(audit.before.is_none());
+    if let Some(after) = audit.after {
+        assert_eq!(after["global_name"].as_str().unwrap(), "Test Clan");
+        assert_eq!(after["tag"].as_str().unwrap(), "TC");
     } else {
-        panic!("No diff found for clan creation");
+        panic!("No after snapshot found for clan");
     }
 }
 
@@ -87,11 +88,11 @@ async fn create_empty_clan() {
 
     let audit = latest_audit_entry_for_clan(&db, clan_id, AuditAction::Create);
     assert_eq!(audit.entity_id, clan_id);
-    if let Some(diff) = audit.diff {
-        assert_eq!(diff["global_name"].as_str().unwrap(), "Empty Clan");
-        assert_eq!(diff["tag"].as_str().unwrap(), "EC");
+    if let Some(after) = audit.after {
+        assert_eq!(after["global_name"].as_str().unwrap(), "Empty Clan");
+        assert_eq!(after["tag"].as_str().unwrap(), "EC");
     } else {
-        panic!("No diff found for clan creation");
+        panic!("No after snapshot found for clan");
     }
 }
 
@@ -117,16 +118,16 @@ async fn update_clan() {
     let audit = latest_audit_entry_for_clan(&db, clan_id, AuditAction::Update);
     assert_eq!(audit.entity_id, clan_id);
     assert_eq!(
-        audit.display_name,
+        audit.entity_display,
         format!(
             "[{}] Updated",
             clan["tag"].as_str().expect("Expected clan tag")
         )
     );
-    if let Some(diff) = audit.diff {
-        assert_eq!(diff["global_name"].as_str().unwrap(), "Updated");
+    if let Some(after) = audit.after {
+        assert_eq!(after["global_name"].as_str().unwrap(), "Updated");
     } else {
-        panic!("No diff found for clan creation");
+        panic!("No after snapshot found for clan");
     }
 }
 
@@ -148,8 +149,10 @@ async fn delete_clan() {
 
     let audit = latest_audit_entry_for_clan(&db, clan_id, AuditAction::Delete);
     assert_eq!(audit.entity_id, clan_id);
+    assert_eq!(audit.before, Some(deleted_clan.clone()));
+    assert!(audit.after.is_none());
     assert_eq!(
-        audit.display_name,
+        audit.entity_display,
         format!(
             "[{}] {}",
             deleted_clan["tag"].as_str().expect("Expected clan tag"),

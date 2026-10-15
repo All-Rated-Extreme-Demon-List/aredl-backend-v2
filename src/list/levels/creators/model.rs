@@ -1,16 +1,60 @@
 use crate::app_data::db::DbConnection;
-use crate::audit::{AuditEntityType, AuditLogEntry};
+use crate::audit::{AuditEntityType, AuditLogEntry, Auditable};
 use crate::auth::Authenticated;
 use crate::error_handler::ApiError;
-use crate::list::{levels::Level, List};
-use crate::schema::levels_created;
-use crate::schema::users;
+use crate::list::List;
+use crate::schema::{levels, levels_created, users};
 use crate::users::{BaseUser, BaseUserWithAccountStatus};
 use diesel::{delete, insert_into};
-use std::collections::HashSet;
+use serde::Serialize;
 use uuid::Uuid;
 
 use diesel::prelude::*;
+
+#[derive(Serialize)]
+struct LevelCreator {
+    list_id: List,
+    level_id: Uuid,
+    user_id: Uuid,
+}
+
+impl Auditable for LevelCreator {
+    const ENTITY_TYPE: AuditEntityType = AuditEntityType::LevelCreator;
+
+    fn entity_id(&self) -> Uuid {
+        self.user_id
+    }
+
+    fn parent_entity_id(&self) -> Option<Uuid> {
+        Some(self.level_id)
+    }
+
+    fn list_id(&self) -> Option<List> {
+        Some(self.list_id)
+    }
+
+    fn entity_display(&self, conn: &mut DbConnection) -> Result<String, ApiError> {
+        Ok(users::table
+            .find(self.user_id)
+            .select(users::global_name)
+            .first(conn)?)
+    }
+
+    fn parent_display(&self, conn: &mut DbConnection) -> Result<Option<String>, ApiError> {
+        Ok(Some(
+            levels::table
+                .filter(levels::list_id.eq(self.list_id))
+                .find(self.level_id)
+                .select(levels::name)
+                .first(conn)?,
+        ))
+    }
+
+    // data is already stored in the id fields
+    fn ignored_fields() -> &'static [&'static str] {
+        &["list_id", "level_id", "user_id"]
+    }
+}
 
 impl BaseUser {
     pub fn find_all_creators(
@@ -39,10 +83,7 @@ impl BaseUser {
         authenticated: &Authenticated,
     ) -> Result<Vec<Uuid>, ApiError> {
         let result = conn.transaction(|connection| -> Result<Vec<Uuid>, ApiError> {
-            let level = Level::find_for_update(connection, list, level_id)?;
-            let added = Self::add_creators(connection, list, level_id, creators)?
-                .into_iter()
-                .collect::<HashSet<_>>();
+            let added = Self::add_creators(connection, list, level_id, creators)?;
 
             let creators: Vec<Uuid> = levels_created::table
                 .filter(levels_created::list_id.eq(list))
@@ -50,18 +91,16 @@ impl BaseUser {
                 .select(levels_created::user_id)
                 .load(connection)?;
 
-            let before = creators
-                .iter()
-                .copied()
-                .filter(|id| !added.contains(id))
-                .collect::<Vec<_>>();
-            AuditLogEntry::log_list_change(
+            AuditLogEntry::log_membership_changes(
                 connection,
                 Some(authenticated.user_id),
-                &level,
-                AuditEntityType::LevelCreator,
-                &before,
-                &creators,
+                &[],
+                &added,
+                |user_id| LevelCreator {
+                    list_id: list,
+                    level_id,
+                    user_id: *user_id,
+                },
             )?;
 
             Ok(creators)
@@ -78,7 +117,6 @@ impl BaseUser {
         authenticated: &Authenticated,
     ) -> Result<Vec<Uuid>, ApiError> {
         let result = conn.transaction(|connection| -> Result<Vec<Uuid>, ApiError> {
-            let level = Level::find_for_update(connection, list, level_id)?;
             let removed = delete(levels_created::table)
                 .filter(levels_created::list_id.eq(list))
                 .filter(levels_created::level_id.eq(level_id))
@@ -92,15 +130,16 @@ impl BaseUser {
                 .select(levels_created::user_id)
                 .load(connection)?;
 
-            let mut before = creators.clone();
-            before.extend(removed);
-            AuditLogEntry::log_list_change(
+            AuditLogEntry::log_membership_changes(
                 connection,
                 Some(authenticated.user_id),
-                &level,
-                AuditEntityType::LevelCreator,
-                &before,
-                &creators,
+                &removed,
+                &[],
+                |user_id| LevelCreator {
+                    list_id: list,
+                    level_id,
+                    user_id: *user_id,
+                },
             )?;
 
             Ok(creators)
@@ -117,7 +156,6 @@ impl BaseUser {
         authenticated: &Authenticated,
     ) -> Result<Vec<Uuid>, ApiError> {
         let result = conn.transaction(|connection| -> Result<Vec<Uuid>, ApiError> {
-            let level = Level::find_for_update(connection, list, level_id)?;
             let before = delete(levels_created::table)
                 .filter(levels_created::list_id.eq(list))
                 .filter(levels_created::level_id.eq(level_id))
@@ -125,13 +163,16 @@ impl BaseUser {
                 .get_results::<Uuid>(connection)?;
 
             let after = Self::add_creators(connection, list, level_id, creators)?;
-            AuditLogEntry::log_list_change(
+            AuditLogEntry::log_membership_changes(
                 connection,
                 Some(authenticated.user_id),
-                &level,
-                AuditEntityType::LevelCreator,
                 &before,
                 &after,
+                |user_id| LevelCreator {
+                    list_id: list,
+                    level_id,
+                    user_id: *user_id,
+                },
             )?;
 
             Ok(creators.to_vec())

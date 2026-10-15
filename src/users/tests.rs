@@ -144,7 +144,7 @@ async fn delete_user() {
     let log = latest_audit_entry_for_user(&db, user_id, AuditAction::Update);
     assert_eq!(log.actor_id, Some(staff_id));
     assert_eq!(
-        log.diff.expect("Expected deletion diff")["account_status"],
+        log.after.expect("Expected snapshot after deletion")["account_status"],
         5
     );
 
@@ -458,10 +458,10 @@ async fn create_placeholder_user() {
         .expect("Expected valid user id");
     let log = latest_audit_entry_for_user(&db, created_user_id, AuditAction::Create);
     assert_eq!(log.actor_id, Some(staff_user_id));
-    if let Some(diff) = log.diff {
-        assert_eq!(diff["global_name"], "test_placeholder");
+    if let Some(after) = log.after {
+        assert_eq!(after["global_name"], "test_placeholder");
     } else {
-        panic!("Expected diff in audit log for user creation");
+        panic!("Expected after snapshot in audit log for user creation");
     }
 }
 
@@ -469,6 +469,7 @@ async fn create_placeholder_user() {
 async fn update_user_info() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, None).await;
+    let before = get_test_user(&db, user_id);
     let (staff_user_id, _) = create_test_user(&db, Some(Permission::UserModify)).await;
     let staff_token =
         create_test_token(staff_user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
@@ -493,11 +494,13 @@ async fn update_user_info() {
 
     let log = latest_audit_entry_for_user(&db, user_id, AuditAction::Update);
     assert_eq!(log.actor_id, Some(staff_user_id));
-    if let Some(diff) = log.diff {
-        assert_eq!(diff["global_name"], "Updated Name");
-        assert_eq!(diff["description"], "Updated description");
+    assert_eq!(log.before, Some(json!(before)));
+    if let Some(after) = log.after {
+        assert_eq!(after["id"], json!(user_id));
+        assert_eq!(after["global_name"], "Updated Name");
+        assert_eq!(after["description"], "Updated description");
     } else {
-        panic!("Expected diff in audit log for user update");
+        panic!("Expected after snapshot in audit log for user update");
     }
 }
 

@@ -64,9 +64,13 @@ pub struct AuditLogEntry {
     /// For list-scoped entities, the list it applies to (or None for global entities i.e. users clans etc)
     pub list_id: Option<List>,
     /// Display name of the entity at the time of the action.
-    pub display_name: String,
-    /// The changed entity fields, or added and removed values for a list change.
-    pub diff: Option<Value>,
+    pub entity_display: String,
+    /// Display name of the parent at the time of the action, when available.
+    pub parent_display: Option<String>,
+    /// Entity before the action (excluding ignored fields).
+    pub before: Option<Value>,
+    /// Entity after the action (excluding ignored fields).
+    pub after: Option<Value>,
     /// When this entry was created
     pub timestamp: DateTime<Utc>,
 }
@@ -86,9 +90,13 @@ pub struct AuditLogEntryResolved {
     /// For list-scoped entities, the list it applies to (or None for global entities i.e. users clans etc)
     pub list_id: Option<List>,
     /// Display name of the entity at the time of the action.
-    pub display_name: String,
-    /// The changed entity fields, or added and removed values for a list change.
-    pub diff: Option<Value>,
+    pub entity_display: String,
+    /// Display name of the parent at the time of the action, when available.
+    pub parent_display: Option<String>,
+    /// Entity before the action (excluding ignored fields).
+    pub before: Option<Value>,
+    /// Entity after the action (excluding ignored fields).
+    pub after: Option<Value>,
     /// When this entry was created
     pub timestamp: DateTime<Utc>,
 }
@@ -102,8 +110,10 @@ struct NewAuditLogEntry {
     pub entity_id: Uuid,
     pub parent_entity_id: Option<Uuid>,
     pub list_id: Option<List>,
-    pub display_name: String,
-    pub diff: Option<Value>,
+    pub entity_display: String,
+    pub parent_display: Option<String>,
+    pub before: Option<Value>,
+    pub after: Option<Value>,
 }
 
 pub trait Auditable: Serialize {
@@ -112,11 +122,14 @@ pub trait Auditable: Serialize {
     fn parent_entity_id(&self) -> Option<Uuid> {
         None
     }
-    fn display_name(&self, conn: &mut DbConnection) -> Result<String, ApiError>;
+    fn entity_display(&self, conn: &mut DbConnection) -> Result<String, ApiError>;
+    fn parent_display(&self, _conn: &mut DbConnection) -> Result<Option<String>, ApiError> {
+        Ok(None)
+    }
     fn list_id(&self) -> Option<List> {
         None
     }
-    fn redacted_fields() -> &'static [&'static str] {
+    fn ignored_fields() -> &'static [&'static str] {
         &[]
     }
 }
@@ -138,96 +151,45 @@ pub struct AuditLogPage {
 }
 
 impl AuditLogEntry {
-    /// Log differences in a list (e.g. level creators or role permissions).
-    pub fn log_list_change<T: Auditable, I: Serialize + Ord + Clone>(
+    /// Log a create/delete entry for each member added/removed to from a list.
+    pub fn log_membership_changes<'a, I: Ord + 'a, T: Auditable>(
         conn: &mut DbConnection,
         actor_id: Option<Uuid>,
-        parent: &T,
-        entity_type: AuditEntityType,
-        before: &[I],
-        after: &[I],
+        before: impl IntoIterator<Item = &'a I>,
+        after: impl IntoIterator<Item = &'a I>,
+        entity: impl Fn(&I) -> T,
     ) -> Result<(), ApiError> {
         let before = before
-            .iter()
-            .cloned()
+            .into_iter()
             .collect::<std::collections::BTreeSet<_>>();
-        let after = after
-            .iter()
-            .cloned()
-            .collect::<std::collections::BTreeSet<_>>();
-        if before == after {
-            return Ok(());
+        let after = after.into_iter().collect::<std::collections::BTreeSet<_>>();
+        for item in after.difference(&before) {
+            Self::log_create(conn, actor_id, &entity(item))?;
         }
-        let added = after.difference(&before).cloned().collect::<Vec<_>>();
-        let removed = before.difference(&after).cloned().collect::<Vec<_>>();
-
-        let entry = NewAuditLogEntry {
-            action_type: AuditAction::Update,
-            actor_id,
-            entity_type,
-            entity_id: parent.entity_id(),
-            parent_entity_id: Some(parent.entity_id()),
-            list_id: parent.list_id(),
-            display_name: parent.display_name(conn)?,
-            diff: Some(serde_json::json!({ "added": added, "removed": removed })),
-        };
-        diesel::insert_into(audit_logs::table)
-            .values(entry)
-            .execute(conn)?;
+        for item in before.difference(&after) {
+            Self::log_delete(conn, actor_id, &entity(item))?;
+        }
         Ok(())
     }
 
-    fn serialize_auditable<T: Auditable>(entity: &T) -> Result<Value, ApiError> {
+    fn serialize_auditable<T: Auditable>(entity: &T) -> Result<Option<Value>, ApiError> {
         let mut value = serde_json::to_value(entity).map_err(|err| {
             ApiError::InternalServerError(format!("Failed to serialize audit log entity: {err}"))
         })?;
 
         if let Value::Object(map) = &mut value {
-            for redacted_field in T::redacted_fields() {
-                if map.contains_key(*redacted_field) {
-                    map.remove(*redacted_field);
+            for ignored_field in T::ignored_fields() {
+                if map.contains_key(*ignored_field) {
+                    map.remove(*ignored_field);
                 }
             }
         }
 
-        Ok(value)
-    }
-
-    fn generate_update_diff<T: Auditable>(before: &T, after: &T) -> Result<Value, ApiError> {
-        let before_value = Self::serialize_auditable(before)?;
-        let after_value = Self::serialize_auditable(after)?;
-
-        let (Some(before_obj), Some(after_obj)) =
-            (before_value.as_object(), after_value.as_object())
-        else {
-            return Err(ApiError::InternalServerError("Invalid diff value(s)"));
-        };
-
-        let mut diff = serde_json::Map::new();
-        let keys = before_obj
-            .keys()
-            .chain(after_obj.keys())
-            .collect::<std::collections::BTreeSet<_>>();
-
-        for key in keys {
-            let before_value = before_obj.get(key);
-            let after_value = after_obj.get(key);
-
-            match (before_value, after_value) {
-                (Some(before), Some(after)) if before != after => {
-                    diff.insert(key.clone(), after.clone());
-                }
-                (None, Some(after)) => {
-                    diff.insert(key.clone(), after.clone());
-                }
-                (Some(_), None) => {
-                    diff.insert(key.clone(), Value::Null);
-                }
-                _ => {}
-            }
+        if value.as_object().is_some_and(serde_json::Map::is_empty) {
+            Ok(None)
+        } else {
+            Ok(Some(value))
         }
-
-        Ok(Value::Object(diff))
     }
 
     /// Choose the audit action from the snapshots already read by the operation.
@@ -257,8 +219,10 @@ impl AuditLogEntry {
             entity_id: entity.entity_id(),
             parent_entity_id: entity.parent_entity_id(),
             list_id: entity.list_id(),
-            display_name: entity.display_name(conn)?,
-            diff: Some(Self::serialize_auditable(entity)?),
+            entity_display: entity.entity_display(conn)?,
+            parent_display: entity.parent_display(conn)?,
+            before: None,
+            after: Self::serialize_auditable(entity)?,
         };
 
         diesel::insert_into(audit_logs::table)
@@ -274,9 +238,10 @@ impl AuditLogEntry {
         before: &T,
         after: &T,
     ) -> Result<(), ApiError> {
-        let diff = Self::generate_update_diff(before, after)?;
+        let before_data = Self::serialize_auditable(before)?;
+        let after_data = Self::serialize_auditable(after)?;
 
-        if diff.as_object().is_none_or(serde_json::Map::is_empty) {
+        if before_data == after_data {
             return Ok(());
         }
 
@@ -287,8 +252,10 @@ impl AuditLogEntry {
             entity_id: after.entity_id(),
             parent_entity_id: after.parent_entity_id(),
             list_id: after.list_id(),
-            display_name: after.display_name(conn)?,
-            diff: Some(diff),
+            entity_display: after.entity_display(conn)?,
+            parent_display: after.parent_display(conn)?,
+            before: before_data,
+            after: after_data,
         };
 
         diesel::insert_into(audit_logs::table)
@@ -310,8 +277,10 @@ impl AuditLogEntry {
             entity_id: entity.entity_id(),
             parent_entity_id: entity.parent_entity_id(),
             list_id: entity.list_id(),
-            display_name: entity.display_name(conn)?,
-            diff: None,
+            entity_display: entity.entity_display(conn)?,
+            parent_display: entity.parent_display(conn)?,
+            before: Self::serialize_auditable(entity)?,
+            after: None,
         };
 
         diesel::insert_into(audit_logs::table)
@@ -383,8 +352,10 @@ impl From<(AuditLogEntry, Option<ExtendedBaseUser>)> for AuditLogEntryResolved {
             entity_id: entry.entity_id,
             parent_entity_id: entry.parent_entity_id,
             list_id: entry.list_id,
-            display_name: entry.display_name,
-            diff: entry.diff,
+            entity_display: entry.entity_display,
+            parent_display: entry.parent_display,
+            before: entry.before,
+            after: entry.after,
             timestamp: entry.timestamp,
         }
     }

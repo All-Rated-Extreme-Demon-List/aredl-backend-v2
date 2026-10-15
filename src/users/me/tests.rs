@@ -92,8 +92,8 @@ async fn update_authenticated_user() {
     assert_eq!(audit_log.actor_id, Some(user_id));
     assert_eq!(
         audit_log
-            .diff
-            .expect("Expected diff in audit log for user update")["global_name"],
+            .after
+            .expect("Expected after snapshot in audit log for user update")["global_name"],
         "Updated Name"
     );
 }

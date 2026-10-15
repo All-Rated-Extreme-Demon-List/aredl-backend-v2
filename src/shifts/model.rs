@@ -228,14 +228,16 @@ impl Auditable for Shift {
         Some(self.user_id)
     }
 
-    fn display_name(&self, conn: &mut DbConnection) -> Result<String, ApiError> {
-        let user_global_name = users::table
-            .find(self.user_id)
-            .select(users::global_name)
-            .first::<String>(conn)?;
-        Ok(format!(
-            "{user_global_name} ({})",
-            self.start_at.to_rfc3339()
+    fn entity_display(&self, _conn: &mut DbConnection) -> Result<String, ApiError> {
+        Ok(self.start_at.to_rfc3339())
+    }
+
+    fn parent_display(&self, conn: &mut DbConnection) -> Result<Option<String>, ApiError> {
+        Ok(Some(
+            users::table
+                .find(self.user_id)
+                .select(users::global_name)
+                .first(conn)?,
         ))
     }
 }

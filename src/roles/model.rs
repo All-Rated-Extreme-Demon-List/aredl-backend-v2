@@ -77,8 +77,47 @@ impl Auditable for Role {
         self.id
     }
 
-    fn display_name(&self, _conn: &mut DbConnection) -> Result<String, ApiError> {
+    fn entity_display(&self, _conn: &mut DbConnection) -> Result<String, ApiError> {
         Ok(self.role_desc.clone())
+    }
+}
+
+#[derive(Serialize)]
+pub(crate) struct RoleUser {
+    pub role_id: Uuid,
+    pub user_id: Uuid,
+}
+
+impl Auditable for RoleUser {
+    const ENTITY_TYPE: AuditEntityType = AuditEntityType::RoleUser;
+
+    fn entity_id(&self) -> Uuid {
+        self.user_id
+    }
+
+    fn parent_entity_id(&self) -> Option<Uuid> {
+        Some(self.role_id)
+    }
+
+    fn entity_display(&self, conn: &mut DbConnection) -> Result<String, ApiError> {
+        Ok(users::table
+            .find(self.user_id)
+            .select(users::global_name)
+            .first(conn)?)
+    }
+
+    fn parent_display(&self, conn: &mut DbConnection) -> Result<Option<String>, ApiError> {
+        Ok(Some(
+            roles::table
+                .find(self.role_id)
+                .select(roles::role_desc)
+                .first(conn)?,
+        ))
+    }
+
+    // data is already stored in the id fields
+    fn ignored_fields() -> &'static [&'static str] {
+        &["role_id", "user_id"]
     }
 }
 

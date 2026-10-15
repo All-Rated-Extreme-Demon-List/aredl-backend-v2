@@ -105,7 +105,7 @@ impl Auditable for Clan {
         self.id
     }
 
-    fn display_name(&self, _conn: &mut DbConnection) -> Result<String, ApiError> {
+    fn entity_display(&self, _conn: &mut DbConnection) -> Result<String, ApiError> {
         Ok(format!("[{}] {}", self.tag, self.global_name))
     }
 }
@@ -114,15 +114,28 @@ impl Auditable for ClanMember {
     const ENTITY_TYPE: AuditEntityType = AuditEntityType::ClanMember;
 
     fn entity_id(&self) -> Uuid {
-        self.id
+        self.user_id
     }
 
     fn parent_entity_id(&self) -> Option<Uuid> {
         Some(self.clan_id)
     }
 
-    fn display_name(&self, conn: &mut DbConnection) -> Result<String, ApiError> {
+    fn entity_display(&self, conn: &mut DbConnection) -> Result<String, ApiError> {
         Ok(User::from_uuid(conn, self.user_id)?.global_name)
+    }
+
+    fn parent_display(&self, conn: &mut DbConnection) -> Result<Option<String>, ApiError> {
+        let clan = clans::table
+            .find(self.clan_id)
+            .select(Clan::as_select())
+            .first(conn)?;
+        Ok(Some(clan.entity_display(conn)?))
+    }
+
+    // data is already stored in the id fields
+    fn ignored_fields() -> &'static [&'static str] {
+        &["id", "clan_id", "user_id", "created_at", "updated_at"]
     }
 }
 

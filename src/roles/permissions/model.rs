@@ -1,15 +1,52 @@
 use crate::app_data::db::DbConnection;
-use crate::audit::{AuditEntityType, AuditLogEntry};
+use crate::audit::{AuditEntityType, AuditLogEntry, Auditable};
 use crate::auth::{Authenticated, Permission};
 use crate::error_handler::ApiError;
 use crate::roles::Role;
-use crate::schema::{role_permissions, role_permissions_full};
+use crate::schema::{role_permissions, role_permissions_full, roles};
 use diesel::insert_into;
+use serde::Serialize;
 use std::collections::HashSet;
 use std::str::FromStr as _;
 
 use diesel::prelude::*;
 use uuid::Uuid;
+
+#[derive(Serialize)]
+struct RolePermission {
+    role_id: Uuid,
+    permission: String,
+}
+
+impl Auditable for RolePermission {
+    const ENTITY_TYPE: AuditEntityType = AuditEntityType::Permission;
+
+    fn entity_id(&self) -> Uuid {
+        self.role_id
+    }
+
+    fn parent_entity_id(&self) -> Option<Uuid> {
+        Some(self.role_id)
+    }
+
+    fn entity_display(&self, _conn: &mut DbConnection) -> Result<String, ApiError> {
+        Ok(self.permission.clone())
+    }
+
+    fn parent_display(&self, conn: &mut DbConnection) -> Result<Option<String>, ApiError> {
+        Ok(Some(
+            roles::table
+                .find(self.role_id)
+                .select(roles::role_desc)
+                .first(conn)?,
+        ))
+    }
+
+    fn ignored_fields() -> &'static [&'static str] {
+        &["role_id"]
+    }
+}
+
 impl Role {
     pub fn permission_find_all(
         conn: &mut DbConnection,
@@ -41,7 +78,7 @@ impl Role {
         permissions: Vec<String>,
     ) -> Result<Vec<String>, ApiError> {
         conn.transaction(move |connection| -> Result<Vec<String>, ApiError> {
-            let role = Self::user_can_edit(connection, &authenticated, role_id)?;
+            Self::user_can_edit(connection, &authenticated, role_id)?;
             let permissions = Self::validated_permissions(permissions)?;
 
             if !permissions.is_empty() {
@@ -62,13 +99,15 @@ impl Role {
                     .returning(role_permissions::permission)
                     .get_results::<String>(connection)?;
 
-                AuditLogEntry::log_list_change(
+                AuditLogEntry::log_membership_changes(
                     connection,
                     Some(authenticated.user_id),
-                    &role,
-                    AuditEntityType::Permission,
                     &[],
                     &added,
+                    |permission| RolePermission {
+                        role_id,
+                        permission: permission.clone(),
+                    },
                 )?;
             }
 
@@ -83,7 +122,7 @@ impl Role {
         permissions: Vec<String>,
     ) -> Result<Vec<String>, ApiError> {
         conn.transaction(move |connection| -> Result<Vec<String>, ApiError> {
-            let role = Self::user_can_edit(connection, &authenticated, role_id)?;
+            Self::user_can_edit(connection, &authenticated, role_id)?;
             let permissions = Self::validated_permissions(permissions)?;
 
             let before = diesel::delete(
@@ -109,13 +148,15 @@ impl Role {
             }
 
             let after = Self::direct_permissions(connection, role_id)?;
-            AuditLogEntry::log_list_change(
+            AuditLogEntry::log_membership_changes(
                 connection,
                 Some(authenticated.user_id),
-                &role,
-                AuditEntityType::Permission,
                 &before,
                 &after,
+                |permission| RolePermission {
+                    role_id,
+                    permission: permission.clone(),
+                },
             )?;
             Ok(after)
         })
@@ -128,7 +169,7 @@ impl Role {
         permissions: Vec<String>,
     ) -> Result<Vec<String>, ApiError> {
         conn.transaction(move |connection| -> Result<Vec<String>, ApiError> {
-            let role = Self::user_can_edit(connection, &authenticated, role_id)?;
+            Self::user_can_edit(connection, &authenticated, role_id)?;
             let permissions = Self::validated_permissions(permissions)?;
 
             let removed = diesel::delete(
@@ -139,13 +180,15 @@ impl Role {
             .returning(role_permissions::permission)
             .get_results::<String>(connection)?;
 
-            AuditLogEntry::log_list_change(
+            AuditLogEntry::log_membership_changes(
                 connection,
                 Some(authenticated.user_id),
-                &role,
-                AuditEntityType::Permission,
                 &removed,
                 &[],
+                |permission| RolePermission {
+                    role_id,
+                    permission: permission.clone(),
+                },
             )?;
             Self::direct_permissions(connection, role_id)
         })

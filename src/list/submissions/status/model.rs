@@ -44,7 +44,7 @@ impl Auditable for SubmissionsEnabled {
         self.id
     }
 
-    fn display_name(&self, _conn: &mut DbConnection) -> Result<String, ApiError> {
+    fn entity_display(&self, _conn: &mut DbConnection) -> Result<String, ApiError> {
         Ok(if self.enabled {
             "Submissions enabled"
         } else {

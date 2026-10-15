@@ -1,8 +1,8 @@
 use crate::app_data::db::DbConnection;
-use crate::audit::{AuditEntityType, AuditLogEntry};
+use crate::audit::AuditLogEntry;
 use crate::auth::Authenticated;
 use crate::error_handler::ApiError;
-use crate::roles::Role;
+use crate::roles::{Role, RoleUser};
 use crate::schema::{user_roles, users};
 use crate::users::BaseUser;
 use diesel::insert_into;
@@ -17,15 +17,17 @@ impl BaseUser {
         users: Vec<Uuid>,
     ) -> Result<Vec<Self>, ApiError> {
         conn.transaction(move |connection| -> Result<Vec<Self>, ApiError> {
-            let role = Role::user_can_edit(connection, &authenticated, role_id)?;
+            Role::user_can_edit(connection, &authenticated, role_id)?;
             let added = Self::add_users(role_id, users.as_ref(), connection)?;
-            AuditLogEntry::log_list_change(
+            AuditLogEntry::log_membership_changes(
                 connection,
                 Some(authenticated.user_id),
-                &role,
-                AuditEntityType::RoleUser,
                 &[],
                 &added,
+                |user_id| RoleUser {
+                    role_id,
+                    user_id: *user_id,
+                },
             )?;
 
             let users: Vec<BaseUser> = user_roles::table
@@ -44,19 +46,21 @@ impl BaseUser {
         users: Vec<Uuid>,
     ) -> Result<Vec<Self>, ApiError> {
         conn.transaction(move |connection| -> Result<Vec<Self>, ApiError> {
-            let role = Role::user_can_edit(connection, &authenticated, role_id)?;
+            Role::user_can_edit(connection, &authenticated, role_id)?;
             let before = diesel::delete(user_roles::table.filter(user_roles::role_id.eq(role_id)))
                 .returning(user_roles::user_id)
                 .get_results::<Uuid>(connection)?;
 
             let after = Self::add_users(role_id, &users, connection)?;
-            AuditLogEntry::log_list_change(
+            AuditLogEntry::log_membership_changes(
                 connection,
                 Some(authenticated.user_id),
-                &role,
-                AuditEntityType::RoleUser,
                 &before,
                 &after,
+                |user_id| RoleUser {
+                    role_id,
+                    user_id: *user_id,
+                },
             )?;
 
             let users: Vec<BaseUser> = user_roles::table
@@ -75,15 +79,17 @@ impl BaseUser {
         users: Vec<Uuid>,
     ) -> Result<Vec<Self>, ApiError> {
         conn.transaction(move |connection| -> Result<Vec<Self>, ApiError> {
-            let role = Role::user_can_edit(connection, &authenticated, role_id)?;
+            Role::user_can_edit(connection, &authenticated, role_id)?;
             let removed = Self::delete_users(role_id, &users, connection)?;
-            AuditLogEntry::log_list_change(
+            AuditLogEntry::log_membership_changes(
                 connection,
                 Some(authenticated.user_id),
-                &role,
-                AuditEntityType::RoleUser,
                 &removed,
                 &[],
+                |user_id| RoleUser {
+                    role_id,
+                    user_id: *user_id,
+                },
             )?;
 
             let users: Vec<BaseUser> = user_roles::table

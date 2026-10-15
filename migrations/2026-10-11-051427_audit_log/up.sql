@@ -21,10 +21,12 @@ CREATE TABLE audit_logs (
     action_type audit_action NOT NULL,
     entity_id uuid NOT NULL,
     entity_type audit_entity_type NOT NULL,
-    display_name TEXT NOT NULL,
-    diff JSONB
+    entity_display TEXT NOT NULL,
+    parent_display TEXT,
+    before JSONB,
+    after JSONB
 );
 
-CREATE INDEX audit_entity_idx ON audit_logs (entity_type, entity_id, timestamp DESC);
+CREATE INDEX audit_entity_idx ON audit_logs (entity_type, entity_id, list_id, timestamp DESC);
 CREATE INDEX audit_actor_idx  ON audit_logs (actor_id, timestamp DESC);
 CREATE INDEX audit_time_idx   ON audit_logs USING brin (timestamp);

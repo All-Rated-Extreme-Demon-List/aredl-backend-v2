@@ -1,9 +1,9 @@
 use crate::app_data::db::{DbAppState, DbConnection};
-use crate::audit::{AuditEntityType, AuditLogEntry};
+use crate::audit::AuditLogEntry;
 use crate::auth::oauth::OAuthProvider;
 use crate::error_handler::{ApiError, StartupError};
 use crate::providers::ProvidersAppState;
-use crate::roles::Role;
+use crate::roles::RoleUser;
 use crate::scheduled::{parse_startup_schedule, sleep_until_next};
 use crate::schema::{oauth_connected_accounts, user_roles};
 use crate::utils::patreon::{patreon_plus_role_id, set_users_submissions_to_priority};
@@ -201,7 +201,6 @@ pub fn apply_patreon_plus_sync(
     };
 
     conn.transaction(|conn| {
-        let role = Role::find_for_update(conn, role_id)?;
         let existing_plus_user_ids = user_roles::table
             .filter(user_roles::role_id.eq(role_id))
             .select(user_roles::user_id)
@@ -231,13 +230,15 @@ pub fn apply_patreon_plus_sync(
                 .execute(conn)?;
         }
 
-        AuditLogEntry::log_list_change(
+        AuditLogEntry::log_membership_changes(
             conn,
             None,
-            &role,
-            AuditEntityType::RoleUser,
             &existing_plus_user_ids,
-            &matched_user_ids,
+            &matched_user_set,
+            |user_id| RoleUser {
+                role_id,
+                user_id: *user_id,
+            },
         )?;
         let prioritized_count = set_users_submissions_to_priority(conn, &matched_user_ids)?;
 

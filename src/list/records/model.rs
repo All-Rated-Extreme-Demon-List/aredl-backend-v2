@@ -301,18 +301,21 @@ impl Auditable for Record {
         Some(self.submitted_by)
     }
 
-    fn display_name(&self, conn: &mut DbConnection) -> Result<String, ApiError> {
-        let level_name = levels::table
+    fn entity_display(&self, conn: &mut DbConnection) -> Result<String, ApiError> {
+        Ok(levels::table
             .filter(levels::list_id.eq(self.list_id))
             .find(self.level_id)
             .select(levels::name)
-            .first::<String>(conn)?;
-        let user_name = users::table
-            .find(self.submitted_by)
-            .select(users::global_name)
-            .first::<String>(conn)?;
+            .first(conn)?)
+    }
 
-        Ok(format!("{user_name} on {level_name}"))
+    fn parent_display(&self, conn: &mut DbConnection) -> Result<Option<String>, ApiError> {
+        Ok(Some(
+            users::table
+                .find(self.submitted_by)
+                .select(users::global_name)
+                .first(conn)?,
+        ))
     }
 
     fn list_id(&self) -> Option<List> {

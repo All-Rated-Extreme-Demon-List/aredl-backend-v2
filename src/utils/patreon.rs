@@ -1,9 +1,9 @@
 use crate::app_data::db::DbConnection;
-use crate::audit::{AuditEntityType, AuditLogEntry};
+use crate::audit::AuditLogEntry;
 use crate::auth::Permission;
 use crate::error_handler::ApiError;
 use crate::list::submissions::SubmissionStatus;
-use crate::roles::Role;
+use crate::roles::RoleUser;
 use crate::schema::{role_permissions_full, submissions, user_roles};
 use diesel::prelude::*;
 use uuid::Uuid;
@@ -14,7 +14,6 @@ pub(crate) fn grant_patreon_plus(
 ) -> Result<usize, ApiError> {
     conn.transaction(|conn| {
         let role_id = patreon_plus_role_id(conn)?;
-        let role = Role::find_for_update(conn, role_id)?;
 
         let added = diesel::insert_into(user_roles::table)
             .values((
@@ -24,7 +23,10 @@ pub(crate) fn grant_patreon_plus(
             .on_conflict_do_nothing()
             .returning(user_roles::user_id)
             .get_results::<Uuid>(conn)?;
-        AuditLogEntry::log_list_change(conn, None, &role, AuditEntityType::RoleUser, &[], &added)?;
+        AuditLogEntry::log_membership_changes(conn, None, &[], &added, |user_id| RoleUser {
+            role_id,
+            user_id: *user_id,
+        })?;
 
         set_users_submissions_to_priority(conn, &[user_id])
     })
