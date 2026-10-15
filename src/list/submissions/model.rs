@@ -27,6 +27,7 @@ pub enum SubmissionStatus {
     Denied,
     Accepted,
     UnderReview,
+    CopyReview,
 }
 
 impl SubmissionStatus {
@@ -36,6 +37,7 @@ impl SubmissionStatus {
             SubmissionStatus::Denied => Some("SUBMISSION_DENIED"),
             SubmissionStatus::UnderConsideration => Some("SUBMISSION_UNDER_CONSIDERATION"),
             SubmissionStatus::UnderReview => Some("SUBMISSION_UNDER_REVIEW"),
+            SubmissionStatus::CopyReview => Some("SUBMISSION_COPY_REVIEW"),
             SubmissionStatus::Claimed | SubmissionStatus::Pending => None,
         }
     }

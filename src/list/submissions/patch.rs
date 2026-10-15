@@ -108,6 +108,7 @@ impl Submission {
                 | SubmissionStatus::Claimed
                 | SubmissionStatus::UnderConsideration
                 | SubmissionStatus::UnderReview
+                | SubmissionStatus::CopyReview
         );
         let to_ok = matches!(
             new_status,
@@ -222,7 +223,8 @@ impl SubmissionPatchUser {
         match old_submission.status {
             SubmissionStatus::Claimed
             | SubmissionStatus::UnderConsideration
-            | SubmissionStatus::UnderReview => {
+            | SubmissionStatus::UnderReview
+            | SubmissionStatus::CopyReview => {
                 return Err(ApiError::Conflict(
                     "This submission is currently being reviewed and cannot be edited.",
                 ));
@@ -398,7 +400,8 @@ impl SubmissionPatchMod {
                         ),
                         SubmissionStatus::Pending
                         | SubmissionStatus::Claimed
-                        | SubmissionStatus::UnderReview => {
+                        | SubmissionStatus::UnderReview
+                        | SubmissionStatus::CopyReview => {
                             return Err(ApiError::InternalServerError(
                                 "Unexpected submission status while creating notification",
                             ));

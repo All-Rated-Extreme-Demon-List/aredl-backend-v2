@@ -24,11 +24,12 @@ After the `101` upgrade, notifications are sent as JSON text messages using `Web
 
 | notification_type | data payload | When sent |
 |---|---|---|
-| `SUBMISSION_CREATED` | `Submission` or `PlatformerSubmission` | After a classic or platformer submission is created. |
-| `SUBMISSION_ACCEPTED` | `Submission` or `PlatformerSubmission` | After a reviewer changes the submission status to Accepted. |
-| `SUBMISSION_DENIED` | `Submission` or `PlatformerSubmission` | After a reviewer changes the submission status to Denied. |
-| `SUBMISSION_UNDER_CONSIDERATION` | `Submission` or `PlatformerSubmission` | After a reviewer changes the submission status to UnderConsideration. |
-| `SUBMISSION_UNDER_REVIEW` | `Submission` or `PlatformerSubmission` | After a reviewer changes the submission status to UnderReview. |
+| `SUBMISSION_CREATED` | `Submission` | After a classic or platformer submission is created. |
+| `SUBMISSION_ACCEPTED` | `Submission` | After a reviewer changes the submission status to Accepted. |
+| `SUBMISSION_DENIED` | `Submission` | After a reviewer changes the submission status to Denied. |
+| `SUBMISSION_UNDER_CONSIDERATION` | `Submission` | After a reviewer changes the submission status to UnderConsideration. |
+| `SUBMISSION_UNDER_REVIEW` | `Submission` | After a reviewer changes the submission status to UnderReview. |
+| `SUBMISSION_COPY_REVIEW` | `Submission` | After a reviewer changes the submission status to CopyReview. |
 | `SHIFT_COMPLETED` | `Shift` | When a reviewer completes a shift after reviewing a submission. |
 | `SHIFTS_CREATED` | Array of `ShiftInsert` | Emitted whenever the scheduled job to create shifts based on recurrent-shifts runs. |
 | `SHIFTS_MISSED` | Array of `Shift` | Emitted when the cleanup job expires running shifts that haven't been completed in time. |
