@@ -49,6 +49,7 @@ async fn create_custom_copy() {
     );
     assert_eq!(custom_copy_data["id_type"], "Bugfix");
     assert_eq!(body["added_by"], user_id.to_string());
+    assert_eq!(body["published"], false);
 }
 
 #[actix_web::test]
@@ -64,7 +65,8 @@ async fn update_custom_copy() {
 
     let custom_copy_data = json!({
         "status": "Banned",
-        "id_type": "Ldm"
+        "id_type": "Startpos",
+        "published": true,
     });
     let req = test::TestRequest::patch()
         .uri(format!("/classic/levels/{level_id}/custom-copies/{custom_copy}").as_str())
@@ -77,6 +79,33 @@ async fn update_custom_copy() {
     let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(body["status"], custom_copy_data["status"]);
     assert_eq!(body["id_type"], custom_copy_data["id_type"]);
+    assert_eq!(body["published"], true);
+
+    let req = test::TestRequest::patch()
+        .uri(&format!(
+            "/classic/levels/{level_id}/custom-copies/{custom_copy}"
+        ))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!({"status": "Allowed"}))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["status"], "Allowed");
+    assert_eq!(body["published"], true);
+
+    let req = test::TestRequest::patch()
+        .uri(&format!(
+            "/classic/levels/{level_id}/custom-copies/{custom_copy}"
+        ))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!({"published": false}))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["status"], "Allowed");
+    assert_eq!(body["published"], false);
 }
 
 #[actix_web::test]
@@ -122,6 +151,75 @@ async fn list_custom_copies() {
     assert!(data
         .iter()
         .all(|x| x["added_by"]["id"] == user_id.to_string()));
+    assert!(data.iter().all(|x| x["published"] == false));
+
+    let req = test::TestRequest::get()
+        .uri(&format!(
+            "/classic/levels/{level_id}/custom-copies?published_filter=true"
+        ))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let copies: Vec<serde_json::Value> = read_body_json(resp).await;
+    assert!(copies.is_empty());
+
+    let req = test::TestRequest::get()
+        .uri(&format!(
+            "/classic/levels/{level_id}/custom-copies?published_filter=false"
+        ))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let copies: Vec<serde_json::Value> = read_body_json(resp).await;
+    assert_eq!(copies.len(), 2);
+}
+
+#[actix_web::test]
+async fn custom_copy_id_is_unique_on_create_and_update() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, Some(Permission::LevelCustomCopiesModify)).await;
+    let token =
+        create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
+    let level_id = create_test_level(&db).await;
+    let other_level_id = create_test_level(&db).await;
+
+    let req = test::TestRequest::post()
+        .uri(&format!("/classic/levels/{level_id}/custom-copies"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!({"copy_id": 123_456, "id_type": "Bugfix", "status": "Allowed"}))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    for target_level in [level_id, other_level_id] {
+        let req = test::TestRequest::post()
+            .uri(&format!("/classic/levels/{target_level}/custom-copies"))
+            .insert_header(("Authorization", format!("Bearer {token}")))
+            .set_json(json!({"copy_id": 123_456, "id_type": "Ldm", "status": "Banned"}))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_error_response!(resp, StatusCode::CONFLICT, None);
+    }
+
+    let req = test::TestRequest::post()
+        .uri(&format!("/classic/levels/{other_level_id}/custom-copies"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!({"copy_id": 654_321, "id_type": "Bugfix", "status": "Allowed"}))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+    let body: serde_json::Value = read_body_json(resp).await;
+    let copy_uuid = body["id"].as_str().expect("Missing custom copy ID");
+
+    let req = test::TestRequest::patch()
+        .uri(&format!(
+            "/classic/levels/{other_level_id}/custom-copies/{copy_uuid}"
+        ))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!({"copy_id": 123_456}))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_error_response!(resp, StatusCode::CONFLICT, None);
 }
 
 #[actix_web::test]

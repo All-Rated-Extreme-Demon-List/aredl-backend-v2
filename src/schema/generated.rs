@@ -163,6 +163,7 @@ pub mod public {
             created_at -> Timestamptz,
             id_type -> CustomIdType,
             status -> CustomIdStatus,
+            published -> Bool,
         }
     }
 

@@ -37,6 +37,7 @@ use uuid::Uuid;
         ("level_id" = String, Path, description = "Level ID (Can be internal UUID, list position, or GD ID. For the latter, add a _2p suffix to target the 2p version)"),
         ("type_filter" = Option<LevelCustomCopyType>, Query, description = "The type of custom copy to filter by."),
         ("status_filter" = Option<LevelCustomCopyStatus>, Query, description = "The status of a custom copy to filter by."),
+        ("published_filter" = Option<bool>, Query, description = "Whether the custom copy should be displayed on the site or hidden."),
         ("description_filter" = Option<Option<String>>, Query, description = "Filter for the description of this custom copy. Use SQL LIKE syntax."),
         ("added_by" = Option<Uuid>, Query, description = "Filter by the moderator that added a custom copy."),
     )
@@ -71,7 +72,8 @@ async fn find_all(
     responses(
         (status = 201, body = LevelCustomCopy),
         (status = 400, description = "Invalid level ID", body = ErrorResponse),
-        (status = 404, description = "Level not found", body = ErrorResponse)
+        (status = 404, description = "Level not found", body = ErrorResponse),
+        (status = 409, description = "Copy ID already exists", body = ErrorResponse)
     ),
     security(("bearer_token" = ["LevelCustomCopiesModify"])),
 )]
@@ -115,6 +117,7 @@ struct CustomCopyPath {
     ),
     responses(
         (status = 200, body = LevelCustomCopy),
+        (status = 409, description = "Copy ID already exists", body = ErrorResponse),
         (status = 404, description = "Custom copy not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["LevelCustomCopiesModify"])),

@@ -20,9 +20,7 @@ use diesel::prelude::*;
 #[ExistingTypePath = "crate::schema::sql_types::CustomIdStatus"]
 #[DbValueStyle = "PascalCase"]
 pub enum LevelCustomCopyStatus {
-    /// This ID is suggested for use and officially displayed on the site.
-    Published,
-    /// This ID is not the one suggested for use, but is allowed in records
+    /// This ID is allowed in records
     Allowed,
     /// This ID cannot be used in records
     Banned,
@@ -38,6 +36,8 @@ pub enum LevelCustomCopyType {
     GlobedCopy,
     /// This level is a Low Detail Mode of the official level
     Ldm,
+    /// This level contains start positions
+    Startpos,
     Other,
 }
 
@@ -58,6 +58,8 @@ pub struct LevelCustomCopy {
     pub id_type: LevelCustomCopyType,
     /// The status of this custom copy on the site
     pub status: LevelCustomCopyStatus,
+    /// Whether this custom copy should be displayed on the site or hidden
+    pub published: bool,
     /// The description of what this custom copy changes, if any
     pub description: Option<String>,
     /// The time this custom copy was added
@@ -76,6 +78,8 @@ pub struct LevelCustomCopyResolved {
     pub id_type: LevelCustomCopyType,
     /// The status of this custom copy on the site
     pub status: LevelCustomCopyStatus,
+    /// Whether this custom copy should be displayed on the site or hidden
+    pub published: bool,
     /// The moderator who added this custom copy
     #[serde(skip_serializing_if = "Option::is_none")]
     pub added_by: Option<BaseUser>,
@@ -92,6 +96,7 @@ pub struct LevelCustomCopyInsert {
     pub copy_id: i32,
     pub id_type: LevelCustomCopyType,
     pub status: LevelCustomCopyStatus,
+    pub published: bool,
     pub description: Option<String>,
     pub added_by: Uuid,
 }
@@ -105,6 +110,8 @@ pub struct LevelCustomCopyUpdate {
     pub id_type: Option<LevelCustomCopyType>,
     /// The status of this custom copy on the site
     pub status: Option<LevelCustomCopyStatus>,
+    /// Whether this custom copy should be displayed on the site or hidden
+    pub published: Option<bool>,
     /// The description of what this custom copy changes, if any
     #[serde(default, with = "double_option")]
     pub description: Option<Option<String>>,
@@ -118,6 +125,10 @@ pub struct LevelCustomCopyBody {
     pub id_type: LevelCustomCopyType,
     /// The status of this custom copy on the site
     pub status: LevelCustomCopyStatus,
+    /// Whether this custom copy should be displayed on the site or hidden
+    #[serde(default)]
+    #[schema(default = false)]
+    pub published: bool,
     /// The description of what this custom copy changes, if any
     pub description: Option<String>,
 }
@@ -126,6 +137,7 @@ pub struct LevelCustomCopyBody {
 pub struct LevelCustomCopyQueryOptions {
     pub type_filter: Option<LevelCustomCopyType>,
     pub status_filter: Option<LevelCustomCopyStatus>,
+    pub published_filter: Option<bool>,
     pub description_filter: Option<Option<String>>,
     pub added_by: Option<Uuid>,
 }
@@ -199,6 +211,7 @@ impl LevelCustomCopy {
         let data = LevelCustomCopyInsert {
             level_id,
             status: body.status,
+            published: body.published,
             id_type: body.id_type,
             copy_id: body.copy_id,
             description: body.description,
@@ -271,6 +284,9 @@ impl LevelCustomCopyResolved {
         if let Some(status) = filters.status_filter.as_ref() {
             query = query.filter(level_custom_copies::status.eq(status));
         }
+        if let Some(published) = filters.published_filter {
+            query = query.filter(level_custom_copies::published.eq(published));
+        }
         if let Some(description_filter) = filters.description_filter.as_ref() {
             match description_filter {
                 Some(description) => {
@@ -292,6 +308,7 @@ impl LevelCustomCopyResolved {
                 copy_id: custom_copy.copy_id,
                 id_type: custom_copy.id_type,
                 status: custom_copy.status,
+                published: custom_copy.published,
                 added_by: Some(moderator),
                 description: custom_copy.description,
                 created_at: custom_copy.created_at,
