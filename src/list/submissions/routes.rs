@@ -99,6 +99,38 @@ async fn find_one(
 
 #[utoipa::path(
     get,
+    summary = "[Staff]Find duplicated videos",
+    description = "Find submissions using the same video link as the specified one and that were not sent by the same user",
+    tag = "List - Submissions",
+    responses(
+        (status = 200, body = Vec<SubmissionResolved>),
+        (status = 401, description = "Authentication required", body = ErrorResponse),
+        (status = 403, description = "SubmissionReview permission required", body = ErrorResponse),
+        (status = 404, description = "Submission not found in the selected list", body = ErrorResponse)
+    ),
+    params(
+        ("list" = List, Path, description = "The selected list (classic / aredl or platformer / arepl)"),
+        ("id" = Uuid, Path, description = "The ID of the submission")
+    ),
+    security(("bearer_token" = ["SubmissionReview"])),
+)]
+#[get(
+    "/{id}/video-duplicates",
+    wrap = "UserAuth::require(Permission::SubmissionReview)"
+)]
+async fn find_video_duplicates(
+    db: web::Data<Arc<DbAppState>>,
+    path: web::Path<SubmissionPath>,
+) -> Result<HttpResponse, ApiError> {
+    let records = web::block(move || {
+        Submission::find_video_duplicates(&mut db.connection()?, path.list, path.id)
+    })
+    .await??;
+    Ok(HttpResponse::Ok().json(records))
+}
+
+#[utoipa::path(
+    get,
     summary = "[Auth]Get own submissions",
     description = "List all submissions submitted by the logged in user.",
     tag = "List - Submissions",
@@ -370,6 +402,7 @@ async fn delete(
     paths(
         find_all,
         find_one,
+        find_video_duplicates,
         find_me,
         claim,
         create,
@@ -388,6 +421,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .configure(queue::init_routes)
             .configure(sync::init_routes)
             .service(find_one)
+            .service(find_video_duplicates)
             .service(patch)
             .service(delete)
             .service(create)

@@ -135,6 +135,14 @@ pub fn set_test_submission_status(
 }
 
 #[cfg(test)]
+pub fn set_test_submission_video_url(db: &Arc<DbAppState>, submission_id: Uuid, video_url: &str) {
+    diesel::update(submissions::table.filter(submissions::id.eq(submission_id)))
+        .set(submissions::video_url.eq(video_url))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to set test submission video URL");
+}
+
+#[cfg(test)]
 pub fn test_submission_priorities<const N: usize>(
     db: &Arc<DbAppState>,
     submission_ids: [Uuid; N],

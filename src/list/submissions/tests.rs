@@ -20,9 +20,10 @@ use {
                     get_test_submission_optional, latest_test_submission_history,
                     set_test_submission_raw_url, set_test_submission_raw_url_status_and_reviewer,
                     set_test_submission_reviewer, set_test_submission_reviewer_with_private_notes,
-                    set_test_submission_status, set_test_submissions_raw_url,
+                    set_test_submission_status, set_test_submission_video_url,
+                    set_test_submissions_raw_url,
                 },
-                SubmissionStatus,
+                SubmissionResolved, SubmissionStatus,
             },
         },
         providers::{
@@ -55,6 +56,47 @@ use {
     tokio::time::{sleep, timeout, Duration},
     uuid::Uuid,
 };
+
+#[actix_web::test]
+async fn video_duplicates_only_returns_same_video_from_different_submitter() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (reviewer, _) = create_test_user(&db, Some(Permission::SubmissionReview)).await;
+    let (submitter, _) = create_test_user(&db, None).await;
+    let (other_submitter, _) = create_test_user(&db, None).await;
+    let token = create_test_token(reviewer, &auth.jwt_encoding_key).unwrap();
+    let level = create_test_level(&db).await;
+    let video_url = "https://youtube.com/watch?v=shared11111";
+    let submission = create_test_submission(level, submitter, &db).await;
+    set_test_submission_video_url(&db, submission, video_url);
+
+    // same video but same submitter excluded.
+    let other_level = create_test_level(&db).await;
+    let same_video_same_submitter = create_test_submission(other_level, submitter, &db).await;
+    set_test_submission_video_url(&db, same_video_same_submitter, video_url);
+
+    // different video but different submitter excluded.
+    let different_video_submission = create_test_submission(level, other_submitter, &db).await;
+    set_test_submission_video_url(
+        &db,
+        different_video_submission,
+        "https://youtube.com/watch?v=othervideo1",
+    );
+
+    // same video but different submitter should match.
+    let same_video_other_submitter =
+        create_test_submission(other_level, other_submitter, &db).await;
+    set_test_submission_video_url(&db, same_video_other_submitter, video_url);
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/aredl/submissions/{submission}/video-duplicates"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let submissions: Vec<SubmissionResolved> = read_body_json(resp).await;
+    assert_eq!(submissions.len(), 1);
+    assert_eq!(submissions.first().unwrap().id, same_video_other_submitter);
+}
 
 #[actix_web::test]
 async fn resolved_find_me_and_filters() {

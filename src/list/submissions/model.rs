@@ -5,7 +5,7 @@ use crate::{
     auth::{Authenticated, Permission},
     error_handler::ApiError,
     list::levels::ExtendedBaseLevel,
-    schema::submissions,
+    schema::{levels, submissions, users},
     users::ExtendedBaseUser,
 };
 use chrono::{DateTime, Utc};
@@ -152,6 +152,39 @@ pub struct SubmissionPage {
 pub type SubmissionFilter = Box<dyn BoxableExpression<submissions::table, Pg, SqlType = Bool>>;
 
 impl Submission {
+    pub fn find_video_duplicates(
+        conn: &mut DbConnection,
+        list: List,
+        submission_id: Uuid,
+    ) -> Result<Vec<SubmissionResolved>, ApiError> {
+        let (video_url, submitted_by): (String, Uuid) = submissions::table
+            .filter(submissions::list_id.eq(list))
+            .filter(submissions::id.eq(submission_id))
+            .select((submissions::video_url, submissions::submitted_by))
+            .first(conn)?;
+
+        let duplicates = submissions::table
+            .filter(submissions::list_id.eq(list))
+            .filter(submissions::video_url.eq(video_url))
+            .filter(submissions::submitted_by.ne(submitted_by))
+            .inner_join(users::table)
+            .inner_join(levels::table)
+            .order((submissions::created_at.desc(), submissions::id.asc()))
+            .select((
+                Submission::as_select(),
+                ExtendedBaseUser::as_select(),
+                ExtendedBaseLevel::as_select(),
+            ))
+            .load::<(Submission, ExtendedBaseUser, ExtendedBaseLevel)>(conn)?;
+
+        Ok(duplicates
+            .into_iter()
+            .map(|(submission, user, level)| {
+                SubmissionResolved::from_data((submission, level, user, None))
+            })
+            .collect())
+    }
+
     // filters for submissions that can be claimed by the current reviewer
     fn claimable_filter(
         reviewer_id: Uuid,
