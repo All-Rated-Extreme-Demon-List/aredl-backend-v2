@@ -86,9 +86,8 @@ pub struct SubmissionHistoryOptions {
     is_record_id: Option<bool>,
 }
 
-impl SubmissionHistoryResolved {
-    pub fn from_data(history_row: (SubmissionHistory, Option<BaseUser>)) -> Self {
-        let (history, user) = history_row;
+impl From<(SubmissionHistory, Option<BaseUser>)> for SubmissionHistoryResolved {
+    fn from((history, user): (SubmissionHistory, Option<BaseUser>)) -> Self {
         Self {
             id: history.id,
             submission_id: history.submission_id,
@@ -107,14 +106,16 @@ impl SubmissionHistoryResolved {
             locked: history.locked,
         }
     }
+}
 
+impl SubmissionHistoryResolved {
     pub fn by_submission_id(
         conn: &mut DbConnection,
         list: List,
         id: Uuid,
         authenticated: &Authenticated,
     ) -> Result<Vec<SubmissionHistoryResolved>, ApiError> {
-        let history_row = submission_history::table
+        let mut history_entries: Vec<SubmissionHistoryResolved> = submission_history::table
             .filter(submission_history::list_id.eq(list))
             .left_join(users::table)
             .into_boxed::<Pg>()
@@ -124,16 +125,14 @@ impl SubmissionHistoryResolved {
             ))
             .order(submission_history::timestamp.desc())
             .filter(submission_history::submission_id.eq(id))
-            .load::<(SubmissionHistory, Option<BaseUser>)>(conn)?;
-
-        let mut resolved_history = history_row
+            .load::<(SubmissionHistory, Option<BaseUser>)>(conn)?
             .into_iter()
-            .map(SubmissionHistoryResolved::from_data)
-            .collect::<Vec<_>>();
+            .map(SubmissionHistoryResolved::from)
+            .collect();
 
         let visibility = ReviewerVisibility::new(conn, authenticated)?;
 
-        for history in &mut resolved_history {
+        for history in &mut history_entries {
             visibility
                 .should_hide_reviewer(
                     history
@@ -145,6 +144,6 @@ impl SubmissionHistoryResolved {
                 .apply_base(&mut history.reviewer, &mut history.private_reviewer_notes);
         }
 
-        Ok(resolved_history)
+        Ok(history_entries)
     }
 }

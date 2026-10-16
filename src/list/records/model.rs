@@ -194,13 +194,13 @@ pub struct ResolvedRecordPage {
     data: Vec<ResolvedRecord>,
 }
 
-impl SubmissionPostMod {
-    pub fn from_record_insert(record: RecordInsert) -> Self {
+impl From<RecordInsert> for SubmissionPostMod {
+    fn from(record: RecordInsert) -> Self {
         Self {
             submitted_by: Some(record.submitted_by),
             level_id: record.level_id,
             mobile: record.mobile,
-            video_url: record.video_url,
+            video_url: record.video_url.clone(),
             status: Some(SubmissionStatus::Accepted),
             reviewer_notes: Some("Added by a moderator".to_owned()),
             completion_time: record.completion_time,
@@ -209,22 +209,24 @@ impl SubmissionPostMod {
     }
 }
 
-impl SubmissionPatchMod {
-    pub fn from_record_insert(record: RecordInsert) -> Self {
+impl From<RecordInsert> for SubmissionPatchMod {
+    fn from(record: RecordInsert) -> Self {
         Self {
             mobile: Some(record.mobile),
-            video_url: Some(record.video_url),
+            video_url: Some(record.video_url.clone()),
             status: Some(SubmissionStatus::Accepted),
             reviewer_notes: Some(Some("Added by a moderator".to_owned())),
             completion_time: Some(record.completion_time),
             ..Default::default()
         }
     }
+}
 
-    pub fn from_record_update(record: RecordPatch) -> Self {
+impl From<RecordPatch> for SubmissionPatchMod {
+    fn from(record: RecordPatch) -> Self {
         Self {
             mobile: record.mobile,
-            video_url: record.video_url,
+            video_url: record.video_url.clone(),
             reviewer_notes: Some(Some("Updated by a moderator".to_owned())),
             status: Some(SubmissionStatus::Accepted),
             completion_time: record.completion_time,
@@ -233,16 +235,18 @@ impl SubmissionPatchMod {
     }
 }
 
-impl RecordUpdate {
-    pub fn from_record_insert(record: &RecordInsert) -> Self {
+impl From<&RecordInsert> for RecordUpdate {
+    fn from(record: &RecordInsert) -> Self {
         Self {
             hide_video: record.hide_video,
             is_verification: record.is_verification,
             achieved_at: record.achieved_at,
         }
     }
+}
 
-    pub fn from_record_patch(record: &RecordPatch) -> Self {
+impl From<&RecordPatch> for RecordUpdate {
+    fn from(record: &RecordPatch) -> Self {
         Self {
             hide_video: record.hide_video,
             is_verification: record.is_verification,
@@ -268,7 +272,7 @@ impl Submission {
 
         if let Some(submission_id) = existing_submission_id {
             let submission_update = (
-                SubmissionPatchMod::from_record_insert(record),
+                SubmissionPatchMod::from(record),
                 submissions::reviewer_id.eq(Some(authenticated.user_id)),
             );
             Ok(
@@ -279,7 +283,7 @@ impl Submission {
             )
         } else {
             let submission_insert = (
-                SubmissionPostMod::from_record_insert(record),
+                SubmissionPostMod::from(record),
                 submissions::reviewer_id.eq(Some(authenticated.user_id)),
             );
             Ok(diesel::insert_into(submissions::table)
@@ -376,7 +380,7 @@ impl Record {
                 Submission::upsert_from_record_insert(conn, list, record.clone(), authenticated)?;
 
             // Then update the record-specific fields
-            let record_patch = RecordUpdate::from_record_insert(record);
+            let record_patch = RecordUpdate::from(record);
 
             let result = diesel::update(records::table)
                 .filter(records::list_id.eq(list))
@@ -408,7 +412,7 @@ impl Record {
         conn.transaction(|conn| -> Result<Self, ApiError> {
             // Update the corresponding submission first and let triggers update the record
             let submission_patch = (
-                SubmissionPatchMod::from_record_update(record.clone()),
+                SubmissionPatchMod::from(record.clone()),
                 submissions::reviewer_id.eq(Some(authenticated.user_id)),
             );
 
@@ -427,7 +431,7 @@ impl Record {
                 .execute(conn)?;
 
             // Then update the record-specific fields
-            let record_update = RecordUpdate::from_record_patch(record);
+            let record_update = RecordUpdate::from(record);
 
             let result = if record_update == RecordUpdate::default() {
                 records::table
@@ -741,9 +745,28 @@ impl Record {
     }
 }
 
+impl From<(Record, ExtendedBaseUser, ExtendedBaseLevel)> for ResolvedRecord {
+    fn from((record, user, level): (Record, ExtendedBaseUser, ExtendedBaseLevel)) -> Self {
+        Self {
+            id: record.id,
+            submission_id: record.submission_id,
+            submitted_by: user,
+            level,
+            mobile: record.mobile,
+            video_url: record.video_url,
+            completion_time: record.completion_time,
+            is_verification: record.is_verification,
+            created_at: record.created_at,
+            updated_at: record.updated_at,
+            hide_video: record.hide_video,
+            achieved_at: record.achieved_at,
+        }
+    }
+}
+
 impl ResolvedRecord {
     pub fn find(conn: &mut DbConnection, list: List, record_id: Uuid) -> Result<Self, ApiError> {
-        let (record, user, level): (Record, ExtendedBaseUser, ExtendedBaseLevel) = records::table
+        let record = records::table
             .filter(records::list_id.eq(list))
             .filter(records::id.eq(record_id))
             .inner_join(users::table)
@@ -754,9 +777,10 @@ impl ResolvedRecord {
                 ExtendedBaseUser::as_select(),
                 ExtendedBaseLevel::as_select(),
             ))
-            .first(conn)?;
+            .first::<(Record, ExtendedBaseUser, ExtendedBaseLevel)>(conn)?
+            .into();
 
-        Ok(Self::from_data(record, user, level))
+        Ok(record)
     }
 
     pub fn find_all<const D: i64>(
@@ -838,35 +862,16 @@ impl ResolvedRecord {
             records_query = records_query.order_by(records::created_at.desc());
         }
 
-        let records = records_query.load::<(Record, ExtendedBaseUser, ExtendedBaseLevel)>(conn)?;
-        let records_resolved: Vec<Self> = records
+        let records = records_query
+            .load::<(Record, ExtendedBaseUser, ExtendedBaseLevel)>(conn)?
             .into_iter()
-            .map(|(record, user, level)| Self::from_data(record, user, level))
+            .map(Self::from)
             .collect();
 
         Ok(Paginated::from_data(
             page_query,
             total_count,
-            ResolvedRecordPage {
-                data: records_resolved,
-            },
+            ResolvedRecordPage { data: records },
         ))
-    }
-
-    pub fn from_data(record: Record, user: ExtendedBaseUser, level: ExtendedBaseLevel) -> Self {
-        Self {
-            id: record.id,
-            submission_id: record.submission_id,
-            submitted_by: user,
-            level,
-            mobile: record.mobile,
-            video_url: record.video_url,
-            completion_time: record.completion_time,
-            is_verification: record.is_verification,
-            created_at: record.created_at,
-            updated_at: record.updated_at,
-            hide_video: record.hide_video,
-            achieved_at: record.achieved_at,
-        }
     }
 }

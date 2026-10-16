@@ -130,11 +130,9 @@ pub struct ClanProfileResolved {
     pub published: Vec<ResolvedClanProfileLevel>,
 }
 
-impl ResolvedRecord {
-    pub fn from_clan_data(
-        record: ClanProfileRecord,
-        level: ExtendedBaseLevel,
-        user: ExtendedBaseUser,
+impl From<(ClanProfileRecord, ExtendedBaseUser, ExtendedBaseLevel)> for ResolvedRecord {
+    fn from(
+        (record, user, level): (ClanProfileRecord, ExtendedBaseUser, ExtendedBaseLevel),
     ) -> Self {
         Self {
             id: record.id,
@@ -153,15 +151,13 @@ impl ResolvedRecord {
     }
 }
 
-impl ResolvedClanProfileRecord {
-    pub fn from_clan_data(
-        record: ClanProfileRecord,
-        level: ExtendedBaseLevel,
-        user: ExtendedBaseUser,
+impl From<(ClanProfileRecord, ExtendedBaseUser, ExtendedBaseLevel)> for ResolvedClanProfileRecord {
+    fn from(
+        (record, user, level): (ClanProfileRecord, ExtendedBaseUser, ExtendedBaseLevel),
     ) -> Self {
         let completion_count = record.completion_count;
         Self {
-            record: ResolvedRecord::from_clan_data(record, level, user),
+            record: ResolvedRecord::from((record, user, level)),
             completion_count,
         }
     }
@@ -204,9 +200,7 @@ impl ClanProfileResolved {
             .order_by(levels::position.asc())
             .load::<(ClanProfileRecord, ExtendedBaseUser, ExtendedBaseLevel)>(conn)?
             .into_iter()
-            .map(|(record, user, level)| {
-                ResolvedClanProfileRecord::from_clan_data(record, level, user)
-            })
+            .map(ResolvedClanProfileRecord::from)
             .collect();
 
         let members_points = clan_member_points::table
@@ -294,7 +288,7 @@ impl ClanProfileResolved {
         clan_id: Uuid,
         level_id: Uuid,
     ) -> Result<Vec<LevelResolvedRecordExtended>, ApiError> {
-        records::table
+        Ok(records::table
             .filter(records::list_id.eq(list))
             .filter(records::level_id.eq(level_id))
             .inner_join(users::table.inner_join(clan_members::table))
@@ -304,12 +298,9 @@ impl ClanProfileResolved {
             .filter(levels::status.ne(LevelStatus::Removed))
             .order(records::achieved_at.asc())
             .select((Record::as_select(), ExtendedBaseUser::as_select()))
-            .load::<(Record, ExtendedBaseUser)>(conn)
-            .map(|rows| {
-                rows.into_iter()
-                    .map(|(record, user)| LevelResolvedRecordExtended::from_data(record, user))
-                    .collect()
-            })
-            .map_err(ApiError::from)
+            .load::<(Record, ExtendedBaseUser)>(conn)?
+            .into_iter()
+            .map(LevelResolvedRecordExtended::from)
+            .collect())
     }
 }

@@ -104,8 +104,9 @@ pub fn parse_timezone(timezone: &str) -> Result<Tz, ApiError> {
         )
     })
 }
-impl ResolvedRecurringShift {
-    pub fn from_data(recurring_shift_row: (RecurringShift, BaseUser)) -> Self {
+
+impl From<(RecurringShift, BaseUser)> for ResolvedRecurringShift {
+    fn from(recurring_shift_row: (RecurringShift, BaseUser)) -> Self {
         let (recurring_shift, user) = recurring_shift_row;
         Self {
             id: recurring_shift.id,
@@ -119,24 +120,24 @@ impl ResolvedRecurringShift {
             updated_at: recurring_shift.updated_at,
         }
     }
+}
 
+impl ResolvedRecurringShift {
     pub fn find_all_for_user(
         conn: &mut DbConnection,
         authenticated: &Authenticated,
     ) -> Result<Vec<Self>, ApiError> {
-        let result_rows = recurrent_shifts::table
+        let mut result: Vec<Self> = recurrent_shifts::table
             .inner_join(users::table)
             .order((
                 recurrent_shifts::weekday.asc(),
                 recurrent_shifts::start_hour.asc(),
             ))
             .select((RecurringShift::as_select(), BaseUser::as_select()))
-            .load::<(RecurringShift, BaseUser)>(conn)?;
-
-        let mut result = result_rows
+            .load::<(RecurringShift, BaseUser)>(conn)?
             .into_iter()
-            .map(ResolvedRecurringShift::from_data)
-            .collect::<Vec<_>>();
+            .map(Self::from)
+            .collect();
 
         let visibility = ReviewerVisibility::new(conn, authenticated)?;
 

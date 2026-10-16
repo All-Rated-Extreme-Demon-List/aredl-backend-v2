@@ -36,7 +36,7 @@ async fn find(
         // map history
         let response = entries
             .into_iter()
-            .map(|data| HistoryLevelResponse::from_data(&data, level_id))
+            .map(|data| HistoryLevelResponse::from((data, level_id)))
             .collect::<Vec<_>>();
 
         Ok(response)

@@ -90,11 +90,9 @@ fn resolve_query<'a>(q: submissions::BoxedQuery<'a, Pg>) -> _ {
         .select(selection)
 }
 
-impl SubmissionResolved {
-    pub fn from_data(resolved: ResolvedSubmissionRow) -> SubmissionResolved {
-        let (submission, level, submitter, reviewer) = resolved;
-
-        SubmissionResolved {
+impl From<ResolvedSubmissionRow> for SubmissionResolved {
+    fn from((submission, level, submitter, reviewer): ResolvedSubmissionRow) -> Self {
+        Self {
             id: submission.id,
             level,
             submitted_by: submitter,
@@ -116,7 +114,9 @@ impl SubmissionResolved {
             updated_at: submission.updated_at,
         }
     }
+}
 
+impl SubmissionResolved {
     pub fn find_one(
         conn: &mut DbConnection,
         list: List,
@@ -134,8 +134,9 @@ impl SubmissionResolved {
             query = query.filter(submissions::submitted_by.eq(authenticated.user_id));
         }
 
-        let mut resolved =
-            Self::from_data(resolve_query(query).first::<ResolvedSubmissionRow>(conn)?);
+        let mut resolved: Self = resolve_query(query)
+            .first::<ResolvedSubmissionRow>(conn)?
+            .into();
 
         visibility
             .should_hide_reviewer(
@@ -263,17 +264,15 @@ impl ResolvedSubmissionPage {
             submissions_query = submissions_query.order_by(submissions::created_at.desc());
         }
 
-        let submissions: Vec<ResolvedSubmissionRow> = resolve_query(
+        let mut submissions: Vec<SubmissionResolved> = resolve_query(
             submissions_query
                 .limit(page_query.per_page())
                 .offset(page_query.offset()),
         )
-        .load::<ResolvedSubmissionRow>(conn)?;
-
-        let mut submissions = submissions
-            .into_iter()
-            .map(SubmissionResolved::from_data)
-            .collect::<Vec<_>>();
+        .load::<ResolvedSubmissionRow>(conn)?
+        .into_iter()
+        .map(SubmissionResolved::from)
+        .collect();
 
         let total_count: i64 = build_filtered().count().get_result(conn)?;
 

@@ -165,26 +165,26 @@ impl Submission {
             .select((submissions::video_url, submissions::submitted_by))
             .first(conn)?;
 
-        let duplicates = submissions::table
+        let duplicates: Vec<SubmissionResolved> = submissions::table
             .filter(submissions::list_id.eq(list))
             .filter(submissions::video_url.eq(video_url))
             .filter(submissions::submitted_by.ne(submitted_by))
-            .inner_join(users::table)
             .inner_join(levels::table)
+            .inner_join(users::table)
             .order((submissions::created_at.desc(), submissions::id.asc()))
             .select((
                 Submission::as_select(),
-                ExtendedBaseUser::as_select(),
                 ExtendedBaseLevel::as_select(),
+                ExtendedBaseUser::as_select(),
             ))
-            .load::<(Submission, ExtendedBaseUser, ExtendedBaseLevel)>(conn)?;
-
-        Ok(duplicates
+            .load::<(Submission, ExtendedBaseLevel, ExtendedBaseUser)>(conn)?
             .into_iter()
-            .map(|(submission, user, level)| {
-                SubmissionResolved::from_data((submission, level, user, None))
+            .map(|(submission, level, user)| {
+                SubmissionResolved::from((submission, level, user, None))
             })
-            .collect())
+            .collect();
+
+        Ok(duplicates)
     }
 
     // filters for submissions that can be claimed by the current reviewer

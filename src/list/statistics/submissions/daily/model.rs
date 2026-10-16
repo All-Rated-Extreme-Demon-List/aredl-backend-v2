@@ -98,15 +98,8 @@ pub struct DailyStatsPage {
     pub data: Vec<ResolvedDailyStats>,
 }
 
-impl ResolvedDailyStats {
-    pub fn rebuild(conn: &mut DbConnection, list: List) -> Result<(), ApiError> {
-        diesel::sql_query("SELECT public.rebuild_submission_daily_stats($1)")
-            .bind::<diesel::sql_types::SmallInt, _>(list)
-            .execute(conn)?;
-        Ok(())
-    }
-
-    pub fn from_total_stats(stats: &TotalDailyStats) -> Self {
+impl From<TotalDailyStats> for ResolvedDailyStats {
+    fn from(stats: TotalDailyStats) -> Self {
         Self {
             date: stats.day,
             reviewer: None,
@@ -118,8 +111,10 @@ impl ResolvedDailyStats {
             reviewed: stats.reviewed,
         }
     }
+}
 
-    pub fn from_reviewer_stats(stats: &ReviewerDailyStats, user: BaseUser) -> Self {
+impl From<(ReviewerDailyStats, BaseUser)> for ResolvedDailyStats {
+    fn from((stats, user): (ReviewerDailyStats, BaseUser)) -> Self {
         Self {
             date: stats.day,
             reviewer: Some(user),
@@ -131,8 +126,10 @@ impl ResolvedDailyStats {
             reviewed: stats.reviewed,
         }
     }
+}
 
-    pub fn from_level_stats(stats: &LevelDailyStats, level: ExtendedBaseLevel) -> Self {
+impl From<(LevelDailyStats, ExtendedBaseLevel)> for ResolvedDailyStats {
+    fn from((stats, level): (LevelDailyStats, ExtendedBaseLevel)) -> Self {
         Self {
             date: stats.day,
             reviewer: None,
@@ -143,6 +140,15 @@ impl ResolvedDailyStats {
             under_consideration: stats.under_consideration,
             reviewed: stats.reviewed,
         }
+    }
+}
+
+impl ResolvedDailyStats {
+    pub fn rebuild(conn: &mut DbConnection, list: List) -> Result<(), ApiError> {
+        diesel::sql_query("SELECT public.rebuild_submission_daily_stats($1)")
+            .bind::<diesel::sql_types::SmallInt, _>(list)
+            .execute(conn)?;
+        Ok(())
     }
 }
 
@@ -180,25 +186,17 @@ impl DailyStatsPage {
 
                 let count: i64 = build_filtered_query().count().get_result(conn)?;
 
-                let data: Vec<(ReviewerDailyStats, BaseUser)> = build_filtered_query()
+                let data: Vec<ResolvedDailyStats> = build_filtered_query()
                     .select((ReviewerDailyStats::as_select(), BaseUser::as_select()))
                     .order(submission_daily_reviewer_stats::day.desc())
                     .limit(page_query.per_page())
                     .offset(page_query.offset())
-                    .load(conn)?;
+                    .load::<(ReviewerDailyStats, BaseUser)>(conn)?
+                    .into_iter()
+                    .map(ResolvedDailyStats::from)
+                    .collect();
 
-                Ok(Paginated::from_data(
-                    page_query,
-                    count,
-                    Self {
-                        data: data
-                            .into_iter()
-                            .map(|(stats, user)| {
-                                ResolvedDailyStats::from_reviewer_stats(&stats, user)
-                            })
-                            .collect(),
-                    },
-                ))
+                Ok(Paginated::from_data(page_query, count, Self { data }))
             }
             (None, Some(level_filter)) => {
                 let build_filtered_query = || {
@@ -211,25 +209,17 @@ impl DailyStatsPage {
 
                 let count: i64 = build_filtered_query().count().get_result(conn)?;
 
-                let data: Vec<(LevelDailyStats, ExtendedBaseLevel)> = build_filtered_query()
+                let data: Vec<ResolvedDailyStats> = build_filtered_query()
                     .select((LevelDailyStats::as_select(), ExtendedBaseLevel::as_select()))
                     .order(submission_daily_level_stats::day.desc())
                     .limit(page_query.per_page())
                     .offset(page_query.offset())
-                    .load(conn)?;
+                    .load::<(LevelDailyStats, ExtendedBaseLevel)>(conn)?
+                    .into_iter()
+                    .map(ResolvedDailyStats::from)
+                    .collect();
 
-                Ok(Paginated::from_data(
-                    page_query,
-                    count,
-                    Self {
-                        data: data
-                            .into_iter()
-                            .map(|(stats, level)| {
-                                ResolvedDailyStats::from_level_stats(&stats, level)
-                            })
-                            .collect(),
-                    },
-                ))
+                Ok(Paginated::from_data(page_query, count, Self { data }))
             }
             (None, None) => {
                 let count: i64 = submission_daily_total_stats::table
@@ -237,24 +227,18 @@ impl DailyStatsPage {
                     .count()
                     .get_result(conn)?;
 
-                let data: Vec<TotalDailyStats> = submission_daily_total_stats::table
+                let data: Vec<ResolvedDailyStats> = submission_daily_total_stats::table
                     .filter(submission_daily_total_stats::list_id.eq(list))
                     .select(TotalDailyStats::as_select())
                     .order(submission_daily_total_stats::day.desc())
                     .limit(page_query.per_page())
                     .offset(page_query.offset())
-                    .load(conn)?;
+                    .load(conn)?
+                    .into_iter()
+                    .map(ResolvedDailyStats::from)
+                    .collect();
 
-                Ok(Paginated::from_data(
-                    page_query,
-                    count,
-                    Self {
-                        data: data
-                            .into_iter()
-                            .map(|stats| ResolvedDailyStats::from_total_stats(&stats))
-                            .collect(),
-                    },
-                ))
+                Ok(Paginated::from_data(page_query, count, Self { data }))
             }
         }
     }

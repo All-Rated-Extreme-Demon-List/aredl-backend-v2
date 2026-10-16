@@ -242,8 +242,8 @@ impl Auditable for Shift {
     }
 }
 
-impl ResolvedShift {
-    pub fn from_data(shift_row: (Shift, ExtendedBaseUser)) -> Self {
+impl From<(Shift, ExtendedBaseUser)> for ResolvedShift {
+    fn from(shift_row: (Shift, ExtendedBaseUser)) -> Self {
         let (shift, user) = shift_row;
         Self {
             id: shift.id,
@@ -270,27 +270,19 @@ impl ShiftPage {
             .count()
             .get_result::<i64>(conn)?;
 
-        let shift_rows = shifts::table
+        let data = shifts::table
             .inner_join(users::table)
             .filter(shifts::user_id.eq(user_id))
             .order(shifts::start_at.desc())
             .limit(page_query.per_page())
             .offset(page_query.offset())
             .select((Shift::as_select(), ExtendedBaseUser::as_select()))
-            .load::<(Shift, ExtendedBaseUser)>(conn)?;
-
-        let resolved_shifts = shift_rows
+            .load::<(Shift, ExtendedBaseUser)>(conn)?
             .into_iter()
-            .map(ResolvedShift::from_data)
-            .collect::<Vec<_>>();
+            .map(ResolvedShift::from)
+            .collect();
 
-        Ok(Paginated::from_data(
-            page_query,
-            total,
-            ShiftPage {
-                data: resolved_shifts,
-            },
-        ))
+        Ok(Paginated::from_data(page_query, total, ShiftPage { data }))
     }
 
     pub fn find_all<const D: i64>(
@@ -311,25 +303,21 @@ impl ShiftPage {
 
         let total_count: i64 = build_filtered().count().get_result(conn)?;
 
-        let shift_rows: Vec<(Shift, ExtendedBaseUser)> = build_filtered()
+        let data: Vec<ResolvedShift> = build_filtered()
             .inner_join(users::table)
             .order(shifts::start_at.desc())
             .limit(page_query.per_page())
             .offset(page_query.offset())
             .select((Shift::as_select(), ExtendedBaseUser::as_select()))
-            .load(conn)?;
-
-        let resolved_shifts = shift_rows
+            .load::<(Shift, ExtendedBaseUser)>(conn)?
             .into_iter()
-            .map(ResolvedShift::from_data)
-            .collect::<Vec<_>>();
+            .map(ResolvedShift::from)
+            .collect();
 
         Ok(Paginated::from_data(
             page_query,
             total_count,
-            ShiftPage {
-                data: resolved_shifts,
-            },
+            ShiftPage { data },
         ))
     }
 }

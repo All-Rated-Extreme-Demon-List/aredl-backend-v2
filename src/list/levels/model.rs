@@ -449,10 +449,10 @@ impl ResolvedLevel {
         let verifications = verifications_rows
             .into_iter()
             .map(|(record, user)| {
-                LevelResolvedRecord::from_data(
+                LevelResolvedRecord::from((
                     record,
                     BaseUser::from_base_user_with_account_status(user),
-                )
+                ))
             })
             .collect::<Vec<_>>();
 

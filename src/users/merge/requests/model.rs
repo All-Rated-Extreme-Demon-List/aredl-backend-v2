@@ -71,10 +71,26 @@ pub struct MergeRequestPage {
     pub data: Vec<ResolvedMergeRequest>,
 }
 
+impl From<(MergeRequest, BaseUser, BaseUser)> for ResolvedMergeRequest {
+    fn from(
+        (merge_request, primary_user, secondary_user): (MergeRequest, BaseUser, BaseUser),
+    ) -> Self {
+        Self {
+            id: merge_request.id,
+            primary_user,
+            secondary_user,
+            is_rejected: merge_request.is_rejected,
+            is_claimed: merge_request.is_claimed,
+            created_at: merge_request.created_at,
+            updated_at: merge_request.updated_at,
+        }
+    }
+}
+
 impl ResolvedMergeRequest {
     pub fn find_one(conn: &mut DbConnection, id: Uuid) -> Result<Self, ApiError> {
         let users2 = alias!(users as users2);
-        let data_row = merge_requests::table
+        let request: Self = merge_requests::table
             .inner_join(users::table)
             .inner_join(users2.on(merge_requests::secondary_user.eq(users2.field(users::id))))
             .filter(merge_requests::id.eq(id))
@@ -83,21 +99,10 @@ impl ResolvedMergeRequest {
                 BaseUser::as_select(),
                 users2.fields(<BaseUser as Selectable<Pg>>::construct_selection()),
             ))
-            .first::<(MergeRequest, BaseUser, BaseUser)>(conn)?;
+            .first::<(MergeRequest, BaseUser, BaseUser)>(conn)?
+            .into();
 
-        Ok(ResolvedMergeRequest::from_data(data_row))
-    }
-
-    pub fn from_data(row: (MergeRequest, BaseUser, BaseUser)) -> Self {
-        Self {
-            id: row.0.id,
-            primary_user: row.1,
-            secondary_user: row.2,
-            is_rejected: row.0.is_rejected,
-            is_claimed: row.0.is_claimed,
-            created_at: row.0.created_at,
-            updated_at: row.0.updated_at,
-        }
+        Ok(request)
     }
 }
 
@@ -140,7 +145,7 @@ impl MergeRequestPage {
 
         let total_count: i64 = build_filtered().count().get_result(conn)?;
 
-        let data_rows: Vec<(MergeRequest, BaseUser, BaseUser)> = build_filtered()
+        let data: Vec<ResolvedMergeRequest> = build_filtered()
             .order(merge_requests::updated_at.desc())
             .limit(page_query.per_page())
             .offset(page_query.offset())
@@ -149,11 +154,9 @@ impl MergeRequestPage {
                 BaseUser::as_select(),
                 users2.fields(<BaseUser as Selectable<Pg>>::construct_selection()),
             ))
-            .load(conn)?;
-
-        let data = data_rows
+            .load::<(MergeRequest, BaseUser, BaseUser)>(conn)?
             .into_iter()
-            .map(ResolvedMergeRequest::from_data)
+            .map(ResolvedMergeRequest::from)
             .collect();
 
         Ok(Paginated::from_data(

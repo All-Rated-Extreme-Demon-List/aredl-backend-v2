@@ -23,8 +23,8 @@ pub enum HistoryEvent {
     OtherMovedDown,
 }
 
-impl HistoryEvent {
-    pub fn from_history(data: &HistoryLevelFullResolved, level_id: Uuid) -> Self {
+impl From<(&HistoryLevelFullResolved, Uuid)> for HistoryEvent {
+    fn from((data, level_id): (&HistoryLevelFullResolved, Uuid)) -> Self {
         match (
             data.status.clone(),
             level_id == data.cause.id,
@@ -60,15 +60,28 @@ pub struct HistoryLevelResponse {
     pub cause: BaseLevel,
 }
 
-impl HistoryLevelResponse {
-    pub fn from_data(data: &HistoryLevelFullResolved, level_id: Uuid) -> Self {
+impl From<(HistoryLevelFullResolved, Uuid)> for HistoryLevelResponse {
+    fn from((data, level_id): (HistoryLevelFullResolved, Uuid)) -> Self {
         Self {
             position: data.position,
             position_diff: data.pos_diff,
-            event: HistoryEvent::from_history(data, level_id),
+            event: HistoryEvent::from((&data, level_id)),
             status: data.status.clone(),
             action_at: data.action_at,
-            cause: data.cause.clone(),
+            cause: data.cause,
+        }
+    }
+}
+
+impl From<(HistoryLevelFull, BaseLevel)> for HistoryLevelFullResolved {
+    fn from((history, cause): (HistoryLevelFull, BaseLevel)) -> Self {
+        Self {
+            position: history.position,
+            pos_diff: history.pos_diff,
+            moved: history.moved,
+            status: history.status,
+            action_at: history.action_at,
+            cause,
         }
     }
 }
@@ -92,7 +105,7 @@ impl HistoryLevelFull {
         Ok(())
     }
 }
-#[derive(Serialize, Deserialize, Queryable)]
+#[derive(Serialize, Deserialize, Queryable, Clone)]
 pub struct HistoryLevelFullResolved {
     pub position: Option<i32>,
     pub pos_diff: Option<i32>,
@@ -110,19 +123,10 @@ impl HistoryLevelFullResolved {
             .inner_join(levels::table.on(levels::id.eq(position_history_full_view::cause)))
             .order_by(position_history_full_view::ord.desc())
             .select((HistoryLevelFull::as_select(), BaseLevel::as_select()))
-            .load::<(HistoryLevelFull, BaseLevel)>(conn)?;
-
-        let entries = entries
+            .load::<(HistoryLevelFull, BaseLevel)>(conn)?
             .into_iter()
-            .map(|(history, cause)| HistoryLevelFullResolved {
-                position: history.position,
-                pos_diff: history.pos_diff,
-                moved: history.moved,
-                status: history.status,
-                action_at: history.action_at,
-                cause,
-            })
-            .collect::<Vec<_>>();
+            .map(HistoryLevelFullResolved::from)
+            .collect();
         Ok(entries)
     }
 }

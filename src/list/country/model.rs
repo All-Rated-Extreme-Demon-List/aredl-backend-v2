@@ -94,11 +94,9 @@ pub struct CountryCreatedLevelEntry {
     pub order_pos: Option<i32>,
 }
 
-impl ResolvedRecord {
-    pub fn from_country_data(
-        record: CountryProfileRecord,
-        level: ExtendedBaseLevel,
-        user: ExtendedBaseUser,
+impl From<(CountryProfileRecord, ExtendedBaseUser, ExtendedBaseLevel)> for ResolvedRecord {
+    fn from(
+        (record, user, level): (CountryProfileRecord, ExtendedBaseUser, ExtendedBaseLevel),
     ) -> Self {
         Self {
             id: record.id,
@@ -117,15 +115,15 @@ impl ResolvedRecord {
     }
 }
 
-impl ResolvedCountryProfileRecord {
-    pub fn from_country_data(
-        record: CountryProfileRecord,
-        level: ExtendedBaseLevel,
-        user: ExtendedBaseUser,
+impl From<(CountryProfileRecord, ExtendedBaseUser, ExtendedBaseLevel)>
+    for ResolvedCountryProfileRecord
+{
+    fn from(
+        (record, user, level): (CountryProfileRecord, ExtendedBaseUser, ExtendedBaseLevel),
     ) -> Self {
         let completion_count = record.completion_count;
         Self {
-            record: ResolvedRecord::from_country_data(record, level, user),
+            record: ResolvedRecord::from((record, user, level)),
             completion_count,
         }
     }
@@ -167,9 +165,7 @@ impl CountryProfileResolved {
             .order_by(levels::position.asc())
             .load::<(CountryProfileRecord, ExtendedBaseUser, ExtendedBaseLevel)>(conn)?
             .into_iter()
-            .map(|(record, user, level)| {
-                ResolvedCountryProfileRecord::from_country_data(record, level, user)
-            })
+            .map(ResolvedCountryProfileRecord::from)
             .collect();
 
         let created_rows: Vec<(CountryCreatedLevelEntry, ExtendedBaseLevel, BaseUser)> =
@@ -238,7 +234,7 @@ impl CountryProfileResolved {
         country: i32,
         level_id: Uuid,
     ) -> Result<Vec<LevelResolvedRecordExtended>, ApiError> {
-        records::table
+        let records = records::table
             .filter(records::list_id.eq(list))
             .filter(records::level_id.eq(level_id))
             .inner_join(users::table)
@@ -248,12 +244,11 @@ impl CountryProfileResolved {
             .filter(levels::status.ne(LevelStatus::Removed))
             .order(records::achieved_at.asc())
             .select((Record::as_select(), ExtendedBaseUser::as_select()))
-            .load::<(Record, ExtendedBaseUser)>(conn)
-            .map(|rows| {
-                rows.into_iter()
-                    .map(|(record, user)| LevelResolvedRecordExtended::from_data(record, user))
-                    .collect()
-            })
-            .map_err(ApiError::from)
+            .load::<(Record, ExtendedBaseUser)>(conn)?
+            .into_iter()
+            .map(LevelResolvedRecordExtended::from)
+            .collect();
+
+        Ok(records)
     }
 }

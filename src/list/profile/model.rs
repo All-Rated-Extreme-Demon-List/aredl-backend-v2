@@ -13,7 +13,7 @@ use crate::schema::{
     roles, user_leaderboard, user_roles,
 };
 use crate::users::badges::UserBadge;
-use crate::users::User;
+use crate::users::{ExtendedBaseUser, User};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -95,8 +95,8 @@ pub struct ProfileResolved {
     pub badges: Vec<UserBadge>,
 }
 
-impl ProfileRecordResolved {
-    pub fn from_data(record: Record, level: ExtendedBaseLevel) -> Self {
+impl From<(Record, ExtendedBaseLevel)> for ProfileRecordResolved {
+    fn from((record, level): (Record, ExtendedBaseLevel)) -> Self {
         Self {
             id: record.id,
             level,
@@ -164,8 +164,8 @@ impl ProfileResolved {
             .select((Record::as_select(), ExtendedBaseLevel::as_select()))
             .load::<(Record, ExtendedBaseLevel)>(conn)?
             .into_iter()
-            .map(|(record, level)| ProfileRecordResolved::from_data(record, level))
-            .collect::<Vec<_>>();
+            .map(ProfileRecordResolved::from)
+            .collect();
 
         let mut created = levels::table
             .filter(levels::list_id.eq(list))

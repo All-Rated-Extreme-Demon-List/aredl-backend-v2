@@ -72,8 +72,24 @@ pub struct LevelResolvedRecordPage {
     pub data: Vec<LevelResolvedRecordExtended>,
 }
 
-impl LevelResolvedRecord {
-    pub fn from_data(record: Record, user: BaseUser) -> Self {
+impl From<(Record, BaseUser)> for LevelResolvedRecord {
+    fn from((record, user): (Record, BaseUser)) -> Self {
+        Self {
+            id: record.id,
+            submitted_by: user,
+            mobile: record.mobile,
+            video_url: record.video_url,
+            completion_time: record.completion_time,
+            achieved_at: record.achieved_at,
+            hide_video: record.hide_video,
+            updated_at: record.updated_at,
+            created_at: record.created_at,
+        }
+    }
+}
+
+impl From<(Record, ExtendedBaseUser)> for LevelResolvedRecordExtended {
+    fn from((record, user): (Record, ExtendedBaseUser)) -> Self {
         Self {
             id: record.id,
             submitted_by: user,
@@ -140,33 +156,15 @@ impl LevelResolvedRecordExtended {
             .limit(page_query.per_page())
             .offset(page_query.offset())
             .select((Record::as_select(), ExtendedBaseUser::as_select()))
-            .load::<(Record, ExtendedBaseUser)>(conn)?;
-
-        let records_resolved = records
+            .load::<(Record, ExtendedBaseUser)>(conn)?
             .into_iter()
-            .map(|(record, user)| Self::from_data(record, user))
+            .map(Self::from)
             .collect();
 
         Ok(Paginated::from_data(
             page_query,
             total_count,
-            LevelResolvedRecordPage {
-                data: records_resolved,
-            },
+            LevelResolvedRecordPage { data: records },
         ))
-    }
-
-    pub fn from_data(record: Record, user: ExtendedBaseUser) -> Self {
-        Self {
-            id: record.id,
-            submitted_by: user,
-            mobile: record.mobile,
-            video_url: record.video_url,
-            hide_video: record.hide_video,
-            completion_time: record.completion_time,
-            achieved_at: record.achieved_at,
-            updated_at: record.updated_at,
-            created_at: record.created_at,
-        }
     }
 }
