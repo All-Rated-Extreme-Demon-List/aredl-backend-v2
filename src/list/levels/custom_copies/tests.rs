@@ -176,7 +176,7 @@ async fn list_custom_copies() {
 }
 
 #[actix_web::test]
-async fn custom_copy_id_is_unique_on_create_and_update() {
+async fn custom_copy_id_is_unique_per_level_on_create_and_update() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, Some(Permission::LevelCustomCopiesModify)).await;
     let token =
@@ -199,7 +199,11 @@ async fn custom_copy_id_is_unique_on_create_and_update() {
             .set_json(json!({"copy_id": 123_456, "id_types": ["Ldm"], "status": "Banned"}))
             .to_request();
         let resp = test::call_service(&app, req).await;
-        assert_error_response!(resp, StatusCode::CONFLICT, None);
+        if target_level == level_id {
+            assert_error_response!(resp, StatusCode::CONFLICT, None);
+        } else {
+            assert_eq!(resp.status(), StatusCode::CREATED);
+        }
     }
 
     let req = test::TestRequest::post()
