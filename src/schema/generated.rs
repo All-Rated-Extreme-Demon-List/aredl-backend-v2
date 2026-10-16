@@ -161,7 +161,7 @@ pub mod public {
             added_by -> Uuid,
             description -> Nullable<Varchar>,
             created_at -> Timestamptz,
-            id_type -> CustomIdType,
+            id_types -> Array<CustomIdType>,
             status -> CustomIdStatus,
             published -> Bool,
         }

@@ -54,8 +54,9 @@ pub struct LevelCustomCopy {
     pub copy_id: i32,
     /// The moderator who added this custom copy
     pub added_by: Uuid,
-    /// The type of this custom copy
-    pub id_type: LevelCustomCopyType,
+    /// The types of this custom copy
+    #[schema(min_items = 1)]
+    pub id_types: Vec<LevelCustomCopyType>,
     /// The status of this custom copy on the site
     pub status: LevelCustomCopyStatus,
     /// Whether this custom copy should be displayed on the site or hidden
@@ -74,8 +75,9 @@ pub struct LevelCustomCopyResolved {
     pub level_id: Uuid,
     /// The in-game ID of this copy
     pub copy_id: i32,
-    /// The type of this custom copy
-    pub id_type: LevelCustomCopyType,
+    /// The types of this custom copy
+    #[schema(min_items = 1)]
+    pub id_types: Vec<LevelCustomCopyType>,
     /// The status of this custom copy on the site
     pub status: LevelCustomCopyStatus,
     /// Whether this custom copy should be displayed on the site or hidden
@@ -94,7 +96,7 @@ pub struct LevelCustomCopyResolved {
 pub struct LevelCustomCopyInsert {
     pub level_id: Uuid,
     pub copy_id: i32,
-    pub id_type: LevelCustomCopyType,
+    pub id_types: Vec<LevelCustomCopyType>,
     pub status: LevelCustomCopyStatus,
     pub published: bool,
     pub description: Option<String>,
@@ -106,8 +108,9 @@ pub struct LevelCustomCopyInsert {
 pub struct LevelCustomCopyUpdate {
     /// The in-game ID of this copy
     pub copy_id: Option<i32>,
-    /// The type of this custom copy
-    pub id_type: Option<LevelCustomCopyType>,
+    /// The types of this custom copy
+    #[schema(min_items = 1)]
+    pub id_types: Option<Vec<LevelCustomCopyType>>,
     /// The status of this custom copy on the site
     pub status: Option<LevelCustomCopyStatus>,
     /// Whether this custom copy should be displayed on the site or hidden
@@ -121,8 +124,9 @@ pub struct LevelCustomCopyUpdate {
 pub struct LevelCustomCopyBody {
     /// The in-game ID of this copy
     pub copy_id: i32,
-    /// The type of this custom copy
-    pub id_type: LevelCustomCopyType,
+    /// The types of this custom copy
+    #[schema(min_items = 1)]
+    pub id_types: Vec<LevelCustomCopyType>,
     /// The status of this custom copy on the site
     pub status: LevelCustomCopyStatus,
     /// Whether this custom copy should be displayed on the site or hidden
@@ -154,7 +158,7 @@ impl Auditable for LevelCustomCopy {
     }
 
     fn entity_display(&self, _conn: &mut DbConnection) -> Result<String, ApiError> {
-        Ok(format!("{} ({:?})", self.copy_id, self.id_type))
+        Ok(format!("{} ({:?})", self.copy_id, self.id_types))
     }
 
     fn parent_display(&self, conn: &mut DbConnection) -> Result<Option<String>, ApiError> {
@@ -212,7 +216,7 @@ impl LevelCustomCopy {
             level_id,
             status: body.status,
             published: body.published,
-            id_type: body.id_type,
+            id_types: body.id_types,
             copy_id: body.copy_id,
             description: body.description,
             added_by: auth.user_id,
@@ -279,7 +283,7 @@ impl LevelCustomCopyResolved {
             query = query.filter(level_custom_copies::added_by.eq(added_by));
         }
         if let Some(custom_copy_type) = filters.type_filter.as_ref() {
-            query = query.filter(level_custom_copies::id_type.eq(custom_copy_type));
+            query = query.filter(level_custom_copies::id_types.contains(vec![custom_copy_type]));
         }
         if let Some(status) = filters.status_filter.as_ref() {
             query = query.filter(level_custom_copies::status.eq(status));
@@ -306,7 +310,7 @@ impl LevelCustomCopyResolved {
                 id: custom_copy.id,
                 level_id: custom_copy.level_id,
                 copy_id: custom_copy.copy_id,
-                id_type: custom_copy.id_type,
+                id_types: custom_copy.id_types,
                 status: custom_copy.status,
                 published: custom_copy.published,
                 added_by: Some(moderator),

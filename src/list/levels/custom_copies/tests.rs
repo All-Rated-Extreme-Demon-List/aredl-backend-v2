@@ -25,7 +25,7 @@ async fn create_custom_copy() {
 
     let custom_copy_data = json!({
         "copy_id": 123_456,
-        "id_type": "Bugfix",
+        "id_types": ["Bugfix", "Ldm"],
         "status": "Allowed",
     });
     let req = test::TestRequest::post()
@@ -47,7 +47,7 @@ async fn create_custom_copy() {
         body["copy_id"].as_i64().unwrap(),
         "Level IDs do not match!"
     );
-    assert_eq!(custom_copy_data["id_type"], "Bugfix");
+    assert_eq!(body["id_types"], custom_copy_data["id_types"]);
     assert_eq!(body["added_by"], user_id.to_string());
     assert_eq!(body["published"], false);
 }
@@ -65,7 +65,7 @@ async fn update_custom_copy() {
 
     let custom_copy_data = json!({
         "status": "Banned",
-        "id_type": "Startpos",
+        "id_types": ["Startpos", "Ldm"],
         "published": true,
     });
     let req = test::TestRequest::patch()
@@ -78,7 +78,7 @@ async fn update_custom_copy() {
 
     let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(body["status"], custom_copy_data["status"]);
-    assert_eq!(body["id_type"], custom_copy_data["id_type"]);
+    assert_eq!(body["id_types"], custom_copy_data["id_types"]);
     assert_eq!(body["published"], true);
 
     let req = test::TestRequest::patch()
@@ -93,6 +93,7 @@ async fn update_custom_copy() {
     let body: serde_json::Value = read_body_json(resp).await;
     assert_eq!(body["status"], "Allowed");
     assert_eq!(body["published"], true);
+    assert_eq!(body["id_types"], custom_copy_data["id_types"]);
 
     let req = test::TestRequest::patch()
         .uri(&format!(
@@ -186,7 +187,7 @@ async fn custom_copy_id_is_unique_on_create_and_update() {
     let req = test::TestRequest::post()
         .uri(&format!("/classic/levels/{level_id}/custom-copies"))
         .insert_header(("Authorization", format!("Bearer {token}")))
-        .set_json(json!({"copy_id": 123_456, "id_type": "Bugfix", "status": "Allowed"}))
+        .set_json(json!({"copy_id": 123_456, "id_types": ["Bugfix"], "status": "Allowed"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::CREATED);
@@ -195,7 +196,7 @@ async fn custom_copy_id_is_unique_on_create_and_update() {
         let req = test::TestRequest::post()
             .uri(&format!("/classic/levels/{target_level}/custom-copies"))
             .insert_header(("Authorization", format!("Bearer {token}")))
-            .set_json(json!({"copy_id": 123_456, "id_type": "Ldm", "status": "Banned"}))
+            .set_json(json!({"copy_id": 123_456, "id_types": ["Ldm"], "status": "Banned"}))
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_error_response!(resp, StatusCode::CONFLICT, None);
@@ -204,7 +205,7 @@ async fn custom_copy_id_is_unique_on_create_and_update() {
     let req = test::TestRequest::post()
         .uri(&format!("/classic/levels/{other_level_id}/custom-copies"))
         .insert_header(("Authorization", format!("Bearer {token}")))
-        .set_json(json!({"copy_id": 654_321, "id_type": "Bugfix", "status": "Allowed"}))
+        .set_json(json!({"copy_id": 654_321, "id_types": ["Bugfix"], "status": "Allowed"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::CREATED);
@@ -234,7 +235,7 @@ async fn create_custom_copy_requires_level_custom_copies_modify() {
     let custom_copy_data = json!({
         "copy_id": 123_456,
         "description": "test description",
-        "id_type": "Bugfix",
+        "id_types": ["Bugfix"],
         "status": "Allowed"
     });
     let req = test::TestRequest::post()
