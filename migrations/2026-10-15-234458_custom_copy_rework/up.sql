@@ -13,8 +13,7 @@ ALTER TABLE public.level_custom_copies
 DROP TYPE public.custom_id_status_old;
 
 ALTER TABLE public.level_custom_copies
-    ADD CONSTRAINT level_custom_copies_copy_id_key UNIQUE (copy_id);
-
+    ADD CONSTRAINT level_custom_copies_level_id_copy_id_key UNIQUE (level_id, copy_id);
 ALTER TABLE public.level_custom_copies RENAME COLUMN id_type TO id_types;
 ALTER TABLE public.level_custom_copies
     ALTER COLUMN id_types TYPE public.custom_id_type[] USING ARRAY[id_types],

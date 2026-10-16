@@ -73,7 +73,7 @@ async fn find_all(
         (status = 201, body = LevelCustomCopy),
         (status = 400, description = "Invalid level ID", body = ErrorResponse),
         (status = 404, description = "Level not found", body = ErrorResponse),
-        (status = 409, description = "Copy ID already exists", body = ErrorResponse)
+        (status = 409, description = "Copy ID already exists for this level", body = ErrorResponse)
     ),
     security(("bearer_token" = ["LevelCustomCopiesModify"])),
 )]
@@ -117,7 +117,7 @@ struct CustomCopyPath {
     ),
     responses(
         (status = 200, body = LevelCustomCopy),
-        (status = 409, description = "Copy ID already exists", body = ErrorResponse),
+        (status = 409, description = "Copy ID already exists for this level", body = ErrorResponse),
         (status = 404, description = "Custom copy not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["LevelCustomCopiesModify"])),

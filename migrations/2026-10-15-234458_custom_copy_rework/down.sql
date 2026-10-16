@@ -1,5 +1,5 @@
 ALTER TABLE public.level_custom_copies
-    DROP CONSTRAINT level_custom_copies_copy_id_key;
+    DROP CONSTRAINT level_custom_copies_level_id_copy_id_key;
 
 ALTER TYPE public.custom_id_status RENAME TO custom_id_status_new;
 CREATE TYPE public.custom_id_status AS ENUM ('Published', 'Allowed', 'Banned');
