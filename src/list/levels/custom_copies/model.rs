@@ -37,7 +37,7 @@ pub enum LevelCustomCopyType {
     /// This level is a Low Detail Mode of the official level
     Ldm,
     /// This level contains start positions
-    Startpos,
+    StartPos,
     Other,
 }
 

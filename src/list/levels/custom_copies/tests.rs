@@ -65,7 +65,7 @@ async fn update_custom_copy() {
 
     let custom_copy_data = json!({
         "status": "Banned",
-        "id_types": ["Startpos", "Ldm"],
+        "id_types": ["StartPos", "Ldm"],
         "published": true,
     });
     let req = test::TestRequest::patch()

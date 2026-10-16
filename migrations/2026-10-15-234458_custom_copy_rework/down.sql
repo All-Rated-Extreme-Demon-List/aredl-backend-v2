@@ -23,7 +23,7 @@ CREATE TYPE public.custom_id_type AS ENUM ('Bugfix', 'GlobedCopy', 'Ldm', 'Other
 ALTER TABLE public.level_custom_copies
     ALTER COLUMN id_type TYPE public.custom_id_type
     USING (CASE
-        WHEN id_type::text = 'Startpos' THEN 'Other'
+        WHEN id_type::text = 'StartPos' THEN 'Other'
         ELSE id_type::text
     END)::public.custom_id_type;
 DROP TYPE public.custom_id_type_new;

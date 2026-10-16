@@ -24,4 +24,4 @@ ALTER TABLE public.level_custom_copies
         AND array_position(id_types, NULL) IS NULL
     );
 
-ALTER TYPE public.custom_id_type ADD VALUE 'Startpos';
+ALTER TYPE public.custom_id_type ADD VALUE 'StartPos';
