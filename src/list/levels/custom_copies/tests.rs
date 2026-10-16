@@ -25,7 +25,7 @@ async fn create_custom_copy() {
 
     let custom_copy_data = json!({
         "copy_id": 123_456,
-        "id_types": ["Bugfix", "Ldm"],
+        "id_types": ["BugFix", "Ldm"],
         "status": "Allowed",
     });
     let req = test::TestRequest::post()
@@ -139,7 +139,7 @@ async fn list_custom_copies() {
     create_test_custom_copy(&db, List::Classic, level_id, user_id).await;
 
     let req = test::TestRequest::get()
-        .uri(format!("/classic/levels/{level_id}/custom-copies?type_filter=Bugfix&status_filter=Allowed&description=%es%").as_str())
+        .uri(format!("/classic/levels/{level_id}/custom-copies?type_filter=BugFix&status_filter=Allowed&description=%es%").as_str())
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -187,7 +187,7 @@ async fn custom_copy_id_is_unique_per_level_on_create_and_update() {
     let req = test::TestRequest::post()
         .uri(&format!("/classic/levels/{level_id}/custom-copies"))
         .insert_header(("Authorization", format!("Bearer {token}")))
-        .set_json(json!({"copy_id": 123_456, "id_types": ["Bugfix"], "status": "Allowed"}))
+        .set_json(json!({"copy_id": 123_456, "id_types": ["BugFix"], "status": "Allowed"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::CREATED);
@@ -209,7 +209,7 @@ async fn custom_copy_id_is_unique_per_level_on_create_and_update() {
     let req = test::TestRequest::post()
         .uri(&format!("/classic/levels/{other_level_id}/custom-copies"))
         .insert_header(("Authorization", format!("Bearer {token}")))
-        .set_json(json!({"copy_id": 654_321, "id_types": ["Bugfix"], "status": "Allowed"}))
+        .set_json(json!({"copy_id": 654_321, "id_types": ["BugFix"], "status": "Allowed"}))
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::CREATED);
@@ -239,7 +239,7 @@ async fn create_custom_copy_requires_level_custom_copies_modify() {
     let custom_copy_data = json!({
         "copy_id": 123_456,
         "description": "test description",
-        "id_types": ["Bugfix"],
+        "id_types": ["BugFix"],
         "status": "Allowed"
     });
     let req = test::TestRequest::post()

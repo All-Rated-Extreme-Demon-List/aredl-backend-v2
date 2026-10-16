@@ -26,7 +26,7 @@ pub async fn create_test_custom_copy(
             level_custom_copies::copy_id.eq(copy_id),
             level_custom_copies::description.eq("Test"),
             level_custom_copies::status.eq(LevelCustomCopyStatus::Allowed),
-            level_custom_copies::id_types.eq(vec![LevelCustomCopyType::Bugfix]),
+            level_custom_copies::id_types.eq(vec![LevelCustomCopyType::BugFix]),
         ))
         .execute(&mut db.connection().unwrap())
         .expect("Failed to create test custom copy id");

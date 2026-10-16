@@ -31,7 +31,7 @@ pub enum LevelCustomCopyStatus {
 #[DbValueStyle = "PascalCase"]
 pub enum LevelCustomCopyType {
     /// This level fixes a bug in the offical level
-    Bugfix,
+    BugFix,
     /// This level is made for use with Globed Deathlink
     GlobedCopy,
     /// This level is a Low Detail Mode of the official level

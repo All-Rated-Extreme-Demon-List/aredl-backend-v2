@@ -24,6 +24,7 @@ ALTER TABLE public.level_custom_copies
     ALTER COLUMN id_type TYPE public.custom_id_type
     USING (CASE
         WHEN id_type::text = 'StartPos' THEN 'Other'
+        WHEN id_type::text = 'BugFix' THEN 'Bugfix'
         ELSE id_type::text
     END)::public.custom_id_type;
 DROP TYPE public.custom_id_type_new;
