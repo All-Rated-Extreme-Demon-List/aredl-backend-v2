@@ -23,10 +23,9 @@ async fn list(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let result = web::block(move || {
-        ClanInvite::find_all_me_invites(&mut db.connection()?, authenticated.user_id)
-    })
-    .await??;
+    let result = db
+        .run(move |conn| ClanInvite::find_all_me_invites(conn, authenticated.user_id))
+        .await?;
     Ok(HttpResponse::Ok().json(result))
 }
 
@@ -51,10 +50,8 @@ async fn accept(
     invite_id: web::Path<Uuid>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    web::block(move || {
-        ClanInvite::accept_invite(&mut db.connection()?, *invite_id, &authenticated)
-    })
-    .await??;
+    db.run(move |conn| ClanInvite::accept_invite(conn, *invite_id, &authenticated))
+        .await?;
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -79,10 +76,8 @@ async fn reject(
     invite_id: web::Path<Uuid>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    web::block(move || {
-        ClanInvite::reject_invite(&mut db.connection()?, *invite_id, &authenticated)
-    })
-    .await??;
+    db.run(move |conn| ClanInvite::reject_invite(conn, *invite_id, &authenticated))
+        .await?;
     Ok(HttpResponse::NoContent().finish())
 }
 

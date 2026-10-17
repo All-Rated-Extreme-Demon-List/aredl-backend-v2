@@ -41,14 +41,8 @@ async fn direct_merge(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&options));
-    web::block(move || {
-        merge_users(
-            &mut db.connection()?,
-            options.primary_user,
-            options.secondary_user,
-        )
-    })
-    .await??;
+    db.transaction(move |conn| merge_users(conn, options.primary_user, options.secondary_user))
+        .await?;
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -70,9 +64,9 @@ async fn list_logs(
     db: web::Data<Arc<DbAppState>>,
     page_query: web::Query<PageQuery<20>>,
 ) -> Result<HttpResponse, ApiError> {
-    let result =
-        web::block(move || MergeLogPage::find_all(&mut db.connection()?, page_query.into_inner()))
-            .await??;
+    let result = db
+        .run(move |conn| MergeLogPage::find_all(conn, page_query.into_inner()))
+        .await?;
     Ok(HttpResponse::Ok().json(result))
 }
 

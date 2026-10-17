@@ -56,16 +56,17 @@ async fn find_all(
     options: web::Query<SubmissionQueryOptions>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let submissions = web::block(move || {
-        ResolvedSubmissionPage::find_all(
-            &mut db.connection()?,
-            *list,
-            page_query.into_inner(),
-            options.into_inner(),
-            &authenticated,
-        )
-    })
-    .await??;
+    let submissions = db
+        .run(move |conn| {
+            ResolvedSubmissionPage::find_all(
+                conn,
+                *list,
+                page_query.into_inner(),
+                options.into_inner(),
+                &authenticated,
+            )
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(submissions))
 }
 
@@ -90,10 +91,9 @@ async fn find_one(
     path: web::Path<SubmissionPath>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let submission = web::block(move || {
-        SubmissionResolved::find_one(&mut db.connection()?, path.list, path.id, &authenticated)
-    })
-    .await??;
+    let submission = db
+        .run(move |conn| SubmissionResolved::find_one(conn, path.list, path.id, &authenticated))
+        .await?;
     Ok(HttpResponse::Ok().json(submission))
 }
 
@@ -122,10 +122,9 @@ async fn find_video_duplicates(
     db: web::Data<Arc<DbAppState>>,
     path: web::Path<SubmissionPath>,
 ) -> Result<HttpResponse, ApiError> {
-    let records = web::block(move || {
-        Submission::find_video_duplicates(&mut db.connection()?, path.list, path.id)
-    })
-    .await??;
+    let records = db
+        .run(move |conn| Submission::find_video_duplicates(conn, path.list, path.id))
+        .await?;
     Ok(HttpResponse::Ok().json(records))
 }
 
@@ -157,16 +156,17 @@ async fn find_me(
     options: web::Query<SubmissionQueryOptions>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let submissions = web::block(move || {
-        ResolvedSubmissionPage::find_own(
-            &mut db.connection()?,
-            *list,
-            page_query.into_inner(),
-            options.into_inner(),
-            &authenticated,
-        )
-    })
-    .await??;
+    let submissions = db
+        .run(move |conn| {
+            ResolvedSubmissionPage::find_own(
+                conn,
+                *list,
+                page_query.into_inner(),
+                options.into_inner(),
+                &authenticated,
+            )
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(submissions))
 }
 
@@ -210,19 +210,19 @@ async fn create(
     notify_tx: web::Data<broadcast::Sender<WebsocketNotification>>,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&body));
-    let created = web::block(move || {
-        let conn = &mut db.connection()?;
-        authenticated.ensure_not_banned(conn)?;
-        Submission::create(
-            conn,
-            *list,
-            body.into_inner(),
-            &authenticated,
-            providers.get_ref(),
-            notify_tx.get_ref(),
-        )
-    })
-    .await??;
+    let created = db
+        .run(move |conn| {
+            authenticated.ensure_not_banned(conn)?;
+            Submission::create(
+                conn,
+                *list,
+                body.into_inner(),
+                &authenticated,
+                providers.get_ref(),
+                notify_tx.get_ref(),
+            )
+        })
+        .await?;
     Ok(HttpResponse::Created().json(created))
 }
 
@@ -276,42 +276,36 @@ async fn patch(
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&body));
     let list = path.list;
-    let db_clone = db.clone();
     let providers_clone = providers.clone();
-    let patched = web::block(move || {
-        let conn = &mut db.connection()?;
-        if authenticated.has_permission(conn, Permission::SubmissionReview)? {
-            SubmissionPatchMod::patch(
-                body.into_inner(),
-                path.id,
-                conn,
-                path.list,
-                &authenticated,
-                notify_tx.get_ref(),
-                providers.get_ref(),
-            )
-        } else {
-            let user_patch = SubmissionPatchMod::downgrade(body.into_inner());
-            SubmissionPatchUser::patch(
-                user_patch,
-                path.id,
-                conn,
-                path.list,
-                &authenticated,
-                providers.get_ref(),
-            )
-        }
-    })
-    .await??;
+    let patched = db
+        .run(move |conn| {
+            if authenticated.has_permission(conn, Permission::SubmissionReview)? {
+                SubmissionPatchMod::patch(
+                    body.into_inner(),
+                    path.id,
+                    conn,
+                    path.list,
+                    &authenticated,
+                    notify_tx.get_ref(),
+                    providers.get_ref(),
+                )
+            } else {
+                let user_patch = SubmissionPatchMod::downgrade(body.into_inner());
+                SubmissionPatchUser::patch(
+                    user_patch,
+                    path.id,
+                    conn,
+                    path.list,
+                    &authenticated,
+                    providers.get_ref(),
+                )
+            }
+        })
+        .await?;
 
     // if the status submission is changed to accepted, trigger other actions (timestamp update, badges, bounties, etc)
     if patched.status == SubmissionStatus::Accepted {
-        Record::post_accept_actions(
-            db_clone,
-            list,
-            std::slice::from_ref(&patched),
-            providers_clone,
-        );
+        Record::post_accept_actions(db, list, std::slice::from_ref(&patched), providers_clone);
     }
     Ok(HttpResponse::Ok().json(patched))
 }
@@ -334,10 +328,9 @@ async fn claim(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let claimed = web::block(move || {
-        Submission::claim_highest_priority(&mut db.connection()?, *list, &authenticated)
-    })
-    .await??;
+    let claimed = db
+        .run(move |conn| Submission::claim_highest_priority(conn, *list, &authenticated))
+        .await?;
 
     Ok(match claimed {
         Some(item) => HttpResponse::Ok().json(item),
@@ -365,10 +358,8 @@ async fn delete(
     path: web::Path<SubmissionPath>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    web::block(move || {
-        Submission::delete(&mut db.connection()?, path.list, path.id, &authenticated)
-    })
-    .await??;
+    db.run(move |conn| Submission::delete(conn, path.list, path.id, &authenticated))
+        .await?;
     Ok(HttpResponse::NoContent().finish())
 }
 

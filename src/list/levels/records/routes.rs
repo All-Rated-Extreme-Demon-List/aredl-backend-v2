@@ -36,18 +36,18 @@ async fn find_all(
     page_query: web::Query<PageQuery<20>>,
     opts: web::Query<RecordQuery>,
 ) -> Result<HttpResponse, ApiError> {
-    let records = web::block(move || {
-        let conn = &mut db.connection()?;
-        let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
-        LevelResolvedRecordExtended::find_all_by_level(
-            conn,
-            path.list,
-            level_id,
-            page_query.into_inner(),
-            &opts.into_inner(),
-        )
-    })
-    .await??;
+    let records = db
+        .run(move |conn| {
+            let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
+            LevelResolvedRecordExtended::find_all_by_level(
+                conn,
+                path.list,
+                level_id,
+                page_query.into_inner(),
+                &opts.into_inner(),
+            )
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(records))
 }
 

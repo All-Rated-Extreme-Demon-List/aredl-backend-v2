@@ -29,14 +29,11 @@ async fn get_connected_accounts(
     user_id: web::Path<Uuid>,
     auth: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let connected_accounts = web::block(move || {
-        OAuthConnectedAccount::find_all_by_user_id(
-            &mut db.connection()?,
-            user_id.into_inner(),
-            &auth,
-        )
-    })
-    .await??;
+    let connected_accounts = db
+        .run(move |conn| {
+            OAuthConnectedAccount::find_all_by_user_id(conn, user_id.into_inner(), &auth)
+        })
+        .await?;
 
     Ok(HttpResponse::Ok().json(connected_accounts))
 }

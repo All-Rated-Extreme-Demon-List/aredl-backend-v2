@@ -27,10 +27,9 @@ async fn find_all(
     list: web::Path<List>,
     page_query: web::Query<PageQuery<20>>,
 ) -> Result<HttpResponse, ApiError> {
-    let result = web::block(move || {
-        ChangelogPage::find(&mut db.connection()?, *list, page_query.into_inner())
-    })
-    .await??;
+    let result = db
+        .run(move |conn| ChangelogPage::find(conn, *list, page_query.into_inner()))
+        .await?;
     Ok(HttpResponse::Ok().json(result))
 }
 

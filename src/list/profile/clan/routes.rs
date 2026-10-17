@@ -42,10 +42,9 @@ async fn find(
     db: web::Data<Arc<DbAppState>>,
     path: web::Path<ClanPath>,
 ) -> Result<HttpResponse, ApiError> {
-    let profile = web::block(move || {
-        ClanProfileResolved::find(&mut db.connection()?, path.list, path.clan_id)
-    })
-    .await??;
+    let profile = db
+        .run(move |conn| ClanProfileResolved::find(conn, path.list, path.clan_id))
+        .await?;
     Ok(HttpResponse::Ok().json(profile))
 }
 
@@ -71,15 +70,16 @@ async fn level_records(
     db: web::Data<Arc<DbAppState>>,
     path: web::Path<ClanLevelPath>,
 ) -> Result<HttpResponse, ApiError> {
-    let records = web::block(move || {
-        ClanProfileResolved::find_records_for_level(
-            &mut db.connection()?,
-            path.list,
-            path.clan_id,
-            path.level_id,
-        )
-    })
-    .await??;
+    let records = db
+        .run(move |conn| {
+            ClanProfileResolved::find_records_for_level(
+                conn,
+                path.list,
+                path.clan_id,
+                path.level_id,
+            )
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(records))
 }
 

@@ -14,7 +14,6 @@ use crate::{
     CacheController,
 };
 use actix_web::{delete, get, patch, post, web, HttpResponse};
-use diesel::Connection as _;
 use std::sync::Arc;
 use utoipa::OpenApi;
 use uuid::Uuid;
@@ -47,16 +46,17 @@ async fn find_all(
     path: web::Path<LevelPath>,
     authenticated: Option<Authenticated>,
 ) -> Result<HttpResponse, ApiError> {
-    let notes = web::block(move || {
-        LevelNotes::find_all_level(
-            &mut db.connection()?,
-            &query.into_inner(),
-            path.list,
-            &path.level_id,
-            authenticated,
-        )
-    })
-    .await??;
+    let notes = db
+        .run(move |conn| {
+            LevelNotes::find_all_level(
+                conn,
+                &query.into_inner(),
+                path.list,
+                &path.level_id,
+                authenticated,
+            )
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(notes))
 }
 
@@ -83,16 +83,14 @@ async fn create(
     path: web::Path<LevelPath>,
     auth: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let notes = web::block(move || {
-        let conn = &mut db.connection()?;
-        conn.transaction(|conn| {
+    let notes = db
+        .transaction(move |conn| {
             let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
             let notes = LevelNotes::create(conn, body.into_inner(), path.list, level_id, &auth)?;
             AuditLogEntry::log_create(conn, Some(auth.user_id), &notes)?;
             Ok::<_, ApiError>(notes)
         })
-    })
-    .await??;
+        .await?;
     Ok(HttpResponse::Created().json(notes))
 }
 
@@ -127,9 +125,8 @@ async fn update(
     path: web::Path<NotePath>,
     auth: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let notes = web::block(move || {
-        let conn = &mut db.connection()?;
-        conn.transaction(|conn| {
+    let notes = db
+        .transaction(move |conn| {
             let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
             let before = LevelNotes::find_for_update(conn, path.list, level_id, path.note_id)?;
             let after =
@@ -137,8 +134,7 @@ async fn update(
             AuditLogEntry::log_update(conn, Some(auth.user_id), &before, &after)?;
             Ok::<_, ApiError>(after)
         })
-    })
-    .await??;
+        .await?;
     Ok(HttpResponse::Ok().json(notes))
 }
 
@@ -165,17 +161,14 @@ async fn delete(
     path: web::Path<NotePath>,
     auth: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    web::block(move || {
-        let conn = &mut db.connection()?;
-        conn.transaction(|conn| {
-            let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
-            if let Some(deleted) = LevelNotes::delete(conn, path.list, level_id, &path.note_id)? {
-                AuditLogEntry::log_delete(conn, Some(auth.user_id), &deleted)?;
-            }
-            Ok::<_, ApiError>(())
-        })
+    db.transaction(move |conn| {
+        let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
+        if let Some(deleted) = LevelNotes::delete(conn, path.list, level_id, &path.note_id)? {
+            AuditLogEntry::log_delete(conn, Some(auth.user_id), &deleted)?;
+        }
+        Ok::<_, ApiError>(())
     })
-    .await??;
+    .await?;
     Ok(HttpResponse::NoContent().finish())
 }
 

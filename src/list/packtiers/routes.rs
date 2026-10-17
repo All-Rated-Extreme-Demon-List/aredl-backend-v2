@@ -7,7 +7,6 @@ use crate::list::packtiers::PackTierResolved;
 use crate::list::packtiers::{PackTier, PackTierCreate, PackTierUpdate};
 use crate::list::List;
 use actix_web::{delete, get, patch, post, web, HttpResponse};
-use diesel::Connection as _;
 use serde::Deserialize;
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
@@ -43,14 +42,11 @@ async fn find_all(
     list: web::Path<List>,
     authenticated: Option<Authenticated>,
 ) -> Result<HttpResponse, ApiError> {
-    let tiers = web::block(move || {
-        PackTierResolved::find_all(
-            &mut db.connection()?,
-            *list,
-            authenticated.map(|user| user.user_id),
-        )
-    })
-    .await??;
+    let tiers = db
+        .run(move |conn| {
+            PackTierResolved::find_all(conn, *list, authenticated.map(|user| user.user_id))
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(tiers))
 }
 
@@ -77,14 +73,13 @@ async fn create(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&tier));
-    let tier = web::block(move || {
-        db.connection()?.transaction(|conn| {
+    let tier = db
+        .transaction(move |conn| {
             let tier = PackTier::create(conn, *list, tier.into_inner())?;
             AuditLogEntry::log_create(conn, Some(authenticated.user_id), &tier)?;
             Ok::<_, ApiError>(tier)
         })
-    })
-    .await??;
+        .await?;
     Ok(HttpResponse::Created().json(tier))
 }
 #[utoipa::path(
@@ -112,15 +107,14 @@ async fn update(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&tier));
-    let tier = web::block(move || {
-        db.connection()?.transaction(|conn| {
+    let tier = db
+        .transaction(move |conn| {
             let before = PackTier::find_for_update(conn, path.list, path.id)?;
             let after = PackTier::update(conn, path.list, path.id, tier.into_inner())?;
             AuditLogEntry::log_update(conn, Some(authenticated.user_id), &before, &after)?;
             Ok::<_, ApiError>(after)
         })
-    })
-    .await??;
+        .await?;
     Ok(HttpResponse::Ok().json(tier))
 }
 
@@ -145,14 +139,13 @@ async fn delete(
     path: web::Path<PackTierPath>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let tier = web::block(move || {
-        db.connection()?.transaction(|conn| {
+    let tier = db
+        .transaction(move |conn| {
             let deleted = PackTier::delete(conn, path.list, path.id)?;
             AuditLogEntry::log_delete(conn, Some(authenticated.user_id), &deleted)?;
             Ok::<_, ApiError>(deleted)
         })
-    })
-    .await??;
+        .await?;
     Ok(HttpResponse::Ok().json(tier))
 }
 

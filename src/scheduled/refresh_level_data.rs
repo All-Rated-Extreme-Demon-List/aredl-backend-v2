@@ -5,7 +5,6 @@ use crate::providers::ProvidersAppState;
 use crate::scheduled::{sleep_until_next, startup_schedule};
 use crate::schema::{last_gddl_update, levels};
 use crate::{create_client, get_secret};
-use actix_web::web;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -55,23 +54,26 @@ pub async fn start_level_data_refresher(
 
             let one_day_ago = Utc::now() - chrono::Duration::days(1);
 
-            if let Ok(levels_to_update) = db.connection().and_then(|mut conn| {
-                levels::table
-                    .left_join(last_gddl_update::table)
-                    .filter(
-                        last_gddl_update::updated_at
-                            .is_null()
-                            .or(last_gddl_update::updated_at.lt(one_day_ago)),
-                    )
-                    .select((
-                        levels::list_id,
-                        levels::id,
-                        levels::level_id,
-                        levels::two_player,
-                    ))
-                    .load::<(List, Uuid, i32, bool)>(&mut conn)
-                    .map_err(ApiError::from)
-            }) {
+            if let Ok(levels_to_update) = db
+                .run(move |conn| {
+                    levels::table
+                        .left_join(last_gddl_update::table)
+                        .filter(
+                            last_gddl_update::updated_at
+                                .is_null()
+                                .or(last_gddl_update::updated_at.lt(one_day_ago)),
+                        )
+                        .select((
+                            levels::list_id,
+                            levels::id,
+                            levels::level_id,
+                            levels::two_player,
+                        ))
+                        .load::<(List, Uuid, i32, bool)>(conn)
+                        .map_err(ApiError::from)
+                })
+                .await
+            {
                 for (list, id, level_id, two_p) in levels_to_update {
                     tokio::time::sleep(Duration::from_secs(5)).await;
                     if let Err(e) = update_gddl_data(db.clone(), id, list, level_id, two_p).await {
@@ -108,16 +110,16 @@ pub async fn refresh_nlw(
 }
 
 pub async fn refresh_gddl(db: Arc<DbAppState>, list: List, id: Uuid) -> Result<(), ApiError> {
-    let db_level = db.clone();
-    let (level_id, two_player) = web::block(move || {
-        levels::table
-            .filter(levels::id.eq(id))
-            .filter(levels::list_id.eq(list))
-            .select((levels::level_id, levels::two_player))
-            .first::<(i32, bool)>(&mut db_level.connection()?)
-            .map_err(ApiError::from)
-    })
-    .await??;
+    let (level_id, two_player) = db
+        .run(move |conn| {
+            levels::table
+                .filter(levels::id.eq(id))
+                .filter(levels::list_id.eq(list))
+                .select((levels::level_id, levels::two_player))
+                .first::<(i32, bool)>(conn)
+                .map_err(ApiError::from)
+        })
+        .await?;
     update_gddl_data(db, id, list, level_id, two_player).await
 }
 
@@ -180,9 +182,7 @@ async fn update_gddl_data(
         (_, _, _) => data.default_rating,
     };
 
-    web::block(move || {
-        let conn = &mut db.connection()?;
-
+    db.transaction(move |conn| {
         diesel::update(levels::table)
             .filter(levels::id.eq(id))
             .set(levels::gddl_tier.eq(rating))
@@ -201,7 +201,7 @@ async fn update_gddl_data(
 
         Ok(())
     })
-    .await?
+    .await
 }
 
 async fn update_edel_data(
@@ -228,50 +228,46 @@ async fn update_edel_data(
         .collect::<HashMap<_, _>>();
     let level_ids = data.keys().copied().collect::<Vec<_>>();
 
-    web::block(move || {
-        let conn = &mut db.connection()?;
+    db.transaction(move |conn| {
+        let levels_to_update = levels::table
+            .filter(
+                levels::level_id
+                    .eq_any(&level_ids)
+                    .or(levels::edel_enjoyment
+                        .is_not_null()
+                        .or(levels::is_edel_pending.eq(true))),
+            )
+            .select((levels::id, levels::level_id))
+            .load::<(Uuid, i32)>(conn)?;
 
-        conn.transaction(|conn| {
-            let levels_to_update = levels::table
-                .filter(
-                    levels::level_id
-                        .eq_any(&level_ids)
-                        .or(levels::edel_enjoyment
-                            .is_not_null()
-                            .or(levels::is_edel_pending.eq(true))),
-                )
-                .select((levels::id, levels::level_id))
-                .load::<(Uuid, i32)>(conn)?;
+        let levels_to_update_count = levels_to_update.len();
 
-            let levels_to_update_count = levels_to_update.len();
+        let edel_updates = levels_to_update
+            .into_iter()
+            .map(|(id, level_id)| {
+                let (edel_enjoyment, is_edel_pending) = data
+                    .get(&level_id)
+                    .map_or((None, false), |(enjoyment, pending)| {
+                        (Some(*enjoyment), *pending)
+                    });
 
-            let edel_updates = levels_to_update
-                .into_iter()
-                .map(|(id, level_id)| {
-                    let (edel_enjoyment, is_edel_pending) = data
-                        .get(&level_id)
-                        .map_or((None, false), |(enjoyment, pending)| {
-                            (Some(*enjoyment), *pending)
-                        });
+                EdelUpdate {
+                    id,
+                    edel_enjoyment,
+                    is_edel_pending,
+                }
+            })
+            .collect::<Vec<_>>();
 
-                    EdelUpdate {
-                        id,
-                        edel_enjoyment,
-                        is_edel_pending,
-                    }
-                })
-                .collect::<Vec<_>>();
+        if !edel_updates.is_empty() {
+            diesel::update(levels::table)
+                .set(&edel_updates)
+                .execute(conn)?;
+        }
 
-            if !edel_updates.is_empty() {
-                diesel::update(levels::table)
-                    .set(&edel_updates)
-                    .execute(conn)?;
-            }
-
-            Ok(levels_to_update_count)
-        })
+        Ok(levels_to_update_count)
     })
-    .await?
+    .await
 }
 
 async fn update_nlw_data(
@@ -294,38 +290,34 @@ async fn update_nlw_data(
         .collect::<HashMap<_, _>>();
     let level_ids = data.keys().copied().collect::<Vec<_>>();
 
-    web::block(move || {
-        let conn = &mut db.connection()?;
+    db.transaction(move |conn| {
+        let levels_to_update = levels::table
+            .filter(
+                levels::level_id
+                    .eq_any(&level_ids)
+                    .or(levels::nlw_tier.is_not_null()),
+            )
+            .select((levels::id, levels::level_id))
+            .load::<(Uuid, i32)>(conn)?;
+        let levels_to_update_count = levels_to_update.len();
 
-        conn.transaction(|conn| {
-            let levels_to_update = levels::table
-                .filter(
-                    levels::level_id
-                        .eq_any(&level_ids)
-                        .or(levels::nlw_tier.is_not_null()),
-                )
-                .select((levels::id, levels::level_id))
-                .load::<(Uuid, i32)>(conn)?;
-            let levels_to_update_count = levels_to_update.len();
+        let nlw_updates = levels_to_update
+            .into_iter()
+            .map(|(id, level_id)| NlwTierUpdate {
+                id,
+                nlw_tier: data.get(&level_id).cloned(),
+            })
+            .collect::<Vec<_>>();
 
-            let nlw_updates = levels_to_update
-                .into_iter()
-                .map(|(id, level_id)| NlwTierUpdate {
-                    id,
-                    nlw_tier: data.get(&level_id).cloned(),
-                })
-                .collect::<Vec<_>>();
+        if !nlw_updates.is_empty() {
+            diesel::update(levels::table)
+                .set(&nlw_updates)
+                .execute(conn)?;
+        }
 
-            if !nlw_updates.is_empty() {
-                diesel::update(levels::table)
-                    .set(&nlw_updates)
-                    .execute(conn)?;
-            }
-
-            Ok(levels_to_update_count)
-        })
+        Ok(levels_to_update_count)
     })
-    .await?
+    .await
 }
 
 #[derive(Deserialize)]

@@ -6,7 +6,6 @@ use crate::error_handler::{ApiError, ErrorResponse};
 use crate::list::packs::{levels, CompletedPackVictor, Pack, PackCreate, PackUpdate};
 use crate::list::List;
 use actix_web::{delete, get, patch, post, web, HttpResponse};
-use diesel::Connection as _;
 use serde::Deserialize;
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
@@ -41,14 +40,13 @@ async fn create(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&pack));
-    let pack = web::block(move || {
-        db.connection()?.transaction(|conn| {
+    let pack = db
+        .transaction(move |conn| {
             let pack = Pack::create(conn, *list, pack.into_inner())?;
             AuditLogEntry::log_create(conn, Some(authenticated.user_id), &pack)?;
             Ok::<_, ApiError>(pack)
         })
-    })
-    .await??;
+        .await?;
     Ok(HttpResponse::Created().json(pack))
 }
 
@@ -77,15 +75,14 @@ async fn update(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&pack));
-    let pack = web::block(move || {
-        db.connection()?.transaction(|conn| {
+    let pack = db
+        .transaction(move |conn| {
             let before = Pack::find_for_update(conn, path.list, path.pack_id)?;
             let after = Pack::update(conn, path.list, path.pack_id, pack.into_inner())?;
             AuditLogEntry::log_update(conn, Some(authenticated.user_id), &before, &after)?;
             Ok::<_, ApiError>(after)
         })
-    })
-    .await??;
+        .await?;
     Ok(HttpResponse::Ok().json(pack))
 }
 
@@ -110,14 +107,13 @@ async fn delete(
     path: web::Path<PackPath>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let pack = web::block(move || {
-        db.connection()?.transaction(|conn| {
+    let pack = db
+        .transaction(move |conn| {
             let deleted = Pack::delete(conn, path.list, path.pack_id)?;
             AuditLogEntry::log_delete(conn, Some(authenticated.user_id), &deleted)?;
             Ok::<_, ApiError>(deleted)
         })
-    })
-    .await??;
+        .await?;
     Ok(HttpResponse::Ok().json(pack))
 }
 
@@ -144,9 +140,9 @@ async fn get_victors(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&path));
-    let victors =
-        web::block(move || Pack::find_victors(&mut db.connection()?, path.list, path.pack_id))
-            .await??;
+    let victors = db
+        .run(move |conn| Pack::find_victors(conn, path.list, path.pack_id))
+        .await?;
     Ok(HttpResponse::Ok().json(victors))
 }
 

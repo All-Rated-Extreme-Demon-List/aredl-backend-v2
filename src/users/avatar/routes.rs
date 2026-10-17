@@ -1,7 +1,7 @@
 use super::{AvatarRefresher, RefreshError};
 use crate::app_data::db::DbAppState;
 use crate::auth::{Permission, UserAuth};
-use crate::error_handler::{ApiError, ErrorResponse};
+use crate::error_handler::ErrorResponse;
 use crate::users::User;
 use actix_web::{post, web, HttpResponse};
 use std::sync::Arc;
@@ -28,12 +28,9 @@ async fn refresh(
     refresher: web::Data<Arc<AvatarRefresher>>,
     id: web::Path<String>,
 ) -> Result<HttpResponse, RefreshError> {
-    let db_user = db.get_ref().clone();
-    let user_id = web::block(move || {
-        User::from_str(&mut db_user.connection()?, &id.into_inner()).map(|user| user.id)
-    })
-    .await
-    .map_err(ApiError::from)??;
+    let user_id = db
+        .run(move |conn| User::from_str(conn, &id.into_inner()).map(|user| user.id))
+        .await?;
     let user = refresher
         .refresh_user(db.get_ref().clone(), user_id)
         .await?;

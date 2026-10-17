@@ -47,18 +47,19 @@ pub async fn stats(
     query: web::Query<StatsQuery>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let stats = web::block(move || {
-        let query = query.into_inner();
-        DailyStatsPage::find(
-            &mut db.connection()?,
-            *list,
-            page.into_inner(),
-            query.reviewer_id,
-            query.level_id,
-            &authenticated,
-        )
-    })
-    .await??;
+    let stats = db
+        .run(move |conn| {
+            let query = query.into_inner();
+            DailyStatsPage::find(
+                conn,
+                *list,
+                page.into_inner(),
+                query.reviewer_id,
+                query.level_id,
+                &authenticated,
+            )
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(stats))
 }
 
@@ -80,7 +81,8 @@ async fn rebuild(
     db: web::Data<Arc<DbAppState>>,
     list: web::Path<List>,
 ) -> Result<HttpResponse, ApiError> {
-    web::block(move || ResolvedDailyStats::rebuild(&mut db.connection()?, *list)).await??;
+    db.run(move |conn| ResolvedDailyStats::rebuild(conn, *list))
+        .await?;
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -121,15 +123,9 @@ pub async fn leaderboard_route(
     query: web::Query<LeaderboardQuery>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let data = web::block(move || {
-        stats_mod_leaderboard(
-            &mut db.connection()?,
-            *list,
-            &query.into_inner(),
-            &authenticated,
-        )
-    })
-    .await??;
+    let data = db
+        .run(move |conn| stats_mod_leaderboard(conn, *list, &query.into_inner(), &authenticated))
+        .await?;
     Ok(HttpResponse::Ok().json(data))
 }
 

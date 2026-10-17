@@ -33,14 +33,9 @@ async fn list(
     page_query: web::Query<PageQuery<100>>,
     options: web::Query<ClanListQueryOptions>,
 ) -> Result<HttpResponse, ApiError> {
-    let result = web::block(move || {
-        Clan::find(
-            &mut db.connection()?,
-            &options.into_inner(),
-            page_query.into_inner(),
-        )
-    })
-    .await??;
+    let result = db
+        .run(move |conn| Clan::find(conn, &options.into_inner(), page_query.into_inner()))
+        .await?;
     Ok(HttpResponse::Ok().json(result))
 }
 
@@ -69,15 +64,13 @@ async fn create_and_join(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&clan));
-    let result = web::block(move || {
-        let conn = &mut db.connection()?;
-        conn.transaction(|conn| {
+    let result = db
+        .transaction(move |conn| {
             let clan = Clan::create_and_join(conn, &clan.into_inner(), &authenticated)?;
             AuditLogEntry::log_create(conn, Some(authenticated.user_id), &clan)?;
             Ok::<_, ApiError>(clan)
         })
-    })
-    .await??;
+        .await?;
     Ok(HttpResponse::Created().json(result))
 }
 
@@ -105,13 +98,13 @@ async fn create_empty(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&clan));
-    let result = web::block(move || {
-        let conn = &mut db.connection()?;
-        let clan = Clan::create_empty(conn, &clan.into_inner())?;
-        AuditLogEntry::log_create(conn, Some(authenticated.user_id), &clan)?;
-        Ok::<_, ApiError>(clan)
-    })
-    .await??;
+    let result = db
+        .transaction(move |conn| {
+            let clan = Clan::create_empty(conn, &clan.into_inner())?;
+            AuditLogEntry::log_create(conn, Some(authenticated.user_id), &clan)?;
+            Ok::<_, ApiError>(clan)
+        })
+        .await?;
     Ok(HttpResponse::Created().json(result))
 }
 
@@ -146,17 +139,17 @@ async fn update(
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&clan));
     let clan_id = id.into_inner();
-    let result = web::block(move || {
-        let conn = &mut db.connection()?;
-        authenticated.ensure_has_clan_permission(conn, clan_id, 2)?;
-        let old_clan = Clan::by_id(conn, clan_id)?;
-        let new_clan = Clan::update(conn, clan_id, &clan.into_inner())?;
+    let result = db
+        .transaction(move |conn| {
+            authenticated.ensure_has_clan_permission(conn, clan_id, 2)?;
+            let old_clan = Clan::by_id(conn, clan_id)?;
+            let new_clan = Clan::update(conn, clan_id, &clan.into_inner())?;
 
-        AuditLogEntry::log_update(conn, Some(authenticated.user_id), &old_clan, &new_clan)?;
+            AuditLogEntry::log_update(conn, Some(authenticated.user_id), &old_clan, &new_clan)?;
 
-        Ok::<_, ApiError>(new_clan)
-    })
-    .await??;
+            Ok::<_, ApiError>(new_clan)
+        })
+        .await?;
 
     Ok(HttpResponse::Ok().json(result))
 }
@@ -186,29 +179,29 @@ async fn delete(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let clan_id = id.into_inner();
-    let result = web::block(move || {
-        let conn = &mut db.connection()?;
+    let result = db
+        .transaction(move |conn| {
+            authenticated.ensure_has_clan_permission(conn, clan_id, 2)?;
+            let has_staff_permission =
+                authenticated.has_permission(conn, Permission::ClanModify)?;
 
-        authenticated.ensure_has_clan_permission(conn, clan_id, 2)?;
-        let has_staff_permission = authenticated.has_permission(conn, Permission::ClanModify)?;
+            let members_count: i64 = clan_members::table
+                .filter(clan_members::clan_id.eq(clan_id))
+                .select(count_star())
+                .first(conn)?;
+            if members_count > 1 && !has_staff_permission {
+                return Err(ApiError::Forbidden(
+                    "You cannot delete a clan unless you're the only member left in it.",
+                ));
+            }
 
-        let members_count: i64 = clan_members::table
-            .filter(clan_members::clan_id.eq(clan_id))
-            .select(count_star())
-            .first(conn)?;
-        if members_count > 1 && !has_staff_permission {
-            return Err(ApiError::Forbidden(
-                "You cannot delete a clan unless you're the only member left in it.",
-            ));
-        }
+            let deleted_clan = Clan::delete(conn, clan_id)?;
 
-        let deleted_clan = Clan::delete(conn, clan_id)?;
+            AuditLogEntry::log_delete(conn, Some(authenticated.user_id), &deleted_clan)?;
 
-        AuditLogEntry::log_delete(conn, Some(authenticated.user_id), &deleted_clan)?;
-
-        Ok::<_, ApiError>(deleted_clan)
-    })
-    .await??;
+            Ok::<_, ApiError>(deleted_clan)
+        })
+        .await?;
 
     Ok(HttpResponse::Ok().json(result))
 }

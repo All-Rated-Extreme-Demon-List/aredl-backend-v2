@@ -36,9 +36,7 @@ pub async fn logout_all(
         return Err(ApiError::Unauthorized("No token provided"));
     };
 
-    web::block(move || {
-        let conn = &mut db.connection()?;
-
+    db.run(move |conn| {
         let decoded_token_claims =
             token::decode_token(token, &data.jwt_decoding_key, &["access", "refresh"])?;
 
@@ -52,7 +50,7 @@ pub async fn logout_all(
 
         Ok::<(), ApiError>(())
     })
-    .await??;
+    .await?;
 
     Ok(HttpResponse::Ok().json("Logged out all sessions"))
 }

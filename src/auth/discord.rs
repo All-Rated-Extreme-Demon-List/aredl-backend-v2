@@ -103,16 +103,17 @@ async fn discord_auth(
         .clone()
         .ok_or_else(|| ApiError::ServiceUnavailable("Discord integration is not configured"))?;
 
-    let authorize_url = web::block(move || {
-        OAuthRequestData::init_request(
-            &mut db.connection()?,
-            discord_provider.user_oauth()?,
-            OAuthProvider::Discord,
-            options.callback.clone(),
-            None,
-        )
-    })
-    .await??;
+    let authorize_url = db
+        .run(move |conn| {
+            OAuthRequestData::init_request(
+                conn,
+                discord_provider.user_oauth()?,
+                OAuthProvider::Discord,
+                options.callback.clone(),
+                None,
+            )
+        })
+        .await?;
 
     Ok(HttpResponse::Found()
         .append_header((header::LOCATION, authorize_url))
@@ -154,13 +155,11 @@ async fn discord_callback(
         .ok_or_else(|| ApiError::ServiceUnavailable("Discord integration is not configured"))?;
     let state = query.state.clone();
 
-    let db2 = db.clone();
-
-    let request_data = web::block(move || {
-        let conn = &mut db.connection()?;
-        OAuthRequestData::consume_request(conn, OAuthProvider::Discord, state.as_str())
-    })
-    .await??;
+    let request_data = db
+        .run(move |conn| {
+            OAuthRequestData::consume_request(conn, OAuthProvider::Discord, state.as_str())
+        })
+        .await?;
 
     let access_token = exchange_oauth_code(
         &discord_provider.user_oauth()?.client,
@@ -179,21 +178,21 @@ async fn discord_callback(
         .await
         .map_err(|_err| ApiError::BadGateway("Failed to load discord data"))?;
 
-    let (user, roles, scopes) = web::block(move || {
-        let conn = &mut db2.connection()?;
-        let user = User::upsert(conn, UserUpsert::from(discord_user_data))?;
+    let (user, roles, scopes) = db
+        .transaction(move |conn| {
+            let user = User::upsert(conn, UserUpsert::from(discord_user_data))?;
 
-        let roles = user_roles::table
-            .inner_join(roles::table)
-            .filter(user_roles::user_id.eq(user.id))
-            .select(Role::as_select())
-            .load::<Role>(conn)?;
+            let roles = user_roles::table
+                .inner_join(roles::table)
+                .filter(user_roles::user_id.eq(user.id))
+                .select(Role::as_select())
+                .load::<Role>(conn)?;
 
-        let scopes = permission::get_user_permissions(conn, user.id, false)?;
+            let scopes = permission::get_user_permissions(conn, user.id, false)?;
 
-        Ok::<_, ApiError>((user, roles, scopes))
-    })
-    .await??;
+            Ok::<_, ApiError>((user, roles, scopes))
+        })
+        .await?;
 
     if let Some(callback) = request_data.callback {
         let (token, _expires) = token::create_token(

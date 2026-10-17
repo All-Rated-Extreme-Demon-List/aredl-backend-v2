@@ -110,16 +110,17 @@ async fn patreon_link(
     let callback = options.callback.clone();
     let user_id = authenticated.user_id;
 
-    let authorize_url = web::block(move || {
-        OAuthRequestData::init_request(
-            &mut db.connection()?,
-            patreon_auth.user_oauth()?,
-            OAuthProvider::Patreon,
-            callback,
-            Some(user_id),
-        )
-    })
-    .await??;
+    let authorize_url = db
+        .run(move |conn| {
+            OAuthRequestData::init_request(
+                conn,
+                patreon_auth.user_oauth()?,
+                OAuthProvider::Patreon,
+                callback,
+                Some(user_id),
+            )
+        })
+        .await?;
 
     Ok(HttpResponse::Ok().json(PatreonLinkResponse { authorize_url }))
 }
@@ -161,15 +162,10 @@ async fn patreon_callback(
         .ok_or_else(|| ApiError::ServiceUnavailable("Patreon integration is not configured"))?;
 
     let state = query.state.clone();
-    let db_for_request = db.clone();
-    let request_data = web::block(move || {
-        OAuthRequestData::consume_request(
-            &mut db_for_request.connection()?,
-            OAuthProvider::Patreon,
-            &state,
-        )
-    })
-    .await??;
+
+    let request_data = db
+        .run(move |conn| OAuthRequestData::consume_request(conn, OAuthProvider::Patreon, &state))
+        .await?;
 
     let user_id = request_data
         .user_id
@@ -199,45 +195,42 @@ async fn patreon_callback(
 
     let provider_user_id_for_db = provider_user_id.clone();
     let provider_user_name_for_db = provider_user_name.clone();
-    let db_for_link = db.clone();
-    web::block(move || {
-        let conn = &mut db_for_link.connection()?;
-        conn.transaction(|conn| {
-            let existing_user_id = oauth_connected_accounts::table
+
+    db.transaction(move |conn| {
+        let existing_user_id = oauth_connected_accounts::table
+            .filter(oauth_connected_accounts::provider.eq(OAuthProvider::Patreon))
+            .filter(oauth_connected_accounts::provider_user_id.eq(&provider_user_id_for_db))
+            .select(oauth_connected_accounts::user_id)
+            .first::<uuid::Uuid>(conn)
+            .optional()?;
+
+        if existing_user_id.is_some_and(|existing_user_id| existing_user_id != user_id) {
+            return Err(ApiError::Conflict(
+                "This Patreon account is already linked to another user",
+            ));
+        }
+
+        diesel::delete(
+            oauth_connected_accounts::table
                 .filter(oauth_connected_accounts::provider.eq(OAuthProvider::Patreon))
-                .filter(oauth_connected_accounts::provider_user_id.eq(&provider_user_id_for_db))
-                .select(oauth_connected_accounts::user_id)
-                .first::<uuid::Uuid>(conn)
-                .optional()?;
+                .filter(oauth_connected_accounts::user_id.eq(user_id)),
+        )
+        .execute(conn)?;
 
-            if existing_user_id.is_some_and(|existing_user_id| existing_user_id != user_id) {
-                return Err(ApiError::Conflict(
-                    "This Patreon account is already linked to another user",
-                ));
-            }
-
-            diesel::delete(
-                oauth_connected_accounts::table
-                    .filter(oauth_connected_accounts::provider.eq(OAuthProvider::Patreon))
-                    .filter(oauth_connected_accounts::user_id.eq(user_id)),
-            )
+        diesel::insert_into(oauth_connected_accounts::table)
+            .values((
+                oauth_connected_accounts::user_id.eq(user_id),
+                oauth_connected_accounts::provider.eq(OAuthProvider::Patreon),
+                oauth_connected_accounts::provider_user_id.eq(provider_user_id_for_db),
+                oauth_connected_accounts::provider_user_name.eq(provider_user_name_for_db),
+            ))
             .execute(conn)?;
 
-            diesel::insert_into(oauth_connected_accounts::table)
-                .values((
-                    oauth_connected_accounts::user_id.eq(user_id),
-                    oauth_connected_accounts::provider.eq(OAuthProvider::Patreon),
-                    oauth_connected_accounts::provider_user_id.eq(provider_user_id_for_db),
-                    oauth_connected_accounts::provider_user_name.eq(provider_user_name_for_db),
-                ))
-                .execute(conn)?;
+        grant_patreon_plus(conn, user_id)?;
 
-            grant_patreon_plus(conn, user_id)?;
-
-            Ok::<_, ApiError>(())
-        })
+        Ok::<_, ApiError>(())
     })
-    .await??;
+    .await?;
 
     if let Some(callback) = request_data.callback {
         let mut callback_url = Url::parse(&callback)

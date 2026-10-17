@@ -19,17 +19,18 @@ use diesel::prelude::*;
 )]
 #[get("")]
 async fn healthz(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
-    let result = web::block(move || {
-        diesel::sql_query("SELECT 1")
-            .execute(&mut db.connection()?)
-            .map_err(|error| {
-                ApiError::ServiceUnavailable(format!("DB healthcheck failed: {error}"))
-            })
-    })
-    .await;
+    let result = db
+        .run(move |conn| {
+            diesel::sql_query("SELECT 1")
+                .execute(conn)
+                .map_err(|error| {
+                    ApiError::ServiceUnavailable(format!("DB healthcheck failed: {error}"))
+                })
+        })
+        .await;
 
     match result {
-        Ok(Ok(_)) => Ok(HttpResponse::Ok().finish()),
+        Ok(_) => Ok(HttpResponse::Ok().finish()),
         _ => Err(ApiError::ServiceUnavailable("Service unavailable")),
     }
 }

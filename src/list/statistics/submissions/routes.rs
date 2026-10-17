@@ -28,7 +28,7 @@ pub async fn total(
     db: web::Data<Arc<DbAppState>>,
     list: web::Path<List>,
 ) -> Result<HttpResponse, ApiError> {
-    let data = web::block(move || total_submissions(&mut db.connection()?, *list)).await??;
+    let data = db.run(move |conn| total_submissions(conn, *list)).await?;
     Ok(HttpResponse::Ok().json(data))
 }
 

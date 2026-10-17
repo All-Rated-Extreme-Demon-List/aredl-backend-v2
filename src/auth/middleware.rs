@@ -142,55 +142,47 @@ where
             );
         };
 
-        let mut conn = match db_state.connection() {
-            Ok(conn) => conn,
-            Err(error) => return Self::error_future(http_req, &error),
-        };
-
-        if check_token_valid(&token_claims, &user_claims, &mut conn).is_err() {
-            return Self::error_future(
-                http_req,
-                &ApiError::Unauthorized("Token has been invalidated"),
-            );
-        }
-
         let user_id = user_claims.user_id;
-
-        tracing::Span::current().record("user_id", tracing::field::display(user_id));
-
-        if let Some(required_perm) = self.required_perm {
-            let has_permission =
-                permission::check_user_permission(&mut conn, user_id, required_perm);
-            match has_permission {
-                Ok(permission) => {
-                    if !permission {
-                        return Self::error_future(
-                            http_req,
-                            &ApiError::Forbidden(
-                                format!("You do not have the required permission ({required_perm}) to access this endpoint")
-                                .as_str(),
-                            ),
-                        );
-                    }
-                }
-                Err(_) => {
-                    return Self::error_future(
-                        http_req,
-                        &ApiError::InternalServerError("Failed to load permissions"),
-                    )
-                }
-            }
-        }
-
-        http_req.extensions_mut().insert::<UserClaims>(user_claims);
-
-        let fut = self
-            .service
-            .call(ServiceRequest::from_parts(http_req, payload));
+        let required_perm = self.required_perm;
+        let service = Rc::clone(&self.service);
 
         Box::pin(async move {
-            let res = fut.await?;
-            Ok(res)
+            let user_claims = db_state
+                .run(move |conn| {
+                    check_token_valid(&token_claims, &user_claims, conn)
+                        .map_err(|_error| ApiError::Unauthorized("Token has been invalidated"))?;
+
+                    if let Some(required_perm) = required_perm {
+                        let has_permission = permission::check_user_permission(
+                            conn,
+                            user_id,
+                            required_perm,
+                        )
+                        .map_err(|_error| {
+                            ApiError::InternalServerError("Failed to load permissions")
+                        })?;
+                        if !has_permission {
+                            return Err(ApiError::Forbidden(format!(
+                                "You do not have the required permission ({required_perm}) to access this endpoint"
+                            )));
+                        }
+                    }
+
+                    Ok(user_claims)
+                })
+                .await;
+
+            let user_claims = match user_claims {
+                Ok(user_claims) => user_claims,
+                Err(error) => return Self::error_future(http_req, &error).await,
+            };
+
+            tracing::Span::current().record("user_id", tracing::field::display(user_id));
+            http_req.extensions_mut().insert::<UserClaims>(user_claims);
+
+            service
+                .call(ServiceRequest::from_parts(http_req, payload))
+                .await
         })
     }
 }

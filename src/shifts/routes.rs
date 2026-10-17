@@ -37,14 +37,9 @@ async fn find_all_shifts(
     page_query: web::Query<PageQuery<50>>,
     options: web::Query<ShiftFilterQuery>,
 ) -> Result<HttpResponse, ApiError> {
-    let shifts = web::block(move || {
-        ShiftPage::find_all(
-            &mut db.connection()?,
-            page_query.into_inner(),
-            &options.into_inner(),
-        )
-    })
-    .await??;
+    let shifts = db
+        .run(move |conn| ShiftPage::find_all(conn, page_query.into_inner(), &options.into_inner()))
+        .await?;
     Ok(HttpResponse::Ok().json(shifts))
 }
 
@@ -67,14 +62,9 @@ async fn find_all_shifts_me(
     page_query: web::Query<PageQuery<50>>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let shifts = web::block(move || {
-        ShiftPage::find_me(
-            &mut db.connection()?,
-            page_query.into_inner(),
-            authenticated.user_id,
-        )
-    })
-    .await??;
+    let shifts = db
+        .run(move |conn| ShiftPage::find_me(conn, page_query.into_inner(), authenticated.user_id))
+        .await?;
     Ok(HttpResponse::Ok().json(shifts))
 }
 
@@ -100,24 +90,24 @@ async fn create_shift_now(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&body));
-    let new_shift = web::block(move || {
-        let mut conn = db.connection()?;
-        let data = body.into_inner();
-        // Only admins can create shifts for other users
-        if !authenticated.has_permission(&mut conn, Permission::ShiftManage)?
-            && data.user_id.is_some_and(|id| id != authenticated.user_id)
-        {
-            return Err(ApiError::Forbidden(
-                "You can only create shifts for yourself.",
-            ));
-        }
-        conn.transaction(|conn| {
-            let shift = Shift::create(conn, &data, &authenticated)?;
-            AuditLogEntry::log_create(conn, Some(authenticated.user_id), &shift)?;
-            Ok::<_, ApiError>(shift)
+    let new_shift = db
+        .run(move |conn| {
+            let data = body.into_inner();
+            // Only admins can create shifts for other users
+            if !authenticated.has_permission(conn, Permission::ShiftManage)?
+                && data.user_id.is_some_and(|id| id != authenticated.user_id)
+            {
+                return Err(ApiError::Forbidden(
+                    "You can only create shifts for yourself.",
+                ));
+            }
+            conn.transaction(|conn| {
+                let shift = Shift::create(conn, &data, &authenticated)?;
+                AuditLogEntry::log_create(conn, Some(authenticated.user_id), &shift)?;
+                Ok::<_, ApiError>(shift)
+            })
         })
-    })
-    .await??;
+        .await?;
 
     Ok(HttpResponse::Created().json(new_shift))
 }
@@ -146,16 +136,15 @@ async fn patch_shift(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&body));
-    let updated = web::block(move || {
-        db.connection()?.transaction(|conn| {
+    let updated = db
+        .transaction(move |conn| {
             let id = id.into_inner();
             let before = Shift::find_for_update(conn, id)?;
             let after = Shift::patch(conn, id, &body.into_inner())?;
             AuditLogEntry::log_update(conn, Some(authenticated.user_id), &before, &after)?;
             Ok::<_, ApiError>(after)
         })
-    })
-    .await??;
+        .await?;
     Ok(HttpResponse::Ok().json(updated))
 }
 
@@ -179,14 +168,13 @@ async fn delete_shift(
     id: web::Path<Uuid>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let deleted = web::block(move || {
-        db.connection()?.transaction(|conn| {
+    let deleted = db
+        .transaction(move |conn| {
             let deleted = Shift::delete(conn, id.into_inner())?;
             AuditLogEntry::log_delete(conn, Some(authenticated.user_id), &deleted)?;
             Ok::<_, ApiError>(deleted)
         })
-    })
-    .await??;
+        .await?;
     Ok(HttpResponse::Ok().json(deleted))
 }
 

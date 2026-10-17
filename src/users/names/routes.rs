@@ -17,7 +17,7 @@ use utoipa::OpenApi;
 )]
 #[get("", wrap = "CacheController::public_with_max_age(3600)")]
 async fn list(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
-    let roles = web::block(move || RoleResolved::find_all_public(&mut db.connection()?)).await??;
+    let roles = db.run(RoleResolved::find_all_public).await?;
     Ok(HttpResponse::Ok().json(roles))
 }
 

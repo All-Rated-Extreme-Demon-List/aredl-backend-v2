@@ -8,7 +8,6 @@ use crate::{
     schema::{notifications, shifts, submissions},
     shifts::{Shift, ShiftStatus},
 };
-use actix_web::web;
 use chrono::Utc;
 use diesel::prelude::*;
 use serde::Serialize;
@@ -46,9 +45,8 @@ pub async fn cleanup(
     db: Arc<DbAppState>,
     notify_tx: broadcast::Sender<WebsocketNotification>,
 ) -> Result<CleanupResult, ApiError> {
-    let (deleted_notifications, released_claimed_submissions, expired_shifts) =
-        web::block(move || {
-            let conn = &mut db.connection()?;
+    let (deleted_notifications, released_claimed_submissions, expired_shifts) = db
+        .run(move |conn| {
             let now = Utc::now();
 
             conn.transaction::<_, ApiError, _>(|conn| {
@@ -94,7 +92,7 @@ pub async fn cleanup(
                 Ok((deleted, released, expired))
             })
         })
-        .await??;
+        .await?;
 
     WebsocketNotification::send(&notify_tx, "SHIFTS_MISSED", &expired_shifts);
 

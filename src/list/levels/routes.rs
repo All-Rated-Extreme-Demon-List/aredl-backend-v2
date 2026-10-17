@@ -12,7 +12,6 @@ use crate::list::levels::{notes, updates, LevelQueryOptions};
 use crate::list::List;
 use crate::scheduled::refresh_level_data;
 use actix_web::{get, patch, post, web, HttpResponse};
-use diesel::Connection as _;
 use serde::Deserialize;
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
@@ -52,15 +51,16 @@ async fn list_all(
     query: web::Query<LevelQueryOptions>,
     authenticated: Option<Authenticated>,
 ) -> Result<HttpResponse, ApiError> {
-    let levels = web::block(move || {
-        LevelWithUserCompletionStatus::find_all(
-            &mut db.connection()?,
-            *list,
-            &query.into_inner(),
-            authenticated.map(|user| user.user_id),
-        )
-    })
-    .await??;
+    let levels = db
+        .run(move |conn| {
+            LevelWithUserCompletionStatus::find_all(
+                conn,
+                *list,
+                &query.into_inner(),
+                authenticated.map(|user| user.user_id),
+            )
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(levels))
 }
 
@@ -87,14 +87,13 @@ async fn create(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&level));
-    let level = web::block(move || {
-        db.connection()?.transaction(|conn| {
+    let level = db
+        .transaction(move |conn| {
             let level = Level::create(conn, *list, level.into_inner())?;
             AuditLogEntry::log_create(conn, Some(authenticated.user_id), &level)?;
             Ok::<_, ApiError>(level)
         })
-    })
-    .await??;
+        .await?;
     Ok(HttpResponse::Created().json(level))
 }
 
@@ -124,17 +123,15 @@ async fn update(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&level));
-    let level = web::block(move || {
-        let conn = &mut db.connection()?;
-        conn.transaction(|conn| {
+    let level = db
+        .transaction(move |conn| {
             let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
             let before = Level::find_for_update(conn, path.list, level_id)?;
             let after = Level::update(conn, path.list, level_id, level.into_inner())?;
             AuditLogEntry::log_update(conn, Some(authenticated.user_id), &before, &after)?;
             Ok::<_, ApiError>(after)
         })
-    })
-    .await??;
+        .await?;
     Ok(HttpResponse::Ok().json(level))
 }
 
@@ -164,10 +161,9 @@ async fn refresh_gddl(
     path: web::Path<LevelPath>,
 ) -> Result<HttpResponse, ApiError> {
     let list = path.list;
-    let db_level = db.get_ref().clone();
-    let id =
-        web::block(move || resolve_level_id(&mut db_level.connection()?, list, &path.level_id))
-            .await??;
+    let id = db
+        .run(move |conn| resolve_level_id(conn, list, &path.level_id))
+        .await?;
     refresh_level_data::refresh_gddl(db.get_ref().clone(), list, id).await?;
     Ok(HttpResponse::NoContent().finish())
 }
@@ -193,7 +189,8 @@ async fn rebuild_history(
     db: web::Data<Arc<DbAppState>>,
     list: web::Path<List>,
 ) -> Result<HttpResponse, ApiError> {
-    web::block(move || HistoryLevelFull::rebuild(&mut db.connection()?, *list)).await??;
+    db.run(move |conn| HistoryLevelFull::rebuild(conn, *list))
+        .await?;
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -217,12 +214,12 @@ async fn find(
     db: web::Data<Arc<DbAppState>>,
     path: web::Path<LevelPath>,
 ) -> Result<HttpResponse, ApiError> {
-    let level = web::block(move || {
-        let conn = &mut db.connection()?;
-        let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
-        ResolvedLevel::find(conn, path.list, level_id)
-    })
-    .await??;
+    let level = db
+        .run(move |conn| {
+            let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
+            ResolvedLevel::find(conn, path.list, level_id)
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(level))
 }
 

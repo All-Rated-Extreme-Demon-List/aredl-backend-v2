@@ -149,8 +149,8 @@ impl OAuthProviderContext {
         })
     }
 
-    fn read_stored_token(&self, db: &DbAppState) -> Result<OAuthToken, ApiError> {
-        let token = self.read_optional_stored_token(db)?;
+    async fn read_stored_token(&self, db: &DbAppState) -> Result<OAuthToken, ApiError> {
+        let token = self.read_optional_stored_token(db).await?;
 
         let Some(token) = token else {
             return Err(ApiError::ServiceUnavailable(format!(
@@ -162,23 +162,28 @@ impl OAuthProviderContext {
         Ok(token)
     }
 
-    fn read_optional_stored_token(&self, db: &DbAppState) -> Result<Option<OAuthToken>, ApiError> {
-        let mut conn = db.connection()?;
+    async fn read_optional_stored_token(
+        &self,
+        db: &DbAppState,
+    ) -> Result<Option<OAuthToken>, ApiError> {
+        let provider = self.provider;
+        db.run(move |conn| {
+            let stored_token = oauth_tokens::table
+                .filter(oauth_tokens::provider.eq(provider))
+                .select(OAuthToken::as_select())
+                .first::<OAuthToken>(conn)
+                .optional()?;
 
-        let stored_token = oauth_tokens::table
-            .filter(oauth_tokens::provider.eq(self.provider))
-            .select(OAuthToken::as_select())
-            .first::<OAuthToken>(&mut conn)
-            .optional()?;
-
-        stored_token.map(decrypt_oauth_token).transpose()
+            stored_token.map(decrypt_oauth_token).transpose()
+        })
+        .await
     }
 
     async fn fetch_and_cache_token(&self, db: &DbAppState) -> Result<String, ApiError> {
         let backend_token_state = self.backend_token_state()?;
         let stored_token = match backend_token_state.grant_type {
-            BackendGrantType::RefreshToken => Some(self.read_stored_token(db)?),
-            BackendGrantType::ClientCredentials => self.read_optional_stored_token(db)?,
+            BackendGrantType::RefreshToken => Some(self.read_stored_token(db).await?),
+            BackendGrantType::ClientCredentials => self.read_optional_stored_token(db).await?,
         };
 
         let mut grant_request = vec![
@@ -217,28 +222,30 @@ impl OAuthProviderContext {
             })
             .transpose()?;
 
-        let updated_token = {
-            let mut conn = db.connection()?;
-
-            diesel::insert_into(oauth_tokens::table)
-                .values((
-                    oauth_tokens::provider.eq(self.provider),
-                    oauth_tokens::access_token.eq(Some(encrypted_access_token.clone())),
-                    oauth_tokens::refresh_token.eq(encrypted_refresh_token.clone()),
-                    oauth_tokens::expires_at.eq(Some(expires_at)),
-                    oauth_tokens::updated_at.eq(Utc::now()),
-                ))
-                .on_conflict(oauth_tokens::provider)
-                .do_update()
-                .set((
-                    oauth_tokens::access_token.eq(Some(encrypted_access_token)),
-                    oauth_tokens::refresh_token.eq(encrypted_refresh_token),
-                    oauth_tokens::expires_at.eq(Some(expires_at)),
-                    oauth_tokens::updated_at.eq(Utc::now()),
-                ))
-                .returning(OAuthToken::as_returning())
-                .get_result::<OAuthToken>(&mut conn)?
-        };
+        let provider = self.provider;
+        let updated_token = db
+            .run(move |conn| {
+                diesel::insert_into(oauth_tokens::table)
+                    .values((
+                        oauth_tokens::provider.eq(provider),
+                        oauth_tokens::access_token.eq(Some(encrypted_access_token.clone())),
+                        oauth_tokens::refresh_token.eq(encrypted_refresh_token.clone()),
+                        oauth_tokens::expires_at.eq(Some(expires_at)),
+                        oauth_tokens::updated_at.eq(Utc::now()),
+                    ))
+                    .on_conflict(oauth_tokens::provider)
+                    .do_update()
+                    .set((
+                        oauth_tokens::access_token.eq(Some(encrypted_access_token)),
+                        oauth_tokens::refresh_token.eq(encrypted_refresh_token),
+                        oauth_tokens::expires_at.eq(Some(expires_at)),
+                        oauth_tokens::updated_at.eq(Utc::now()),
+                    ))
+                    .returning(OAuthToken::as_returning())
+                    .get_result::<OAuthToken>(conn)
+                    .map_err(ApiError::from)
+            })
+            .await?;
 
         *backend_token_state.token.lock().await = Some(decrypt_oauth_token(updated_token)?);
 
@@ -267,8 +274,9 @@ impl OAuthProviderContext {
         }
 
         let token = match backend_token_state.grant_type {
-            BackendGrantType::RefreshToken => self.read_stored_token(db)?,
-            BackendGrantType::ClientCredentials => match self.read_optional_stored_token(db)? {
+            BackendGrantType::RefreshToken => self.read_stored_token(db).await?,
+            BackendGrantType::ClientCredentials => match self.read_optional_stored_token(db).await?
+            {
                 Some(token) => token,
                 None => return self.fetch_and_cache_token(db).await,
             },

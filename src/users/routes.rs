@@ -37,14 +37,11 @@ async fn find(
     id: web::Path<String>,
     authenticated: Option<Authenticated>,
 ) -> Result<HttpResponse, ApiError> {
-    let result = web::block(move || {
-        UserResolved::from_str(
-            &mut db.connection()?,
-            id.into_inner().as_str(),
-            authenticated.as_ref(),
-        )
-    })
-    .await??;
+    let result = db
+        .run(move |conn| {
+            UserResolved::from_str(conn, id.into_inner().as_str(), authenticated.as_ref())
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(result))
 }
 
@@ -75,15 +72,16 @@ async fn list(
     options: web::Query<UserListQueryOptions>,
     authenticated: Option<Authenticated>,
 ) -> Result<HttpResponse, ApiError> {
-    let result = web::block(move || {
-        User::find_all(
-            &mut db.connection()?,
-            page_query.into_inner(),
-            &options.into_inner(),
-            authenticated.as_ref(),
-        )
-    })
-    .await??;
+    let result = db
+        .run(move |conn| {
+            User::find_all(
+                conn,
+                page_query.into_inner(),
+                &options.into_inner(),
+                authenticated.as_ref(),
+            )
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(result))
 }
 
@@ -109,13 +107,13 @@ async fn create_placeholder(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&options));
-    let result = web::block(move || {
-        let conn = &mut db.connection()?;
-        let created_user = User::create_placeholder(conn, options.into_inner())?;
-        AuditLogEntry::log_create(conn, Some(authenticated.user_id), &created_user)?;
-        Ok::<_, ApiError>(created_user)
-    })
-    .await??;
+    let result = db
+        .transaction(move |conn| {
+            let created_user = User::create_placeholder(conn, options.into_inner())?;
+            AuditLogEntry::log_create(conn, Some(authenticated.user_id), &created_user)?;
+            Ok::<_, ApiError>(created_user)
+        })
+        .await?;
     Ok(HttpResponse::Created().json(result))
 }
 
@@ -146,16 +144,16 @@ async fn update(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&user));
-    let result = web::block(move || {
-        let conn = &mut db.connection()?;
-        let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
-        authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
-        let before = User::from_uuid(conn, user_id)?;
-        let updated_user = User::update(conn, user_id, &user.into_inner())?;
-        AuditLogEntry::log_update(conn, Some(authenticated.user_id), &before, &updated_user)?;
-        Ok::<_, ApiError>(updated_user)
-    })
-    .await??;
+    let result = db
+        .transaction(move |conn| {
+            let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
+            authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
+            let before = User::from_uuid(conn, user_id)?;
+            let updated_user = User::update(conn, user_id, &user.into_inner())?;
+            AuditLogEntry::log_update(conn, Some(authenticated.user_id), &before, &updated_user)?;
+            Ok::<_, ApiError>(updated_user)
+        })
+        .await?;
 
     Ok(HttpResponse::Ok().json(result))
 }
@@ -199,24 +197,24 @@ async fn update_account_status(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&user));
-    let result = web::block(move || {
-        let conn = &mut db.connection()?;
-        let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
-        authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
-        if user.account_status == AccountStatus::Redacted {
-            authenticated.ensure_has_permission(conn, Permission::UserRedact)?;
-        }
-        let before = User::from_uuid(conn, user_id)?;
-        let updated_user = User::update_account_status(
-            conn,
-            &authenticated,
-            user_id,
-            user.into_inner().account_status,
-        )?;
-        AuditLogEntry::log_update(conn, Some(authenticated.user_id), &before, &updated_user)?;
-        Ok::<_, ApiError>(updated_user)
-    })
-    .await??;
+    let result = db
+        .transaction(move |conn| {
+            let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
+            authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
+            if user.account_status == AccountStatus::Redacted {
+                authenticated.ensure_has_permission(conn, Permission::UserRedact)?;
+            }
+            let before = User::from_uuid(conn, user_id)?;
+            let updated_user = User::update_account_status(
+                conn,
+                &authenticated,
+                user_id,
+                user.into_inner().account_status,
+            )?;
+            AuditLogEntry::log_update(conn, Some(authenticated.user_id), &before, &updated_user)?;
+            Ok::<_, ApiError>(updated_user)
+        })
+        .await?;
 
     Ok(HttpResponse::Ok().json(result))
 }
@@ -240,13 +238,12 @@ async fn delete(
     id: web::Path<String>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    web::block(move || {
-        let conn = &mut db.connection()?;
+    db.run(move |conn| {
         let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
         authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
         User::soft_delete(conn, user_id, &authenticated)
     })
-    .await??;
+    .await?;
     Ok(HttpResponse::NoContent().finish())
 }
 

@@ -27,12 +27,12 @@ async fn find_all(
     db: web::Data<Arc<DbAppState>>,
     user_id: web::Path<String>,
 ) -> Result<HttpResponse, ApiError> {
-    let badges = web::block(move || {
-        let conn = &mut db.connection()?;
-        let user = User::from_str(conn, &user_id.into_inner())?;
-        UserBadge::find_all(conn, user.id)
-    })
-    .await??;
+    let badges = db
+        .run(move |conn| {
+            let user = User::from_str(conn, &user_id.into_inner())?;
+            UserBadge::find_all(conn, user.id)
+        })
+        .await?;
 
     Ok(HttpResponse::Ok().json(badges))
 }
@@ -57,14 +57,14 @@ async fn sync(
     id: web::Path<String>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let badges = web::block(move || {
-        let conn = &mut db.connection()?;
-        let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
-        authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
-        UserBadge::update_user_badges(conn, user_id)?;
-        UserBadge::find_all(conn, user_id)
-    })
-    .await??;
+    let badges = db
+        .run(move |conn| {
+            let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
+            authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
+            UserBadge::update_user_badges(conn, user_id)?;
+            UserBadge::find_all(conn, user_id)
+        })
+        .await?;
 
     Ok(HttpResponse::Ok().json(badges))
 }
@@ -94,14 +94,14 @@ async fn grant(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&badge));
-    let badges = web::block(move || {
-        let conn = &mut db.connection()?;
-        let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
-        authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
-        let badges = UserBadge::grant(conn, user_id, badge.into_inner())?;
-        Ok::<_, ApiError>(badges)
-    })
-    .await??;
+    let badges = db
+        .run(move |conn| {
+            let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
+            authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
+            let badges = UserBadge::grant(conn, user_id, badge.into_inner())?;
+            Ok::<_, ApiError>(badges)
+        })
+        .await?;
 
     Ok(HttpResponse::Ok().json(badges))
 }
@@ -131,14 +131,14 @@ async fn remove(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&badge_codes));
-    let badges = web::block(move || {
-        let conn = &mut db.connection()?;
-        let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
-        authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
-        let badges = UserBadge::remove_all(conn, user_id, badge_codes.into_inner())?;
-        Ok::<_, ApiError>(badges)
-    })
-    .await??;
+    let badges = db
+        .run(move |conn| {
+            let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
+            authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
+            let badges = UserBadge::remove_all(conn, user_id, badge_codes.into_inner())?;
+            Ok::<_, ApiError>(badges)
+        })
+        .await?;
 
     Ok(HttpResponse::Ok().json(badges))
 }

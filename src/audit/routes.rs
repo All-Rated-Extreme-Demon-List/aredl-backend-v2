@@ -35,14 +35,11 @@ async fn find_all(
     page_query: web::Query<PageQuery<50>>,
     options: web::Query<AuditLogQueryOpts>,
 ) -> Result<HttpResponse, ApiError> {
-    let logs = web::block(move || {
-        AuditLogEntry::list_all(
-            &mut db.connection()?,
-            &options.into_inner(),
-            page_query.into_inner(),
-        )
-    })
-    .await??;
+    let logs = db
+        .run(move |conn| {
+            AuditLogEntry::list_all(conn, &options.into_inner(), page_query.into_inner())
+        })
+        .await?;
 
     Ok(HttpResponse::Ok().json(logs))
 }

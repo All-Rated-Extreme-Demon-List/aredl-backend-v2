@@ -4,7 +4,6 @@ use crate::{
     scheduled::{sleep_until_next, startup_schedule},
     schema::matview_refresh_log,
 };
-use actix_web::web;
 use chrono::Utc;
 use diesel::{prelude::*, upsert::excluded};
 use serde::{Deserialize, Serialize};
@@ -53,27 +52,21 @@ pub async fn start_matviews_refresher(db: Arc<DbAppState>) -> Result<(), Startup
 }
 
 pub async fn refresh(db: Arc<DbAppState>, view: Matview) -> Result<(), ApiError> {
-    web::block(move || {
-        let conn = &mut db.connection()?;
-        conn.transaction::<_, ApiError, _>(|conn| {
-            diesel::sql_query("SET LOCAL work_mem = '64MB'").execute(conn)?;
-            diesel::sql_query(format!("REFRESH MATERIALIZED VIEW CONCURRENTLY {view}"))
-                .execute(conn)?;
-            let new_timestamp = MatviewRefreshLog {
-                view_name: view.to_string(),
-                last_refresh: Utc::now(),
-            };
-            diesel::insert_into(matview_refresh_log::table)
-                .values(&new_timestamp)
-                .on_conflict(matview_refresh_log::view_name)
-                .do_update()
-                .set(
-                    matview_refresh_log::last_refresh
-                        .eq(excluded(matview_refresh_log::last_refresh)),
-                )
-                .execute(conn)?;
-            Ok(())
-        })
+    db.transaction(move |conn| {
+        diesel::sql_query("SET LOCAL work_mem = '64MB'").execute(conn)?;
+        diesel::sql_query(format!("REFRESH MATERIALIZED VIEW CONCURRENTLY {view}"))
+            .execute(conn)?;
+        let new_timestamp = MatviewRefreshLog {
+            view_name: view.to_string(),
+            last_refresh: Utc::now(),
+        };
+        diesel::insert_into(matview_refresh_log::table)
+            .values(&new_timestamp)
+            .on_conflict(matview_refresh_log::view_name)
+            .do_update()
+            .set(matview_refresh_log::last_refresh.eq(excluded(matview_refresh_log::last_refresh)))
+            .execute(conn)?;
+        Ok(())
     })
-    .await?
+    .await
 }

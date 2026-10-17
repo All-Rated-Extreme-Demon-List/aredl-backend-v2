@@ -40,9 +40,9 @@ async fn find_one(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
 ) -> Result<HttpResponse, ApiError> {
-    let result =
-        web::block(move || ResolvedMergeRequest::find_one(&mut db.connection()?, id.into_inner()))
-            .await??;
+    let result = db
+        .run(move |conn| ResolvedMergeRequest::find_one(conn, id.into_inner()))
+        .await?;
     Ok(HttpResponse::Ok().json(result))
 }
 
@@ -68,14 +68,11 @@ async fn list(
     page_query: web::Query<PageQuery<20>>,
     options: web::Query<MergeRequestQueryOptions>,
 ) -> Result<HttpResponse, ApiError> {
-    let result = web::block(move || {
-        MergeRequestPage::find_all(
-            &mut db.connection()?,
-            page_query.into_inner(),
-            &options.into_inner(),
-        )
-    })
-    .await??;
+    let result = db
+        .run(move |conn| {
+            MergeRequestPage::find_all(conn, page_query.into_inner(), &options.into_inner())
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(result))
 }
 
@@ -92,7 +89,7 @@ async fn list(
 )]
 #[post("/claim", wrap = "UserAuth::require(Permission::MergeReview)")]
 async fn claim(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
-    let result = web::block(move || MergeRequest::claim(&mut db.connection()?)).await??;
+    let result = db.transaction(MergeRequest::claim).await?;
     Ok(match result {
         Some(item) => HttpResponse::Ok().json(item),
         None => HttpResponse::NoContent().finish(),
@@ -128,20 +125,19 @@ async fn create(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&options));
-    let result = web::block(move || {
-        let conn = &mut db.connection()?;
+    let result = db
+        .run(move |conn| {
+            authenticated.ensure_not_banned(conn)?;
 
-        authenticated.ensure_not_banned(conn)?;
-
-        MergeRequest::upsert(
-            conn,
-            &MergeRequestUpsert {
-                primary_user: authenticated.user_id,
-                secondary_user: options.secondary_user,
-            },
-        )
-    })
-    .await??;
+            MergeRequest::upsert(
+                conn,
+                &MergeRequestUpsert {
+                    primary_user: authenticated.user_id,
+                    secondary_user: options.secondary_user,
+                },
+            )
+        })
+        .await?;
 
     Ok(HttpResponse::Ok().json(result))
 }
@@ -165,7 +161,8 @@ async fn accept(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
 ) -> Result<HttpResponse, ApiError> {
-    web::block(move || MergeRequest::accept(&mut db.connection()?, id.into_inner())).await??;
+    db.transaction(move |conn| MergeRequest::accept(conn, id.into_inner()))
+        .await?;
 
     Ok(HttpResponse::NoContent().finish())
 }
@@ -189,8 +186,9 @@ async fn reject(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
 ) -> Result<HttpResponse, ApiError> {
-    let result =
-        web::block(move || MergeRequest::reject(&mut db.connection()?, id.into_inner())).await??;
+    let result = db
+        .transaction(move |conn| MergeRequest::reject(conn, id.into_inner()))
+        .await?;
 
     Ok(HttpResponse::Ok().json(result))
 }
@@ -214,8 +212,9 @@ async fn unclaim(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
 ) -> Result<HttpResponse, ApiError> {
-    let result =
-        web::block(move || MergeRequest::unclaim(&mut db.connection()?, id.into_inner())).await??;
+    let result = db
+        .run(move |conn| MergeRequest::unclaim(conn, id.into_inner()))
+        .await?;
     Ok(HttpResponse::Ok().json(result))
 }
 

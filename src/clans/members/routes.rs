@@ -30,10 +30,9 @@ async fn list(
     db: web::Data<Arc<DbAppState>>,
     clan_id: web::Path<Uuid>,
 ) -> Result<HttpResponse, ApiError> {
-    let result = web::block(move || {
-        ClanMember::find_all_clan_members(&mut db.connection()?, clan_id.into_inner())
-    })
-    .await??;
+    let result = db
+        .run(move |conn| ClanMember::find_all_clan_members(conn, clan_id.into_inner()))
+        .await?;
     Ok(HttpResponse::Ok().json(result))
 }
 
@@ -60,15 +59,9 @@ async fn add(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&members));
-    let result = web::block(move || {
-        ClanMember::add_all(
-            &mut db.connection()?,
-            *clan_id,
-            &members.into_inner(),
-            &authenticated,
-        )
-    })
-    .await??;
+    let result = db
+        .run(move |conn| ClanMember::add_all(conn, *clan_id, &members.into_inner(), &authenticated))
+        .await?;
     Ok(HttpResponse::Ok().json(result))
 }
 
@@ -95,15 +88,9 @@ async fn set(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&members));
-    let result = web::block(move || {
-        ClanMember::set_all(
-            &mut db.connection()?,
-            *clan_id,
-            members.into_inner(),
-            &authenticated,
-        )
-    })
-    .await??;
+    let result = db
+        .run(move |conn| ClanMember::set_all(conn, *clan_id, members.into_inner(), &authenticated))
+        .await?;
     Ok(HttpResponse::Ok().json(result))
 }
 
@@ -132,17 +119,18 @@ async fn delete(
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&members));
     let clan_id = clan_id.into_inner();
-    let result = web::block(move || {
-        let conn = &mut db.connection()?;
-        authenticated.ensure_has_clan_permission(conn, clan_id, 1)?;
+    let result = db
+        .run(move |conn| {
+            authenticated.ensure_has_clan_permission(conn, clan_id, 1)?;
 
-        for member_id in members.iter() {
-            authenticated.ensure_has_clan_higher_permission_than_user(conn, clan_id, *member_id)?;
-        }
+            for member_id in members.iter() {
+                authenticated
+                    .ensure_has_clan_higher_permission_than_user(conn, clan_id, *member_id)?;
+            }
 
-        ClanMember::remove_all(conn, clan_id, &members.into_inner(), &authenticated)
-    })
-    .await??;
+            ClanMember::remove_all(conn, clan_id, &members.into_inner(), &authenticated)
+        })
+        .await?;
 
     Ok(HttpResponse::Ok().json(result))
 }
@@ -173,21 +161,21 @@ async fn invite(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&user));
-    let result = web::block(move || {
-        let conn = &mut db.connection()?;
-        authenticated.ensure_has_clan_permission(conn, *clan_id, 1)?;
-        let invite = ClanInvite::create(
-            conn,
-            ClanInviteCreate {
-                clan_id: *clan_id,
-                user_id: user.user_id,
-                invited_by: authenticated.user_id,
-            },
-        )?;
+    let result = db
+        .run(move |conn| {
+            authenticated.ensure_has_clan_permission(conn, *clan_id, 1)?;
+            let invite = ClanInvite::create(
+                conn,
+                ClanInviteCreate {
+                    clan_id: *clan_id,
+                    user_id: user.user_id,
+                    invited_by: authenticated.user_id,
+                },
+            )?;
 
-        Ok::<ClanInvite, ApiError>(invite)
-    })
-    .await??;
+            Ok::<ClanInvite, ApiError>(invite)
+        })
+        .await?;
     Ok(HttpResponse::Created().json(result))
 }
 
@@ -219,19 +207,19 @@ async fn edit(
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&member));
     let (clan_id, user_id) = path.into_inner();
-    let result = web::block(move || {
-        let conn = &mut db.connection()?;
-        authenticated.ensure_has_clan_permission(conn, clan_id, 2)?;
-        let member = ClanMember::edit_member_role(
-            conn,
-            clan_id,
-            user_id,
-            &member.into_inner(),
-            &authenticated,
-        )?;
-        Ok::<ClanMember, ApiError>(member)
-    })
-    .await??;
+    let result = db
+        .run(move |conn| {
+            authenticated.ensure_has_clan_permission(conn, clan_id, 2)?;
+            let member = ClanMember::edit_member_role(
+                conn,
+                clan_id,
+                user_id,
+                &member.into_inner(),
+                &authenticated,
+            )?;
+            Ok::<ClanMember, ApiError>(member)
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(result))
 }
 

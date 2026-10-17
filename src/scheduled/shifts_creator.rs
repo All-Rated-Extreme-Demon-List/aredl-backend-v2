@@ -5,7 +5,6 @@ use crate::{
     scheduled::{sleep_until_next, startup_schedule},
     shifts::RecurringShift,
 };
-use actix_web::web;
 use chrono::{NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use std::{sync::Arc, time::Duration};
@@ -41,8 +40,9 @@ pub async fn create_shifts(
     notify_tx: broadcast::Sender<WebsocketNotification>,
     date: NaiveDate,
 ) -> Result<CreateShiftsResult, ApiError> {
-    let new_shifts =
-        web::block(move || RecurringShift::create_shifts(&mut db.connection()?, date)).await??;
+    let new_shifts = db
+        .run(move |conn| RecurringShift::create_shifts(conn, date))
+        .await?;
     WebsocketNotification::send(&notify_tx, "SHIFTS_CREATED", &new_shifts);
     Ok(CreateShiftsResult {
         date,

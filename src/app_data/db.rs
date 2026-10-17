@@ -18,11 +18,31 @@ pub type DbConnection = r2d2::PooledConnection<ConnectionManager<PgConnection>>;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
+#[derive(Clone)]
 pub struct DbAppState {
     pub pool: Pool,
 }
 
 impl DbAppState {
+    /// acquires a db connection and runs an operation through actix web block
+    pub async fn run<F, T>(&self, operation: F) -> Result<T, ApiError>
+    where
+        F: FnOnce(&mut DbConnection) -> Result<T, ApiError> + Send + 'static,
+        T: Send + 'static,
+    {
+        let db = self.clone();
+        actix_web::web::block(move || operation(&mut db.connection()?)).await?
+    }
+
+    /// acquires a db connection and runs an operation in a transaction through actix web block
+    pub async fn transaction<F, T>(&self, operation: F) -> Result<T, ApiError>
+    where
+        F: FnOnce(&mut DbConnection) -> Result<T, ApiError> + Send + 'static,
+        T: Send + 'static,
+    {
+        self.run(move |conn| conn.transaction(operation)).await
+    }
+
     pub fn connection(&self) -> Result<DbConnection, ApiError> {
         self.pool
             .get()

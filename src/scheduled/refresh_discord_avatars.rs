@@ -3,7 +3,6 @@ use crate::error_handler::{ApiError, StartupError};
 use crate::scheduled::{sleep_until_next, startup_schedule};
 use crate::schema::users;
 use crate::users::avatar::{AvatarRefresher, RefreshError};
-use actix_web::web;
 use chrono::Utc;
 use diesel::prelude::*;
 use std::sync::Arc;
@@ -21,24 +20,23 @@ pub async fn start_discord_avatars_refresher(
     task::spawn(async move {
         loop {
             tracing::info!("Refreshing discord avatars");
-            let db_users = db.clone();
-            let users_to_refresh = web::block(move || {
-                users::table
-                    .filter(users::discord_id.is_not_null())
-                    .filter(users::last_discord_avatar_update.is_null().or(
-                        users::last_discord_avatar_update.lt(
-                            (Utc::now() - chrono::Duration::days(STALE_AFTER_DAYS)).naive_utc(),
-                        ),
-                    ))
-                    .order(users::last_discord_avatar_update.asc().nulls_first())
-                    .limit(BATCH_LIMIT)
-                    .select(users::id)
-                    .load::<Uuid>(&mut db_users.connection()?)
-                    .map_err(ApiError::from)
-            })
-            .await
-            .map_err(ApiError::from)
-            .and_then(|result| result);
+
+            let users_to_refresh = db
+                .run(move |conn| {
+                    users::table
+                        .filter(users::discord_id.is_not_null())
+                        .filter(users::last_discord_avatar_update.is_null().or(
+                            users::last_discord_avatar_update.lt(
+                                (Utc::now() - chrono::Duration::days(STALE_AFTER_DAYS)).naive_utc(),
+                            ),
+                        ))
+                        .order(users::last_discord_avatar_update.asc().nulls_first())
+                        .limit(BATCH_LIMIT)
+                        .select(users::id)
+                        .load::<Uuid>(conn)
+                        .map_err(ApiError::from)
+                })
+                .await;
 
             match users_to_refresh {
                 Ok(user_ids) => {

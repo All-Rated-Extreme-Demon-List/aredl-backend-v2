@@ -21,10 +21,9 @@ async fn list(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let result = web::block(move || {
-        Notification::find_all_me_notifications(&mut db.connection()?, authenticated.user_id)
-    })
-    .await??;
+    let result = db
+        .run(move |conn| Notification::find_all_me_notifications(conn, authenticated.user_id))
+        .await?;
     Ok(HttpResponse::Ok().json(result))
 }
 
@@ -43,10 +42,8 @@ async fn clear(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    web::block(move || {
-        Notification::clear_me_notifications(&mut db.connection()?, authenticated.user_id)
-    })
-    .await??;
+    db.run(move |conn| Notification::clear_me_notifications(conn, authenticated.user_id))
+        .await?;
     Ok(HttpResponse::NoContent().finish())
 }
 

@@ -32,12 +32,12 @@ async fn find_all(
     db: web::Data<Arc<DbAppState>>,
     path: web::Path<LevelPath>,
 ) -> Result<HttpResponse, ApiError> {
-    let creators = web::block(move || {
-        let conn = &mut db.connection()?;
-        let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
-        BaseUser::find_all_creators(conn, path.list, level_id)
-    })
-    .await??;
+    let creators = db
+        .run(move |conn| {
+            let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
+            BaseUser::find_all_creators(conn, path.list, level_id)
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(creators))
 }
 
@@ -66,18 +66,18 @@ async fn set(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&creators));
-    let creators = web::block(move || {
-        let conn = &mut db.connection()?;
-        let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
-        BaseUser::set_all_creators(
-            conn,
-            path.list,
-            level_id,
-            &creators.into_inner(),
-            &authenticated,
-        )
-    })
-    .await??;
+    let creators = db
+        .run(move |conn| {
+            let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
+            BaseUser::set_all_creators(
+                conn,
+                path.list,
+                level_id,
+                &creators.into_inner(),
+                &authenticated,
+            )
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(creators))
 }
 
@@ -106,18 +106,18 @@ async fn add(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&creators));
-    let creators = web::block(move || {
-        let conn = &mut db.connection()?;
-        let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
-        BaseUser::add_all_creators(
-            conn,
-            path.list,
-            level_id,
-            &creators.into_inner(),
-            &authenticated,
-        )
-    })
-    .await??;
+    let creators = db
+        .run(move |conn| {
+            let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
+            BaseUser::add_all_creators(
+                conn,
+                path.list,
+                level_id,
+                &creators.into_inner(),
+                &authenticated,
+            )
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(creators))
 }
 
@@ -146,18 +146,18 @@ async fn delete(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&creators));
-    let creators = web::block(move || {
-        let conn = &mut db.connection()?;
-        let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
-        BaseUser::delete_all_creators(
-            conn,
-            path.list,
-            level_id,
-            &creators.into_inner(),
-            &authenticated,
-        )
-    })
-    .await??;
+    let creators = db
+        .run(move |conn| {
+            let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
+            BaseUser::delete_all_creators(
+                conn,
+                path.list,
+                level_id,
+                &creators.into_inner(),
+                &authenticated,
+            )
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(creators))
 }
 

@@ -57,41 +57,38 @@ pub async fn create_api_key(
 
     let lifetime_minutes = options.lifetime_minutes;
 
-    let response = web::block(move || {
-        let decoded_token_claims =
-            token::decode_token(access_token, &data.jwt_decoding_key, &["access"])?;
+    let response = db
+        .run(move |conn| {
+            let decoded_token_claims =
+                token::decode_token(access_token, &data.jwt_decoding_key, &["access"])?;
 
-        let decoded_user_claims = token::decode_user_claims(&decoded_token_claims)?;
+            let decoded_user_claims = token::decode_user_claims(&decoded_token_claims)?;
 
-        check_token_valid(
-            &decoded_token_claims,
-            &decoded_user_claims,
-            &mut db.connection()?,
-        )?;
+            check_token_valid(&decoded_token_claims, &decoded_user_claims, conn)?;
 
-        let user_id = decoded_user_claims.user_id;
+            let user_id = decoded_user_claims.user_id;
 
-        let lifetime = Duration::minutes(lifetime_minutes);
+            let lifetime = Duration::minutes(lifetime_minutes);
 
-        if lifetime > Duration::days(365) {
-            return Err(ApiError::UnprocessableEntity(
-                "API key lifetime cannot exceed 1 year (525600 minutes)",
-            ));
-        }
+            if lifetime > Duration::days(365) {
+                return Err(ApiError::UnprocessableEntity(
+                    "API key lifetime cannot exceed 1 year (525600 minutes)",
+                ));
+            }
 
-        let (api_key, expires) = token::create_token(
-            &UserClaims {
-                user_id,
-                is_api_key: true,
-            },
-            &data.jwt_encoding_key,
-            lifetime,
-            "access",
-        )?;
+            let (api_key, expires) = token::create_token(
+                &UserClaims {
+                    user_id,
+                    is_api_key: true,
+                },
+                &data.jwt_encoding_key,
+                lifetime,
+                "access",
+            )?;
 
-        Ok(ApiKeyResponse { api_key, expires })
-    })
-    .await??;
+            Ok(ApiKeyResponse { api_key, expires })
+        })
+        .await?;
 
     Ok(HttpResponse::Ok().json(response))
 }

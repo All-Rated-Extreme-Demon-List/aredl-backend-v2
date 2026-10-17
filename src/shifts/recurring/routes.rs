@@ -34,10 +34,9 @@ async fn find_all_recurring_shifts(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let shifts = web::block(move || {
-        ResolvedRecurringShift::find_all_for_user(&mut db.connection()?, &authenticated)
-    })
-    .await??;
+    let shifts = db
+        .run(move |conn| ResolvedRecurringShift::find_all_for_user(conn, &authenticated))
+        .await?;
     Ok(HttpResponse::Ok().json(shifts))
 }
 
@@ -59,11 +58,12 @@ async fn create_new_recurring_shift(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&body));
-    let shift = web::block(move || {
-        parse_timezone(&body.timezone)?;
-        RecurringShift::create(&mut db.connection()?, &body.into_inner())
-    })
-    .await??;
+    let shift = db
+        .run(move |conn| {
+            parse_timezone(&body.timezone)?;
+            RecurringShift::create(conn, &body.into_inner())
+        })
+        .await?;
     Ok(HttpResponse::Created().json(shift))
 }
 
@@ -91,13 +91,14 @@ async fn patch_recurring_shift(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&body));
-    let updated = web::block(move || {
-        if let Some(tz_str) = &body.timezone {
-            parse_timezone(tz_str)?;
-        }
-        RecurringShift::patch(&mut db.connection()?, id.into_inner(), &body.into_inner())
-    })
-    .await??;
+    let updated = db
+        .run(move |conn| {
+            if let Some(tz_str) = &body.timezone {
+                parse_timezone(tz_str)?;
+            }
+            RecurringShift::patch(conn, id.into_inner(), &body.into_inner())
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(updated))
 }
 
@@ -120,9 +121,9 @@ async fn delete_recurring_shift(
     db: web::Data<Arc<DbAppState>>,
     id: web::Path<Uuid>,
 ) -> Result<HttpResponse, ApiError> {
-    let deleted =
-        web::block(move || RecurringShift::delete(&mut db.connection()?, id.into_inner()))
-            .await??;
+    let deleted = db
+        .run(move |conn| RecurringShift::delete(conn, id.into_inner()))
+        .await?;
     Ok(HttpResponse::Ok().json(deleted))
 }
 

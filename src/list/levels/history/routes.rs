@@ -29,19 +29,19 @@ async fn find(
     db: web::Data<Arc<DbAppState>>,
     path: web::Path<LevelPath>,
 ) -> Result<HttpResponse, ApiError> {
-    let response = web::block(move || -> Result<Vec<HistoryLevelResponse>, ApiError> {
-        let conn = &mut db.connection()?;
-        let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
-        let entries = HistoryLevelFullResolved::find(conn, path.list, level_id)?;
-        // map history
-        let response = entries
-            .into_iter()
-            .map(|data| HistoryLevelResponse::from((data, level_id)))
-            .collect::<Vec<_>>();
+    let response = db
+        .run(move |conn| -> Result<Vec<HistoryLevelResponse>, ApiError> {
+            let level_id = resolve_level_id(conn, path.list, &path.level_id)?;
+            let entries = HistoryLevelFullResolved::find(conn, path.list, level_id)?;
+            // map history
+            let response = entries
+                .into_iter()
+                .map(|data| HistoryLevelResponse::from((data, level_id)))
+                .collect::<Vec<_>>();
 
-        Ok(response)
-    })
-    .await??;
+            Ok(response)
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(response))
 }
 

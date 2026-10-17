@@ -42,10 +42,9 @@ async fn find(
     path: web::Path<ProfilePath>,
     authenticated: Option<Authenticated>,
 ) -> Result<HttpResponse, ApiError> {
-    let profile = web::block(move || {
-        ProfileResolved::from_str(&mut db.connection()?, path.list, &path.id, authenticated)
-    })
-    .await??;
+    let profile = db
+        .run(move |conn| ProfileResolved::from_str(conn, path.list, &path.id, authenticated))
+        .await?;
     Ok(HttpResponse::Ok().json(profile))
 }
 

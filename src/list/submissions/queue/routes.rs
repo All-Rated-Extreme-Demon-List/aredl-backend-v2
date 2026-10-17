@@ -35,10 +35,9 @@ async fn get_queue_position(
     path: web::Path<SubmissionPath>,
     _auth: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let (position, priority) = web::block(move || {
-        Submission::get_queue_position(&mut db.connection()?, path.list, path.id)
-    })
-    .await??;
+    let (position, priority) = db
+        .run(move |conn| Submission::get_queue_position(conn, path.list, path.id))
+        .await?;
 
     Ok(HttpResponse::Ok().json(QueuePositionResponse { position, priority }))
 }
@@ -58,8 +57,9 @@ async fn get_queue(
     list: web::Path<List>,
     db: web::Data<Arc<DbAppState>>,
 ) -> Result<HttpResponse, ApiError> {
-    let submission =
-        web::block(move || SubmissionQueue::get_queue(&mut db.connection()?, *list)).await??;
+    let submission = db
+        .run(move |conn| SubmissionQueue::get_queue(conn, *list))
+        .await?;
     Ok(HttpResponse::Ok().json(submission))
 }
 

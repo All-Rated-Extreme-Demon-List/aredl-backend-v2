@@ -4,7 +4,7 @@ use crate::providers::ProvidersAppState;
 use crate::schema::users;
 use crate::users::User;
 use crate::{create_client, get_secret};
-use actix_web::{http::StatusCode, web, HttpResponse, ResponseError};
+use actix_web::{http::StatusCode, HttpResponse, ResponseError};
 use chrono::Utc;
 use diesel::prelude::*;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
@@ -116,14 +116,13 @@ impl AvatarRefresher {
         db: Arc<DbAppState>,
         user_id: Uuid,
     ) -> Result<User, RefreshError> {
-        let db_user = db.clone();
-        let discord_id = web::block(move || {
-            User::from_uuid(&mut db_user.connection()?, user_id)?
-                .discord_id
-                .ok_or_else(|| ApiError::BadRequest("User has no linked Discord account"))
-        })
-        .await
-        .map_err(ApiError::from)??;
+        let discord_id = db
+            .run(move |conn| {
+                User::from_uuid(conn, user_id)?
+                    .discord_id
+                    .ok_or_else(|| ApiError::BadRequest("User has no linked Discord account"))
+            })
+            .await?;
 
         // only fetch if not rate limited
         let mut next_request_at = self.next_request_at.lock().await;
@@ -183,24 +182,24 @@ impl AvatarRefresher {
 
         drop(next_request_at);
 
-        Ok(web::block(move || {
-            diesel::update(
-                users::table
-                    .find(user_id)
-                    .filter(users::discord_id.eq(discord_id)),
-            )
-            .set((
-                users::discord_avatar.eq(discord_user.avatar),
-                users::discord_avatar_decoration
-                    .eq(discord_user.avatar_decoration_data.map(|data| data.asset)),
-                users::last_discord_avatar_update.eq(Utc::now().naive_utc()),
-            ))
-            .returning(User::as_returning())
-            .get_result(&mut db.connection()?)
-            .map_err(ApiError::from)
-        })
-        .await
-        .map_err(ApiError::from)??)
+        Ok(db
+            .run(move |conn| {
+                diesel::update(
+                    users::table
+                        .find(user_id)
+                        .filter(users::discord_id.eq(discord_id)),
+                )
+                .set((
+                    users::discord_avatar.eq(discord_user.avatar),
+                    users::discord_avatar_decoration
+                        .eq(discord_user.avatar_decoration_data.map(|data| data.asset)),
+                    users::last_discord_avatar_update.eq(Utc::now().naive_utc()),
+                ))
+                .returning(User::as_returning())
+                .get_result(conn)
+                .map_err(ApiError::from)
+            })
+            .await?)
     }
 
     fn parse_header_seconds(headers: &HeaderMap, name: &str) -> Option<Duration> {

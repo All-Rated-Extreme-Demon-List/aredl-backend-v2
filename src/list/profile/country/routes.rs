@@ -41,10 +41,9 @@ async fn find(
     db: web::Data<Arc<DbAppState>>,
     path: web::Path<CountryPath>,
 ) -> Result<HttpResponse, ApiError> {
-    let profile = web::block(move || {
-        CountryProfileResolved::find(&mut db.connection()?, path.list, path.country)
-    })
-    .await??;
+    let profile = db
+        .run(move |conn| CountryProfileResolved::find(conn, path.list, path.country))
+        .await?;
     Ok(HttpResponse::Ok().json(profile))
 }
 
@@ -70,15 +69,16 @@ async fn level_records(
     db: web::Data<Arc<DbAppState>>,
     path: web::Path<CountryLevelPath>,
 ) -> Result<HttpResponse, ApiError> {
-    let records = web::block(move || {
-        CountryProfileResolved::find_records_for_level(
-            &mut db.connection()?,
-            path.list,
-            path.country,
-            path.level_id,
-        )
-    })
-    .await??;
+    let records = db
+        .run(move |conn| {
+            CountryProfileResolved::find_records_for_level(
+                conn,
+                path.list,
+                path.country,
+                path.level_id,
+            )
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(records))
 }
 

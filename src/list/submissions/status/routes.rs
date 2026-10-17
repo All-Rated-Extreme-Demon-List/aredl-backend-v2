@@ -8,7 +8,6 @@ use crate::{
     list::submissions::status::{SubmissionsEnabled, SubmissionsEnabledFull},
 };
 use actix_web::{get, post, web, HttpResponse};
-use diesel::Connection as _;
 use std::sync::Arc;
 use utoipa::OpenApi;
 
@@ -32,13 +31,11 @@ async fn enable(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    web::block(move || {
-        db.connection()?.transaction(|conn| {
-            let status = SubmissionsEnabled::enable(conn, *list, authenticated.user_id)?;
-            AuditLogEntry::log_create(conn, Some(authenticated.user_id), &status)
-        })
+    db.transaction(move |conn| {
+        let status = SubmissionsEnabled::enable(conn, *list, authenticated.user_id)?;
+        AuditLogEntry::log_create(conn, Some(authenticated.user_id), &status)
     })
-    .await??;
+    .await?;
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -62,13 +59,11 @@ async fn disable(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    web::block(move || {
-        db.connection()?.transaction(|conn| {
-            let status = SubmissionsEnabled::disable(conn, *list, authenticated.user_id)?;
-            AuditLogEntry::log_create(conn, Some(authenticated.user_id), &status)
-        })
+    db.transaction(move |conn| {
+        let status = SubmissionsEnabled::disable(conn, *list, authenticated.user_id)?;
+        AuditLogEntry::log_create(conn, Some(authenticated.user_id), &status)
     })
-    .await??;
+    .await?;
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -92,8 +87,9 @@ async fn get_status_full(
     list: web::Path<List>,
     db: web::Data<Arc<DbAppState>>,
 ) -> Result<HttpResponse, ApiError> {
-    let res = web::block(move || SubmissionsEnabledFull::get_status(&mut db.connection()?, *list))
-        .await??;
+    let res = db
+        .run(move |conn| SubmissionsEnabledFull::get_status(conn, *list))
+        .await?;
     Ok(HttpResponse::Ok().json(res))
 }
 
@@ -112,8 +108,9 @@ async fn get_status(
     list: web::Path<List>,
     db: web::Data<Arc<DbAppState>>,
 ) -> Result<HttpResponse, ApiError> {
-    let res =
-        web::block(move || SubmissionsEnabled::is_enabled(&mut db.connection()?, *list)).await??;
+    let res = db
+        .run(move |conn| SubmissionsEnabled::is_enabled(conn, *list))
+        .await?;
     Ok(HttpResponse::Ok().json(res))
 }
 
@@ -136,9 +133,9 @@ async fn get_history(
     list: web::Path<List>,
     db: web::Data<Arc<DbAppState>>,
 ) -> Result<HttpResponse, ApiError> {
-    let res =
-        web::block(move || SubmissionsEnabledFull::get_statuses(&mut db.connection()?, *list))
-            .await??;
+    let res = db
+        .run(move |conn| SubmissionsEnabledFull::get_statuses(conn, *list))
+        .await?;
     Ok(HttpResponse::Ok().json(res))
 }
 

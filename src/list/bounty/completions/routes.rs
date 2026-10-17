@@ -26,10 +26,9 @@ async fn list(
     db: web::Data<Arc<DbAppState>>,
     path: web::Path<BountyPath>,
 ) -> Result<HttpResponse, ApiError> {
-    let result = web::block(move || {
-        Bounty::find_completions_from_id(&mut db.connection()?, path.list, path.bounty_id)
-    })
-    .await??;
+    let result = db
+        .run(move |conn| Bounty::find_completions_from_id(conn, path.list, path.bounty_id))
+        .await?;
     Ok(HttpResponse::Ok().json(result))
 }
 
@@ -53,11 +52,10 @@ async fn sync_completions(
     db: web::Data<Arc<DbAppState>>,
     path: web::Path<BountyPath>,
 ) -> Result<HttpResponse, ApiError> {
-    web::block(move || {
-        let conn = &mut db.connection()?;
+    db.run(move |conn| {
         Bounty::find_by_id(conn, path.list, path.bounty_id)?.sync_completions(conn, path.list)
     })
-    .await??;
+    .await?;
     Ok(HttpResponse::NoContent().finish())
 }
 

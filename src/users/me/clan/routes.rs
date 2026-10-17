@@ -24,7 +24,8 @@ async fn leave(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    web::block(move || Clan::leave(&mut db.connection()?, authenticated.user_id)).await??;
+    db.run(move |conn| Clan::leave(conn, authenticated.user_id))
+        .await?;
     Ok(HttpResponse::NoContent().finish())
 }
 

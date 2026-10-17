@@ -27,14 +27,9 @@ async fn find(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let user = web::block(move || {
-        UserResolved::from_uuid(
-            &mut db.connection()?,
-            authenticated.user_id,
-            Some(&authenticated),
-        )
-    })
-    .await??;
+    let user = db
+        .run(move |conn| UserResolved::from_uuid(conn, authenticated.user_id, Some(&authenticated)))
+        .await?;
     Ok(HttpResponse::Ok().json(user))
 }
 
@@ -66,14 +61,14 @@ async fn update(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&user));
-    let user = web::block(move || {
-        let conn = &mut db.connection()?;
-        let before = User::from_uuid(conn, authenticated.user_id)?;
-        let updated_user = User::update_me(conn, authenticated.user_id, &user.into_inner())?;
-        AuditLogEntry::log_update(conn, Some(authenticated.user_id), &before, &updated_user)?;
-        Ok::<_, ApiError>(updated_user)
-    })
-    .await??;
+    let user = db
+        .transaction(move |conn| {
+            let before = User::from_uuid(conn, authenticated.user_id)?;
+            let updated_user = User::update_me(conn, authenticated.user_id, &user.into_inner())?;
+            AuditLogEntry::log_update(conn, Some(authenticated.user_id), &before, &updated_user)?;
+            Ok::<_, ApiError>(updated_user)
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(user))
 }
 
@@ -92,12 +87,12 @@ async fn sync(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let badges = web::block(move || {
-        let conn = &mut db.connection()?;
-        UserBadge::update_user_badges(conn, authenticated.user_id)?;
-        UserBadge::find_all(conn, authenticated.user_id)
-    })
-    .await??;
+    let badges = db
+        .run(move |conn| {
+            UserBadge::update_user_badges(conn, authenticated.user_id)?;
+            UserBadge::find_all(conn, authenticated.user_id)
+        })
+        .await?;
 
     Ok(HttpResponse::Ok().json(badges))
 }
@@ -140,10 +135,8 @@ async fn delete(
     db: web::Data<Arc<DbAppState>>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    web::block(move || {
-        User::soft_delete(&mut db.connection()?, authenticated.user_id, &authenticated)
-    })
-    .await??;
+    db.run(move |conn| User::soft_delete(conn, authenticated.user_id, &authenticated))
+        .await?;
     Ok(HttpResponse::NoContent().finish())
 }
 

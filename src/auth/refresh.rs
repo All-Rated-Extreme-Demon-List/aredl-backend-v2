@@ -59,10 +59,13 @@ async fn refresh_auth(
 
     let decoded_user_claims = token::decode_user_claims(&decoded_token_claims)?;
 
-    let conn = &mut db.connection()?;
-    check_token_valid(&decoded_token_claims, &decoded_user_claims, conn)?;
-
     let user_id = decoded_user_claims.user_id;
+    let decoded_token_claims = db
+        .run(move |conn| {
+            check_token_valid(&decoded_token_claims, &decoded_user_claims, conn)?;
+            Ok(decoded_token_claims)
+        })
+        .await?;
 
     let (access_token, access_expires) = token::create_token(
         &UserClaims {

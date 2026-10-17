@@ -6,7 +6,6 @@ use crate::error_handler::{ApiError, ErrorResponse};
 use crate::list::bounty::{completions, Bounty, BountyPatch, BountyPost, BountyResolved};
 use crate::list::List;
 use actix_web::{delete, get, patch, post, web, HttpResponse};
-use diesel::Connection as _;
 use serde::Deserialize;
 use std::sync::Arc;
 use tracing_actix_web::RootSpan;
@@ -42,9 +41,9 @@ async fn find_all(
     list: web::Path<List>,
     authenticated: Option<Authenticated>,
 ) -> Result<HttpResponse, ApiError> {
-    let result =
-        web::block(move || BountyResolved::find_all(&mut db.connection()?, *list, authenticated))
-            .await??;
+    let result = db
+        .run(move |conn| BountyResolved::find_all(conn, *list, authenticated))
+        .await?;
     Ok(HttpResponse::Ok().json(result))
 }
 
@@ -75,14 +74,13 @@ async fn create(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&new_bounty));
-    let result = web::block(move || {
-        db.connection()?.transaction(|conn| {
+    let result = db
+        .transaction(move |conn| {
             let bounty = Bounty::create(conn, *list, new_bounty.into_inner())?;
             AuditLogEntry::log_create(conn, Some(authenticated.user_id), &bounty)?;
             Ok::<_, ApiError>(bounty)
         })
-    })
-    .await??;
+        .await?;
     Ok(HttpResponse::Created().json(result))
 }
 
@@ -115,15 +113,14 @@ async fn update(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&patch));
-    let result = web::block(move || {
-        db.connection()?.transaction(|conn| {
+    let result = db
+        .transaction(move |conn| {
             let before = Bounty::find_for_update(conn, path.list, path.bounty_id)?;
             let after = before.update(conn, path.list, patch.into_inner())?;
             AuditLogEntry::log_update(conn, Some(authenticated.user_id), &before, &after)?;
             Ok::<_, ApiError>(after)
         })
-    })
-    .await??;
+        .await?;
     Ok(HttpResponse::Ok().json(result))
 }
 
@@ -148,15 +145,13 @@ async fn delete(
     path: web::Path<BountyPath>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    web::block(move || {
-        db.connection()?.transaction(|conn| {
-            let deleted =
-                Bounty::find_by_id(conn, path.list, path.bounty_id)?.delete(conn, path.list)?;
-            AuditLogEntry::log_delete(conn, Some(authenticated.user_id), &deleted)?;
-            Ok::<_, ApiError>(deleted)
-        })
+    db.transaction(move |conn| {
+        let deleted =
+            Bounty::find_by_id(conn, path.list, path.bounty_id)?.delete(conn, path.list)?;
+        AuditLogEntry::log_delete(conn, Some(authenticated.user_id), &deleted)?;
+        Ok::<_, ApiError>(deleted)
     })
-    .await??;
+    .await?;
     Ok(HttpResponse::NoContent().finish())
 }
 

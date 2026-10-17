@@ -27,10 +27,9 @@ async fn list(
     list: web::Path<List>,
     options: web::Query<CountryLeaderboardQueryOptions>,
 ) -> Result<HttpResponse, ApiError> {
-    let result = web::block(move || {
-        CountryLeaderboardPage::find_all(&mut db.connection()?, *list, options.into_inner())
-    })
-    .await??;
+    let result = db
+        .run(move |conn| CountryLeaderboardPage::find_all(conn, *list, options.into_inner()))
+        .await?;
     Ok(HttpResponse::Ok().json(result))
 }
 

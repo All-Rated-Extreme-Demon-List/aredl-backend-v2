@@ -43,9 +43,9 @@ async fn find(
     db: web::Data<Arc<DbAppState>>,
     path: web::Path<RecordPath>,
 ) -> Result<HttpResponse, ApiError> {
-    let record =
-        web::block(move || ResolvedRecord::find(&mut db.connection()?, path.list, path.id))
-            .await??;
+    let record = db
+        .run(move |conn| ResolvedRecord::find(conn, path.list, path.id))
+        .await?;
     Ok(HttpResponse::Ok().json(record))
 }
 
@@ -75,15 +75,9 @@ async fn create(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&record));
-    let record = web::block(move || {
-        Record::create(
-            &mut db.connection()?,
-            *list,
-            &record.into_inner(),
-            &authenticated,
-        )
-    })
-    .await??;
+    let record = db
+        .run(move |conn| Record::create(conn, *list, &record.into_inner(), &authenticated))
+        .await?;
     Ok(HttpResponse::Ok().json(record))
 }
 
@@ -115,16 +109,17 @@ async fn update(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&record));
-    let record = web::block(move || {
-        Record::update(
-            &mut db.connection()?,
-            path.list,
-            path.id,
-            &record.into_inner(),
-            &authenticated,
-        )
-    })
-    .await??;
+    let record = db
+        .run(move |conn| {
+            Record::update(
+                conn,
+                path.list,
+                path.id,
+                &record.into_inner(),
+                &authenticated,
+            )
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(record))
 }
 
@@ -177,8 +172,8 @@ async fn delete(
     path: web::Path<RecordPath>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    web::block(move || Record::delete(&mut db.connection()?, path.list, path.id, &authenticated))
-        .await??;
+    db.run(move |conn| Record::delete(conn, path.list, path.id, &authenticated))
+        .await?;
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -211,13 +206,13 @@ async fn mutual_victors(
     query: web::Query<MutualVictorsQuery>,
 ) -> Result<HttpResponse, ApiError> {
     let query = query.into_inner();
-    let victors = web::block(move || {
-        let conn = &mut db.connection()?;
-        let level_id = resolve_level_id(conn, *list, &query.level_id)?;
-        let other_level_id = resolve_level_id(conn, *list, &query.other_level_id)?;
-        MutualVictors::find(conn, *list, level_id, other_level_id, query.high_extremes)
-    })
-    .await??;
+    let victors = db
+        .run(move |conn| {
+            let level_id = resolve_level_id(conn, *list, &query.level_id)?;
+            let other_level_id = resolve_level_id(conn, *list, &query.other_level_id)?;
+            MutualVictors::find(conn, *list, level_id, other_level_id, query.high_extremes)
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(victors))
 }
 
@@ -247,15 +242,11 @@ async fn find_all(
     page_query: web::Query<PageQuery<100>>,
     options: web::Query<RecordsQueryOptions>,
 ) -> Result<HttpResponse, ApiError> {
-    let records = web::block(move || {
-        ResolvedRecord::find_all(
-            &mut db.connection()?,
-            page_query.into_inner(),
-            *list,
-            &options.into_inner(),
-        )
-    })
-    .await??;
+    let records = db
+        .run(move |conn| {
+            ResolvedRecord::find_all(conn, page_query.into_inner(), *list, &options.into_inner())
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(records))
 }
 
@@ -280,21 +271,22 @@ async fn find_me(
     page_query: web::Query<PageQuery<100>>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let records = web::block(move || {
-        ResolvedRecord::find_all(
-            &mut db.connection()?,
-            page_query.into_inner(),
-            *list,
-            &RecordsQueryOptions {
-                level_filter: None,
-                mobile_filter: None,
-                verification_filter: None,
-                submitter_filter: Some(authenticated.user_id.to_string()),
-                sort: None,
-            },
-        )
-    })
-    .await??;
+    let records = db
+        .run(move |conn| {
+            ResolvedRecord::find_all(
+                conn,
+                page_query.into_inner(),
+                *list,
+                &RecordsQueryOptions {
+                    level_filter: None,
+                    mobile_filter: None,
+                    verification_filter: None,
+                    submitter_filter: Some(authenticated.user_id.to_string()),
+                    sort: None,
+                },
+            )
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(records))
 }
 

@@ -20,7 +20,7 @@ use uuid::Uuid;
 )]
 #[get("", wrap = "UserAuth::require(Permission::RoleAssign)")]
 async fn find_all(db: web::Data<Arc<DbAppState>>) -> Result<HttpResponse, ApiError> {
-    let roles = web::block(move || RoleResolved::find_all(&mut db.connection()?)).await??;
+    let roles = db.run(RoleResolved::find_all).await?;
     Ok(HttpResponse::Ok().json(roles))
 }
 
@@ -47,9 +47,9 @@ async fn create(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&role));
-    let role =
-        web::block(move || Role::create(&mut db.connection()?, &authenticated, role.into_inner()))
-            .await??;
+    let role = db
+        .run(move |conn| Role::create(conn, &authenticated, role.into_inner()))
+        .await?;
     Ok(HttpResponse::Created().json(role))
 }
 
@@ -81,15 +81,9 @@ async fn update(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&role));
-    let role = web::block(move || {
-        Role::update(
-            &mut db.connection()?,
-            &authenticated,
-            id.into_inner(),
-            role.into_inner(),
-        )
-    })
-    .await??;
+    let role = db
+        .run(move |conn| Role::update(conn, &authenticated, id.into_inner(), role.into_inner()))
+        .await?;
     Ok(HttpResponse::Ok().json(role))
 }
 
@@ -116,9 +110,9 @@ async fn delete(
     authenticated: Authenticated,
     id: web::Path<Uuid>,
 ) -> Result<HttpResponse, ApiError> {
-    let role =
-        web::block(move || Role::delete(&mut db.connection()?, &authenticated, id.into_inner()))
-            .await??;
+    let role = db
+        .run(move |conn| Role::delete(conn, &authenticated, id.into_inner()))
+        .await?;
     Ok(HttpResponse::Ok().json(role))
 }
 

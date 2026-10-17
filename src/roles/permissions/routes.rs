@@ -31,9 +31,9 @@ async fn find_all(
     id: web::Path<Uuid>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let permissions =
-        web::block(move || Role::permission_find_all(&mut db.connection()?, *id, &authenticated))
-            .await??;
+    let permissions = db
+        .run(move |conn| Role::permission_find_all(conn, *id, &authenticated))
+        .await?;
     Ok(HttpResponse::Ok().json(permissions))
 }
 
@@ -61,10 +61,9 @@ async fn find_all_resolved(
     id: web::Path<Uuid>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let permissions = web::block(move || {
-        Role::permission_find_all_resolved(&mut db.connection()?, *id, &authenticated)
-    })
-    .await??;
+    let permissions = db
+        .run(move |conn| Role::permission_find_all_resolved(conn, *id, &authenticated))
+        .await?;
     Ok(HttpResponse::Ok().json(permissions))
 }
 
@@ -96,15 +95,11 @@ async fn set(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&permissions));
-    let permissions = web::block(move || {
-        Role::permission_set_all(
-            &mut db.connection()?,
-            *id,
-            authenticated,
-            permissions.into_inner(),
-        )
-    })
-    .await??;
+    let permissions = db
+        .run(move |conn| {
+            Role::permission_set_all(conn, *id, authenticated, permissions.into_inner())
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(permissions))
 }
 
@@ -136,15 +131,11 @@ async fn add(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&permissions));
-    let permissions = web::block(move || {
-        Role::permission_add_all(
-            &mut db.connection()?,
-            *id,
-            authenticated,
-            permissions.into_inner(),
-        )
-    })
-    .await??;
+    let permissions = db
+        .run(move |conn| {
+            Role::permission_add_all(conn, *id, authenticated, permissions.into_inner())
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(permissions))
 }
 
@@ -176,15 +167,11 @@ async fn delete(
     root_span: RootSpan,
 ) -> Result<HttpResponse, ApiError> {
     root_span.record("body", tracing::field::debug(&permissions));
-    let permissions = web::block(move || {
-        Role::permission_delete_all(
-            &mut db.connection()?,
-            *id,
-            authenticated,
-            permissions.into_inner(),
-        )
-    })
-    .await??;
+    let permissions = db
+        .run(move |conn| {
+            Role::permission_delete_all(conn, *id, authenticated, permissions.into_inner())
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(permissions))
 }
 

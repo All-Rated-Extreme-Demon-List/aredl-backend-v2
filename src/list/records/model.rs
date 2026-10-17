@@ -595,18 +595,17 @@ impl Record {
         record_id: Uuid,
         providers: &ProvidersAppState,
     ) -> Result<Self, ApiError> {
-        let db_clone = db.clone();
-        let record: Record = web::block(move || {
-            let conn = &mut db.connection()?;
-            let record = records::table
-                .filter(records::list_id.eq(list))
-                .filter(records::id.eq(record_id))
-                .select(Record::as_select())
-                .first::<Record>(conn)?;
+        let record: Record = db
+            .run(move |conn| {
+                let record = records::table
+                    .filter(records::list_id.eq(list))
+                    .filter(records::id.eq(record_id))
+                    .select(Record::as_select())
+                    .first::<Record>(conn)?;
 
-            Ok::<Record, ApiError>(record)
-        })
-        .await??;
+                Ok::<Record, ApiError>(record)
+            })
+            .await?;
 
         if record.achieved_at < record.created_at - chrono::Duration::seconds(1) {
             return Ok(record);
@@ -617,9 +616,8 @@ impl Record {
             return Ok(record);
         }
 
-        let result = web::block(move || -> Result<Record, ApiError> {
-            let conn = &mut db_clone.connection()?;
-            conn.transaction(|conn| {
+        let result = db
+            .transaction(move |conn| -> Result<Record, ApiError> {
                 let after = diesel::update(
                     records::table
                         .filter(records::list_id.eq(list))
@@ -631,8 +629,7 @@ impl Record {
                 AuditLogEntry::log_update(conn, None, &record, &after)?;
                 Ok(after)
             })
-        })
-        .await??;
+            .await?;
 
         Ok(result)
     }
@@ -660,13 +657,12 @@ impl Record {
                 if !processed.insert(submission_id) {
                     continue;
                 }
-                let db_clone = db.clone();
-                let record = match web::block(move || {
-                    Record::find_from_submission(&mut db_clone.connection()?, list, submission_id)
-                })
-                .await
+
+                let record = match db
+                    .run(move |conn| Record::find_from_submission(conn, list, submission_id))
+                    .await
                 {
-                    Ok(Ok(record)) => record,
+                    Ok(record) => record,
                     result => {
                         tracing::warn!(
                             ?result,
@@ -693,16 +689,10 @@ impl Record {
                     }
                 };
 
-                let db_clone = db.clone();
                 let record_id = record.id;
-                if let Err(error) = async {
-                    web::block(move || {
-                        record.complete_bounty_if_exists(&mut db_clone.connection()?, list)
-                    })
-                    .await??;
-                    Ok::<(), ApiError>(())
-                }
-                .await
+                if let Err(error) = db
+                    .run(move |conn| record.complete_bounty_if_exists(conn, list))
+                    .await
                 {
                     tracing::warn!(error = %error.error_message, ?record_id,
                         "Failed to complete bounty for post submission accept actions");
@@ -710,20 +700,14 @@ impl Record {
             }
 
             // refresh users badges once
-            if let Err(error) = web::block(move || {
-                for user_id in users {
-                    if let Err(error) = db
-                        .connection()
-                        .and_then(|mut conn| UserBadge::update_user_badges(&mut conn, user_id))
-                    {
-                        tracing::warn!(error = %error.error_message, ?user_id,
-                            "Failed to update user badges for post submission accept actions");
-                    }
+            for user_id in users {
+                if let Err(error) = db
+                    .run(move |conn| UserBadge::update_user_badges(conn, user_id))
+                    .await
+                {
+                    tracing::warn!(error = %error.error_message, ?user_id,
+                        "Failed to update user badges for post submission accept actions");
                 }
-            })
-            .await
-            {
-                tracing::warn!(%error, "Failed to run badge updates for post submission accept actions");
             }
         });
     }

@@ -34,15 +34,11 @@ async fn get_history(
     path: web::Path<SubmissionPath>,
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
-    let history = web::block(move || {
-        SubmissionHistoryResolved::by_submission_id(
-            &mut db.connection()?,
-            path.list,
-            path.id,
-            &authenticated,
-        )
-    })
-    .await??;
+    let history = db
+        .run(move |conn| {
+            SubmissionHistoryResolved::by_submission_id(conn, path.list, path.id, &authenticated)
+        })
+        .await?;
 
     Ok(HttpResponse::Ok().json(history))
 }

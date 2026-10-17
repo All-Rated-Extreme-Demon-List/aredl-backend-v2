@@ -33,15 +33,11 @@ async fn list(
     page_query: web::Query<PageQuery<100>>,
     options: web::Query<LeaderboardQueryOptions>,
 ) -> Result<HttpResponse, ApiError> {
-    let result = web::block(move || {
-        LeaderboardPage::find(
-            &mut db.connection()?,
-            *list,
-            page_query.into_inner(),
-            options.into_inner(),
-        )
-    })
-    .await??;
+    let result = db
+        .run(move |conn| {
+            LeaderboardPage::find(conn, *list, page_query.into_inner(), options.into_inner())
+        })
+        .await?;
     Ok(HttpResponse::Ok().json(result))
 }
 

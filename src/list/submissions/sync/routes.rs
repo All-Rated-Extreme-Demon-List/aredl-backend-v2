@@ -47,24 +47,22 @@ async fn sync(
 ) -> Result<HttpResponse, ApiError> {
     let path = path.into_inner();
 
-    let result = web::block(move || {
-        let user = User::from_uuid(&mut db.connection()?, authenticated.user_id)?;
-
+    let user = db
+        .run(move |conn| User::from_uuid(conn, authenticated.user_id))
+        .await?;
+    let (user, records_to_import) = web::block(move || {
         let records_to_import = RecordsSync::sync(path.provider, path.list, &user)?;
-
-        let result = RecordsSync::import_records(
-            &mut db.connection()?,
-            path.provider,
-            path.list,
-            &user,
-            records_to_import,
-        )?;
-
-        Record::post_accept_actions(db, path.list, &result.changed_submissions, providers);
-
-        Ok::<_, ApiError>(result)
+        Ok::<_, ApiError>((user, records_to_import))
     })
     .await??;
+
+    let result = db
+        .run(move |conn| {
+            RecordsSync::import_records(conn, path.provider, path.list, &user, records_to_import)
+        })
+        .await?;
+
+    Record::post_accept_actions(db, path.list, &result.changed_submissions, providers);
 
     Ok(HttpResponse::Ok().json(result.submissions))
 }

@@ -116,8 +116,8 @@ pub async fn sync(
     let active_user_ids =
         fetch_active_patreon_user_ids(&client, &token, &patreon_auth.api_base_uri, &campaign_id)
             .await?;
-    actix_web::web::block(move || apply_patreon_plus_sync(&mut db.connection()?, &active_user_ids))
-        .await?
+    db.run(move |conn| apply_patreon_plus_sync(conn, &active_user_ids))
+        .await
 }
 
 async fn fetch_active_patreon_user_ids(
