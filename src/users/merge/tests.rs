@@ -32,7 +32,10 @@ async fn fetch_merged_user_by_previous_uuid() {
 
     merge_test_users(&db, primary_user, secondary_user);
 
-    for (path, record) in [("/users", None), ("/classic/profile", Some(profile_record))] {
+    for (path, record) in [
+        ("/users", None),
+        ("/classic/profile/user", Some(profile_record)),
+    ] {
         let req = test::TestRequest::get()
             .uri(&format!("{path}/{secondary_user}"))
             .to_request();

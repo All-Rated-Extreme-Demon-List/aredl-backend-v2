@@ -8,8 +8,6 @@ use utoipa::ToSchema;
 
 pub mod bounty;
 mod changelog;
-mod clan;
-mod country;
 pub mod leaderboard;
 pub mod levels;
 mod packs;

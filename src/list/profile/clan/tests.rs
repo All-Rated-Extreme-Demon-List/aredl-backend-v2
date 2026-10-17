@@ -4,12 +4,12 @@ use {
     crate::{
         clans::test_utils::{create_test_clan, create_test_clan_member},
         list::{
-            clan::test_utils::refresh_test_clan_created_levels,
             levels::test_utils::{
                 add_test_level_creators, create_test_level, create_test_level_with_publisher,
                 create_test_level_with_record, set_test_level_status,
             },
             levels::LevelStatus,
+            profile::clan::test_utils::refresh_test_clan_created_levels,
             records::test_utils::{
                 create_test_record, set_test_record_achieved_at, set_test_record_verification,
             },
@@ -33,7 +33,7 @@ async fn get_clan() {
     create_test_clan_member(&db, clan_id, user, 0).await;
 
     let req = test::TestRequest::get()
-        .uri(format!("/classic/clan/{clan_id}").as_str())
+        .uri(format!("/classic/profile/clan/{clan_id}").as_str())
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -67,7 +67,7 @@ async fn get_clan_includes_created_levels_and_matching_creators() {
     refresh_test_clan_created_levels(&db).await;
 
     let req = test::TestRequest::get()
-        .uri(format!("/classic/clan/{clan_id}").as_str())
+        .uri(format!("/classic/profile/clan/{clan_id}").as_str())
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -152,7 +152,7 @@ async fn get_clan_includes_completion_counts_and_member_points() {
     set_test_level_status(&db, removed_level, LevelStatus::Removed, None).await;
 
     let req = test::TestRequest::get()
-        .uri(format!("/classic/clan/{clan_id}").as_str())
+        .uri(format!("/classic/profile/clan/{clan_id}").as_str())
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -211,7 +211,7 @@ async fn get_clan_includes_completion_counts_and_member_points() {
     set_test_record_achieved_at(&db, member_b_shared, new_time).await;
 
     let req = test::TestRequest::get()
-        .uri(format!("/classic/clan/{clan_id}/levels/{shared_level}/records").as_str())
+        .uri(format!("/classic/profile/clan/{clan_id}/levels/{shared_level}/records").as_str())
         .to_request();
 
     let resp = test::call_service(&app, req).await;

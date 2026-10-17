@@ -1,8 +1,8 @@
 use crate::app_data::db::DbAppState;
 use crate::cache_control::CacheController;
 use crate::error_handler::{ApiError, ErrorResponse};
-use crate::list::clan::ClanProfileResolved;
 use crate::list::levels::records::LevelResolvedRecordExtended;
+use crate::list::profile::clan::ClanProfileResolved;
 use crate::list::List;
 use actix_web::{get, web, HttpResponse};
 use serde::Deserialize;

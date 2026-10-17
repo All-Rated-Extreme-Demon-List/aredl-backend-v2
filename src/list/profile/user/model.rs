@@ -1,0 +1,187 @@
+use crate::app_data::db::DbConnection;
+use crate::auth::{Authenticated, Permission};
+use crate::clans::Clan;
+use crate::error_handler::ApiError;
+use crate::list::levels::ExtendedBaseLevel;
+use crate::list::packs::{BasePack, PackWithTierResolved};
+use crate::list::packtiers::BasePackTier;
+use crate::list::profile::ProfileRecordResolved;
+use crate::list::records::Record;
+use crate::list::List;
+use crate::roles::Role;
+use crate::schema::{
+    clan_members, clans, completed_packs, levels, levels_created, pack_tiers, packs, records,
+    roles, user_leaderboard, user_roles,
+};
+use crate::users::badges::UserBadge;
+use crate::users::User;
+use diesel::prelude::*;
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+
+#[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema)]
+#[diesel(table_name=user_leaderboard)]
+pub struct Rank {
+    /// Rank of the user in the global leaderboard, sorted by total points (including packs).
+    pub rank: i32,
+    /// Rank of the user in the global leaderboard, sorted by total points (excluding packs).
+    pub raw_rank: i32,
+    /// Rank of the user in the global leaderboard, sorted by count of extremes completed.
+    pub extremes_rank: i32,
+    /// Rank of the user in the global leaderboard, sorted by hardest completed level position.
+    pub hardest_rank: i32,
+    /// Rank of the user in the country leaderboard, sorted by total points (including packs).
+    pub country_rank: i32,
+    /// Rank of the user in the country leaderboard, sorted by total points (excluding packs).
+    pub country_raw_rank: i32,
+    /// Rank of the user in the country leaderboard, sorted by count of extremes completed.
+    pub country_extremes_rank: i32,
+    /// Rank of the user in the country leaderboard, sorted by hardest completed level position.
+    pub country_hardest_rank: i32,
+    /// Total points of the user, including pack points.
+    pub total_points: i32,
+    /// Pack points of the user.
+    pub pack_points: i32,
+    /// Count of extremes the user has completed.
+    pub extremes: i32,
+}
+
+#[derive(Serialize, Deserialize, Debug, ToSchema)]
+pub struct ProfileResolved {
+    #[serde(flatten)]
+    pub user: User,
+    /// The clan the user is in.
+    pub clan: Option<Clan>,
+    /// The roles the user has.
+    pub roles: Vec<Role>,
+    /// Leaderboard ranks of the user.
+    pub rank: Option<Rank>,
+    /// Packs the user has completed.
+    pub packs: Vec<PackWithTierResolved>,
+    /// Records the user has submitted.
+    pub records: Vec<ProfileRecordResolved>,
+    /// Levels the user is listed as a creator of.
+    pub created: Vec<ExtendedBaseLevel>,
+    /// Levels the user has published in game.
+    pub published: Vec<ExtendedBaseLevel>,
+    /// All unlocked badges for the user.
+    pub badges: Vec<UserBadge>,
+}
+
+impl ProfileResolved {
+    pub fn from_str(
+        conn: &mut DbConnection,
+        list: List,
+        user_id: &str,
+        authenticated: Option<Authenticated>,
+    ) -> Result<Self, ApiError> {
+        let user = User::from_str_with_merge_log_fallback(conn, user_id)?;
+        Self::from_user(conn, list, user, authenticated)
+    }
+
+    pub fn from_user(
+        conn: &mut DbConnection,
+        list: List,
+        user: User,
+        authenticated: Option<Authenticated>,
+    ) -> Result<Self, ApiError> {
+        let clan = clans::table
+            .inner_join(clan_members::table)
+            .filter(clan_members::user_id.eq(user.id))
+            .select(Clan::as_select())
+            .first::<Clan>(conn)
+            .optional()?;
+
+        let mut roles = roles::table
+            .inner_join(user_roles::table)
+            .filter(user_roles::user_id.eq(user.id))
+            .order(roles::privilege_level.desc())
+            .select(Role::as_select())
+            .load::<Role>(conn)?;
+
+        if !authenticated.map_or(Ok(false), |auth| {
+            auth.has_permission(conn, Permission::RoleAssign)
+        })? {
+            roles.retain(|role| !role.hide);
+        }
+
+        let rank = user_leaderboard::table
+            .filter(user_leaderboard::list_id.eq(list))
+            .filter(user_leaderboard::user_id.eq(user.id))
+            .select(Rank::as_select())
+            .first(conn)
+            .optional()?;
+
+        let records = records::table
+            .filter(records::list_id.eq(list))
+            .filter(records::submitted_by.eq(user.id))
+            .inner_join(levels::table)
+            .order(levels::position.asc())
+            .select((Record::as_select(), ExtendedBaseLevel::as_select()))
+            .load::<(Record, ExtendedBaseLevel)>(conn)?
+            .into_iter()
+            .map(ProfileRecordResolved::from)
+            .collect();
+
+        let mut created = levels::table
+            .filter(levels::list_id.eq(list))
+            .inner_join(levels_created::table)
+            .filter(levels_created::list_id.eq(list))
+            .order(levels::position.asc())
+            .filter(levels_created::user_id.eq(user.id))
+            .select(ExtendedBaseLevel::as_select())
+            .load::<ExtendedBaseLevel>(conn)?;
+
+        let published = levels::table
+            .filter(levels::list_id.eq(list))
+            .filter(levels::publisher_id.eq(user.id))
+            .order(levels::position.asc())
+            .select(ExtendedBaseLevel::as_select())
+            .load::<ExtendedBaseLevel>(conn)?;
+
+        // also append to "created" the levels that the user has published that don't have any listed creators
+
+        let published_without_creators_list: Vec<ExtendedBaseLevel> = levels::table
+            .filter(levels::list_id.eq(list))
+            .left_outer_join(
+                levels_created::table.on(levels_created::level_id
+                    .eq(levels::id)
+                    .and(levels_created::list_id.eq(list))),
+            )
+            .filter(levels::publisher_id.eq(user.id))
+            .filter(levels_created::level_id.is_null())
+            .order(levels::position.asc())
+            .select(ExtendedBaseLevel::as_select())
+            .load(conn)?;
+
+        created.extend(published_without_creators_list);
+        created.sort_by_key(|lvl| lvl.position);
+
+        let packs = packs::table
+            .filter(packs::list_id.eq(list))
+            .inner_join(completed_packs::table)
+            .inner_join(pack_tiers::table)
+            .filter(completed_packs::list_id.eq(list))
+            .filter(completed_packs::user_id.eq(user.id))
+            .order(pack_tiers::placement.asc())
+            .select((BasePack::as_select(), BasePackTier::as_select()))
+            .load::<(BasePack, BasePackTier)>(conn)?
+            .into_iter()
+            .map(|(pack, tier)| PackWithTierResolved { pack, tier })
+            .collect::<Vec<_>>();
+
+        let badges = UserBadge::find_all(conn, user.id)?;
+
+        Ok(Self {
+            user,
+            clan,
+            roles,
+            rank,
+            packs,
+            records,
+            created,
+            published,
+            badges,
+        })
+    }
+}

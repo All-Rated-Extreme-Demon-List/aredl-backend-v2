@@ -3,12 +3,12 @@ use {
     crate::users::AccountStatus,
     crate::{
         list::{
-            country::test_utils::refresh_test_country_created_levels,
             levels::test_utils::{
                 add_test_level_creators, create_test_level, create_test_level_with_publisher,
                 create_test_level_with_record, set_test_level_status,
             },
             levels::LevelStatus,
+            profile::country::test_utils::refresh_test_country_created_levels,
             records::test_utils::{
                 create_test_record, set_test_record_achieved_at, set_test_record_verification,
             },
@@ -34,7 +34,7 @@ async fn get_country() {
     set_test_user_country(&db, user, Some(us_id)).await;
 
     let req = test::TestRequest::get()
-        .uri(format!("/classic/country/{us_id}").as_str())
+        .uri(format!("/classic/profile/country/{us_id}").as_str())
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -73,7 +73,7 @@ async fn get_country_includes_created_levels_and_matching_creators() {
     refresh_test_country_created_levels(&db).await;
 
     let req = test::TestRequest::get()
-        .uri(format!("/classic/country/{country_id}").as_str())
+        .uri(format!("/classic/profile/country/{country_id}").as_str())
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -157,7 +157,7 @@ async fn get_country_includes_completion_counts_and_level_records() {
     set_test_level_status(&db, removed_level, LevelStatus::Removed, None).await;
 
     let req = test::TestRequest::get()
-        .uri(format!("/classic/country/{country_id}").as_str())
+        .uri(format!("/classic/profile/country/{country_id}").as_str())
         .to_request();
 
     let resp = test::call_service(&app, req).await;
@@ -186,7 +186,9 @@ async fn get_country_includes_completion_counts_and_level_records() {
     set_test_record_achieved_at(&db, member_b_shared, new_time).await;
 
     let req = test::TestRequest::get()
-        .uri(format!("/classic/country/{country_id}/levels/{shared_level}/records").as_str())
+        .uri(
+            format!("/classic/profile/country/{country_id}/levels/{shared_level}/records").as_str(),
+        )
         .to_request();
 
     let resp = test::call_service(&app, req).await;

@@ -15,7 +15,7 @@ async fn get_profile() {
     let (app, db, _, _) = init_test_app().await;
     let (user, _) = create_test_user(&db, None).await;
     let req = test::TestRequest::get()
-        .uri(format!("/classic/profile/{user}").as_str())
+        .uri(format!("/classic/profile/user/{user}").as_str())
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -33,7 +33,7 @@ async fn get_profile_by_discord_id() {
     set_test_user_discord_id(&db, user, discord_id).await;
 
     let req = test::TestRequest::get()
-        .uri(format!("/classic/profile/{discord_id}").as_str())
+        .uri(format!("/classic/profile/user/{discord_id}").as_str())
         .to_request();
     let resp = test::call_service(&app, req).await;
     assert!(resp.status().is_success(), "status is {}", resp.status());
@@ -87,7 +87,7 @@ async fn get_profile_hides_hidden_roles_except_for_role_assign() {
     };
 
     let anon_req = test::TestRequest::get()
-        .uri(format!("/classic/profile/{target_user}").as_str())
+        .uri(format!("/classic/profile/user/{target_user}").as_str())
         .to_request();
     let anon_resp = test::call_service(&app, anon_req).await;
     assert!(anon_resp.status().is_success());
@@ -96,7 +96,7 @@ async fn get_profile_hides_hidden_roles_except_for_role_assign() {
     assert_hidden_role_is_not_exposed(anon_roles);
 
     let normal_req = test::TestRequest::get()
-        .uri(format!("/classic/profile/{target_user}").as_str())
+        .uri(format!("/classic/profile/user/{target_user}").as_str())
         .insert_header(("Authorization", format!("Bearer {normal_token}")))
         .to_request();
     let normal_resp = test::call_service(&app, normal_req).await;
@@ -106,7 +106,7 @@ async fn get_profile_hides_hidden_roles_except_for_role_assign() {
     assert_hidden_role_is_not_exposed(normal_roles);
 
     let manager_req = test::TestRequest::get()
-        .uri(format!("/classic/profile/{target_user}").as_str())
+        .uri(format!("/classic/profile/user/{target_user}").as_str())
         .insert_header(("Authorization", format!("Bearer {manager_token}")))
         .to_request();
     let manager_resp = test::call_service(&app, manager_req).await;
@@ -144,7 +144,7 @@ async fn get_profile_includes_badges_and_featured_badge() {
     assert!(feature_resp.status().is_success());
 
     let profile_req = test::TestRequest::get()
-        .uri(format!("/classic/profile/{user_id}").as_str())
+        .uri(format!("/classic/profile/user/{user_id}").as_str())
         .to_request();
     let profile_resp = test::call_service(&app, profile_req).await;
     assert!(profile_resp.status().is_success());

@@ -90,19 +90,7 @@ diesel::table! {
     min_placement_country_records (id) {
         list_id -> Int2,
         id -> Uuid,
-        submission_id -> Uuid,
-        level_id -> Uuid,
-        submitted_by -> Uuid,
-        mobile -> Bool,
-        video_url -> Varchar,
-        completion_time -> Nullable<Int8>,
-        is_verification -> Bool,
-        hide_video -> Bool,
-        achieved_at -> Timestamptz,
-        created_at -> Timestamptz,
-        updated_at -> Timestamptz,
         country -> Int4,
-        order_pos -> Int4,
         completion_count -> Int8,
     }
 }
@@ -111,19 +99,7 @@ diesel::table! {
     min_placement_clans_records (id) {
         list_id -> Int2,
         id -> Uuid,
-        submission_id -> Uuid,
-        level_id -> Uuid,
-        submitted_by -> Uuid,
-        mobile -> Bool,
-        video_url -> Varchar,
-        completion_time -> Nullable<Int8>,
-        is_verification -> Bool,
-        hide_video -> Bool,
-        achieved_at -> Timestamptz,
-        created_at -> Timestamptz,
-        updated_at -> Timestamptz,
         clan_id -> Uuid,
-        order_pos -> Int4,
         completion_count -> Int8,
     }
 }
@@ -205,10 +181,10 @@ diesel::allow_tables_to_appear_in_same_query!(country_leaderboard, levels,);
 diesel::allow_tables_to_appear_in_same_query!(clans_leaderboard, levels,);
 diesel::allow_tables_to_appear_in_same_query!(clans_leaderboard, clans,);
 diesel::allow_tables_to_appear_in_same_query!(min_placement_country_records, users,);
-diesel::allow_tables_to_appear_in_same_query!(min_placement_country_records, submissions,);
+diesel::allow_tables_to_appear_in_same_query!(min_placement_country_records, records,);
 diesel::allow_tables_to_appear_in_same_query!(min_placement_country_records, levels,);
 diesel::allow_tables_to_appear_in_same_query!(min_placement_clans_records, users,);
-diesel::allow_tables_to_appear_in_same_query!(min_placement_clans_records, submissions,);
+diesel::allow_tables_to_appear_in_same_query!(min_placement_clans_records, records,);
 diesel::allow_tables_to_appear_in_same_query!(min_placement_clans_records, levels,);
 diesel::allow_tables_to_appear_in_same_query!(min_placement_clans_records, clans,);
 diesel::allow_tables_to_appear_in_same_query!(country_created_levels, levels,);
@@ -232,12 +208,6 @@ diesel::joinable!(user_leaderboard -> clans (clan_id));
 diesel::joinable!(country_leaderboard -> levels (hardest));
 diesel::joinable!(clans_leaderboard -> levels (hardest));
 diesel::joinable!(clans_leaderboard -> clans (clan_id));
-diesel::joinable!(min_placement_country_records -> users (submitted_by));
-diesel::joinable!(min_placement_country_records -> submissions (submission_id));
-diesel::joinable!(min_placement_country_records -> levels (level_id));
-diesel::joinable!(min_placement_clans_records -> users (submitted_by));
-diesel::joinable!(min_placement_clans_records -> submissions (submission_id));
-diesel::joinable!(min_placement_clans_records -> levels (level_id));
 diesel::joinable!(min_placement_clans_records -> clans (clan_id));
 diesel::joinable!(country_created_levels -> levels (level_id));
 diesel::joinable!(country_created_levels -> users (creator_id));
