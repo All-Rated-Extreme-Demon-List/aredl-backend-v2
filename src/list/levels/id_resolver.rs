@@ -3,41 +3,60 @@ use crate::error_handler::ApiError;
 use crate::list::List;
 use crate::schema::levels;
 use diesel::pg::Pg;
+use std::str::FromStr;
 use uuid::Uuid;
 
 use diesel::prelude::*;
-fn parse_gd_id(string: &str) -> Result<(i32, bool), ApiError> {
-    let (parsed_id, two_player) = if let Some(stripped) = string.strip_suffix("_2p") {
-        (stripped.parse::<i32>(), true)
-    } else {
-        (string.parse::<i32>(), false)
-    };
 
-    let id = parsed_id.map_err(|error| {
-        ApiError::BadRequest(format!("Failed to parse {string}: {error}").as_str())
-    })?;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LevelIdentifier {
+    Uuid(Uuid),
+    /// A GD ID or list position
+    Numeric {
+        value: i32,
+        two_player: bool,
+    },
+}
 
-    Ok((id, two_player))
+impl FromStr for LevelIdentifier {
+    type Err = ApiError;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        if let Ok(uuid) = Uuid::parse_str(input) {
+            return Ok(Self::Uuid(uuid));
+        }
+
+        let (number, two_player) = input
+            .strip_suffix("_2p")
+            .map_or((input, false), |stripped| (stripped, true));
+        let value = number
+            .parse::<i32>()
+            .map_err(|error| ApiError::BadRequest(format!("Failed to parse {input}: {error}")))?;
+
+        Ok(Self::Numeric { value, two_player })
+    }
+}
+
+impl LevelIdentifier {
+    pub fn filter(self, list: List) -> levels::BoxedQuery<'static, Pg> {
+        let query = levels::table
+            .filter(levels::list_id.eq(list))
+            .into_boxed::<Pg>();
+
+        match self {
+            Self::Uuid(uuid) => query.filter(levels::id.eq(uuid)),
+            Self::Numeric { value, two_player } => query.filter(
+                levels::level_id
+                    .eq(value)
+                    .and(levels::two_player.eq(two_player))
+                    .or(levels::position.eq(value)),
+            ),
+        }
+    }
 }
 
 pub fn level_filter(list: List, input: &str) -> Result<levels::BoxedQuery<'static, Pg>, ApiError> {
-    let mut query = levels::table
-        .filter(levels::list_id.eq(list))
-        .into_boxed::<Pg>();
-
-    if let Ok(uuid) = Uuid::parse_str(input) {
-        query = query.filter(levels::id.eq(uuid));
-    } else {
-        let (id_or_position, two_player) = parse_gd_id(input)?;
-        query = query.filter(
-            levels::level_id
-                .eq(id_or_position)
-                .and(levels::two_player.eq(two_player))
-                .or(levels::position.eq(id_or_position)),
-        );
-    }
-
-    Ok(query)
+    Ok(input.parse::<LevelIdentifier>()?.filter(list))
 }
 
 pub fn resolve_level_id(

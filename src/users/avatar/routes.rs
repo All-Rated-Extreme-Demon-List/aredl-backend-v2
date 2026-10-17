@@ -29,7 +29,7 @@ async fn refresh(
     id: web::Path<String>,
 ) -> Result<HttpResponse, RefreshError> {
     let user_id = db
-        .run(move |conn| User::from_str(conn, &id.into_inner()).map(|user| user.id))
+        .run(move |conn| User::find(conn, id.as_str()).map(|user| user.id))
         .await?;
     let user = refresher
         .refresh_user(db.get_ref().clone(), user_id)

@@ -29,7 +29,7 @@ async fn find_all(
 ) -> Result<HttpResponse, ApiError> {
     let badges = db
         .run(move |conn| {
-            let user = User::from_str(conn, &user_id.into_inner())?;
+            let user = User::find(conn, user_id.as_str())?;
             UserBadge::find_all(conn, user.id)
         })
         .await?;
@@ -59,7 +59,7 @@ async fn sync(
 ) -> Result<HttpResponse, ApiError> {
     let badges = db
         .run(move |conn| {
-            let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
+            let user_id = User::find(conn, id.as_str())?.id;
             authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
             UserBadge::update_user_badges(conn, user_id)?;
             UserBadge::find_all(conn, user_id)
@@ -96,7 +96,7 @@ async fn grant(
     root_span.record("body", tracing::field::debug(&badge));
     let badges = db
         .run(move |conn| {
-            let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
+            let user_id = User::find(conn, id.as_str())?.id;
             authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
             let badges = UserBadge::grant(conn, user_id, badge.into_inner())?;
             Ok::<_, ApiError>(badges)
@@ -133,7 +133,7 @@ async fn remove(
     root_span.record("body", tracing::field::debug(&badge_codes));
     let badges = db
         .run(move |conn| {
-            let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
+            let user_id = User::find(conn, id.as_str())?.id;
             authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
             let badges = UserBadge::remove_all(conn, user_id, badge_codes.into_inner())?;
             Ok::<_, ApiError>(badges)

@@ -122,7 +122,7 @@ impl Auditable for ClanMember {
     }
 
     fn entity_display(&self, conn: &mut DbConnection) -> Result<String, ApiError> {
-        Ok(User::from_uuid(conn, self.user_id)?.global_name)
+        Ok(User::find(conn, self.user_id)?.global_name)
     }
 
     fn parent_display(&self, conn: &mut DbConnection) -> Result<Option<String>, ApiError> {

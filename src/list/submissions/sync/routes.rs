@@ -48,7 +48,7 @@ async fn sync(
     let path = path.into_inner();
 
     let user = db
-        .run(move |conn| User::from_uuid(conn, authenticated.user_id))
+        .run(move |conn| User::find(conn, authenticated.user_id))
         .await?;
     let (user, records_to_import) = web::block(move || {
         let records_to_import = RecordsSync::sync(path.provider, path.list, &user)?;

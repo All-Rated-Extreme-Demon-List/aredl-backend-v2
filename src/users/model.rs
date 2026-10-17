@@ -12,7 +12,8 @@ use crate::schema::{
     submissions, user_roles, users,
 };
 use crate::users::badges::UserBadge;
-use crate::users::AccountStatus;
+use crate::users::id_resolver::UserIdentifier;
+use crate::users::{user_ilike_filter, AccountStatus};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::pg::Pg;
 use diesel::sql_types::VarChar;
@@ -175,40 +176,6 @@ pub struct UserPage {
     pub data: Vec<User>,
 }
 
-// user filter that matches either by UUID, username, or discord_id
-pub fn user_filter<'a>(input: &'a String) -> users::BoxedQuery<'a, Pg> {
-    let mut q = users::table.into_boxed::<Pg>();
-    let uuid_candidate: String = input
-        .chars()
-        .filter(|c| c.is_ascii_hexdigit() || *c == '-')
-        .collect();
-
-    if let Ok(uuid) = Uuid::parse_str(&uuid_candidate) {
-        q = q.filter(users::id.eq(uuid));
-    } else {
-        let discord_candidate: String = input.chars().filter(char::is_ascii_digit).collect();
-        q = q.filter(
-            users::discord_id
-                .eq(Some(discord_candidate))
-                .or(users::username.eq(input)),
-        );
-    }
-
-    q
-}
-
-// user ilike filter that matches either by partial username or global_name or exact user_filter match
-pub fn user_ilike_filter<'a>(input: &'a String) -> users::BoxedQuery<'a, Pg> {
-    let mut q = users::table.into_boxed::<Pg>();
-    q = q.filter(
-        users::username
-            .ilike(input)
-            .or(users::global_name.ilike(input))
-            .or(users::id.eq_any(user_filter(input).select(users::id))),
-    );
-    q
-}
-
 impl BaseUser {
     pub fn hidden() -> Self {
         BaseUser {
@@ -255,34 +222,25 @@ impl ExtendedBaseUser {
 }
 
 impl User {
-    pub fn from_uuid(conn: &mut DbConnection, user_id: Uuid) -> Result<Self, ApiError> {
-        Ok(users::table
-            .filter(users::id.eq(user_id))
-            .select(User::as_select())
-            .first::<User>(conn)?)
-    }
-
-    pub fn from_str(conn: &mut DbConnection, user_id: &str) -> Result<Self, ApiError> {
-        match Uuid::parse_str(user_id) {
-            Ok(uuid) => Ok(Self::from_uuid(conn, uuid)?),
-            Err(_) => Ok(users::table
-                .filter(
-                    users::discord_id
-                        .eq(Some(user_id.to_owned()))
-                        .or(users::username.eq(user_id.to_owned())),
-                )
-                .select(User::as_select())
-                .first::<User>(conn)?),
-        }
-    }
-
-    /// tries to fallback merge logs if the given uuid can't be found in the current users table
-    pub fn from_str_with_merge_log_fallback(
+    pub fn find(
         conn: &mut DbConnection,
-        user_id: &str,
+        identifier: impl Into<UserIdentifier>,
     ) -> Result<Self, ApiError> {
-        let Ok(uuid) = Uuid::parse_str(user_id) else {
-            return Self::from_str(conn, user_id);
+        Ok(identifier
+            .into()
+            .filter()
+            .select(Self::as_select())
+            .first(conn)?)
+    }
+
+    /// tries to fallback merge logs if the given identifier can't be found in the current users table
+    pub fn find_with_merge_fallback(
+        conn: &mut DbConnection,
+        identifier: impl Into<UserIdentifier>,
+    ) -> Result<Self, ApiError> {
+        let uuid = match identifier.into() {
+            UserIdentifier::Uuid(uuid) => uuid,
+            identifier => return Self::find(conn, identifier),
         };
 
         if let Some(user) = users::table
@@ -567,24 +525,6 @@ impl Auditable for User {
 }
 
 impl UserResolved {
-    pub fn from_uuid(
-        conn: &mut DbConnection,
-        uuid: Uuid,
-        authenticated: Option<&Authenticated>,
-    ) -> Result<Self, ApiError> {
-        let user = User::from_uuid(conn, uuid)?;
-        Self::from_user(conn, user, authenticated)
-    }
-
-    pub fn from_str(
-        conn: &mut DbConnection,
-        user_id: &str,
-        authenticated: Option<&Authenticated>,
-    ) -> Result<Self, ApiError> {
-        let user = User::from_str_with_merge_log_fallback(conn, user_id)?;
-        Self::from_user(conn, user, authenticated)
-    }
-
     pub fn from_user(
         conn: &mut DbConnection,
         user: User,

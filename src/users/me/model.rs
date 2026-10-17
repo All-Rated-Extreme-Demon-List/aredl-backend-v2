@@ -9,7 +9,6 @@ use diesel::dsl::now;
 use serde::{Deserialize, Serialize};
 use serde_with::rust::double_option;
 use utoipa::ToSchema;
-use uuid::Uuid;
 
 use diesel::prelude::*;
 #[derive(Serialize, Deserialize, AsChangeset, Debug, ToSchema)]
@@ -37,20 +36,17 @@ pub struct UserMeUpdate {
 impl User {
     pub fn update_me(
         conn: &mut DbConnection,
-        id: Uuid,
+        current_user: &User,
         user: &UserMeUpdate,
     ) -> Result<User, ApiError> {
-        let (current_account_status, last_country_update): (AccountStatus, DateTime<Utc>) =
-            users::table
-                .filter(users::id.eq(id))
-                .select((users::account_status, users::last_country_update))
-                .first(conn)?;
+        let id = current_user.id;
 
-        if current_account_status == AccountStatus::Deleted {
+        if current_user.account_status == AccountStatus::Deleted {
             return Err(ApiError::Forbidden("Deleted users cannot be edited."));
         }
 
-        if user.account_status.is_some() && current_account_status >= AccountStatus::ListBanned {
+        if user.account_status.is_some() && current_user.account_status >= AccountStatus::ListBanned
+        {
             return Err(ApiError::Forbidden("You have been banned from the list."));
         }
 
@@ -64,6 +60,10 @@ impl User {
         }
 
         if user.country.is_some() {
+            let last_country_update = users::table
+                .filter(users::id.eq(id))
+                .select(users::last_country_update)
+                .first::<DateTime<Utc>>(conn)?;
             let next_allowed_change = last_country_update + chrono::Duration::days(90);
             let current_time = Utc::now();
             if current_time < next_allowed_change {

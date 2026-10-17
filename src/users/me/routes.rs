@@ -28,7 +28,10 @@ async fn find(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let user = db
-        .run(move |conn| UserResolved::from_uuid(conn, authenticated.user_id, Some(&authenticated)))
+        .run(move |conn| {
+            let user = User::find(conn, authenticated.user_id)?;
+            UserResolved::from_user(conn, user, Some(&authenticated))
+        })
         .await?;
     Ok(HttpResponse::Ok().json(user))
 }
@@ -63,8 +66,8 @@ async fn update(
     root_span.record("body", tracing::field::debug(&user));
     let user = db
         .transaction(move |conn| {
-            let before = User::from_uuid(conn, authenticated.user_id)?;
-            let updated_user = User::update_me(conn, authenticated.user_id, &user.into_inner())?;
+            let before = User::find(conn, authenticated.user_id)?;
+            let updated_user = User::update_me(conn, &before, &user.into_inner())?;
             AuditLogEntry::log_update(conn, Some(authenticated.user_id), &before, &updated_user)?;
             Ok::<_, ApiError>(updated_user)
         })

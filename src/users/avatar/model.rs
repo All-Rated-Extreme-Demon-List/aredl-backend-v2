@@ -118,7 +118,7 @@ impl AvatarRefresher {
     ) -> Result<User, RefreshError> {
         let discord_id = db
             .run(move |conn| {
-                User::from_uuid(conn, user_id)?
+                User::find(conn, user_id)?
                     .discord_id
                     .ok_or_else(|| ApiError::BadRequest("User has no linked Discord account"))
             })

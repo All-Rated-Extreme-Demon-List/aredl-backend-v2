@@ -39,7 +39,8 @@ async fn find(
 ) -> Result<HttpResponse, ApiError> {
     let result = db
         .run(move |conn| {
-            UserResolved::from_str(conn, id.into_inner().as_str(), authenticated.as_ref())
+            let user = User::find_with_merge_fallback(conn, id.as_str())?;
+            UserResolved::from_user(conn, user, authenticated.as_ref())
         })
         .await?;
     Ok(HttpResponse::Ok().json(result))
@@ -146,9 +147,9 @@ async fn update(
     root_span.record("body", tracing::field::debug(&user));
     let result = db
         .transaction(move |conn| {
-            let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
+            let before = User::find(conn, id.as_str())?;
+            let user_id = before.id;
             authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
-            let before = User::from_uuid(conn, user_id)?;
             let updated_user = User::update(conn, user_id, &user.into_inner())?;
             AuditLogEntry::log_update(conn, Some(authenticated.user_id), &before, &updated_user)?;
             Ok::<_, ApiError>(updated_user)
@@ -199,12 +200,12 @@ async fn update_account_status(
     root_span.record("body", tracing::field::debug(&user));
     let result = db
         .transaction(move |conn| {
-            let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
+            let before = User::find(conn, id.as_str())?;
+            let user_id = before.id;
             authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
             if user.account_status == AccountStatus::Redacted {
                 authenticated.ensure_has_permission(conn, Permission::UserRedact)?;
             }
-            let before = User::from_uuid(conn, user_id)?;
             let updated_user = User::update_account_status(
                 conn,
                 &authenticated,
@@ -239,7 +240,7 @@ async fn delete(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     db.run(move |conn| {
-        let user_id = User::from_str(conn, id.into_inner().as_str())?.id;
+        let user_id = User::find(conn, id.as_str())?.id;
         authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
         User::soft_delete(conn, user_id, &authenticated)
     })

@@ -75,7 +75,7 @@ impl ProfileResolved {
         user_id: &str,
         authenticated: Option<Authenticated>,
     ) -> Result<Self, ApiError> {
-        let user = User::from_str_with_merge_log_fallback(conn, user_id)?;
+        let user = User::find_with_merge_fallback(conn, user_id)?;
         Self::from_user(conn, list, user, authenticated)
     }
 
