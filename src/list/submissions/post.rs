@@ -118,17 +118,17 @@ pub struct SubmissionInsert {
     pub reviewer_id: Option<Uuid>,
 }
 
-impl SubmissionPostMod {
-    pub fn downgrade(self) -> SubmissionPostUser {
+impl From<SubmissionPostMod> for SubmissionPostUser {
+    fn from(mod_post: SubmissionPostMod) -> Self {
         SubmissionPostUser {
-            level_id: self.level_id,
-            mobile: self.mobile,
-            custom_copy_id: self.custom_copy_id,
-            video_url: self.video_url,
-            completion_time: self.completion_time,
-            raw_url: self.raw_url,
-            mod_menu: self.mod_menu,
-            user_notes: self.user_notes,
+            level_id: mod_post.level_id,
+            mobile: mod_post.mobile,
+            custom_copy_id: mod_post.custom_copy_id,
+            video_url: mod_post.video_url,
+            completion_time: mod_post.completion_time,
+            raw_url: mod_post.raw_url,
+            mod_menu: mod_post.mod_menu,
+            user_notes: mod_post.user_notes,
         }
     }
 }
@@ -169,7 +169,7 @@ impl SubmissionInsert {
         if !authenticated.has_permission(conn, Permission::SubmissionEditNonSelfClaimed)?
             || submitted_by == authenticated.user_id
         {
-            return SubmissionInsert::from_user(conn, list, body.downgrade(), authenticated);
+            return SubmissionInsert::from_user(conn, list, body.into(), authenticated);
         }
 
         Ok(SubmissionInsert {

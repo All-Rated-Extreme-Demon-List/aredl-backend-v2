@@ -95,6 +95,20 @@ pub struct SubmissionPatchMod {
     pub locked: Option<bool>,
 }
 
+impl From<SubmissionPatchMod> for SubmissionPatchUser {
+    fn from(mod_patch: SubmissionPatchMod) -> Self {
+        SubmissionPatchUser {
+            mobile: mod_patch.mobile,
+            custom_copy_id: mod_patch.custom_copy_id,
+            video_url: mod_patch.video_url,
+            completion_time: mod_patch.completion_time,
+            raw_url: mod_patch.raw_url,
+            mod_menu: mod_patch.mod_menu,
+            user_notes: mod_patch.user_notes,
+        }
+    }
+}
+
 impl Submission {
     pub fn update_user_shift(
         conn: &mut DbConnection,
@@ -331,7 +345,7 @@ impl SubmissionPatchMod {
 
         if old_submission.submitted_by == authenticated.user_id {
             return SubmissionPatchUser::patch(
-                SubmissionPatchMod::downgrade(patch),
+                patch.into(),
                 id,
                 conn,
                 list,
@@ -434,17 +448,5 @@ impl SubmissionPatchMod {
         }
 
         Ok(result)
-    }
-
-    pub fn downgrade(s: Self) -> SubmissionPatchUser {
-        SubmissionPatchUser {
-            mobile: s.mobile,
-            custom_copy_id: s.custom_copy_id,
-            video_url: s.video_url,
-            completion_time: s.completion_time,
-            raw_url: s.raw_url,
-            mod_menu: s.mod_menu,
-            user_notes: s.user_notes,
-        }
     }
 }

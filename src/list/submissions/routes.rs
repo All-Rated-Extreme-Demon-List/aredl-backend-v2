@@ -290,7 +290,7 @@ async fn patch(
                     providers.get_ref(),
                 )
             } else {
-                let user_patch = SubmissionPatchMod::downgrade(body.into_inner());
+                let user_patch = SubmissionPatchUser::from(body.into_inner());
                 SubmissionPatchUser::patch(
                     user_patch,
                     path.id,
