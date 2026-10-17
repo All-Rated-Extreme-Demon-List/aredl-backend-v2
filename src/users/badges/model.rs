@@ -1,65 +1,181 @@
 use crate::app_data::db::DbConnection;
 use crate::error_handler::ApiError;
-use crate::schema::user_badges;
+use crate::list::List;
+use crate::schema::{levels, records, user_badges};
 use crate::users::badges::badges_list::{
-    AvailableBadges, TagBadgeMode, HARDEST_LEVEL_BADGE_CUTOFFS, HARDEST_PACK_TIERS,
-    LEVEL_TAG_BADGES, NLW_TIERS,
+    AvailableBadges, BadgeRule, PackTier, TagBadgeMode, NLW_TIERS,
 };
 use crate::users::badges::statistics::{BadgeLevelStatistics, UserListStatistics, UserStatistics};
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
+use diesel::upsert::excluded;
 use diesel::{delete, insert_into, Selectable};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use strum::IntoEnumIterator as _;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use diesel::prelude::*;
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, Queryable, Selectable, Insertable)]
+
+#[derive(Debug, Clone, Queryable, Selectable, Insertable)]
 #[diesel(table_name = user_badges, check_for_backend(Pg))]
 pub struct UserBadge {
-    #[serde(skip_serializing, skip_deserializing)]
     pub user_id: Uuid,
+    pub badge_code: String,
+    pub level_ids: Vec<Uuid>,
+    pub record_id: Option<Uuid>,
+    pub unlocked_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct UserBadgeResolved {
     /// The code identifying the badge, e.g. `global.level_completion.10`.
     pub badge_code: String,
-    /// Additional user-specific badge information.
-    pub description: Option<String>,
+    /// Names of levels associated with this badge if applicable (e.g. verified, created, etc)
+    pub levels: Vec<String>,
+    /// The completion associated with this badge if applicable (e.g. hardest level)
+    pub record: Option<UserBadgeRecord>,
     /// The timestamp when the badge was first unlocked.
     pub unlocked_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct UserBadgeRecord {
+    /// Internal UUID of the record.
+    pub id: Uuid,
+    /// Name of the level associated with this record.
+    pub level: String,
+    /// Timestamp of when the record was achieved.
+    pub achieved_at: DateTime<Utc>,
+}
+
+impl From<(Uuid, String, DateTime<Utc>)> for UserBadgeRecord {
+    fn from((id, level, achieved_at): (Uuid, String, DateTime<Utc>)) -> Self {
+        Self {
+            id,
+            level,
+            achieved_at,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct UserBadgeGrant {
     /// The code identifying the badge, e.g. `global.level_completion.10`.
     pub badge_code: String,
-    /// Additional user-specific badge information.
-    pub description: Option<String>,
+    /// Internal UUIDs of the levels associated with this badge, if applicable.
+    #[serde(default)]
+    pub level_ids: Vec<Uuid>,
+    /// Internal UUID of the user's completion associated with this badge, if applicable.
+    pub record_id: Option<Uuid>,
 }
 
 impl UserBadge {
-    pub fn find_all(conn: &mut DbConnection, user_id: Uuid) -> Result<Vec<Self>, ApiError> {
-        Ok(user_badges::table
+    pub fn find_all(
+        conn: &mut DbConnection,
+        user_id: Uuid,
+    ) -> Result<Vec<UserBadgeResolved>, ApiError> {
+        let badges = user_badges::table
             .filter(user_badges::user_id.eq(user_id))
             .order((
                 user_badges::unlocked_at.asc(),
                 user_badges::badge_code.asc(),
             ))
-            .select(UserBadge::as_select())
-            .load::<UserBadge>(conn)?)
+            .select(Self::as_select())
+            .load::<Self>(conn)?;
+
+        let level_ids = badges
+            .iter()
+            .flat_map(|badge| badge.level_ids.iter().copied())
+            .collect::<HashSet<_>>();
+        let levels_by_id = if level_ids.is_empty() {
+            HashMap::new()
+        } else {
+            levels::table
+                .filter(levels::id.eq_any(level_ids))
+                .select((levels::id, levels::name))
+                .load::<(Uuid, String)>(conn)?
+                .into_iter()
+                .collect::<HashMap<_, _>>()
+        };
+
+        let record_ids = badges
+            .iter()
+            .filter_map(|badge| badge.record_id)
+            .collect::<HashSet<_>>();
+        let records_by_id = if record_ids.is_empty() {
+            HashMap::new()
+        } else {
+            records::table
+                .inner_join(levels::table)
+                .filter(records::id.eq_any(record_ids))
+                .filter(records::submitted_by.eq(user_id))
+                .select((records::id, levels::name, records::achieved_at))
+                .load::<(Uuid, String, DateTime<Utc>)>(conn)?
+                .into_iter()
+                .map(UserBadgeRecord::from)
+                .map(|record| (record.id, record))
+                .collect::<HashMap<_, _>>()
+        };
+
+        Ok(badges
+            .into_iter()
+            .map(|badge| UserBadgeResolved {
+                badge_code: badge.badge_code,
+                levels: badge
+                    .level_ids
+                    .iter()
+                    .filter_map(|id| levels_by_id.get(id).cloned())
+                    .collect(),
+                record: badge
+                    .record_id
+                    .and_then(|id| records_by_id.get(&id).cloned()),
+                unlocked_at: badge.unlocked_at,
+            })
+            .collect())
     }
 
     pub fn grant(
         conn: &mut DbConnection,
         user_id: Uuid,
-        badge: UserBadgeGrant,
-    ) -> Result<Vec<Self>, ApiError> {
+        mut badge: UserBadgeGrant,
+    ) -> Result<Vec<UserBadgeResolved>, ApiError> {
         Self::validate_badge_code(&badge.badge_code)?;
 
+        let mut level_ids = HashSet::new();
+        badge.level_ids.retain(|id| level_ids.insert(*id));
+        if !badge.level_ids.is_empty() {
+            let existing = levels::table
+                .filter(levels::id.eq_any(&badge.level_ids))
+                .select(levels::id)
+                .load::<Uuid>(conn)?
+                .into_iter()
+                .collect::<HashSet<_>>();
+            if let Some(id) = badge.level_ids.iter().find(|id| !existing.contains(id)) {
+                return Err(ApiError::BadRequest(format!("Unknown level ID: {id}")));
+            }
+        }
+        if let Some(record_id) = badge.record_id {
+            let record = records::table
+                .filter(records::id.eq(record_id))
+                .filter(records::submitted_by.eq(user_id))
+                .select(records::id)
+                .first::<Uuid>(conn)
+                .optional()?;
+            if record.is_none() {
+                return Err(ApiError::BadRequest(format!(
+                    "Record {record_id} does not belong to this user"
+                )));
+            }
+        }
+
         insert_into(user_badges::table)
-            .values(UserBadge {
+            .values(Self {
                 user_id,
                 badge_code: badge.badge_code,
-                description: badge.description,
+                level_ids: badge.level_ids,
+                record_id: badge.record_id,
                 unlocked_at: Utc::now(),
             })
             .on_conflict_do_nothing()
@@ -72,7 +188,7 @@ impl UserBadge {
         conn: &mut DbConnection,
         user_id: Uuid,
         badge_codes: Vec<String>,
-    ) -> Result<Vec<Self>, ApiError> {
+    ) -> Result<Vec<UserBadgeResolved>, ApiError> {
         Self::validate_badge_codes(&badge_codes)?;
 
         if !badge_codes.is_empty() {
@@ -86,12 +202,59 @@ impl UserBadge {
 
         Self::find_all(conn, user_id)
     }
-}
 
-impl UserBadge {
     pub fn update_user_badges(conn: &mut DbConnection, user_id: Uuid) -> Result<(), ApiError> {
-        let badge_data = UserStatistics::load(conn, user_id)?.get_unlocked_badges();
-        Self::insert_missing(conn, user_id, &badge_data)
+        let statistics = UserStatistics::load(conn, user_id)?;
+        let already_unlocked_badges = user_badges::table
+            .filter(user_badges::user_id.eq(user_id))
+            .select((
+                user_badges::badge_code,
+                user_badges::level_ids,
+                user_badges::record_id,
+            ))
+            .load::<(String, Vec<Uuid>, Option<Uuid>)>(conn)?
+            .into_iter()
+            .map(|(code, level_ids, record_id)| (code, (level_ids, record_id)))
+            .collect::<HashMap<_, _>>();
+
+        let now = Utc::now();
+        // includes all new and already unlocked ones
+        let new_unlocked_badges = AvailableBadges::get_all()
+            .into_iter()
+            .filter_map(|badge| {
+                let badge_code = badge.to_string();
+                let current_badge_data = already_unlocked_badges.get(&badge_code);
+                if current_badge_data.is_none() && !statistics.is_badge_unlocked(badge) {
+                    return None;
+                }
+                let (level_ids, record_id) = statistics.badge_additional_data(badge);
+                if current_badge_data.is_some_and(|(existing_level_ids, existing_record_id)| {
+                    existing_level_ids == &level_ids && *existing_record_id == record_id
+                }) {
+                    return None;
+                }
+                Some(Self {
+                    user_id,
+                    badge_code,
+                    level_ids,
+                    record_id,
+                    unlocked_at: now,
+                })
+            })
+            .collect::<Vec<_>>();
+
+        if !new_unlocked_badges.is_empty() {
+            insert_into(user_badges::table)
+                .values(&new_unlocked_badges)
+                .on_conflict((user_badges::user_id, user_badges::badge_code))
+                .do_update()
+                .set((
+                    user_badges::level_ids.eq(excluded(user_badges::level_ids)),
+                    user_badges::record_id.eq(excluded(user_badges::record_id)),
+                ))
+                .execute(conn)?;
+        }
+        Ok(())
     }
 
     pub fn has_code(
@@ -109,44 +272,10 @@ impl UserBadge {
         Ok(exists.is_some())
     }
 
-    fn insert_missing(
-        conn: &mut DbConnection,
-        user_id: Uuid,
-        badges: &HashMap<String, Option<String>>,
-    ) -> Result<(), ApiError> {
-        let existing_codes = user_badges::table
-            .filter(user_badges::user_id.eq(user_id))
-            .select(user_badges::badge_code)
-            .load::<String>(conn)?
-            .into_iter()
-            .collect::<HashSet<_>>();
-
-        let now = Utc::now();
-        let new_rows = badges
-            .iter()
-            .filter(|(badge_code, _)| !existing_codes.contains(*badge_code))
-            .map(|(badge_code, description)| UserBadge {
-                user_id,
-                badge_code: badge_code.clone(),
-                description: description.clone(),
-                unlocked_at: now,
-            })
-            .collect::<Vec<_>>();
-
-        if !new_rows.is_empty() {
-            insert_into(user_badges::table)
-                .values(&new_rows)
-                .on_conflict_do_nothing()
-                .execute(conn)?;
-        }
-
-        Ok(())
-    }
-
     fn validate_badge_code(badge_code: &str) -> Result<(), ApiError> {
         if !AvailableBadges::get_all()
             .iter()
-            .any(|badge| badge == badge_code)
+            .any(|badge| badge.to_string() == badge_code)
         {
             return Err(ApiError::BadRequest(format!(
                 "Unknown badge code: {badge_code}"
@@ -164,124 +293,67 @@ impl UserBadge {
         Ok(())
     }
 }
-
 impl UserStatistics {
-    fn list_statistics(&self, scope: &str) -> Option<&UserListStatistics> {
-        match scope {
-            "classic" => Some(&self.classic),
-            "platformer" => Some(&self.platformer),
-            "global" => Some(&self.global),
-            _ => None,
+    fn list_statistics(&self, list: Option<List>) -> &UserListStatistics {
+        match list {
+            Some(List::Classic) => &self.classic,
+            Some(List::Platformer) => &self.platformer,
+            None => &self.global,
         }
     }
 
-    fn get_unlocked_badges(&self) -> HashMap<String, Option<String>> {
-        AvailableBadges::get_all()
-            .iter()
-            .filter(|badge_code| self.is_badge_unlocked(badge_code))
-            .map(|badge_code| (badge_code.clone(), self.badge_description(badge_code)))
-            .collect()
-    }
+    fn is_badge_unlocked(&self, badge: BadgeRule) -> bool {
+        let statistics = self.list_statistics(badge.list());
 
-    fn is_badge_unlocked(&self, badge_code: &str) -> bool {
-        let parts = badge_code.split('.').collect::<Vec<_>>();
-
-        let Some((scope, kind)) = parts.split_first() else {
-            return false;
-        };
-
-        let Some(scope_statistics) = self.list_statistics(scope) else {
-            return false;
-        };
-
-        match (*scope, kind) {
-            (_, ["level_completion", threshold]) => threshold
-                .parse::<usize>()
-                .ok()
-                .is_some_and(|threshold| scope_statistics.level_completion_count >= threshold),
-            (_, ["pack_completion", threshold]) => threshold
-                .parse::<usize>()
-                .ok()
-                .is_some_and(|threshold| scope_statistics.pack_completion_count >= threshold),
-            ("global", ["bounty_board", bounty_type, threshold]) => {
-                threshold.parse::<i64>().ok().is_some_and(|threshold| {
-                    scope_statistics
-                        .bounty_counts
-                        .get(*bounty_type)
+        match badge {
+            BadgeRule::LevelCompletion(threshold) => statistics.level_completion_count >= threshold,
+            BadgeRule::PackCompletion(threshold) => statistics.pack_completion_count >= threshold,
+            BadgeRule::BountyBoard {
+                bounty_type,
+                threshold,
+            } => statistics
+                .bounty_counts
+                .get(&bounty_type)
+                .is_some_and(|count| *count >= threshold),
+            BadgeRule::LevelTags {
+                tags,
+                mode,
+                threshold,
+                ..
+            } => match mode {
+                TagBadgeMode::And => tags.iter().all(|tag_name| {
+                    statistics
+                        .level_tag_counts
+                        .get(*tag_name)
                         .is_some_and(|count| *count >= threshold)
-                })
-            }
-            (_, ["level_tags", alias, threshold]) => threshold
-                .parse::<i64>()
-                .ok()
-                .zip(
-                    LEVEL_TAG_BADGES
-                        .iter()
-                        .find(|(level_tag_alias, _, _)| *level_tag_alias == *alias),
-                )
-                .is_some_and(|(threshold, (_, level_tags, mode))| match mode {
-                    TagBadgeMode::And => level_tags.iter().all(|tag_name| {
-                        scope_statistics
-                            .level_tag_counts
-                            .get(*tag_name)
-                            .is_some_and(|count| *count >= threshold)
-                    }),
-                    TagBadgeMode::Or => {
-                        level_tags
-                            .iter()
-                            .filter_map(|tag_name| scope_statistics.level_tag_counts.get(*tag_name))
-                            .sum::<i64>()
-                            >= threshold
-                    }
                 }),
-            (_, ["hardest_level", threshold]) => {
-                threshold.parse::<i32>().ok().is_some_and(|threshold| {
-                    let cutoff = Self::hardest_level_cutoff(scope, threshold);
-                    scope_statistics
-                        .levels_records
-                        .iter()
-                        .any(|level| Self::qualifies_for_hardest_level(level, threshold, cutoff))
-                })
-            }
-            (_, ["leaderboard_rank", threshold]) => {
-                threshold.parse::<i32>().ok().is_some_and(|threshold| {
-                    scope_statistics
-                        .leaderboard_rank
-                        .is_some_and(|rank| rank <= threshold)
-                })
-            }
-            (_, ["hardest_pack_tier", tier_code]) => scope_statistics
+                TagBadgeMode::Or => {
+                    tags.iter()
+                        .filter_map(|tag_name| statistics.level_tag_counts.get(*tag_name))
+                        .sum::<usize>()
+                        >= threshold
+                }
+            },
+            BadgeRule::HardestLevel {
+                threshold, cutoff, ..
+            } => statistics
+                .levels_records
+                .iter()
+                .any(|level| Self::qualifies_for_hardest_level(level, threshold, cutoff)),
+            BadgeRule::LeaderboardRank(threshold) => statistics
+                .leaderboard_rank
+                .is_some_and(|rank| rank <= threshold),
+            BadgeRule::HardestPackTier(required_tier) => statistics
                 .packs
                 .iter()
-                .filter_map(|pack| {
-                    HARDEST_PACK_TIERS
-                        .iter()
-                        .position(|(_, tier_name)| *tier_name == pack.tier_name)
-                })
+                .filter_map(|pack| PackTier::iter().find(|tier| tier.name() == pack.tier_name))
                 .max()
-                .zip(
-                    HARDEST_PACK_TIERS
-                        .iter()
-                        .position(|(code, _)| *code == *tier_code),
-                )
-                .is_some_and(|(unlocked_tier_index, required_tier_index)| {
-                    unlocked_tier_index >= required_tier_index
-                }),
-            ("global", ["publisher_levels", threshold]) => {
-                threshold.parse::<i64>().ok().is_some_and(|threshold| {
-                    let mut publisher_counts = HashMap::new();
-                    for level in &scope_statistics.levels_records {
-                        *publisher_counts.entry(level.publisher_id).or_insert(0) += 1;
-                    }
-
-                    publisher_counts
-                        .into_values()
-                        .max()
-                        .is_some_and(|count| count >= threshold)
-                })
+                .is_some_and(|unlocked_tier| unlocked_tier >= required_tier),
+            BadgeRule::PublisherLevels(threshold) => {
+                statistics.per_publisher_levels().len() >= threshold
             }
-            ("global", ["alphabet"]) => {
-                let initials = scope_statistics
+            BadgeRule::Alphabet => {
+                let initials = statistics
                     .levels_records
                     .iter()
                     .filter_map(|level| {
@@ -295,10 +367,10 @@ impl UserStatistics {
 
                 ('A'..='Z').all(|letter| initials.contains(&letter))
             }
-            ("global", ["all_nlw"]) => {
+            BadgeRule::AllNlw => {
                 !NLW_TIERS.is_empty()
                     && NLW_TIERS.iter().all(|required_tier| {
-                        scope_statistics.levels_records.iter().any(|level| {
+                        statistics.levels_records.iter().any(|level| {
                             level
                                 .nlw_tier
                                 .as_deref()
@@ -306,8 +378,8 @@ impl UserStatistics {
                         })
                     })
             }
-            ("global", ["edel_high"]) => {
-                scope_statistics
+            BadgeRule::EdelHigh => {
+                statistics
                     .levels_records
                     .iter()
                     .filter(|level| {
@@ -318,8 +390,8 @@ impl UserStatistics {
                     .count()
                     >= 3
             }
-            ("global", ["edel_low"]) => {
-                scope_statistics
+            BadgeRule::EdelLow => {
+                statistics
                     .levels_records
                     .iter()
                     .filter(|level| {
@@ -330,9 +402,9 @@ impl UserStatistics {
                     .count()
                     >= 3
             }
-            ("global", ["2p_and_solo"]) => {
+            BadgeRule::TwoPlayerAndSolo => {
                 let mut level_versions = HashMap::new();
-                for level in &scope_statistics.levels_records {
+                for level in &statistics.levels_records {
                     let versions = level_versions
                         .entry((level.list_id, level.level_id))
                         .or_insert((false, false));
@@ -348,33 +420,29 @@ impl UserStatistics {
                     .into_values()
                     .any(|(has_solo, has_two_player)| has_solo && has_two_player)
             }
-            ("global", ["first_victor"]) => scope_statistics
+            BadgeRule::FirstVictor => statistics
                 .levels_records
                 .iter()
                 .any(|level| level.is_first_victor),
-            ("platformer", ["fastest_time"]) => scope_statistics
+            BadgeRule::FastestTime => statistics
                 .levels_records
                 .iter()
                 .any(|level| level.is_fastest_time),
-            ("global", ["creator"]) => !scope_statistics.created_levels.is_empty(),
-            ("global", ["verifier"]) => scope_statistics
+            BadgeRule::Creator => !statistics.created_levels.is_empty(),
+            BadgeRule::Verifier => statistics
                 .levels_records
                 .iter()
                 .any(|level| level.is_verification),
-            _ => false,
         }
     }
 
-    fn badge_description(&self, badge_code: &str) -> Option<String> {
-        let parts = badge_code.split('.').collect::<Vec<_>>();
-
-        match parts.as_slice() {
-            [scope @ ("classic" | "platformer"), "hardest_level", threshold] => {
-                let threshold = threshold.parse::<i32>().ok()?;
-                let cutoff = Self::hardest_level_cutoff(scope, threshold);
-
-                let level = self
-                    .list_statistics(scope)?
+    fn badge_additional_data(&self, badge: BadgeRule) -> (Vec<Uuid>, Option<Uuid>) {
+        let statistics = self.list_statistics(badge.list());
+        let levels = match badge {
+            BadgeRule::HardestLevel {
+                threshold, cutoff, ..
+            } => {
+                let record = statistics
                     .levels_records
                     .iter()
                     .filter(|level| Self::qualifies_for_hardest_level(level, threshold, cutoff))
@@ -389,84 +457,53 @@ impl UserStatistics {
                                     .unwrap_or(i32::MAX),
                             )
                             .then(left.name.cmp(&right.name))
-                    })?;
-
-                let completed_at = level.achieved_at.format("%Y-%m-%d");
-                let completion_rank = level
-                    .position
-                    .map(|position| format!(" when it was ranked #{position}"))
-                    .unwrap_or_default();
-
-                Some(format!("{} on {completed_at}{completion_rank}", level.name))
+                            .then(left.record_id.cmp(&right.record_id))
+                    });
+                return (Vec::new(), record.map(|record| record.record_id));
             }
             // description should be the longest list of levels by the same publisher completed by the user
-            ["global", "publisher_levels", _] => {
-                let mut publisher_levels = HashMap::new();
-                for level in &self.global.levels_records {
-                    publisher_levels
-                        .entry(level.publisher_id)
-                        .or_insert_with(Vec::new)
-                        .push(level);
-                }
+            BadgeRule::PublisherLevels(_) => statistics
+                .per_publisher_levels()
+                .into_iter()
+                .map(|level| (level.position, level.name.as_str(), level.id))
+                .collect::<Vec<_>>(),
+            BadgeRule::FirstVictor => statistics
+                .levels_records
+                .iter()
+                .filter(|level| level.is_first_victor)
+                .map(|level| (level.position, level.name.as_str(), level.id))
+                .collect(),
+            BadgeRule::FastestTime => statistics
+                .levels_records
+                .iter()
+                .filter(|level| level.is_fastest_time)
+                .map(|level| (level.position, level.name.as_str(), level.id))
+                .collect(),
+            BadgeRule::Creator => statistics
+                .created_levels
+                .iter()
+                .map(|level| (level.position, level.name.as_str(), level.id))
+                .collect(),
+            BadgeRule::Verifier => statistics
+                .levels_records
+                .iter()
+                .filter(|level| level.is_verification)
+                .map(|level| (level.position, level.name.as_str(), level.id))
+                .collect(),
+            BadgeRule::LevelCompletion(_)
+            | BadgeRule::LeaderboardRank(_)
+            | BadgeRule::PackCompletion(_)
+            | BadgeRule::BountyBoard { .. }
+            | BadgeRule::HardestPackTier(_)
+            | BadgeRule::LevelTags { .. }
+            | BadgeRule::AllNlw
+            | BadgeRule::EdelHigh
+            | BadgeRule::EdelLow
+            | BadgeRule::TwoPlayerAndSolo
+            | BadgeRule::Alphabet => Vec::new(),
+        };
 
-                let levels = publisher_levels.into_values().max_by(|left, right| {
-                    left.len().cmp(&right.len()).then_with(|| {
-                        right
-                            .iter()
-                            .filter_map(|level| level.position)
-                            .min()
-                            .cmp(&left.iter().filter_map(|level| level.position).min())
-                    })
-                })?;
-
-                Self::format_levels_list(
-                    levels
-                        .into_iter()
-                        .map(|level| (level.position, level.name.as_str())),
-                )
-            }
-            ["global", "first_victor"] => Self::format_levels_list(
-                self.global
-                    .levels_records
-                    .iter()
-                    .filter(|level| level.is_first_victor)
-                    .map(|level| (level.position, level.name.as_str())),
-            ),
-            ["platformer", "fastest_time"] => Self::format_levels_list(
-                self.platformer
-                    .levels_records
-                    .iter()
-                    .filter(|level| level.is_fastest_time)
-                    .map(|level| (level.position, level.name.as_str())),
-            ),
-            ["global", "creator"] => Self::format_levels_list(
-                self.global
-                    .created_levels
-                    .iter()
-                    .map(|level| (level.position, level.name.as_str())),
-            ),
-            ["global", "verifier"] => Self::format_levels_list(
-                self.global
-                    .levels_records
-                    .iter()
-                    .filter(|level| level.is_verification)
-                    .map(|level| (level.position, level.name.as_str())),
-            ),
-            _ => None,
-        }
-    }
-
-    // for the hardest level badge, gets the defined cutoff date for a given tier
-    fn hardest_level_cutoff(scope: &str, threshold: i32) -> Option<DateTime<Utc>> {
-        let threshold = threshold.to_string();
-
-        HARDEST_LEVEL_BADGE_CUTOFFS
-            .iter()
-            .find(|(cutoff_scope, cutoff_threshold, _)| {
-                *cutoff_scope == scope && *cutoff_threshold == threshold
-            })
-            .and_then(|(_, _, cutoff)| DateTime::parse_from_rfc3339(cutoff).ok())
-            .map(|cutoff| cutoff.with_timezone(&Utc))
+        (Self::level_ids(levels), None)
     }
 
     // for the hardest level badge, checks if a level completion can award it
@@ -482,33 +519,20 @@ impl UserStatistics {
                 && cutoff.is_none_or(|cutoff| level.achieved_at >= cutoff))
     }
 
-    // creates a text list of levels names from a list of levels
-    fn format_levels_list<'a>(
-        levels: impl IntoIterator<Item = (Option<i32>, &'a str)>,
-    ) -> Option<String> {
+    fn level_ids<'a>(levels: impl IntoIterator<Item = (Option<i32>, &'a str, Uuid)>) -> Vec<Uuid> {
         let mut levels = levels.into_iter().collect::<Vec<_>>();
-
-        if levels.is_empty() {
-            return None;
-        }
-
         levels.sort_by(|left, right| {
             left.0
                 .unwrap_or(i32::MAX)
                 .cmp(&right.0.unwrap_or(i32::MAX))
                 .then(left.1.cmp(right.1))
+                .then(left.2.cmp(&right.2))
         });
-
-        let level_names = levels.into_iter().map(|(_, name)| name).collect::<Vec<_>>();
-
-        match level_names.as_slice() {
-            [] => None,
-            [level_name] => Some(level_name.to_string()),
-            [first_level, second_level] => Some(format!("{first_level} and {second_level}")),
-            _ => {
-                let (last_level, other_levels) = level_names.split_last()?;
-                Some(format!("{}, and {}", other_levels.join(", "), last_level))
-            }
-        }
+        let mut added_levels = HashSet::new();
+        levels
+            .into_iter()
+            .map(|(_, _, id)| id)
+            .filter(|id| added_levels.insert(*id))
+            .collect()
     }
 }

@@ -3,7 +3,7 @@ use crate::audit::AuditLogEntry;
 use crate::auth::{Authenticated, UserAuth};
 use crate::error_handler::{ApiError, ErrorResponse};
 use crate::users::avatar::{AvatarRefresher, RefreshError};
-use crate::users::badges::UserBadge;
+use crate::users::badges::{UserBadge, UserBadgeResolved};
 use crate::users::me::{clan, notifications, UserMeUpdate};
 use crate::users::{User, UserResolved};
 use actix_web::{delete, get, patch, post, web, HttpResponse};
@@ -78,10 +78,10 @@ async fn update(
 #[utoipa::path(
     post,
     summary = "[Auth]Synchronize my badges",
-    description = "Recalculate newly unlocked badges for the authenticated user.",
+    description = "Recalculate unlocked badges for the authenticated user.",
     tag = "Users - Me",
     responses(
-        (status = 200, body = [UserBadge]),
+        (status = 200, body = [UserBadgeResolved]),
     ),
     security(("bearer_token" = [])),
 )]

@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
 
-use super::{UserBadge, UserBadgeGrant};
+use super::{UserBadge, UserBadgeGrant, UserBadgeRecord, UserBadgeResolved};
 
 #[utoipa::path(
     get,
@@ -18,7 +18,7 @@ use super::{UserBadge, UserBadgeGrant};
         ("id" = String, description = "The internal UUID, username or discord ID of the user")
     ),
     responses(
-        (status = 200, body = [UserBadge]),
+        (status = 200, body = [UserBadgeResolved]),
         (status = 404, description = "User not found", body = ErrorResponse)
     ),
 )]
@@ -40,13 +40,13 @@ async fn find_all(
 #[utoipa::path(
     post,
     summary = "[Staff]Synchronize user badges",
-    description = "Recalculate newly unlocked badges for a user.",
+    description = "Recalculate unlocked badges for a user.",
     tag = "Users - Badges",
     params(
         ("id" = String, description = "The internal UUID, username or discord ID of the user")
     ),
     responses(
-        (status = 200, body = [UserBadge]),
+        (status = 200, body = [UserBadgeResolved]),
         (status = 404, description = "User not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["UserModify"])),
@@ -79,8 +79,8 @@ async fn sync(
     ),
     request_body = UserBadgeGrant,
     responses(
-        (status = 200, body = [UserBadge]),
-        (status = 400, description = "Unknown badge code", body = ErrorResponse),
+        (status = 200, body = [UserBadgeResolved]),
+        (status = 400, description = "Unknown badge code or invalid level/record UUID", body = ErrorResponse),
         (status = 404, description = "User not found", body = ErrorResponse)
     ),
     security(("bearer_token" = ["UserModify"])),
@@ -116,7 +116,7 @@ async fn grant(
     ),
     request_body = [String],
     responses(
-        (status = 200, body = [UserBadge]),
+        (status = 200, body = [UserBadgeResolved]),
         (status = 400, description = "Unknown badge code", body = ErrorResponse),
         (status = 404, description = "User not found", body = ErrorResponse)
     ),
@@ -150,7 +150,8 @@ async fn remove(
     ),
     components(
         schemas(
-            UserBadge,
+            UserBadgeResolved,
+            UserBadgeRecord,
             UserBadgeGrant,
         )
     ),

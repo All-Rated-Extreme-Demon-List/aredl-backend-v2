@@ -567,7 +567,8 @@ pub mod public {
             user_id -> Uuid,
             badge_code -> Varchar,
             unlocked_at -> Timestamptz,
-            description -> Nullable<Varchar>,
+            level_ids -> Array<Uuid>,
+            record_id -> Nullable<Uuid>,
         }
     }
 

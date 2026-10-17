@@ -11,7 +11,7 @@ use crate::schema::{
     clan_members, clans, merge_logs, oauth_connected_accounts, oauth_requests, records, roles,
     submissions, user_roles, users,
 };
-use crate::users::badges::UserBadge;
+use crate::users::badges::{UserBadge, UserBadgeResolved};
 use crate::users::id_resolver::UserIdentifier;
 use crate::users::{user_ilike_filter, AccountStatus};
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -134,7 +134,7 @@ pub struct UserResolved {
     /// Permissions scopes the user has.
     pub scopes: Vec<String>,
     /// All unlocked badges for the user.
-    pub badges: Vec<UserBadge>,
+    pub badges: Vec<UserBadgeResolved>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Insertable, AsChangeset, ToSchema)]

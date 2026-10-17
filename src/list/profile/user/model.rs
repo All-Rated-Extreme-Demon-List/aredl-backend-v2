@@ -13,7 +13,7 @@ use crate::schema::{
     clan_members, clans, completed_packs, levels, levels_created, pack_tiers, packs, records,
     roles, user_leaderboard, user_roles,
 };
-use crate::users::badges::UserBadge;
+use crate::users::badges::{UserBadge, UserBadgeResolved};
 use crate::users::User;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -65,7 +65,7 @@ pub struct ProfileResolved {
     /// Levels the user has published in game.
     pub published: Vec<ExtendedBaseLevel>,
     /// All unlocked badges for the user.
-    pub badges: Vec<UserBadge>,
+    pub badges: Vec<UserBadgeResolved>,
 }
 
 impl ProfileResolved {

@@ -34,6 +34,7 @@ diesel::table! {
         achieved_at -> Timestamptz,
         is_first_victor -> Bool,
         is_fastest_time -> Bool,
+        record_id -> Uuid,
     }
 }
 

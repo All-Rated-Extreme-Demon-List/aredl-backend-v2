@@ -1,8 +1,12 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    cmp::Reverse,
+    collections::{HashMap, HashSet},
+};
 
 use chrono::{DateTime, Utc};
 use diesel::pg::Pg;
 use diesel::prelude::*;
+use itertools::Itertools as _;
 use uuid::Uuid;
 
 use crate::{
@@ -29,8 +33,8 @@ pub struct UserListStatistics {
     pub levels_records: Vec<BadgeLevelStatistics>,
     pub created_levels: Vec<BadgeCreatedLevelStatistics>,
     pub packs: Vec<BadgePackStatistics>,
-    pub level_tag_counts: HashMap<String, i64>,
-    pub bounty_counts: HashMap<String, i64>,
+    pub level_tag_counts: HashMap<String, usize>,
+    pub bounty_counts: HashMap<BountyType, i64>,
     pub leaderboard_rank: Option<i32>,
     pub level_completion_count: usize,
     pub pack_completion_count: usize,
@@ -41,6 +45,7 @@ pub struct UserListStatistics {
 pub struct BadgeLevelStatistics {
     pub list_id: List,
     pub id: Uuid,
+    pub record_id: Uuid,
     pub name: String,
     pub position: Option<i32>,
     pub current_position: Option<i32>,
@@ -158,24 +163,20 @@ impl UserStatistics {
                 diesel::dsl::count_star(),
             ))
             .load::<(List, BountyType, i64)>(conn)?;
-        for key in ["bounty", "weekly", "monthly", "event"] {
-            statistics.classic.bounty_counts.insert(key.to_owned(), 0);
-            statistics
-                .platformer
-                .bounty_counts
-                .insert(key.to_owned(), 0);
+        for bounty_type in [
+            BountyType::Bounty,
+            BountyType::Weekly,
+            BountyType::Monthly,
+            BountyType::Event,
+        ] {
+            statistics.classic.bounty_counts.insert(bounty_type, 0);
+            statistics.platformer.bounty_counts.insert(bounty_type, 0);
         }
         for (list, bounty_type, count) in bounty_counts {
-            let key = match bounty_type {
-                BountyType::Bounty => "bounty",
-                BountyType::Weekly => "weekly",
-                BountyType::Monthly => "monthly",
-                BountyType::Event => "event",
-            };
             statistics
                 .list_mut(list)
                 .bounty_counts
-                .insert(key.to_owned(), count);
+                .insert(bounty_type, count);
         }
 
         statistics.classic.count();
@@ -194,6 +195,22 @@ impl UserStatistics {
 }
 
 impl UserListStatistics {
+    pub fn per_publisher_levels(&self) -> Vec<&BadgeLevelStatistics> {
+        self.levels_records
+            .iter()
+            .into_group_map_by(|level| level.publisher_id)
+            .into_iter()
+            .max_by_key(|(publisher_id, levels)| {
+                (
+                    levels.len(),
+                    Reverse(levels.iter().filter_map(|level| level.position).min()),
+                    Reverse(*publisher_id),
+                )
+            })
+            .map(|(_, levels)| levels)
+            .unwrap_or_default()
+    }
+
     fn count(&mut self) {
         self.level_tag_counts = Self::count_level_tags(&self.levels_records);
         self.level_completion_count = self
@@ -210,7 +227,7 @@ impl UserListStatistics {
             .len();
     }
 
-    fn count_level_tags(levels_records: &[BadgeLevelStatistics]) -> HashMap<String, i64> {
+    fn count_level_tags(levels_records: &[BadgeLevelStatistics]) -> HashMap<String, usize> {
         let mut level_tag_counts = HashMap::new();
         for level in levels_records {
             for tag in level.tags.iter().flatten() {
@@ -254,7 +271,7 @@ impl UserListStatistics {
 
         let mut bounty_counts = classic.bounty_counts.clone();
         for (bounty_type, count) in &platformer.bounty_counts {
-            *bounty_counts.entry(bounty_type.clone()).or_insert(0) += count;
+            *bounty_counts.entry(*bounty_type).or_insert(0) += count;
         }
 
         Self {

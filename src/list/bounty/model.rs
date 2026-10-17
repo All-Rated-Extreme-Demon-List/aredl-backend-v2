@@ -19,7 +19,20 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use diesel::prelude::*;
-#[derive(Debug, Serialize, Deserialize, ToSchema, DbEnum, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(
+    Debug,
+    Serialize,
+    Deserialize,
+    ToSchema,
+    DbEnum,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    strum_macros::AsRefStr,
+)]
+#[strum(serialize_all = "lowercase")]
 #[ExistingTypePath = "crate::schema::sql_types::BountyType"]
 #[DbValueStyle = "PascalCase"]
 pub enum BountyType {
