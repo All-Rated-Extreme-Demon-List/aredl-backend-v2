@@ -552,14 +552,18 @@ async fn bounty_completion_uses_fetched_video_timestamp() {
     }
 
     let expected_achieved_at = "2009-10-25T06:57:33Z".parse::<DateTime<Utc>>().unwrap();
-    for _ in 0..40 {
+    for _ in 0..200 {
         let updated = count_test_records_with_achieved_at(&db, expected_achieved_at);
-        if updated >= 2 {
+        if updated == 2 && count_test_bounty_completions(&db, inside_bounty.id) == 1 {
             break;
         }
         sleep(Duration::from_millis(50)).await;
     }
 
+    assert_eq!(
+        count_test_records_with_achieved_at(&db, expected_achieved_at),
+        2
+    );
     assert_eq!(yt_mock.calls_async().await, 2);
     assert_eq!(count_test_bounty_completions(&db, inside_bounty.id), 1);
     assert_eq!(count_test_bounty_completions(&db, outside_bounty.id), 0);
