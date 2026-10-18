@@ -7,5 +7,7 @@ mod statistics;
 mod tests;
 
 pub use model::*;
-pub use progress::{BadgeListProgress, BadgeProgressStatistics, UserBadgeProgress};
+pub use progress::{
+    BadgeProgressStatistics, UserBadgeProgress, UserBadgeProgressResolved, UserBadgeWithProgress,
+};
 pub use routes::{init_routes, ApiDoc};

@@ -8,8 +8,8 @@ use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
 
 use super::{
-    BadgeListProgress, BadgeProgressStatistics, UserBadge, UserBadgeGrant, UserBadgeProgress,
-    UserBadgeRecord, UserBadgeResolved,
+    UserBadge, UserBadgeGrant, UserBadgeProgressResolved, UserBadgeRecord, UserBadgeResolved,
+    UserBadgeWithProgress,
 };
 
 #[utoipa::path(
@@ -43,13 +43,13 @@ async fn find_all(
 #[utoipa::path(
     get,
     summary = "Get user badge progress",
-    description = "Get statistics used to calculate badge progress for this user",
+    description = "Get the user's progress for all available badges.",
     tag = "Users - Badges",
     params(
         ("id" = String, description = "The internal UUID, username or discord ID of the user")
     ),
     responses(
-        (status = 200, body = UserBadgeProgress),
+        (status = 200, body = UserBadgeProgressResolved),
         (status = 404, description = "User not found", body = ErrorResponse)
     ),
 )]
@@ -61,7 +61,7 @@ async fn progress(
     let progress = db
         .run(move |conn| {
             let user = User::find(conn, id.as_str())?;
-            UserBadgeProgress::find(conn, user.id)
+            UserBadgeProgressResolved::find(conn, user.id)
         })
         .await?;
     Ok(HttpResponse::Ok().json(progress))
@@ -183,9 +183,8 @@ async fn remove(
             UserBadgeResolved,
             UserBadgeRecord,
             UserBadgeGrant,
-            UserBadgeProgress,
-            BadgeProgressStatistics,
-            BadgeListProgress,
+            UserBadgeProgressResolved,
+            UserBadgeWithProgress,
         )
     ),
     paths(

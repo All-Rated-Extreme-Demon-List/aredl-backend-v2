@@ -18,10 +18,24 @@ use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct UserBadgeProgress {
-    #[serde(flatten)]
     pub statistics: BadgeProgressStatistics,
-    /// When the cached progress metrics last changed.
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct UserBadgeProgressResolved {
+    pub badges: Vec<UserBadgeWithProgress>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct UserBadgeWithProgress {
+    /// The code identifying the badge, e.g. `global.level_completion.10`.
+    pub badge_code: String,
+    /// Progress toward the target count for this badge (0 if non applicable)
+    pub progress: usize,
+    /// Target count for this badge (1 if non applicable)
+    pub target: usize,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -36,7 +50,7 @@ pub struct BadgeListProgress {
     pub level_completion_count: usize,
     pub pack_completion_count: usize,
     pub level_tag_counts: BTreeMap<String, usize>,
-    pub bounty_counts: BTreeMap<String, i64>,
+    pub bounty_counts: BTreeMap<String, usize>,
     pub leaderboard_rank: Option<i32>,
     pub hardest_pack_tier: Option<PackTier>,
     pub max_same_publisher: usize,
@@ -114,7 +128,8 @@ impl BadgeListProgress {
         .collect::<BTreeMap<_, _>>();
         for (bounty_list, kind, count) in &statistics.bounty_counts {
             if list.is_none_or(|list| *bounty_list == list) {
-                *bounty_counts.entry(kind.as_ref().to_owned()).or_insert(0) += *count;
+                *bounty_counts.entry(kind.as_ref().to_owned()).or_insert(0) +=
+                    usize::try_from(*count).expect("Bounty count too high");
             }
         }
         let mut hardest_level_ranks = BTreeMap::new();
@@ -186,70 +201,126 @@ impl From<&UserStatistics> for BadgeProgressStatistics {
 }
 
 impl BadgeProgressStatistics {
-    pub(super) fn is_badge_unlocked(&self, badge: BadgeRule) -> bool {
+    fn badge_progress(&self, badge: BadgeRule) -> (usize, usize) {
         let statistics = match badge.list() {
             Some(List::Classic) => &self.classic,
             Some(List::Platformer) => &self.platformer,
             None => &self.global,
         };
-        match badge {
-            BadgeRule::LevelCompletion(threshold) => statistics.level_completion_count >= threshold,
-            BadgeRule::PackCompletion(threshold) => statistics.pack_completion_count >= threshold,
+        let (progress, target) = match badge {
+            BadgeRule::LevelCompletion(threshold) => (statistics.level_completion_count, threshold),
+            BadgeRule::PackCompletion(threshold) => (statistics.pack_completion_count, threshold),
             BadgeRule::BountyBoard {
                 bounty_type,
                 threshold,
-            } => statistics
-                .bounty_counts
-                .get(bounty_type.as_ref())
-                .is_some_and(|count| *count >= threshold),
+            } => (
+                statistics
+                    .bounty_counts
+                    .get(bounty_type.as_ref())
+                    .copied()
+                    .unwrap_or(0),
+                threshold,
+            ),
             BadgeRule::LevelTags {
                 tags,
                 mode,
                 threshold,
                 ..
             } => match mode {
-                TagBadgeMode::And => tags.iter().all(|tag| {
-                    statistics
-                        .level_tag_counts
-                        .get(*tag)
-                        .is_some_and(|count| *count >= threshold)
-                }),
-                TagBadgeMode::Or => {
+                TagBadgeMode::And => (
+                    tags.iter()
+                        .map(|tag| {
+                            statistics
+                                .level_tag_counts
+                                .get(*tag)
+                                .copied()
+                                .unwrap_or(0)
+                                .min(threshold)
+                        })
+                        .sum(),
+                    threshold.saturating_mul(tags.len()),
+                ),
+                TagBadgeMode::Or => (
                     tags.iter()
                         .filter_map(|tag| statistics.level_tag_counts.get(*tag))
-                        .sum::<usize>()
-                        >= threshold
-                }
+                        .sum(),
+                    threshold,
+                ),
             },
-            BadgeRule::HardestLevel { threshold, .. } => statistics
-                .hardest_level_ranks
-                .get(&threshold)
-                .is_some_and(|rank| rank.is_some_and(|rank| rank <= threshold)),
-            BadgeRule::LeaderboardRank(threshold) => statistics
-                .leaderboard_rank
-                .is_some_and(|rank| rank <= threshold),
-            BadgeRule::HardestPackTier(tier) => statistics
-                .hardest_pack_tier
-                .is_some_and(|unlocked| unlocked >= tier),
-            BadgeRule::PublisherLevels(threshold) => statistics.max_same_publisher >= threshold,
-            BadgeRule::Alphabet => statistics.alphabet_letters.len() == 26,
-            BadgeRule::AllNlw => {
-                !NLW_TIERS.is_empty()
-                    && NLW_TIERS.iter().all(|tier| {
+            BadgeRule::HardestLevel { threshold, .. } => (
+                usize::from(
+                    statistics
+                        .hardest_level_ranks
+                        .get(&threshold)
+                        .is_some_and(|rank| rank.is_some_and(|rank| rank <= threshold)),
+                ),
+                1,
+            ),
+            BadgeRule::LeaderboardRank(threshold) => (
+                usize::from(
+                    statistics
+                        .leaderboard_rank
+                        .is_some_and(|rank| rank <= threshold),
+                ),
+                1,
+            ),
+            BadgeRule::HardestPackTier(tier) => (
+                usize::from(
+                    statistics
+                        .hardest_pack_tier
+                        .is_some_and(|unlocked| unlocked >= tier),
+                ),
+                1,
+            ),
+            BadgeRule::PublisherLevels(threshold) => (statistics.max_same_publisher, threshold),
+            BadgeRule::Alphabet => (statistics.alphabet_letters.len(), 26),
+            BadgeRule::AllNlw => (
+                NLW_TIERS
+                    .iter()
+                    .filter(|tier| {
                         statistics
                             .nlw_tiers
                             .iter()
-                            .any(|completed| completed == tier)
+                            .any(|completed| completed == *tier)
                     })
-            }
-            BadgeRule::EdelHigh => statistics.edel_high_count >= 3,
-            BadgeRule::EdelLow => statistics.edel_low_count >= 3,
-            BadgeRule::TwoPlayerAndSolo => statistics.two_player_and_solo,
-            BadgeRule::FirstVictor => statistics.first_victor_count > 0,
-            BadgeRule::FastestTime => statistics.fastest_time_count > 0,
-            BadgeRule::Creator => statistics.created_level_count > 0,
-            BadgeRule::Verifier => statistics.verified_level_count > 0,
-        }
+                    .count(),
+                NLW_TIERS.len().max(1),
+            ),
+            BadgeRule::EdelHigh => (statistics.edel_high_count, 3),
+            BadgeRule::EdelLow => (statistics.edel_low_count, 3),
+            BadgeRule::TwoPlayerAndSolo => (usize::from(statistics.two_player_and_solo), 1),
+            BadgeRule::FirstVictor => (statistics.first_victor_count, 1),
+            BadgeRule::FastestTime => (statistics.fastest_time_count, 1),
+            BadgeRule::Creator => (statistics.created_level_count, 1),
+            BadgeRule::Verifier => (statistics.verified_level_count, 1),
+        };
+        (progress.min(target), target)
+    }
+
+    pub(super) fn is_badge_unlocked(&self, badge: BadgeRule) -> bool {
+        let (progress, target) = self.badge_progress(badge);
+        progress >= target
+    }
+}
+
+impl UserBadgeProgressResolved {
+    pub fn find(conn: &mut DbConnection, user_id: Uuid) -> Result<Self, ApiError> {
+        let progress = UserBadgeProgress::find(conn, user_id)?;
+        let badges = AvailableBadges::get_all()
+            .into_iter()
+            .map(|rule| {
+                let (progress, target) = progress.statistics.badge_progress(rule);
+                UserBadgeWithProgress {
+                    badge_code: rule.to_string(),
+                    progress,
+                    target,
+                }
+            })
+            .collect();
+        Ok(Self {
+            badges,
+            updated_at: progress.updated_at,
+        })
     }
 }
 

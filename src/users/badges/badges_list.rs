@@ -19,7 +19,7 @@ pub enum BadgeRule {
     PackCompletion(usize),
     BountyBoard {
         bounty_type: BountyType,
-        threshold: i64,
+        threshold: usize,
     },
     HardestPackTier(PackTier),
     PublisherLevels(usize),
