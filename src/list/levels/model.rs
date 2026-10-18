@@ -66,6 +66,7 @@ pub struct ExtendedBaseLevel {
 #[diesel(table_name=levels)]
 pub struct Level {
     /// The list this level belongs to.
+    #[serde(skip_serializing)]
     pub list_id: List,
     /// Internal level UUID
     pub id: Uuid,
@@ -73,8 +74,6 @@ pub struct Level {
     pub name: String,
     /// The 1-indexed position of the level on the list.
     pub position: Option<i32>,
-    /// Internal user UUID of the person who published the level in the game.
-    pub publisher_id: Uuid,
     /// Points awarded for completing the level.
     pub points: i32,
     /// The current status of the level.
@@ -88,6 +87,7 @@ pub struct Level {
     /// Tags that describe the level. Includes gameplay, length, version, etc.. tags.
     pub tags: Vec<Option<String>>,
     /// Description of the level.
+    #[serde(skip_serializing)]
     pub description: Option<String>,
     /// Newground's song ID for the level.
     pub song: Option<i32>,
@@ -318,7 +318,6 @@ impl Level {
                 levels::id,
                 levels::name,
                 position_history_full_view::position,
-                levels::publisher_id,
                 levels::points,
                 position_history_full_view::status,
                 levels::requires_raw_footage,

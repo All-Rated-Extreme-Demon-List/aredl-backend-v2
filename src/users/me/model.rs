@@ -1,5 +1,4 @@
 use crate::error_handler::ApiError;
-use crate::list::levels::Level;
 use crate::schema::{levels, users};
 use crate::users::badges::UserBadge;
 use crate::users::{AccountStatus, User};
@@ -96,15 +95,14 @@ impl User {
         }
 
         if let Some(Some(background_level)) = user.background_level {
-            let beaten_level: Option<Level> = records::table
+            let beaten_level: i64 = records::table
                 .filter(records::submitted_by.eq(id))
                 .inner_join(levels::table)
                 .filter(levels::level_id.eq(background_level))
-                .select(Level::as_select())
-                .get_result(conn)
-                .optional()?;
+                .count()
+                .get_result(conn)?;
 
-            if beaten_level.is_none() {
+            if beaten_level == 0 {
                 return Err(ApiError::BadRequest(
                     "You have not beaten the selected level.",
                 ));
