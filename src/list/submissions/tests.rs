@@ -4,13 +4,16 @@ use {
     crate::users::AccountStatus,
     crate::{
         auth::{create_test_token, oauth::OAuthProvider, Permission},
+        clans::test_utils::{create_test_clan, create_test_clan_member},
         list::{
             bounty::test_utils::create_test_bounty,
             levels::{
                 test_utils::{create_test_level, set_test_level_status},
                 LevelStatus,
             },
-            records::test_utils::{get_test_record, get_test_record_for_level_and_user},
+            records::test_utils::{
+                create_test_record, get_test_record, get_test_record_for_level_and_user,
+            },
             submissions::{
                 status::SubmissionsEnabled,
                 test_utils::{
@@ -41,6 +44,10 @@ use {
             ShiftStatus,
         },
         test_utils::*,
+        users::me::{
+            notifications::{test_utils::count_test_notifications, Notification, NotificationType},
+            settings::{test_utils::set_test_clan_notifications, ClanNotifications},
+        },
         users::test_utils::{
             create_test_auditor, create_test_full_reviewer, create_test_hidden_reviewer,
             create_test_user, create_test_user_with_permissions, set_test_user_account_status,
@@ -1637,6 +1644,78 @@ async fn accept_submission() {
         accept_data["reviewer_notes"].as_str().unwrap(),
         "Submission history reviewer notes do not match!"
     );
+}
+
+#[actix_web::test]
+async fn clan_notifications() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (reviewer, _) = create_test_full_reviewer(&db).await;
+    let token = create_test_token(reviewer, &auth.jwt_encoding_key).unwrap();
+    let clan = create_test_clan(&db).await;
+    let other_clan = create_test_clan(&db).await;
+    let (submitter, _) = create_test_user(&db, None).await;
+    let (next_submitter, _) = create_test_user(&db, None).await;
+    let (new_only, _) = create_test_user(&db, None).await;
+    let (all, _) = create_test_user(&db, None).await;
+    let (none, _) = create_test_user(&db, None).await;
+    let (default, _) = create_test_user(&db, None).await;
+    let (outsider, _) = create_test_user(&db, None).await;
+    for user in [submitter, next_submitter, new_only, all, none, default] {
+        create_test_clan_member(&db, clan, user, 0).await;
+    }
+    create_test_clan_member(&db, other_clan, outsider, 0).await;
+    for (user, setting) in [
+        (submitter, ClanNotifications::All),
+        (next_submitter, ClanNotifications::None),
+        (new_only, ClanNotifications::NewOnly),
+        (all, ClanNotifications::All),
+        (none, ClanNotifications::None),
+        (outsider, ClanNotifications::All),
+    ] {
+        set_test_clan_notifications(&db, user, setting);
+    }
+
+    let level = create_test_level(&db).await;
+
+    create_test_record(&db, outsider, level).await;
+    let first = create_test_submission(level, submitter, &db).await;
+
+    // only accepted should trigger for other clan members
+    for status in ["UnderConsideration", "Denied"] {
+        let req = test::TestRequest::patch()
+            .uri(&format!("/classic/submissions/{first}"))
+            .insert_header(("Authorization", format!("Bearer {token}")))
+            .set_json(json!({"status": status}))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        for user in [next_submitter, new_only, all, none, default, outsider] {
+            assert_eq!(count_test_notifications(&db, user), 0);
+        }
+    }
+
+    // accepting it should trigger clan members with all/new only
+    let req = test::TestRequest::patch()
+        .uri(&format!("/classic/submissions/{first}"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!({"status": "Accepted"}))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(count_test_notifications(&db, submitter), 3);
+    for (user, count) in [
+        (new_only, 1),
+        (all, 1),
+        (none, 0),
+        (default, 0),
+        (outsider, 0),
+    ] {
+        assert_eq!(count_test_notifications(&db, user), count);
+    }
+    let notes =
+        Notification::find_all_me_notifications(&mut db.connection().unwrap(), new_only).unwrap();
+    let note = notes.first().unwrap();
+    assert!(matches!(note.notification_type, NotificationType::Success));
 }
 
 #[actix_web::test]

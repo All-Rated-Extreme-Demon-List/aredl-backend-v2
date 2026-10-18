@@ -19,6 +19,10 @@ pub mod public {
         pub struct BountyType;
 
         #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+        #[diesel(postgres_type(name = "clan_notifications"))]
+        pub struct ClanNotifications;
+
+        #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
         #[diesel(postgres_type(name = "custom_id_status"))]
         pub struct CustomIdStatus;
 
@@ -588,6 +592,16 @@ pub mod public {
     }
 
     diesel::table! {
+        use diesel::sql_types::*;
+        use super::sql_types::ClanNotifications;
+
+        user_settings (user_id) {
+            user_id -> Uuid,
+            clan_notifications -> ClanNotifications,
+        }
+    }
+
+    diesel::table! {
         users (id) {
             id -> Uuid,
             username -> Varchar,
@@ -628,6 +642,7 @@ pub mod public {
     diesel::joinable!(levels_created -> users (user_id));
     diesel::joinable!(merge_logs -> users (primary_user));
     diesel::joinable!(notifications -> users (user_id));
+    diesel::joinable!(user_settings -> users (user_id));
     diesel::joinable!(oauth_connected_accounts -> users (user_id));
     diesel::joinable!(oauth_requests -> users (user_id));
     diesel::joinable!(pack_levels -> lists (list_id));
@@ -673,6 +688,7 @@ pub mod public {
         merge_logs,
         merge_requests,
         notifications,
+        user_settings,
         oauth_connected_accounts,
         oauth_requests,
         oauth_tokens,

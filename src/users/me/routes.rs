@@ -4,7 +4,7 @@ use crate::auth::{Authenticated, UserAuth};
 use crate::error_handler::{ApiError, ErrorResponse};
 use crate::users::avatar::{AvatarRefresher, RefreshError};
 use crate::users::badges::{UserBadge, UserBadgeResolved};
-use crate::users::me::{clan, notifications, UserMeUpdate};
+use crate::users::me::{clan, notifications, settings, UserMeUpdate};
 use crate::users::{User, UserResolved};
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
@@ -147,7 +147,8 @@ async fn delete(
 #[openapi(
     nest(
         (path = "/clan", api = clan::ApiDoc),
-		(path = "/notifications", api = notifications::ApiDoc)
+		(path = "/notifications", api = notifications::ApiDoc),
+        (path = "/settings", api = settings::ApiDoc)
     ),
     components(
         schemas(
@@ -170,6 +171,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
         web::scope("/@me")
             .configure(clan::init_routes)
             .configure(notifications::init_routes)
+            .configure(settings::init_routes)
             .service(sync)
             .service(refresh_avatar)
             .service(find)

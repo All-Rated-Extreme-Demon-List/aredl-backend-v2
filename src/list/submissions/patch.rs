@@ -423,6 +423,16 @@ impl SubmissionPatchMod {
                     };
 
                     Notification::create(connection, updated.submitted_by, message, notif_type)?;
+
+                    if new_status == SubmissionStatus::Accepted {
+                        Notification::clan_submission_accepted(
+                            connection,
+                            list,
+                            updated.submitted_by,
+                            updated.level_id,
+                            &level_name,
+                        )?;
+                    }
                 }
 
                 let websocket_type = (old_status != new_status)
