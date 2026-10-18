@@ -563,6 +563,14 @@ pub mod public {
     }
 
     diesel::table! {
+        user_badge_progress (user_id) {
+            user_id -> Uuid,
+            statistics -> Jsonb,
+            updated_at -> Timestamptz,
+        }
+    }
+
+    diesel::table! {
         user_badges (user_id, badge_code) {
             user_id -> Uuid,
             badge_code -> Varchar,
@@ -642,6 +650,7 @@ pub mod public {
     diesel::joinable!(submissions -> lists (list_id));
     diesel::joinable!(submissions_enabled -> lists (list_id));
     diesel::joinable!(submissions_enabled -> users (moderator));
+    diesel::joinable!(user_badge_progress -> users (user_id));
     diesel::joinable!(user_badges -> users (user_id));
     diesel::joinable!(user_roles -> roles (role_id));
     diesel::joinable!(user_roles -> users (user_id));
@@ -684,6 +693,7 @@ pub mod public {
         submission_history,
         submissions,
         submissions_enabled,
+        user_badge_progress,
         user_badges,
         user_roles,
         users,

@@ -7,7 +7,10 @@ use std::sync::Arc;
 use tracing_actix_web::RootSpan;
 use utoipa::OpenApi;
 
-use super::{UserBadge, UserBadgeGrant, UserBadgeRecord, UserBadgeResolved};
+use super::{
+    BadgeListProgress, BadgeProgressStatistics, UserBadge, UserBadgeGrant, UserBadgeProgress,
+    UserBadgeRecord, UserBadgeResolved,
+};
 
 #[utoipa::path(
     get,
@@ -38,6 +41,33 @@ async fn find_all(
 }
 
 #[utoipa::path(
+    get,
+    summary = "Get user badge progress",
+    description = "Get statistics used to calculate badge progress for this user",
+    tag = "Users - Badges",
+    params(
+        ("id" = String, description = "The internal UUID, username or discord ID of the user")
+    ),
+    responses(
+        (status = 200, body = UserBadgeProgress),
+        (status = 404, description = "User not found", body = ErrorResponse)
+    ),
+)]
+#[get("/progress")]
+async fn progress(
+    db: web::Data<Arc<DbAppState>>,
+    id: web::Path<String>,
+) -> Result<HttpResponse, ApiError> {
+    let progress = db
+        .run(move |conn| {
+            let user = User::find(conn, id.as_str())?;
+            UserBadgeProgress::find(conn, user.id)
+        })
+        .await?;
+    Ok(HttpResponse::Ok().json(progress))
+}
+
+#[utoipa::path(
     post,
     summary = "[Staff]Synchronize user badges",
     description = "Recalculate unlocked badges for a user.",
@@ -58,7 +88,7 @@ async fn sync(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let badges = db
-        .run(move |conn| {
+        .transaction(move |conn| {
             let user_id = User::find(conn, id.as_str())?.id;
             authenticated.ensure_has_higher_privilege_than_user(conn, user_id)?;
             UserBadge::update_user_badges(conn, user_id)?;
@@ -153,10 +183,14 @@ async fn remove(
             UserBadgeResolved,
             UserBadgeRecord,
             UserBadgeGrant,
+            UserBadgeProgress,
+            BadgeProgressStatistics,
+            BadgeListProgress,
         )
     ),
     paths(
         find_all,
+        progress,
         sync,
         grant,
         remove,
@@ -168,6 +202,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
     config.service(
         web::scope("/{id}/badges")
             .service(find_all)
+            .service(progress)
             .service(sync)
             .service(grant)
             .service(remove),

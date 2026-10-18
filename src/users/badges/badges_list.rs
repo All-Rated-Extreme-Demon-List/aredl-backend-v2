@@ -1,8 +1,10 @@
 use crate::list::{bounty::BountyType, List};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use strum::IntoEnumIterator as _;
 use strum_macros::{AsRefStr, Display, EnumIter};
+use utoipa::ToSchema;
 
 #[derive(Debug, Clone, Copy, AsRefStr)]
 #[strum(serialize_all = "snake_case")]
@@ -116,7 +118,21 @@ impl fmt::Display for BadgeRule {
 }
 
 // hardcoded here to not bother with dynamic fetching, they never change
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, EnumIter, Display)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumIter,
+    Display,
+    Serialize,
+    Deserialize,
+    ToSchema,
+)]
+#[serde(rename_all = "lowercase")]
 pub enum PackTier {
     Iron,
     Gold,

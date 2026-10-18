@@ -91,7 +91,7 @@ async fn sync(
     authenticated: Authenticated,
 ) -> Result<HttpResponse, ApiError> {
     let badges = db
-        .run(move |conn| {
+        .transaction(move |conn| {
             UserBadge::update_user_badges(conn, authenticated.user_id)?;
             UserBadge::find_all(conn, authenticated.user_id)
         })

@@ -702,7 +702,7 @@ impl Record {
             // refresh users badges once
             for user_id in users {
                 if let Err(error) = db
-                    .run(move |conn| UserBadge::update_user_badges(conn, user_id))
+                    .transaction(move |conn| UserBadge::update_user_badges(conn, user_id))
                     .await
                 {
                     tracing::warn!(error = %error.error_message, ?user_id,
