@@ -41,6 +41,8 @@ pub enum AuditEntityType {
     ClanMember,
     Shift,
     LevelCustomCopy,
+    Tag,
+    LevelTag,
     LevelCreator,
     LevelNote,
     LevelUpdate,

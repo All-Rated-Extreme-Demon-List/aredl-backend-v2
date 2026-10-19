@@ -19,6 +19,10 @@ pub enum Permission {
     LevelUpdatesModify,
     /// Allows editing public or reviewer notes for a level
     LevelNotesModify,
+    /// Allows adding and removing tags on levels
+    LevelTagsModify,
+    /// Allows creating, editing, and deleting tags
+    TagModify,
     /// Allows editing existing records for a level
     RecordModify,
     /// Allows editing pack tiers

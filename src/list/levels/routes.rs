@@ -8,7 +8,7 @@ use crate::list::levels::{
     creators, custom_copies, history, id_resolver::resolve_level_id, packs, records, Level,
     LevelPlace, LevelUpdate, LevelWithUserCompletionStatus, ResolvedLevel,
 };
-use crate::list::levels::{notes, updates, LevelQueryOptions};
+use crate::list::levels::{notes, tags, updates, LevelQueryOptions};
 use crate::list::List;
 use crate::scheduled::refresh_level_data;
 use actix_web::{get, patch, post, web, HttpResponse};
@@ -227,6 +227,7 @@ async fn find(
 #[openapi(
     nest(
         (path = "/{level_id}/creators", api = creators::ApiDoc),
+        (path = "/{level_id}/tags", api = tags::ApiDoc),
         (path = "/{level_id}/history", api = history::ApiDoc),
         (path = "/{level_id}/records", api = records::ApiDoc),
         (path = "/{level_id}/packs", api = packs::ApiDoc),
@@ -260,6 +261,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
             .configure(packs::init_routes)
             .configure(records::init_routes)
             .configure(creators::init_routes)
+            .configure(tags::init_routes)
             .configure(custom_copies::init_routes)
             .configure(notes::init_routes)
             .configure(updates::init_routes)

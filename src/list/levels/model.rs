@@ -6,10 +6,15 @@ use crate::list::levels::records::LevelResolvedRecord;
 use crate::list::levels::updates::{LevelUpdateEntry, LevelUpdateEntryQueryOptions};
 use crate::list::packs::PackWithTierResolved;
 use crate::list::records::Record;
+use crate::list::tags::Tag;
 use crate::list::List;
-use crate::schema::{levels, position_history, position_history_full_view, records, users};
+use crate::schema::{
+    level_tags, levels, position_history, position_history_full_view, records, users,
+};
 use crate::users::{BaseUser, BaseUserWithAccountStatus};
 use chrono::{DateTime, Utc};
+use diesel::dsl::{array, auto_type};
+use diesel::sql_types::Uuid as SqlUuid;
 use diesel_derive_enum::DbEnum;
 use serde::{Deserialize, Serialize};
 use serde_with::rust::double_option;
@@ -62,6 +67,15 @@ pub struct ExtendedBaseLevel {
     pub requires_raw_footage: bool,
 }
 
+#[auto_type]
+fn tag_ids() -> _ {
+    level_tags::table
+        .filter(level_tags::list_id.eq(levels::list_id))
+        .filter(level_tags::level_id.eq(levels::id))
+        .order(level_tags::tag_id)
+        .select(level_tags::tag_id)
+}
+
 #[derive(Serialize, Deserialize, Queryable, Selectable, Debug, ToSchema, Clone)]
 #[diesel(table_name=levels)]
 pub struct Level {
@@ -84,8 +98,9 @@ pub struct Level {
     pub level_id: i32,
     /// Whether this is the 2P version of a level or not.
     pub two_player: bool,
-    /// Tags that describe the level. Includes gameplay, length, version, etc.. tags.
-    pub tags: Vec<Option<String>>,
+    /// Internal UUIDs of tags that describe the level.
+    #[diesel(select_expression = array::<SqlUuid, tag_ids>(tag_ids()))]
+    pub tags: Vec<Uuid>,
     /// Description of the level.
     #[serde(skip_serializing)]
     pub description: Option<String>,
@@ -131,8 +146,6 @@ pub struct LevelPlace {
     pub two_player: bool,
     /// Newground's song ID for the level.
     pub song: Option<i32>,
-    /// Tags that describe the level. Includes gameplay, length, version, etc.. tags.
-    pub tags: Option<Vec<Option<String>>>,
     /// Description of the level.
     pub description: Option<String>,
     /// Estimated NLW tier for pending levels without an NLW tier or list position yet.
@@ -160,8 +173,6 @@ pub struct LevelUpdate {
     /// Newground's song ID for the level.
     #[serde(default, with = "double_option")]
     pub song: Option<Option<i32>>,
-    /// Tags that describe the level. Includes gameplay, length, version, etc.. tags.
-    pub tags: Option<Vec<Option<String>>>,
     /// Description of the level.
     #[serde(default, with = "double_option")]
     pub description: Option<Option<String>>,
@@ -189,8 +200,8 @@ pub struct ResolvedLevel {
     pub level_id: i32,
     /// Whether this is the 2P version of a level or not.
     pub two_player: bool,
-    /// Tags that describe the level. Includes gameplay, length, version, etc.. tags.
-    pub tags: Vec<Option<String>>,
+    /// Tags that describe the level.
+    pub tags: Vec<Tag>,
     /// Description of the level.
     pub description: Option<String>,
     /// Newground's song ID for the level.
@@ -243,6 +254,14 @@ impl Auditable for Level {
 }
 
 impl Level {
+    pub fn find(conn: &mut DbConnection, list: List, id: Uuid) -> Result<Self, ApiError> {
+        Ok(levels::table
+            .filter(levels::list_id.eq(list))
+            .find(id)
+            .select(Self::as_select())
+            .first(conn)?)
+    }
+
     pub fn find_for_update(
         conn: &mut DbConnection,
         list: List,
@@ -323,7 +342,7 @@ impl Level {
                 levels::requires_raw_footage,
                 levels::level_id,
                 levels::two_player,
-                levels::tags,
+                array(tag_ids()),
                 levels::description,
                 levels::song,
                 levels::edel_enjoyment,
@@ -369,11 +388,10 @@ impl Level {
         list: List,
         level: LevelPlace,
     ) -> Result<Self, ApiError> {
-        let level = diesel::insert_into(levels::table)
+        Ok(diesel::insert_into(levels::table)
             .values((level, levels::list_id.eq(list)))
             .returning(Self::as_select())
-            .get_result(conn)?;
-        Ok(level)
+            .get_result(conn)?)
     }
 
     pub fn update(
@@ -382,13 +400,12 @@ impl Level {
         id: Uuid,
         level: LevelUpdate,
     ) -> Result<Self, ApiError> {
-        let level = diesel::update(levels::table)
-            .set(level)
+        Ok(diesel::update(levels::table)
             .filter(levels::list_id.eq(list))
             .filter(levels::id.eq(id))
+            .set(level)
             .returning(Self::as_select())
-            .get_result(conn)?;
-        Ok(level)
+            .get_result(conn)?)
     }
 }
 
@@ -466,8 +483,10 @@ impl ResolvedLevel {
 
         let custom_copies = LevelCustomCopy::find_all(conn, list, id)?;
 
+        let tags = Tag::find_all_level(conn, list, id)?;
         let resolved_level = Self::from_data(
             level,
+            tags,
             BaseUser::from_base_user_with_account_status(publisher),
             verifications,
             creators,
@@ -480,6 +499,7 @@ impl ResolvedLevel {
 
     pub fn from_data(
         level: Level,
+        tags: Vec<Tag>,
         publisher: BaseUser,
         verifications: Vec<LevelResolvedRecord>,
         creators: Vec<BaseUser>,
@@ -496,7 +516,7 @@ impl ResolvedLevel {
             requires_raw_footage: level.requires_raw_footage,
             level_id: level.level_id,
             two_player: level.two_player,
-            tags: level.tags,
+            tags,
             description: level.description,
             song: level.song,
             edel_enjoyment: level.edel_enjoyment,

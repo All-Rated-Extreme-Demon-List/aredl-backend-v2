@@ -1,6 +1,6 @@
 use crate::list::{
     bounty, changelog, leaderboard, levels, packs, packtiers, profile, records, statistics,
-    submissions, List,
+    submissions, tags, List,
 };
 use crate::utils::redirect_prefix;
 use actix_web::web;
@@ -14,6 +14,7 @@ use utoipa::OpenApi;
     ),
     nest(
         (path = "/levels", api=levels::ApiDoc),
+        (path = "/tags", api=tags::ApiDoc),
         (path = "/leaderboard", api=leaderboard::ApiDoc),
         (path = "/changelog", api=changelog::ApiDoc),
         (path = "/packs", api=packs::ApiDoc),
@@ -32,6 +33,7 @@ pub fn init_routes(config: &mut web::ServiceConfig) {
         web::scope("/{list}")
             .configure(submissions::init_routes)
             .configure(levels::init_routes)
+            .configure(tags::init_routes)
             .configure(changelog::init_routes)
             .configure(packtiers::init_routes)
             .configure(packs::init_routes)

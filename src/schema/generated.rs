@@ -39,6 +39,10 @@ pub mod public {
         pub struct LevelStatus;
 
         #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
+        #[diesel(postgres_type(name = "tag_category"))]
+        pub struct TagCategory;
+
+        #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
         #[diesel(postgres_type(name = "level_update_type"))]
         pub struct LevelUpdateType;
 
@@ -188,6 +192,14 @@ pub mod public {
     }
 
     diesel::table! {
+        level_tags (list_id, level_id, tag_id) {
+            list_id -> Int2,
+            level_id -> Uuid,
+            tag_id -> Uuid,
+        }
+    }
+
+    diesel::table! {
         use diesel::sql_types::*;
         use super::sql_types::LevelUpdateType;
 
@@ -215,7 +227,6 @@ pub mod public {
             points -> Int4,
             level_id -> Int4,
             two_player -> Bool,
-            tags -> Array<Nullable<Text>>,
             description -> Nullable<Varchar>,
             song -> Nullable<Int4>,
             edel_enjoyment -> Nullable<Float8>,
@@ -568,6 +579,19 @@ pub mod public {
     }
 
     diesel::table! {
+        use diesel::sql_types::*;
+        use super::sql_types::TagCategory;
+
+        tags (id) {
+            id -> Uuid,
+            list_id -> Int2,
+            name -> Text,
+            description -> Text,
+            category -> TagCategory,
+        }
+    }
+
+    diesel::table! {
         user_badge_progress (user_id) {
             user_id -> Uuid,
             statistics -> Jsonb,
@@ -636,6 +660,7 @@ pub mod public {
     diesel::joinable!(level_custom_copies -> users (added_by));
     diesel::joinable!(level_notes -> lists (list_id));
     diesel::joinable!(level_notes -> users (added_by));
+    diesel::joinable!(level_tags -> lists (list_id));
     diesel::joinable!(level_updates -> lists (list_id));
     diesel::joinable!(levels -> lists (list_id));
     diesel::joinable!(levels -> users (publisher_id));
@@ -666,6 +691,7 @@ pub mod public {
     diesel::joinable!(submissions -> lists (list_id));
     diesel::joinable!(submissions_enabled -> lists (list_id));
     diesel::joinable!(submissions_enabled -> users (moderator));
+    diesel::joinable!(tags -> lists (list_id));
     diesel::joinable!(user_badge_progress -> users (user_id));
     diesel::joinable!(user_badges -> users (user_id));
     diesel::joinable!(user_roles -> roles (role_id));
@@ -681,6 +707,7 @@ pub mod public {
         last_gddl_update,
         level_custom_copies,
         level_notes,
+        level_tags,
         level_updates,
         levels,
         levels_created,
@@ -710,6 +737,7 @@ pub mod public {
         submission_history,
         submissions,
         submissions_enabled,
+        tags,
         user_badge_progress,
         user_badges,
         user_roles,

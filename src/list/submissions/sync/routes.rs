@@ -72,6 +72,7 @@ async fn sync(
     tags(
         (name = "List - Submissions", description = "Endpoints for fetching and managing platformer submissions")
     ),
+    components(schemas(RecordsSyncProvider)),
     paths(
 		sync
     )

@@ -7,6 +7,7 @@ mod notes;
 mod packs;
 pub mod records;
 mod routes;
+mod tags;
 mod updates;
 
 #[cfg(test)]

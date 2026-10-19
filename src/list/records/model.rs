@@ -503,16 +503,8 @@ impl MutualVictors {
         other_level_id: Uuid,
         high_extremes: Option<bool>,
     ) -> Result<Self, ApiError> {
-        let level = levels::table
-            .filter(levels::list_id.eq(list))
-            .filter(levels::id.eq(level_id))
-            .select(Level::as_select())
-            .first::<Level>(conn)?;
-        let other_level = levels::table
-            .filter(levels::list_id.eq(list))
-            .filter(levels::id.eq(other_level_id))
-            .select(Level::as_select())
-            .first::<Level>(conn)?;
+        let level = Level::find(conn, list, level_id)?;
+        let other_level = Level::find(conn, list, other_level_id)?;
 
         let other_level_victors = records::table
             .filter(records::list_id.eq(list))

@@ -16,6 +16,7 @@ mod profile;
 pub(crate) mod records;
 mod routes;
 mod statistics;
+pub mod tags;
 
 pub mod submissions;
 pub use routes::{init_routes, ApiDoc};
