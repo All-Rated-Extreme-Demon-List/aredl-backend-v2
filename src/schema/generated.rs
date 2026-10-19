@@ -352,6 +352,7 @@ pub mod public {
             id -> Uuid,
             name -> Varchar,
             tier -> Uuid,
+            description -> Nullable<Text>,
         }
     }
 

@@ -141,6 +141,7 @@ diesel::table! {
         name -> Varchar,
         tier -> Uuid,
         points -> Int4,
+        description -> Nullable<Text>,
     }
 }
 

@@ -45,6 +45,8 @@ pub struct PackWithTier {
     pub id: Uuid,
     /// Name of the pack.
     pub name: String,
+    /// Description of the pack.
+    pub description: Option<String>,
     /// Internal UUID of the tier the pack belongs to.
     pub tier: Uuid,
     /// Points awarded for completing the pack.
@@ -66,6 +68,8 @@ pub struct PackWithLevelsResolved {
     pub id: Uuid,
     /// Name of the pack.
     pub name: String,
+    /// Description of the pack.
+    pub description: Option<String>,
     /// Points awarded for completing the pack.
     pub points: i32,
     /// Levels in the pack.
@@ -191,6 +195,7 @@ impl PackTierResolved {
                     .map(|pack| PackWithLevelsResolved {
                         id: pack.id,
                         name: pack.name,
+                        description: pack.description,
                         points: pack.points,
                         levels: pack_levels_map.remove(&pack.id).unwrap_or_default(),
                     })

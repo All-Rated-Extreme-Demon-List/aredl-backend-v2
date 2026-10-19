@@ -24,7 +24,8 @@ async fn create_pack() {
     let tier_id = create_test_pack_tier(&db).await;
     let pack_data = json!({
         "name": "Test Pack",
-        "tier": tier_id.to_string()
+        "tier": tier_id.to_string(),
+        "description": "A pack description"
     });
     let req = test::TestRequest::post()
         .uri("/classic/packs")
@@ -40,6 +41,7 @@ async fn create_pack() {
         body["name"].as_str().unwrap(),
         "Names do not match!"
     );
+    assert_eq!(body["description"], pack_data["description"]);
 }
 
 #[actix_web::test]

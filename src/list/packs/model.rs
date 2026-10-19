@@ -8,6 +8,7 @@ use crate::schema::{completed_packs, packs};
 use crate::users::ExtendedBaseUser;
 use diesel::pg::Pg;
 use serde::{Deserialize, Serialize};
+use serde_with::rust::double_option;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -19,6 +20,8 @@ pub struct BasePack {
     pub id: Uuid,
     /// Name of the pack.
     pub name: String,
+    /// Description of the pack.
+    pub description: Option<String>,
 }
 
 #[derive(Serialize, Selectable, Queryable, Debug, ToSchema)]
@@ -30,6 +33,8 @@ pub struct Pack {
     pub id: Uuid,
     /// Name of the pack.
     pub name: String,
+    /// Description of the pack.
+    pub description: Option<String>,
     /// Internal UUID of the tier the pack belongs to.
     pub tier: Uuid,
 }
@@ -47,6 +52,8 @@ pub struct PackWithTierResolved {
 pub struct PackCreate {
     /// Name of the pack to create.
     pub name: String,
+    /// Description of the pack to create.
+    pub description: Option<String>,
     /// Internal UUID of the tier to add the pack to.
     pub tier: Uuid,
 }
@@ -56,6 +63,9 @@ pub struct PackCreate {
 pub struct PackUpdate {
     /// New name of the pack.
     pub name: Option<String>,
+    /// New description of the pack.
+    #[serde(default, with = "double_option")]
+    pub description: Option<Option<String>>,
     /// New tier of the pack.
     pub tier: Option<Uuid>,
 }
