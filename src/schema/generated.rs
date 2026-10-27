@@ -423,6 +423,7 @@ pub mod public {
             hide_video -> Bool,
             submission_id -> Uuid,
             achieved_at -> Timestamptz,
+            completion_time_verified -> Bool,
         }
     }
 

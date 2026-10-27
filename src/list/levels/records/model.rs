@@ -32,6 +32,8 @@ pub struct LevelResolvedRecord {
     /// Completion time of the record in milliseconds.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub completion_time: Option<i64>,
+    /// Whether this completion time should be displayed and used for sorting on the level's completions
+    pub completion_time_verified: bool,
     /// Timestamp of when this record was achieved.
     pub achieved_at: DateTime<Utc>,
     /// Whether the record's video should be hidden on the website.
@@ -56,6 +58,8 @@ pub struct LevelResolvedRecordExtended {
     /// Completion time of the record in milliseconds.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub completion_time: Option<i64>,
+    /// Whether this completion time should be displayed and used for sorting on the level's completions
+    pub completion_time_verified: bool,
     /// Timestamp of when this record was achieved.
     pub achieved_at: DateTime<Utc>,
     /// Whether the record's video should be hidden on the website.
@@ -80,6 +84,7 @@ impl From<(Record, BaseUser)> for LevelResolvedRecord {
             mobile: record.mobile,
             video_url: record.video_url,
             completion_time: record.completion_time,
+            completion_time_verified: record.completion_time_verified,
             achieved_at: record.achieved_at,
             hide_video: record.hide_video,
             updated_at: record.updated_at,
@@ -96,6 +101,7 @@ impl From<(Record, ExtendedBaseUser)> for LevelResolvedRecordExtended {
             mobile: record.mobile,
             video_url: record.video_url,
             completion_time: record.completion_time,
+            completion_time_verified: record.completion_time_verified,
             achieved_at: record.achieved_at,
             hide_video: record.hide_video,
             updated_at: record.updated_at,
@@ -147,9 +153,11 @@ impl LevelResolvedRecordExtended {
             List::Classic => {
                 build_filtered().order((records::achieved_at.asc(), records::id.asc()))
             }
-            List::Platformer => {
-                build_filtered().order((records::completion_time.asc(), records::id.asc()))
-            }
+            List::Platformer => build_filtered().order((
+                records::completion_time_verified.desc(),
+                records::completion_time.asc(),
+                records::id.asc(),
+            )),
         };
 
         let records = query

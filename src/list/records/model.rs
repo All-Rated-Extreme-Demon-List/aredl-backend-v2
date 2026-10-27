@@ -45,6 +45,8 @@ pub struct Record {
     /// Completion time of the record in milliseconds. Only present for platformer records.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub completion_time: Option<i64>,
+    /// Whether this completion time should be displayed and used for sorting on the level's completions
+    pub completion_time_verified: bool,
     /// Whether the record's video should be hidden on the website.
     pub hide_video: bool,
     /// Whether this record is the verification of this level or not.
@@ -74,6 +76,8 @@ pub struct ResolvedRecord {
     /// Completion time of the record in milliseconds. Only present for platformer records.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub completion_time: Option<i64>,
+    /// Whether this completion time should be displayed and used for sorting on the level's completions
+    pub completion_time_verified: bool,
     /// Whether the record's video should be hidden on the website.
     pub hide_video: bool,
     /// Whether this record is the verification of this level or not.
@@ -99,6 +103,9 @@ pub struct RecordInsert {
     pub video_url: String,
     /// Completion time of the record in milliseconds. Only present for platformer records.
     pub completion_time: Option<i64>,
+    /// Whether this completion time should be displayed and used for sorting on the level's completions
+    #[schema(default = true)]
+    pub completion_time_verified: Option<bool>,
     /// Whether the record's video should be hidden on the website.
     pub hide_video: Option<bool>,
     /// Whether this record is the verification of this level or not.
@@ -122,6 +129,8 @@ pub struct RecordPatch {
     pub video_url: Option<String>,
     /// Whether the record's video should be hidden on the website.
     pub hide_video: Option<bool>,
+    /// Whether this completion time should be displayed and used for sorting on the level's completions
+    pub completion_time_verified: Option<bool>,
     /// Completion time of the record in milliseconds. Only present for platformer records.
     #[serde(default, with = "double_option")]
     pub completion_time: Option<Option<i64>>,
@@ -142,6 +151,8 @@ pub struct RecordPatch {
 pub struct RecordUpdate {
     /// Whether the record's video should be hidden on the website.
     pub hide_video: Option<bool>,
+    /// Whether this completion time should be displayed and used for sorting on the level's completions
+    pub completion_time_verified: Option<bool>,
     /// Whether this record is the verification of this level or not.
     pub is_verification: Option<bool>,
     /// Timestamp of when this record was achieved, used for ordering.
@@ -239,6 +250,7 @@ impl From<&RecordInsert> for RecordUpdate {
     fn from(record: &RecordInsert) -> Self {
         Self {
             hide_video: record.hide_video,
+            completion_time_verified: record.completion_time_verified,
             is_verification: record.is_verification,
             achieved_at: record.achieved_at,
         }
@@ -249,6 +261,7 @@ impl From<&RecordPatch> for RecordUpdate {
     fn from(record: &RecordPatch) -> Self {
         Self {
             hide_video: record.hide_video,
+            completion_time_verified: record.completion_time_verified,
             is_verification: record.is_verification,
             achieved_at: record.achieved_at,
         }
@@ -731,6 +744,7 @@ impl From<(Record, ExtendedBaseUser, ExtendedBaseLevel)> for ResolvedRecord {
             mobile: record.mobile,
             video_url: record.video_url,
             completion_time: record.completion_time,
+            completion_time_verified: record.completion_time_verified,
             is_verification: record.is_verification,
             created_at: record.created_at,
             updated_at: record.updated_at,
@@ -827,12 +841,16 @@ impl ResolvedRecord {
                 RecordSortField::NewestUpdatedAt => {
                     records_query.order_by(records::updated_at.desc())
                 }
-                RecordSortField::ShortestCompletionTime => {
-                    records_query.order_by(records::completion_time.asc())
-                }
-                RecordSortField::LongestCompletionTime => {
-                    records_query.order_by(records::completion_time.desc())
-                }
+                RecordSortField::ShortestCompletionTime => records_query.order_by((
+                    records::completion_time_verified.desc(),
+                    records::completion_time.asc(),
+                    records::id.asc(),
+                )),
+                RecordSortField::LongestCompletionTime => records_query.order_by((
+                    records::completion_time_verified.desc(),
+                    records::completion_time.desc(),
+                    records::id.asc(),
+                )),
             };
         } else {
             records_query = records_query.order_by(records::created_at.desc());

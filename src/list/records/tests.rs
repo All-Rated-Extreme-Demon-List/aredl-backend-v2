@@ -3,10 +3,14 @@ use {
     crate::{
         auth::{create_test_token, oauth::OAuthProvider, Permission},
         list::{
-            levels::test_utils::{create_test_level, create_test_level_with_record},
+            levels::test_utils::{
+                create_test_level, create_test_level_for_list, create_test_level_with_record,
+            },
             records::test_utils::{
-                create_test_record, create_two_test_records_with_different_timestamps,
-                create_two_test_records_with_different_timestamps_for_list, set_test_record_mobile,
+                create_test_record, create_test_record_for_list,
+                create_two_test_records_with_different_timestamps,
+                create_two_test_records_with_different_timestamps_for_list,
+                set_test_record_completion_time, set_test_record_mobile,
                 set_test_record_verification,
             },
             List,
@@ -67,6 +71,7 @@ async fn create_record() {
         user_id.to_string().as_str(),
         "Names do not match!"
     );
+    assert_eq!(body["completion_time_verified"], true);
 }
 
 #[actix_web::test]
@@ -640,6 +645,102 @@ async fn get_records_sort_newest_updated_at() {
     assert!(got.len() >= 2);
     assert_eq!(got[0], newer.to_string());
     assert_eq!(got[1], older.to_string());
+}
+
+#[actix_web::test]
+async fn completion_time_sorting_unverified_last() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (moderator, _) = create_test_user(&db, Some(Permission::RecordModify)).await;
+    let token = create_test_token(moderator, &auth.jwt_encoding_key).unwrap();
+    let level = create_test_level_for_list(&db, List::Platformer).await;
+    let (user_a, _) = create_test_user(&db, None).await;
+    let (user_b, _) = create_test_user(&db, None).await;
+    let (user_c, _) = create_test_user(&db, None).await;
+    let (user_d, _) = create_test_user(&db, None).await;
+    let verified_fast = create_test_record_for_list(&db, List::Platformer, user_a, level).await;
+    let verified_slow = create_test_record_for_list(&db, List::Platformer, user_b, level).await;
+    let unverified_fast = create_test_record_for_list(&db, List::Platformer, user_c, level).await;
+    let unverified_slow = create_test_record_for_list(&db, List::Platformer, user_d, level).await;
+    set_test_record_completion_time(&db, verified_fast, 1000, true).await;
+    set_test_record_completion_time(&db, verified_slow, 2000, true).await;
+    set_test_record_completion_time(&db, unverified_fast, 100, false).await;
+    set_test_record_completion_time(&db, unverified_slow, 3000, false).await;
+
+    let req = test::TestRequest::get()
+        .uri("/platformer/records?sort=ShortestCompletionTime")
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body: serde_json::Value = read_body_json(resp).await;
+    let ids: Vec<_> = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["id"].clone())
+        .collect();
+    assert_eq!(
+        ids,
+        json!([
+            verified_fast,
+            verified_slow,
+            unverified_fast,
+            unverified_slow
+        ])
+        .as_array()
+        .unwrap()
+        .clone()
+    );
+    assert_eq!(body["data"][0]["completion_time_verified"], true);
+    assert_eq!(body["data"][2]["completion_time_verified"], false);
+
+    let req = test::TestRequest::get()
+        .uri("/platformer/records?sort=LongestCompletionTime")
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body: serde_json::Value = read_body_json(resp).await;
+    let ids: Vec<_> = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["id"].clone())
+        .collect();
+    assert_eq!(
+        ids,
+        json!([
+            verified_slow,
+            verified_fast,
+            unverified_slow,
+            unverified_fast
+        ])
+        .as_array()
+        .unwrap()
+        .clone()
+    );
+
+    let req = test::TestRequest::get()
+        .uri(&format!("/platformer/levels/{level}/records?per_page=2"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["data"][0]["id"], verified_fast.to_string());
+    assert_eq!(body["data"][1]["id"], verified_slow.to_string());
+    assert_eq!(body["data"][0]["completion_time_verified"], true);
+
+    let req = test::TestRequest::get()
+        .uri(&format!(
+            "/platformer/levels/{level}/records?per_page=2&page=2"
+        ))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(body["data"][0]["id"], unverified_fast.to_string());
+    assert_eq!(body["data"][1]["id"], unverified_slow.to_string());
+    assert_eq!(body["data"][0]["completion_time_verified"], false);
 }
 
 #[actix_web::test]

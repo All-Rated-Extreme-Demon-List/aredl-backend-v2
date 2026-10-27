@@ -128,6 +128,22 @@ pub async fn create_two_test_records_with_different_timestamps_for_list(
 }
 
 #[cfg(test)]
+pub async fn set_test_record_completion_time(
+    db: &Arc<DbAppState>,
+    record_id: Uuid,
+    completion_time: i64,
+    verified: bool,
+) {
+    diesel::update(records::table.filter(records::id.eq(record_id)))
+        .set((
+            records::completion_time.eq(completion_time),
+            records::completion_time_verified.eq(verified),
+        ))
+        .execute(&mut db.connection().unwrap())
+        .expect("Failed to update test record completion time");
+}
+
+#[cfg(test)]
 pub async fn set_test_record_verification(
     db: &Arc<DbAppState>,
     record_id: Uuid,

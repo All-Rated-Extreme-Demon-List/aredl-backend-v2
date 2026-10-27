@@ -27,6 +27,8 @@ pub struct ProfileRecordResolved {
     /// Completion time of the record in milliseconds. Only present for platformer records.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub completion_time: Option<i64>,
+    /// Whether this completion time should be displayed and used for sorting on the level's completions
+    pub completion_time_verified: bool,
     /// Whether the record is a verification or not.
     pub is_verification: bool,
     /// Whether the record's video should be hidden on the website.
@@ -47,6 +49,7 @@ impl From<(Record, ExtendedBaseLevel)> for ProfileRecordResolved {
             mobile: record.mobile,
             video_url: record.video_url,
             completion_time: record.completion_time,
+            completion_time_verified: record.completion_time_verified,
             is_verification: record.is_verification,
             hide_video: record.hide_video,
             achieved_at: record.achieved_at,
