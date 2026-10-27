@@ -2,6 +2,7 @@
 use {
     crate::{
         auth::{create_test_token, Permission},
+        clans::test_utils::{create_test_clan, create_test_clan_member},
         list::{
             levels::custom_copies::test_utils::create_test_custom_copy,
             levels::test_utils::{
@@ -110,6 +111,7 @@ async fn list_levels() {
             .is_none(),
         "Unauthenticated response should not include completed_by_user"
     );
+    assert!(body[0].get("completed_by_clan").is_none());
 }
 
 #[actix_web::test]
@@ -130,6 +132,9 @@ async fn list_levels_with_completion_status_when_authenticated() {
 
     let body: serde_json::Value = read_body_json(resp).await;
     let levels = body.as_array().expect("Response should be an array");
+    assert!(levels
+        .iter()
+        .all(|level| level.get("completed_by_clan").is_none()));
 
     let completed_level = levels
         .iter()
@@ -150,6 +155,83 @@ async fn list_levels_with_completion_status_when_authenticated() {
         Some(false),
         "Incomplete level should be marked as not completed"
     );
+}
+
+#[actix_web::test]
+async fn list_levels_with_clan_completion_status() {
+    let (app, db, auth, _) = init_test_app().await;
+    let (user_id, _) = create_test_user(&db, None).await;
+    let (member_id, _) = create_test_user(&db, None).await;
+    let (outsider_id, _) = create_test_user(&db, None).await;
+    let clan_id = create_test_clan(&db).await;
+    create_test_clan_member(&db, clan_id, user_id, 2).await;
+    create_test_clan_member(&db, clan_id, member_id, 0).await;
+    let other_clan_id = create_test_clan(&db).await;
+    create_test_clan_member(&db, other_clan_id, outsider_id, 2).await;
+    let token = create_test_token(user_id, &auth.jwt_encoding_key).unwrap();
+
+    let (own_level_id, _) = create_test_level_with_record(&db, user_id).await;
+    let (member_level_id, _) = create_test_level_with_record(&db, member_id).await;
+    let (outsider_level_id, _) = create_test_level_with_record(&db, outsider_id).await;
+    let incomplete_level_id = create_test_level(&db).await;
+
+    let req = test::TestRequest::get()
+        .uri("/classic/levels")
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), actix_http::StatusCode::OK);
+    let body: serde_json::Value = read_body_json(resp).await;
+    let levels = body.as_array().unwrap();
+    assert_eq!(levels.len(), 4);
+
+    let own_level = levels
+        .iter()
+        .find(|level| level["id"] == own_level_id.to_string())
+        .unwrap();
+    assert_eq!(own_level["completed_by_user"], true);
+    assert_eq!(own_level["completed_by_clan"], true);
+    let member_level = levels
+        .iter()
+        .find(|level| level["id"] == member_level_id.to_string())
+        .unwrap();
+    assert_eq!(member_level["completed_by_user"], false);
+    assert_eq!(member_level["completed_by_clan"], true);
+    let outsider_level = levels
+        .iter()
+        .find(|level| level["id"] == outsider_level_id.to_string())
+        .unwrap();
+    assert_eq!(outsider_level["completed_by_user"], false);
+    assert_eq!(outsider_level["completed_by_clan"], false);
+    let incomplete_level = levels
+        .iter()
+        .find(|level| level["id"] == incomplete_level_id.to_string())
+        .unwrap();
+    assert_eq!(incomplete_level["completed_by_user"], false);
+    assert_eq!(incomplete_level["completed_by_clan"], false);
+
+    let req = test::TestRequest::delete()
+        .uri(&format!("/clans/{clan_id}/members"))
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .set_json(json!([member_id]))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), actix_http::StatusCode::OK);
+
+    let req = test::TestRequest::get()
+        .uri("/classic/levels")
+        .insert_header(("Authorization", format!("Bearer {token}")))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), actix_http::StatusCode::OK);
+    let body: serde_json::Value = read_body_json(resp).await;
+    let member_level = body
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|level| level["id"] == member_level_id.to_string())
+        .unwrap();
+    assert_eq!(member_level["completed_by_clan"], false);
 }
 
 #[actix_web::test]

@@ -9,7 +9,7 @@ use crate::list::records::Record;
 use crate::list::tags::Tag;
 use crate::list::List;
 use crate::schema::{
-    level_tags, levels, position_history, position_history_full_view, records, users,
+    clan_members, level_tags, levels, position_history, position_history_full_view, records, users,
 };
 use crate::users::{BaseUser, BaseUserWithAccountStatus};
 use chrono::{DateTime, Utc};
@@ -125,6 +125,9 @@ pub struct LevelWithUserCompletionStatus {
     /// Whether the requesting user has completed this level or not.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub completed_by_user: Option<bool>,
+    /// Whether someone from the requesting user's clan has completed this level or not.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed_by_clan: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Insertable, ToSchema, Debug)]
@@ -417,27 +420,58 @@ impl LevelWithUserCompletionStatus {
         user_id: Option<Uuid>,
     ) -> Result<Vec<Self>, ApiError> {
         let levels = Level::find_all(conn, list, query)?;
+        let level_ids = levels.iter().map(|level| level.id).collect::<Vec<_>>();
 
         let completed_level_ids = match user_id {
-            Some(user_id) if !levels.is_empty() => {
-                let level_ids = levels.iter().map(|level| level.id).collect::<Vec<_>>();
+            Some(user_id) if !levels.is_empty() => records::table
+                .filter(records::list_id.eq(list))
+                .filter(records::submitted_by.eq(user_id))
+                .filter(records::level_id.eq_any(&level_ids))
+                .select(records::level_id)
+                .distinct()
+                .load::<Uuid>(conn)?
+                .into_iter()
+                .collect::<HashSet<_>>(),
+            _ => HashSet::new(),
+        };
+
+        let clan_id = match user_id {
+            Some(user_id) if !levels.is_empty() => clan_members::table
+                .filter(clan_members::user_id.eq(user_id))
+                .select(clan_members::clan_id)
+                .first::<Uuid>(conn)
+                .optional()?,
+            _ => None,
+        };
+
+        let clan_completed_level_ids = match clan_id {
+            Some(clan_id) => Some(
                 records::table
                     .filter(records::list_id.eq(list))
-                    .filter(records::submitted_by.eq(user_id))
-                    .filter(records::level_id.eq_any(level_ids))
+                    .filter(records::level_id.eq_any(&level_ids))
+                    .filter(
+                        records::submitted_by.eq_any(
+                            clan_members::table
+                                .filter(clan_members::clan_id.eq(clan_id))
+                                .select(clan_members::user_id),
+                        ),
+                    )
                     .select(records::level_id)
                     .distinct()
                     .load::<Uuid>(conn)?
                     .into_iter()
-                    .collect::<HashSet<_>>()
-            }
-            _ => HashSet::new(),
+                    .collect::<HashSet<_>>(),
+            ),
+            None => None,
         };
 
         Ok(levels
             .into_iter()
             .map(|level| Self {
                 completed_by_user: user_id.map(|_| completed_level_ids.contains(&level.id)),
+                completed_by_clan: clan_completed_level_ids
+                    .as_ref()
+                    .map(|completed| completed.contains(&level.id)),
                 level,
             })
             .collect())
