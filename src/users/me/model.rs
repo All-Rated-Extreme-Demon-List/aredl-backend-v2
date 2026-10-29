@@ -3,8 +3,6 @@ use crate::schema::{levels, users};
 use crate::users::badges::UserBadge;
 use crate::users::{AccountStatus, User};
 use crate::{app_data::db::DbConnection, schema::records};
-use chrono::{DateTime, Utc};
-use diesel::dsl::now;
 use serde::{Deserialize, Serialize};
 use serde_with::rust::double_option;
 use utoipa::ToSchema;
@@ -18,7 +16,7 @@ pub struct UserMeUpdate {
     /// Your new description.
     #[serde(default, with = "double_option")]
     pub description: Option<Option<String>>,
-    /// Your new country. Uses the ISO 3166-1 numeric country code. Has a 90-day cooldown.
+    /// Your country. Uses the ISO 3166-1 numeric country code. Can only be set once by the user themselves.
     #[serde(default, with = "double_option")]
     pub country: Option<Option<i32>>,
     /// Your new account status: normal, semi-unranked, or unranked.
@@ -59,17 +57,15 @@ impl User {
         }
 
         if user.country.is_some() {
-            let last_country_update = users::table
+            let country = users::table
                 .filter(users::id.eq(id))
-                .select(users::last_country_update)
-                .first::<DateTime<Utc>>(conn)?;
-            let next_allowed_change = last_country_update + chrono::Duration::days(90);
-            let current_time = Utc::now();
-            if current_time < next_allowed_change {
-                let remaining = next_allowed_change - current_time;
-                return Err(ApiError::BadRequest(format!(
-                    "You have recently changed your country, please wait {} days and {} hours before changing it again.",
-                    remaining.num_days(), remaining.num_hours() % 24)));
+                .select(users::country)
+                .for_update()
+                .first::<Option<i32>>(conn)?;
+            if country.is_some() {
+                return Err(ApiError::BadRequest(
+                    "You can only set your country once. Please contact a staff member to change it.",
+                ));
             }
         }
 
@@ -122,10 +118,7 @@ impl User {
                 .filter(users::id.eq(id))
                 .filter(users::account_status.ne(AccountStatus::Deleted)),
         )
-        .set((
-            user,
-            user.country.map(|_| users::last_country_update.eq(now)),
-        ))
+        .set(user)
         .returning(User::as_select())
         .get_result::<User>(conn)?;
         Ok(result)

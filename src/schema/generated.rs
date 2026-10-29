@@ -637,7 +637,6 @@ pub mod public {
             placeholder -> Bool,
             description -> Nullable<Text>,
             country -> Nullable<Int4>,
-            last_country_update -> Timestamptz,
             account_status -> Int4,
             discord_avatar -> Nullable<Varchar>,
             access_valid_after -> Timestamptz,

@@ -39,19 +39,19 @@ async fn find(
 #[utoipa::path(
     patch,
     summary = "[Auth]Edit authenticated user",
-    description = "Update the current authenticated user base information",
+    description = "Update the current authenticated user base information. Your country can only be set once; further changes require staff.",
     tag = "Users - Me",
     request_body = UserMeUpdate,
     responses(
         (status = 200, body = User),
-        (status = 400, description = "Display name or description is too long, account status is invalid, country changes are on cooldown, or the selected level or badge is not unlocked", body = ErrorResponse, examples(
+        (status = 400, description = "Display name or description is too long, account status is invalid, country has already been set, or the selected level or badge is not unlocked", body = ErrorResponse, examples(
             ("display_name_too_long" = (value = json!({"message": "The display name can at most be 35 characters long."}))),
             ("description_too_long" = (value = json!({"message": "The description can at most be 300 characters long."}))),
-            ("country_cooldown" = (value = json!({"message": "You have recently changed your country, please wait 30 days and 0 hours before changing it again."}))),
+            ("country_already_set" = (value = json!({"message": "You can only set your country once. Please contact a staff member to change it."}))),
             ("background_level" = (value = json!({"message": "You have not beaten the selected level."}))),
             ("featured_badge" = (value = json!({"message": "You have not unlocked the selected badge."})))
         )),
-        (status = 403, description = "You cannot change your account status while banned from the list", body = ErrorResponse),
+        (status = 403, description = "You cannot change your account status while banned from the list, or your account has been deleted", body = ErrorResponse),
         (status = 404, description = "User not found", body = ErrorResponse)
     ),
     security(("bearer_token" = [])),

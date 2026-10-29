@@ -10,7 +10,7 @@ use {
         },
         users::{AccountStatus, User},
     },
-    chrono::{DateTime, NaiveDateTime, Utc},
+    chrono::{NaiveDateTime, Utc},
     diesel::prelude::*,
     std::sync::Arc,
     uuid::Uuid,
@@ -177,19 +177,6 @@ pub async fn set_test_user_account_status(
         .set(users::account_status.eq(account_status))
         .execute(&mut db.connection().unwrap())
         .expect("Failed to set user account status");
-}
-
-#[cfg(test)]
-pub async fn set_test_user_last_country_update(
-    db: &Arc<DbAppState>,
-    user_id: Uuid,
-    last_country_update: DateTime<Utc>,
-) {
-    diesel::update(users::table)
-        .filter(users::id.eq(user_id))
-        .set(users::last_country_update.eq(last_country_update))
-        .execute(&mut db.connection().unwrap())
-        .expect("Failed to set user last country update");
 }
 
 #[cfg(test)]

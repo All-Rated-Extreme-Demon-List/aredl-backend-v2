@@ -13,12 +13,13 @@ use {
             },
             List,
         },
-        test_utils::init_test_app,
+        test_utils::{assert_error_response, init_test_app},
         users::test_utils::{
             create_test_user, latest_audit_entry_for_user, set_test_user_account_status,
-            set_test_user_background_level, set_test_user_last_country_update,
+            set_test_user_background_level,
         },
     },
+    actix_http::StatusCode,
     actix_web::test::{self, read_body_json},
     serde_json::json,
 };
@@ -164,26 +165,33 @@ async fn update_authenticated_user_banned() {
 }
 
 #[actix_web::test]
-async fn update_authenticated_user_country_cooldown() {
+async fn update_authenticated_user_country_can_only_be_set_once() {
     let (app, db, auth, _) = init_test_app().await;
     let (user_id, _) = create_test_user(&db, None).await;
     let user_token =
         create_test_token(user_id, &auth.jwt_encoding_key).expect("Failed to generate token");
 
-    set_test_user_last_country_update(&db, user_id, chrono::Utc::now()).await;
-
-    let update_payload = json!({
-        "country": 10
-    });
+    let req = test::TestRequest::patch()
+        .uri("/users/@me")
+        .insert_header(("Authorization", format!("Bearer {user_token}")))
+        .set_json(json!({ "country": 840 }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let updated_user: serde_json::Value = read_body_json(resp).await;
+    assert_eq!(updated_user["country"], 840);
 
     let req = test::TestRequest::patch()
         .uri("/users/@me")
         .insert_header(("Authorization", format!("Bearer {user_token}")))
-        .set_json(&update_payload)
+        .set_json(json!({ "country": 124 }))
         .to_request();
-
     let resp = test::call_service(&app, req).await;
-    assert_eq!(resp.status().as_u16(), 400);
+    assert_error_response!(
+        resp,
+        StatusCode::BAD_REQUEST,
+        Some("You can only set your country once. Please contact a staff member to change it.")
+    );
 }
 
 #[actix_web::test]
